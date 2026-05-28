@@ -1,21 +1,49 @@
-# Python
-__pycache__/
-*.pyc
+# Python Environment Isolation [1.1.2]
 .venv/
 venv/
+ENV/
+env/
+dist/
+build/
+
+# Compiled Python Bytecode (Pre-compiled caching)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local Secret Configurations [1.1.2]
 .env
-backend/.env
+*.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database backups and SQLite engines
+db.sqlite3
+db.sqlite3-journal
+*.sql
+*.dump
+
+# Local Multi-Tenant Photographer Uploads (Never commit client images to Git)
 backend/media/
+backend/staticfiles/
 backend/static/
 
-# Node
+# Frontend Development Packages & Compiled Builds
 node_modules/
-dist/
-frontend/.env.local
-frontend/node_modules/
 frontend/dist/
+frontend/.svelte-kit/
+.parcel-cache/
 
-# OS / editor
+# Operating System specific files (macOS/Windows)
 .DS_Store
+.DS_Store?
+ehthumbs.db
 Thumbs.db
+
+# IDE and Editor Workspace Configurations (Prevents settings clashes)
 .vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
