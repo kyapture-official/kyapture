@@ -17,7 +17,8 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
+        # Always pass context on initialization to make request metadata available inside the serializer [1.1.2]
+        serializer = RegisterSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
@@ -34,11 +35,11 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Matches RegisterView formatting [1.1.2]
         serializer = LoginSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class LogoutView(APIView):
     """POST /api/v1/auth/logout/ - Requires header Bearer token [1.1.2]"""

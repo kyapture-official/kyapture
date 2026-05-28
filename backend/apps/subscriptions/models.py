@@ -90,7 +90,7 @@ class UserSubscription(BaseModel):
     def __str__(self):
         return f"{self.user.email} — {self.plan.name} ({self.get_status_display()})"
 
-
+#Offline/Invoice Payments
 class ManualPayment(BaseModel):
     """
     Holds receipts and metadata for out-of-band payment transfers (direct eSewa/Khalti/Bank screenshots).
