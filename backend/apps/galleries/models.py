@@ -52,6 +52,7 @@ class Gallery(BaseModel):
 
     # Deployment Status
     is_published = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True) 
     expires_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
