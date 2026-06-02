@@ -41,11 +41,12 @@ class Photo(BaseModel):
     )
     
     # Files are routed dynamically to standardized folders
-    image = models.ImageField(upload_to=get_photo_upload_path)
+    image = models.ImageField(upload_to=get_photo_upload_path, max_length=500)
     thumbnail = models.ImageField(
         upload_to=get_thumbnail_upload_path,
         null=True,
-        blank=True
+        blank=True,
+        max_length=500
     )
     
     # Optional metadata title vs. immutable system metadata
