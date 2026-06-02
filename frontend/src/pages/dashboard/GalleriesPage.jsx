@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useGalleries } from '../../hooks/useGalleries'
 import { galleriesApi } from '../../api/galleriesApi'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
@@ -8,37 +9,54 @@ import Input from '../../components/ui/Input'
 import { useToast } from '../../components/ui/Toast'
 import { formatDate } from '../../utils/formatters'
 
+/**
+ * WHAT: Aligned and Optimized Galleries Dashboard Control Page
+ * WHY: Clears code duplication by using custom hooks, aligns routes to slugs, and maps serializer fields [1.1.18, 1.2.2].
+ * HOW: Imports useGalleries state manager [1.2.2] and binds elements strictly to schema properties [1.1.18].
+ * WHERE: frontend/src/pages/dashboard/GalleriesPage.jsx
+ */
 export default function GalleriesPage() {
   const toast = useToast()
-  const [galleries, setGalleries] = useState([])
-  const [loading, setLoading] = useState(true)
+  
+  // Consume your centralized state-management hook [1.2.2]
+  const { galleries, setGalleries, loading, error } = useGalleries()
+
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', branding_color: '#2C2825' })
 
-  const load = () =>
-    galleriesApi.list()
-      .then((r) => setGalleries(r.data.results || r.data))
-      .finally(() => setLoading(false))
-
-  useEffect(() => { load() }, [])
-
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  // Auto-generate slug preview for visual UX helper on the form
+  const generateSlugPreview = (title) => {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+  }
 
   const handleCreate = async (e) => {
     e.preventDefault()
+    if (!form.title.trim() || creating) return
+
     setCreating(true)
     try {
-      await galleriesApi.create({
-        ...form,
-        slug: form.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+      // Dispatch payload to backend. The backend handles the unique slug calculation [1.1.18].
+      const { data } = await galleriesApi.create({
+        title: form.title.trim(),
+        description: form.description.trim(),
+        branding_color: form.branding_color,
       })
+
       toast('Gallery created!', 'success')
       setCreateOpen(false)
       setForm({ title: '', description: '', branding_color: '#2C2825' })
-      load()
+
+      // Optimistic UI state injection: Instantly prepend new item to list without refetching [1.2.2]
+      setGalleries((prev) => [data, ...prev])
     } catch (err) {
-      toast(err.response?.data?.title?.[0] || 'Failed to create gallery.', 'error')
+      toast(err.response?.data?.error || 'Failed to create gallery.', 'error')
     } finally {
       setCreating(false)
     }
@@ -59,9 +77,16 @@ export default function GalleriesPage() {
         </Button>
       </div>
 
+      {/* Render centralized network/database errors on page load [1.2.2] */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-sm mb-6 animate-fade-up">
+          {error}
+        </div>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton h-52 rounded-2xl" />)}
+          {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="skeleton h-52 rounded-2xl" />)}
         </div>
       ) : galleries.length === 0 ? (
         <div className="py-24 text-center border-2 border-dashed border-cream-300 rounded-2xl bg-cream-50 animate-fade-up">
@@ -73,27 +98,30 @@ export default function GalleriesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-fade-up">
           {galleries.map((gallery, i) => (
             <Link
-              key={gallery.id}
-              to={`/dashboard/galleries/${gallery.id}`}
+              key={gallery.id || gallery.slug}
+              // STRICT REQUIREMENT: Dynamic routes must map to the slug identifier [1.1.18]
+              to={`/dashboard/galleries/${gallery.slug}`}
               className="group bg-white rounded-2xl border border-cream-200 overflow-hidden hover:border-cream-400 hover:shadow-md transition-all duration-200"
               style={{ animationDelay: `${i * 0.05}s` }}
             >
               {/* Cover */}
               <div className="h-44 bg-cream-100 relative overflow-hidden">
-                {gallery.cover_photo ? (
+                {/* CORRECT KEY: DRF list serializer returns flat 'cover_url' property [1.1.18] */}
+                {gallery.cover_url ? (
                   <img
-                    src={gallery.cover_photo.thumbnail || gallery.cover_photo.image}
-                    alt=""
+                    src={gallery.cover_url}
+                    alt={gallery.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    loading="lazy"
                   />
                 ) : (
                   <div
-                    className="w-full h-full"
+                    className="w-full h-full transition-all duration-300"
                     style={{ backgroundColor: gallery.branding_color + '15' }}
                   />
                 )}
                 <div
-                  className="absolute bottom-0 left-0 right-0 h-1"
+                  className="absolute bottom-0 left-0 right-0 h-1 transition-all duration-300"
                   style={{ backgroundColor: gallery.branding_color }}
                 />
               </div>
@@ -124,15 +152,17 @@ export default function GalleriesPage() {
             value={form.title}
             onChange={set('title')}
             required
+            disabled={creating}
           />
           <div>
             <label className="text-sm font-medium text-ink/80 block mb-1">Description</label>
             <textarea
-              className="w-full px-4 py-2.5 bg-white border border-cream-300 rounded-lg text-sm text-ink placeholder:text-muted focus:outline-none focus:border-cream-500 focus:ring-2 focus:ring-cream-200 resize-none"
+              className="w-full px-4 py-2.5 bg-white border border-cream-300 rounded-lg text-sm text-ink placeholder:text-muted focus:outline-none focus:border-cream-500 focus:ring-2 focus:ring-cream-200 resize-none disabled:bg-cream-50"
               rows={3}
               placeholder="Optional description for this gallery..."
               value={form.description}
               onChange={set('description')}
+              disabled={creating}
             />
           </div>
           <div>
@@ -142,16 +172,32 @@ export default function GalleriesPage() {
                 type="color"
                 value={form.branding_color}
                 onChange={set('branding_color')}
-                className="w-10 h-10 rounded-lg border border-cream-300 cursor-pointer"
+                className="w-10 h-10 rounded-lg border border-cream-300 cursor-pointer disabled:opacity-50"
+                disabled={creating}
               />
-              <span className="text-sm text-muted">{form.branding_color}</span>
+              <span className="text-sm text-muted font-mono">{form.branding_color}</span>
             </div>
           </div>
+
+          {form.title.trim() && (
+            <div className="p-4 bg-cream-50 rounded-2xl border border-cream-100">
+              <span className="text-[10px] font-bold text-muted/80 tracking-wider uppercase">
+                Dynamic Link Preview
+              </span>
+              <p className="text-xs font-semibold text-ink/80 mt-1 truncate">
+                yourname.kyapture.com/gallery/
+                <span className="text-brand-primary font-bold font-mono">
+                  {generateSlugPreview(form.title)}
+                </span>
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} className="flex-1">
+            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} className="flex-1" disabled={creating}>
               Cancel
             </Button>
-            <Button type="submit" loading={creating} className="flex-1">
+            <Button type="submit" loading={creating} className="flex-1" disabled={!form.title.trim()}>
               Create Gallery
             </Button>
           </div>
