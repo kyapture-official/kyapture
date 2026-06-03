@@ -117,12 +117,13 @@ export default function RegisterPage() {
     setLoading(true)
     
     try {
-      // payload-sanitize: Do not transmit raw frontend utility fields like "password2"
+      // payload-sanitize: Include password2 to satisfy backend validation checks
       const payload = {
         email: form.email,
         username: form.username,
         display_name: form.display_name,
-        password: form.password
+        password: form.password,
+        password2: form.password2
       }
       
       await register(payload)
