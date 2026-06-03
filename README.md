@@ -36,7 +36,7 @@ Open the project folder, then go into backend/. Move past the main level to reac
 
 code
 
-Bash
+Terminal:
 
 cd backend
 
@@ -44,7 +44,7 @@ Create and Activate Virtual Environment
 
 code
 
-Bash
+Terminal:
 
 python -m venv .venv
 
@@ -60,7 +60,7 @@ Install Dependencies:
 
 code
 
-Bash
+Terminal:
 
 Start by typing pip install followed by -r and then the file named requirements dot txt
 
@@ -70,7 +70,7 @@ Start by copying backend/.env.example. Then make a new file named backend/.env f
 
 code
 
-Bash
+Terminal
 
 cp .env.example .env
 
@@ -82,7 +82,7 @@ Start by checking that your local PostgreSQL server is active. The database must
 
 code
 
-Bash
+Terminal:
 
 Run python manage.py migrate using config.settings.development instead of default settings
 
@@ -90,7 +90,7 @@ Create an Administrator Superuser
 
 code
 
-Bash
+Terminal:
 
 python manage.py createsuperuser --settings=config.settings.development
 
@@ -98,7 +98,7 @@ Start the Django server
 
 code
 
-Bash
+Terminal:
 
 Start the server using python manage dot py with the development settings specified through command line option
 
@@ -110,7 +110,7 @@ Open the folder named frontend/, starting at the main project location
 
 code
 
-Bash
+Terminal:
 
 cd ../frontend
 
@@ -118,7 +118,7 @@ Install Node Packages:
 
 code
 
-Bash
+Terminal:
 
 npm install
 
@@ -136,9 +136,9 @@ VITE_MEDIA_URL=http://localhost:8000/media
 
 Start the Vite development server
 
-code
 
-Bash
+
+Terminal:
 
 npm run dev
 
