@@ -1,92 +1,177 @@
-# KYAPTURE
-
-Main folder.
-
-## Current Status
-
-This repository currently contains the folder/file structure only. The app logic has not been written yet.
-
-## What To Install
-
-- Python 3.12+
-- Node.js 20+
-- PostgreSQL
-- Docker Desktop if you want to use `docker-compose.yml`
-
-## Backend Setup
-
-From `KYAPTURE/backend`:
-
-In Terminal:
-pip install -r requirements.txt
+Kaypture (SaaS for client photo delivery and photographer management)
 
 
-The current backend dependencies are:
 
-- Django
-- djangorestframework
-- psycopg2-binary
-- django-cors-headers
-- djangorestframework-simplejwt
+Built for pros, Kaypture runs fast even when many users are active at once. Access stays safe through private galleries clients can view only with permission. Images load quickly thanks to smart resizing that adapts on the fly. Each file gets stamped with a precise timestamp-based ID so nothing loses its place. Communication between systems flows smoothly using a streamlined connection setup.
 
-## Frontend Setup
 
-From `KYAPTURE/frontend`:
 
-In Terminal:
+----------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+Project Setup and Tools Used
+
+
+
+
+
+KYAPTURE/ <- Root Directory
+
+backend django rest framework api postgresql
+
+Frontend With React Vite And Tailwind Css
+
+Django 5 or newer runs the backend, while DRF handles API logic. PostgreSQL stores data, stepping in as the main database. Authentication leans on SimpleJWT for token control. Images get managed thanks to Pillow doing the heavy lifting. Settings stay separate through python-decouple keeping secrets out of code. Primary keys? uuid6 brings time-sorted UUIDv7 support right into table IDs.
+
+React 18 powers the interface, built fast using Vite. Styling flows through Tailwind CSS, keeping design lean. API calls happen via Axios - tokens renew quietly in the background. Zustand handles shared state without clutter. Each piece fits, working together but staying clear.
+
+PostgreSQL runs locally, also inside Docker containers.
+
+Getting Started with Local Development
+
+1. Backend Setup (Django API)
+
+Open the project folder, then go into backend/. Move past the main level to reach that subdirectory
+
+code
+
+Bash
+
+cd backend
+
+Create and Activate Virtual Environment
+
+code
+
+Bash
+
+python -m venv .venv
+
+Windows:
+
+.venv\Scripts\activate
+
+macOS/Linux:
+
+source .venv/bin/activate
+
+Install Dependencies:
+
+code
+
+Bash
+
+Start by typing pip install followed by -r and then the file named requirements dot txt
+
+Configure Environment Secrets:
+
+Start by copying backend/.env.example. Then make a new file named backend/.env for your local setup. Use that copy as the base
+
+code
+
+Bash
+
+cp .env.example .env
+
+Start by opening the file backend/.env. There, swap out the current details for your PostgreSQL database - use kyapture_DB. Change the SECRET_KEY too, pick something strong. Make it tough to guess, keep it safe.
+
+Apply Migrations:
+
+Start by checking that your local PostgreSQL server is active. The database must match what you named in the .env file. After that, run the command shown below
+
+code
+
+Bash
+
+Run python manage.py migrate using config.settings.development instead of default settings
+
+Create an Administrator Superuser
+
+code
+
+Bash
+
+python manage.py createsuperuser --settings=config.settings.development
+
+Start the Django server
+
+code
+
+Bash
+
+Start the server using python manage dot py with the development settings specified through command line option
+
+Running right now - the backend API lives here: http://127.0.0.1:8000/api/v1/
+
+2. Frontend Setup (React SPA)
+
+Open the folder named frontend/, starting at the main project location
+
+code
+
+Bash
+
+cd ../frontend
+
+Install Node Packages:
+
+code
+
+Bash
+
 npm install
 
+Configure Local Environment:
 
-The frontend package file is currently only a scaffold, so add app dependencies as the UI is built.(David work)
+Create a local environment file named .env.local inside frontend/:
 
-## Team Workflow
+code
 
-Use one branch per task or feature. Nobody should work directly on `main`.
+Ini
 
-Suggested branch pattern:
+VITE_API_URL=http://localhost:8000/api/v1
 
-- `feature/<short-name>` for new work
-- `fix/<short-name>` for bug fixes
-- `chore/<short-name>` for setup or cleanup
+VITE_MEDIA_URL=http://localhost:8000/media
 
-For a 3-person team:
+Start the Vite development server
 
-- Senior dev Mausam dai reviews pull requests and guards `main`.
-- Kroman and David work on separate branches.
-- Merge only after review and a clean pull from `main`.
+code
 
-Recommended flow:
+Bash
 
-1. Start with `git pull origin main`.
-2. Create a feature branch.
-3. Work only in that branch.
-4. Commit small changes often.
-5. Push your branch.
-6. Open a pull request.
-7. Pull latest `main` again before starting the next task.
+npm run dev
 
-To avoid conflicts:
+Running live on your machine, the photographer's interactive dashboard opens at: http://localhost:5173/. Built right into your local setup, it loads through that address. You’ll find everything responds smoothly once accessed there. This version operates straight from your device. The link points directly to its current home
 
-- Keep each task small.
-- Do not edit the same file at the same time.
-- Pull before we start and before we push.
-- If two people need the same file, we should decide the order first.
+API Docs and Contracts
 
-Pull request checklist:
+Every API path starts with /api/v1/ so front and back connect smoothly. A fixed error format keeps responses clear, no matter the request. One pattern fits all failures, making troubleshooting straightforward. Consistency runs through every endpoint by design.
 
-- Branch is up to date with `main`.
-- Changes match the assigned task.
-- No unrelated files are included.
-- README is updated if setup or workflow changed.
-- At least one person reviews before merge.(It's imp)
+Start by opening the API_DOCS.md file right there at the project's base folder. That document holds every endpoint explained, along with how requests and responses look in JSON format. Look inside for exact header setups, what security rules apply, plus full payload examples. Everything needed sits together in that one place, no extra hunting required.
 
-## Connection Between Parts
+Team Git Workflow and Branch Rules
 
-- `backend/` is for Django API, database models, and server logic.
-- `frontend/` is for the React interface.
-- `docker-compose.yml` is for running backend, frontend, and PostgreSQL together later.
-- `.env` files hold secret values and must not be committed.
+Keeping things tidy and predictable in the repo is up to us - Mausam, Kroman, David - and that means one thing: we follow these rules without exception
 
-## Next Step
+Start fresh each time. Working straight on main? Not happening here. Every new thing - code changes or cleanup - goes into its own detached branch first. Isolation comes before integration, always.
 
-When development starts, kroman will add the real backend apps, David will add frontend dependencies, and environment values, then update this README with exact run commands.
+Branch Naming Convention:
+
+feature/ for new features (e.g., feature/gallery-crud).
+
+Patch applied under fix/ when resolving issues like expired token errors.
+
+Fix/ when adjusting system settings or changing software parts.
+
+Daily Committing Routine:
+
+Every time you begin, grab the latest updates first. Sync things up by running git pull origin main right away. This step keeps your work aligned with the team's progress. Start here, every single time without skipping.
+
+Start fresh with a new branch: type git checkout -b feature/your-feature-name to switch into it
+
+Commit small, logical changes often with descriptive commit messages.
+
+Start by sending your branch up to GitHub, then follow with creating a Pull Request. Once that’s done, others can review what you’ve added. Moving forward, feedback might come in slowly. After changes land, the project shifts slightly. Progress shows up in small updates like this one.
+
+For every pull request, someone on the team - like Mausam dai - needs to take a look first. Only after that check does it move into main. Approval comes before merging, no exceptions. One clear yes from a teammate keeps things moving forward.
