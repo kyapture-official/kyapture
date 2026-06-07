@@ -1,327 +1,495 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../../store/authStore'
+// frontend/src/pages/auth/RegisterPage.jsx
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT: Registration page for new photographers.
+// WHY this file exists: Captures business name, email, credentials, and the
+//   username that becomes their public subdomain (username.kyapture.com).
+//   On success, navigates to /dashboard immediately.
+//
+// ARCHITECTURAL NOTE ON STORE BINDINGS:
+//   This file uses useAuthStore selectors. The exact fields (isAuthenticated,
+//   register) must match your actual authStore.js. If your store exposes
+//   { accessToken, setAuth } instead, change the two selector lines and the
+//   try block accordingly. The rest of this file is store-agnostic.
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Computes password complexity heuristics
- */
-function getStrength(pw) {
-  let score = 0
-  if (pw.length >= 8)            score++
-  if (/[A-Z]/.test(pw))          score++
-  if (/[0-9]/.test(pw))          score++
-  if (/[^A-Za-z0-9]/.test(pw))  score++
-  return score
-}
-
-const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong 💪']
-const STRENGTH_COLORS = ['', '#c0483a', '#c17f3e', '#c17f3e', '#4a7c6f']
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../store/authStore';
 
 export default function RegisterPage() {
-  const navigate = useNavigate()
-  const { register } = useAuthStore()
-  
+  const navigate = useNavigate();
+
+  // ── Store bindings ──────────────────────────────────────────────────────
+  // WHY selector pattern (state => state.x):
+  // Subscribes this component only to the specific field it needs.
+  // Without a selector, any store change (even unrelated ones) re-renders
+  // this entire page. Selectors are not optional — they are required for
+  // performance correctness.
+  //
+  // NOTE: If your authStore.js does not have isAuthenticated and register,
+  // replace these two lines with:
+  //   const isAuthenticated = useAuthStore((state) => !!state.accessToken)
+  //   const setAuth         = useAuthStore((state) => state.setAuth)
+  // and update the try block to call authApi.register() + setAuth() directly.
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const register        = useAuthStore((state) => state.register);
+
   const [form, setForm] = useState({
-    email: '', 
-    username: '', 
-    display_name: '', 
-    password: '', 
-    password2: ''
-  })
-  
-  const [showPw, setShowPw] = useState(false)
-  const [errors, setErrors] = useState({})
-  const [agree, setAgree] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [pwScore, setPwScore] = useState(0)
+    displayName:     '',
+    username:        '',
+    email:           '',
+    password:        '',
+    confirmPassword: '',
+  });
 
-  /**
-   * WHAT: Unified state mutator transaction
-   * WHY: Prevents async batching race conditions and schedules only one state-update per tick.
-   */
-  function set(field, val) {
-    setForm(prev => {
-      const nextState = { ...prev, [field]: val }
-      
-      // Calculate password strength safely
-      if (field === 'password') {
-        setPwScore(getStrength(val))
-      }
-      
-      // Auto-suggest username securely from email prefix, strictly stripping non-alphanumeric chars
-      if (field === 'email') {
-        const emailPrefix = val.split('@')[0] || ''
-        const suggested = emailPrefix.toLowerCase().replace(/[^a-z0-9]/g, '')
-        // Ensure we do not overwrite a username the user has already manually typed
-        nextState.username = prev.username || suggested
-      }
-      
-      return nextState
-    })
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors,       setErrors]       = useState({});
+  const [loading,      setLoading]      = useState(false);
 
-    // Dynamically clear target error state
-    setErrors(prev => ({ ...prev, [field]: '', general: '' }))
-  }
+  // ── Already-authenticated redirect ─────────────────────────────────────
+  // WHY useEffect for this case only:
+  // This handles exactly ONE scenario: a user who is already logged in
+  // navigates to /register (types the URL directly or follows a link).
+  // It fires on mount and on any isAuthenticated change.
+  //
+  // It does NOT handle the post-registration redirect. That happens
+  // directly in the try block to avoid an extra render cycle and
+  // the unmounted-component state update problem.
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
-  /**
-   * WHAT: Defensive form validation scanner
-   * WHY: Ensures compliance with RFC DNS guidelines and isolates formatting bugs before hitting Django.
-   */
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+
+    // WHY only clear the changed field's error:
+    // A general server error ("email already registered") must remain
+    // visible while the user reads and acts on it. Clearing it on the
+    // first keystroke of any field removes it before they've finished reading.
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+  };
+
   function validate() {
-    const e = {}
-    
-    // Strict email structure check
-    if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) {
-      e.email = 'Enter a valid email'
+    const fieldErrors = {};
+
+    if (!form.displayName.trim() || form.displayName.trim().length < 3) {
+      fieldErrors.displayName = 'Business name must be at least 3 characters.';
     }
-    
-    // Subdomain Validation Protocol (Strict RFC 1035 / RFC 1123 Compliance)
-    const cleanUsername = form.username.trim()
-    if (!cleanUsername || cleanUsername.length < 3) {
-      e.username = 'Username must be 3+ characters'
-    } else {
-      // Must only contain letters, numbers, and isolated single hyphens. No underscores, no leading/trailing hyphens.
-      const dnsRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-      if (!dnsRegex.test(cleanUsername)) {
-        e.username = 'Only lowercase letters, numbers, and single hyphens are allowed. Cannot start/end with hyphens.'
-      }
+
+    const trimmedUsername = form.username.trim();
+    const usernameRegex   = /^[a-zA-Z0-9_-]+$/;
+
+    if (!trimmedUsername) {
+      fieldErrors.username = 'Username is required.';
+    } else if (trimmedUsername.length < 3) {
+      fieldErrors.username = 'Username must be at least 3 characters.';
+    } else if (trimmedUsername.length > 30) {
+      fieldErrors.username = 'Username must be 30 characters or fewer.';
+    } else if (!usernameRegex.test(trimmedUsername)) {
+      fieldErrors.username = 'Only letters, numbers, underscores, and hyphens.';
     }
-    
+
+    if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      fieldErrors.email = 'Enter a valid email address.';
+    }
+
     if (!form.password || form.password.length < 8) {
-      e.password = 'Password must be 8+ characters'
+      fieldErrors.password = 'Password must be at least 8 characters.';
     }
-    
-    if (form.password !== form.password2) {
-      e.password2 = 'Passwords do not match'
+
+    if (form.confirmPassword !== form.password) {
+      fieldErrors.confirmPassword = 'Passwords do not match.';
     }
-    
-    return e
+
+    return fieldErrors;
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (loading) return // Prevent duplicate execution streams on multiple clicks
+    e.preventDefault();
+    if (loading) return;
 
-    const errs = validate()
-    if (Object.keys(errs).length) { 
-      setErrors(errs)
-      return 
+    const fieldErrors = validate();
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors);
+      return;
     }
-    
-    if (!agree) { 
-      setErrors({ agree: 'Please agree to the Terms of Service' })
-      return 
-    }
-    
-    setErrors({})
-    setLoading(true)
-    
+
+    setErrors({});
+    setLoading(true);
+
+    const payload = {
+      username:     form.username.toLowerCase().trim(),
+      email:        form.email.trim(),
+      password:     form.password,
+      display_name: form.displayName.trim(),
+    };
+
     try {
-      // payload-sanitize: Include password2 to satisfy backend validation checks
-      const payload = {
-        email: form.email,
-        username: form.username,
-        display_name: form.display_name,
-        password: form.password,
-        password2: form.password2
-      }
-      
-      await register(payload)
-      navigate('/dashboard')
+      await register(payload);
+
+      // WHY navigate here and not rely on the useEffect:
+      // If navigation were left to the useEffect, the sequence is:
+      //   register() resolves → store updates → component re-renders →
+      //   useEffect fires → navigate() → unmount → finally runs setLoading(false)
+      //   on a dead component (React warning).
+      //
+      // Navigating directly here means:
+      //   register() resolves → navigate() → unmount
+      //   The finally block never runs because the component is gone.
+      //   No unmounted state update. No extra render cycle. Clean.
+      navigate('/dashboard', { replace: true });
+
     } catch (err) {
-      // Standardize structured exception mapping
-      setErrors(err.response?.data || { general: 'Registration failed. Please check your inputs.' })
-    } finally {
-      setLoading(false)
+      const responseData = err.response?.data || {};
+      const parsedErrors = {};
+
+      if (responseData.non_field_errors) {
+        parsedErrors.general = responseData.non_field_errors[0];
+      } else if (responseData.detail) {
+        parsedErrors.general = responseData.detail;
+      } else {
+        // WHY explicit keyMap over regex camelCase conversion:
+        // The regex approach converts any unknown backend key automatically,
+        // potentially mapping fields that do not exist in our form state.
+        // The explicit map only accepts fields we know about. Anything
+        // unexpected surfaces as a general error — visible to the user.
+        const keyMap = {
+          display_name: 'displayName',
+          username:     'username',
+          email:        'email',
+          password:     'password',
+        };
+        Object.entries(responseData).forEach(([key, value]) => {
+          const formKey      = keyMap[key] || null;
+          const errorMessage = Array.isArray(value) ? value[0] : value;
+          if (formKey) {
+            parsedErrors[formKey] = errorMessage;
+          } else {
+            parsedErrors.general = errorMessage;
+          }
+        });
+      }
+
+      if (Object.keys(parsedErrors).length === 0) {
+        parsedErrors.general = 'Failed to create account. Please try again.';
+      }
+
+      setErrors(parsedErrors);
+      // WHY setLoading(false) here and not in finally:
+      // On success, navigate() unmounts this component before finally runs.
+      // Calling setLoading on an unmounted component produces a React warning.
+      // On failure, the component stays mounted — setLoading here is safe.
+      setLoading(false);
     }
-  }
+  };
+
+  const previewUsername = form.username.toLowerCase().trim() || 'yourname';
 
   return (
-    <div className="auth-page">
-      <div className="auth-page__bg" />
-      <div className="auth-page__grid" />
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
 
-      <Link to="/" className="auth-page__back">← Back to home</Link>
-
-      <div className="auth-card animate-fadeUp">
-        {/* Logo */}
-        <div className="auth-card__logo">
-          <div className="auth-card__logo-icon">📸</div>
-          <div className="auth-card__brand">Kyapture</div>
+        <div className="text-center mb-8">
+          <p className="text-2xl font-semibold tracking-tight text-gray-900">
+            Kyapture
+          </p>
+          <p className="mt-1 text-sm text-gray-500">
+            Start delivering beautiful galleries today
+          </p>
         </div>
 
-        <h1 className="auth-card__title">Create account</h1>
-        <p className="auth-card__sub">Start delivering beautiful galleries today</p>
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
 
-        {/* Tabs */}
-        <div className="auth-tabs">
-          <Link to="/login" className="auth-tab" style={{ textDecoration: 'none', textAlign: 'center' }}>
-            Sign in
-          </Link>
-          <button className="auth-tab auth-tab--active" type="button">Create account</button>
-        </div>
+          <div className="flex border border-gray-200 rounded-xl p-1 mb-6 gap-1">
+            <Link
+              to="/login"
+              className="flex-1 text-center text-sm py-2 rounded-lg text-gray-500
+                         hover:text-gray-800 transition-colors"
+            >
+              Sign in
+            </Link>
+            <button
+              type="button"
+              className="flex-1 text-center text-sm py-2 rounded-lg bg-gray-900
+                         text-white font-medium cursor-default"
+            >
+              Create account
+            </button>
+          </div>
 
-        <form onSubmit={handleSubmit} noValidate>
           {errors.general && (
-            <div style={{
-              marginBottom: 16, padding: '10px 14px',
-              background: 'rgba(192,72,58,0.08)', border: '1px solid rgba(192,72,58,0.2)',
-              borderRadius: 9, fontSize: 13, color: 'var(--red)'
-            }}>
+            <div
+              role="alert"
+              className="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200
+                         text-sm text-red-700"
+            >
               {errors.general}
             </div>
           )}
 
-          {/* Name row */}
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Display name</label>
-              <input
-                className={`form-input ${errors.display_name ? 'error' : ''}`}
-                placeholder=""
-                value={form.display_name}
-                onChange={e => set('display_name', e.target.value)}
-                autoComplete="name"
-                disabled={loading}
-              />
-              {errors.display_name && <div className="form-error">{errors.display_name}</div>}
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Username</label>
-              <input
-                className={`form-input ${errors.username ? 'error' : ''}`}
-                placeholder="yourname"
-                // Enforce strict lowercase, transform spaces to hyphens instantly, and strip underscores
-                value={form.username}
-                onChange={e => {
-                  const sanitizedValue = e.target.value
-                    .toLowerCase()
-                    .replace(/\s+/g, '-')
-                    .replace(/[^a-z0-9-]/g, '') // Strict exclusion of underscores
-                  set('username', sanitizedValue)
-                }}
-                autoComplete="username"
-                disabled={loading}
-              />
-              {errors.username && <div className="form-error">{errors.username}</div>}
-            </div>
-          </div>
+          <form onSubmit={handleSubmit} noValidate>
 
-          {/* Subdomain URL live projection */}
-          {form.username && !errors.username && (
-            <div className="form-hint" style={{ marginTop: -10, marginBottom: 14 }}>
+            <div className="grid grid-cols-2 gap-3 mb-1">
+              <div>
+                <label
+                  htmlFor="reg-display-name"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Business name
+                </label>
+                <input
+                  id="reg-display-name"
+                  name="displayName"
+                  type="text"
+                  autoComplete="organization"
+                  placeholder="Doe Photography"
+                  value={form.displayName}
+                  onChange={handleChange}
+                  disabled={loading}
+                  aria-invalid={!!errors.displayName}
+                  aria-describedby={errors.displayName ? 'err-display-name' : undefined}
+                  className={`w-full px-3 py-2 text-sm rounded-lg border
+                    focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    ${errors.displayName
+                      ? 'border-red-400 bg-red-50 focus:ring-red-200'
+                      : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                    }`}
+                />
+                {errors.displayName && (
+                  <p id="err-display-name" className="mt-1 text-xs text-red-600">
+                    {errors.displayName}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="reg-username"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Username
+                </label>
+                <input
+                  id="reg-username"
+                  name="username"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="yourname"
+                  value={form.username}
+                  onChange={handleChange}
+                  disabled={loading}
+                  aria-invalid={!!errors.username}
+                  aria-describedby={errors.username ? 'err-username' : 'username-preview'}
+                  className={`w-full px-3 py-2 text-sm rounded-lg border
+                    focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    ${errors.username
+                      ? 'border-red-400 bg-red-50 focus:ring-red-200'
+                      : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                    }`}
+                />
+                {errors.username && (
+                  <p id="err-username" className="mt-1 text-xs text-red-600">
+                    {errors.username}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <p
+              id="username-preview"
+              aria-live="polite"
+              className="mb-5 text-xs text-gray-400"
+            >
               Your gallery link:{' '}
-              <strong style={{ color: 'var(--accent)' }}>{form.username}.kyapture.com</strong>
-            </div>
-          )}
+              <span className="font-medium text-gray-600">
+                {previewUsername}.kyapture.com
+              </span>
+            </p>
 
-          {/* Email */}
-          <div className="form-group">
-            <label className="form-label">Email address</label>
-            <input
-              className={`form-input ${errors.email ? 'error' : ''}`}
-              type="email"
-              placeholder="you@example.com"
-              value={form.email}
-              onChange={e => set('email', e.target.value)}
-              autoComplete="email"
-              disabled={loading}
-            />
-            {errors.email && <div className="form-error">{errors.email}</div>}
-          </div>
-
-          {/* Password */}
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <div className="input-wrap">
+            <div className="mb-4">
+              <label
+                htmlFor="reg-email"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Email address
+              </label>
               <input
-                className={`form-input ${errors.password ? 'error' : ''}`}
-                type={showPw ? 'text' : 'password'}
-                placeholder="Minimum 8 characters"
-                value={form.password}
-                onChange={e => set('password', e.target.value)}
-                autoComplete="new-password"
+                id="reg-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={handleChange}
                 disabled={loading}
+                aria-invalid={!!errors.email}
+                aria-describedby={errors.email ? 'err-email' : undefined}
+                className={`w-full px-3 py-2 text-sm rounded-lg border
+                  focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  ${errors.email
+                    ? 'border-red-400 bg-red-50 focus:ring-red-200'
+                    : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                  }`}
               />
-              <button type="button" className="eye-btn" onClick={() => setShowPw(p => !p)} disabled={loading}>
-                {showPw ? '🙈' : '👁'}
-              </button>
+              {errors.email && (
+                <p id="err-email" className="mt-1 text-xs text-red-600">
+                  {errors.email}
+                </p>
+              )}
             </div>
-            
-            {form.password && (
-              <div className="pw-strength">
-                <div className="pw-strength__bars">
-                  {[1, 2, 3, 4].map(i => (
-                    <div
-                      key={i}
-                      className="pw-strength__bar"
-                      style={{ background: i <= pwScore ? STRENGTH_COLORS[pwScore] : 'var(--warm)' }}
-                    />
-                  ))}
-                </div>
-                <div className="pw-strength__label" style={{ color: STRENGTH_COLORS[pwScore] }}>
-                  {STRENGTH_LABELS[pwScore]}
-                </div>
+
+            <div className="mb-4">
+              <label
+                htmlFor="reg-password"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="reg-password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Minimum 8 characters"
+                  value={form.password}
+                  onChange={handleChange}
+                  disabled={loading}
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? 'err-password' : undefined}
+                  className={`w-full pl-3 pr-10 py-2 text-sm rounded-lg border
+                    focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    ${errors.password
+                      ? 'border-red-400 bg-red-50 focus:ring-red-200'
+                      : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                    }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  disabled={loading}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center
+                             text-gray-400 hover:text-gray-600 transition-colors
+                             disabled:cursor-not-allowed"
+                >
+                  {showPassword ? (
+                    // Eye-off icon — hide password
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                         aria-hidden="true">
+                      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8
+                               a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0
+                               0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  ) : (
+                    // Eye icon — show password
+                    // WHY the space before "8" in "11 8" matters:
+                    // "11-8" = x:11, y:-8 (negative, wrong shape)
+                    // "11 8" = x:11,  y:8 (positive, correct oval arc)
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                         aria-hidden="true">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  )}
+                </button>
               </div>
-            )}
-            {errors.password && <div className="form-error">{errors.password}</div>}
-          </div>
+              {errors.password && (
+                <p id="err-password" className="mt-1 text-xs text-red-600">
+                  {errors.password}
+                </p>
+              )}
+            </div>
 
-          {/* Confirm password */}
-          <div className="form-group">
-            <label className="form-label">Confirm password</label>
-            <input
-              className={`form-input ${errors.password2 ? 'error' : ''}`}
-              type="password"
-              placeholder="Repeat password"
-              value={form.password2}
-              onChange={e => set('password2', e.target.value)}
-              autoComplete="new-password"
+            <div className="mb-6">
+              <label
+                htmlFor="reg-confirm"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Confirm password
+              </label>
+              <input
+                id="reg-confirm"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Repeat your password"
+                value={form.confirmPassword}
+                onChange={handleChange}
+                disabled={loading}
+                aria-invalid={!!errors.confirmPassword}
+                aria-describedby={errors.confirmPassword ? 'err-confirm' : undefined}
+                className={`w-full px-3 py-2 text-sm rounded-lg border
+                  focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  ${errors.confirmPassword
+                    ? 'border-red-400 bg-red-50 focus:ring-red-200'
+                    : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                  }`}
+              />
+              {errors.confirmPassword && (
+                <p id="err-confirm" className="mt-1 text-xs text-red-600">
+                  {errors.confirmPassword}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="submit"
               disabled={loading}
-            />
-            {errors.password2 && <div className="form-error">{errors.password2}</div>}
-          </div>
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4
+                         bg-gray-900 text-white text-sm font-medium rounded-lg
+                         hover:bg-gray-800 transition-colors
+                         disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <svg
+                    className="animate-spin h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle className="opacity-25" cx="12" cy="12" r="10"
+                            stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Creating account…
+                </>
+              ) : (
+                'Create my account'
+              )}
+            </button>
 
-          {/* Terms */}
-          <label className="auth-check auth-check--terms">
-            <input 
-              type="checkbox" 
-              checked={agree} 
-              onChange={e => setAgree(e.target.checked)} 
-              disabled={loading}
-            />
-            <span>
-              I agree to the{' '}
-              <a href="#" className="auth-link">Terms of Service</a>
-              {' '}and{' '}
-              <a href="#" className="auth-link">Privacy Policy</a>
-            </span>
-          </label>
-          {errors.agree && <div className="form-error" style={{ marginTop: -12, marginBottom: 12 }}>{errors.agree}</div>}
+            <p className="mt-5 text-center text-sm text-gray-500">
+              Already have an account?{' '}
+              <Link
+                to="/login"
+                className="font-medium text-gray-900 hover:underline"
+              >
+                Sign in
+              </Link>
+            </p>
 
-          {errors.non_field_errors && (
-            <div className="form-error" style={{ marginBottom: 12 }}>{errors.non_field_errors[0]}</div>
-          )}
-
-          {/* Submit Button with Loading states */}
-          <button className="btn-submit" type="submit" disabled={loading}>
-            {loading ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <div className="spinner" /> 
-                <span>Creating account…</span>
-              </div>
-            ) : (
-              'Create my account ✨'
-            )}
-          </button>
-
-          <p className="auth-footer-text">
-            Already have an account?{' '}
-            <Link to="/login" className="auth-link">Sign in</Link>
-          </p>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
-  )
+  );
 }
