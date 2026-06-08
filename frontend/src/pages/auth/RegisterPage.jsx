@@ -17,34 +17,34 @@
 //   Confirm these fields exist in your actual authStore.js before shipping.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuthStore } from "../../store/authStore";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const register        = useAuthStore((state) => state.register);
+  const register = useAuthStore((state) => state.register);
 
   const [form, setForm] = useState({
-    displayName:     '',
-    username:        '',
-    email:           '',
-    password:        '',
-    confirmPassword: '',
+    displayName: "",
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
 
   const [showPassword, setShowPassword] = useState(false);
-  const [errors,       setErrors]       = useState({});
-  const [loading,      setLoading]      = useState(false);
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
   // Redirects already-authenticated users who land on /register.
   // Does NOT handle post-registration redirect — that happens directly
   // in the try block to prevent setLoading firing on an unmounted component.
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      navigate("/dashboard", { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -52,7 +52,7 @@ export default function RegisterPage() {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
@@ -60,32 +60,32 @@ export default function RegisterPage() {
     const fieldErrors = {};
 
     if (!form.displayName.trim() || form.displayName.trim().length < 3) {
-      fieldErrors.displayName = 'Business name must be at least 3 characters.';
+      fieldErrors.displayName = "Business name must be at least 3 characters.";
     }
 
     const trimmedUsername = form.username.trim();
-    const usernameRegex   = /^[a-zA-Z0-9_-]+$/;
+    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
 
     if (!trimmedUsername) {
-      fieldErrors.username = 'Username is required.';
+      fieldErrors.username = "Username is required.";
     } else if (trimmedUsername.length < 3) {
-      fieldErrors.username = 'Username must be at least 3 characters.';
+      fieldErrors.username = "Username must be at least 3 characters.";
     } else if (trimmedUsername.length > 30) {
-      fieldErrors.username = 'Username must be 30 characters or fewer.';
+      fieldErrors.username = "Username must be 30 characters or fewer.";
     } else if (!usernameRegex.test(trimmedUsername)) {
-      fieldErrors.username = 'Only letters, numbers, underscores, and hyphens.';
+      fieldErrors.username = "Only letters, numbers, underscores, and hyphens.";
     }
 
     if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      fieldErrors.email = 'Enter a valid email address.';
+      fieldErrors.email = "Enter a valid email address.";
     }
 
     if (!form.password || form.password.length < 8) {
-      fieldErrors.password = 'Password must be at least 8 characters.';
+      fieldErrors.password = "Password must be at least 8 characters.";
     }
 
     if (form.confirmPassword !== form.password) {
-      fieldErrors.confirmPassword = 'Passwords do not match.';
+      fieldErrors.confirmPassword = "Passwords do not match.";
     }
 
     return fieldErrors;
@@ -105,13 +105,13 @@ export default function RegisterPage() {
     setLoading(true);
 
     const payload = {
-      username:     form.username.toLowerCase().trim(),
-      email:        form.email.trim(),
-      password:     form.password,
+      username: form.username.toLowerCase().trim(),
+      email: form.email.trim(),
+      password: form.password,
       // WHY password2 is included: backend developer confirmed the
       // RegisterSerializer requires this field for server-side confirmation.
       // TODO: verify this against the actual serializer code.
-      password2:    form.confirmPassword,
+      password2: form.confirmPassword,
       display_name: form.displayName.trim(),
     };
 
@@ -120,17 +120,16 @@ export default function RegisterPage() {
       // Navigate directly — do not rely on useEffect.
       // If useEffect handled this, setLoading(false) would fire on an
       // unmounted component. Direct navigation prevents that.
-      navigate('/dashboard', { replace: true });
-
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       // ── Error response contract (core/exceptions.py) ──────────────────
       // {
       //   "error":   "General message string",
       //   "details": { "field_name": ["Error message array"] }
       // }
-      const responseData      = err.response?.data || {};
+      const responseData = err.response?.data || {};
       const validationDetails = responseData.details || {};
-      const parsedErrors      = {};
+      const parsedErrors = {};
 
       // ── Step 1: Map field-level errors first ──────────────────────────
       // WHY field errors first:
@@ -138,19 +137,19 @@ export default function RegisterPage() {
       //   BEFORE deciding whether the general banner adds anything.
       //   Mapping first then checking parsedErrors gives the true picture.
       const keyMap = {
-        display_name:     'displayName',
-        username:         'username',
-        email:            'email',
-        password:         'password',
-        password2:        'confirmPassword',
+        display_name: "displayName",
+        username: "username",
+        email: "email",
+        password: "password",
+        password2: "confirmPassword",
         // non_field_errors can appear inside details for cross-field
         // validation (e.g., passwords match check performed server-side).
         // Mapped to general so it appears as a banner, not a field error.
-        non_field_errors: 'general',
+        non_field_errors: "general",
       };
 
       Object.entries(validationDetails).forEach(([key, value]) => {
-        const formKey      = keyMap[key] || null;
+        const formKey = keyMap[key] || null;
         const errorMessage = Array.isArray(value) ? value[0] : String(value);
         if (formKey) {
           parsedErrors[formKey] = errorMessage;
@@ -187,7 +186,7 @@ export default function RegisterPage() {
       // Covers network failure, timeout, or CORS error where
       // err.response is undefined — responseData and details both {}.
       if (Object.keys(parsedErrors).length === 0) {
-        parsedErrors.general = 'Failed to create account. Please try again.';
+        parsedErrors.general = "Failed to create account. Please try again.";
       }
 
       setErrors(parsedErrors);
@@ -199,12 +198,11 @@ export default function RegisterPage() {
     }
   };
 
-  const previewUsername = form.username.toLowerCase().trim() || 'yourname';
+  const previewUsername = form.username.toLowerCase().trim() || "yourname";
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-
         <div className="text-center mb-8">
           <p className="text-2xl font-semibold tracking-tight text-gray-900">
             Kyapture
@@ -215,19 +213,18 @@ export default function RegisterPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
-
           <div className="flex border border-gray-200 rounded-xl p-1 mb-6 gap-1">
             <Link
               to="/login"
               className="flex-1 text-center text-sm py-2 rounded-lg text-gray-500
-                         hover:text-gray-800 transition-colors"
+                        hover:text-gray-800 transition-colors"
             >
               Sign in
             </Link>
             <button
               type="button"
               className="flex-1 text-center text-sm py-2 rounded-lg bg-gray-900
-                         text-white font-medium cursor-default"
+                        text-white font-medium cursor-default"
             >
               Create account
             </button>
@@ -237,14 +234,13 @@ export default function RegisterPage() {
             <div
               role="alert"
               className="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200
-                         text-sm text-red-700"
+                        text-sm text-red-700"
             >
               {errors.general}
             </div>
           )}
 
           <form onSubmit={handleSubmit} noValidate>
-
             <div className="grid grid-cols-2 gap-3 mb-1">
               <div>
                 <label
@@ -263,17 +259,23 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   disabled={loading}
                   aria-invalid={!!errors.displayName}
-                  aria-describedby={errors.displayName ? 'err-display-name' : undefined}
+                  aria-describedby={
+                    errors.displayName ? "err-display-name" : undefined
+                  }
                   className={`w-full px-3 py-2 text-sm rounded-lg border
                     focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
                     disabled:opacity-50 disabled:cursor-not-allowed
-                    ${errors.displayName
-                      ? 'border-red-400 bg-red-50 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                    ${
+                      errors.displayName
+                        ? "border-red-400 bg-red-50 focus:ring-red-200"
+                        : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
                     }`}
                 />
                 {errors.displayName && (
-                  <p id="err-display-name" className="mt-1 text-xs text-red-600">
+                  <p
+                    id="err-display-name"
+                    className="mt-1 text-xs text-red-600"
+                  >
                     {errors.displayName}
                   </p>
                 )}
@@ -296,13 +298,16 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   disabled={loading}
                   aria-invalid={!!errors.username}
-                  aria-describedby={errors.username ? 'err-username' : 'username-preview'}
+                  aria-describedby={
+                    errors.username ? "err-username" : "username-preview"
+                  }
                   className={`w-full px-3 py-2 text-sm rounded-lg border
                     focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
                     disabled:opacity-50 disabled:cursor-not-allowed
-                    ${errors.username
-                      ? 'border-red-400 bg-red-50 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                    ${
+                      errors.username
+                        ? "border-red-400 bg-red-50 focus:ring-red-200"
+                        : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
                     }`}
                 />
                 {errors.username && (
@@ -318,7 +323,7 @@ export default function RegisterPage() {
               aria-live="polite"
               className="mb-5 text-xs text-gray-400"
             >
-              Your gallery link:{' '}
+              Your gallery link:{" "}
               <span className="font-medium text-gray-600">
                 {previewUsername}.kyapture.com
               </span>
@@ -341,13 +346,14 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 disabled={loading}
                 aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? 'err-email' : undefined}
+                aria-describedby={errors.email ? "err-email" : undefined}
                 className={`w-full px-3 py-2 text-sm rounded-lg border
                   focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
                   disabled:opacity-50 disabled:cursor-not-allowed
-                  ${errors.email
-                    ? 'border-red-400 bg-red-50 focus:ring-red-200'
-                    : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                  ${
+                    errors.email
+                      ? "border-red-400 bg-red-50 focus:ring-red-200"
+                      : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
                   }`}
               />
               {errors.email && (
@@ -368,48 +374,69 @@ export default function RegisterPage() {
                 <input
                   id="reg-password"
                   name="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   placeholder="Minimum 8 characters"
                   value={form.password}
                   onChange={handleChange}
                   disabled={loading}
                   aria-invalid={!!errors.password}
-                  aria-describedby={errors.password ? 'err-password' : undefined}
+                  aria-describedby={
+                    errors.password ? "err-password" : undefined
+                  }
                   className={`w-full pl-3 pr-10 py-2 text-sm rounded-lg border
                     focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
                     disabled:opacity-50 disabled:cursor-not-allowed
-                    ${errors.password
-                      ? 'border-red-400 bg-red-50 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                    ${
+                      errors.password
+                        ? "border-red-400 bg-red-50 focus:ring-red-200"
+                        : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
                     }`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
                   disabled={loading}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   className="absolute inset-y-0 right-0 px-3 flex items-center
                              text-gray-400 hover:text-gray-600 transition-colors
                              disabled:cursor-not-allowed"
                 >
                   {showPassword ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
-                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                         aria-hidden="true">
-                      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8
                                a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0
-                               0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
-                      <line x1="1" y1="1" x2="23" y2="23"/>
+                               0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"
+                      />
+                      <line x1="1" y1="1" x2="23" y2="23" />
                     </svg>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
-                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                         aria-hidden="true">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                      <circle cx="12" cy="12" r="3"/>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
                     </svg>
                   )}
                 </button>
@@ -438,13 +465,16 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 disabled={loading}
                 aria-invalid={!!errors.confirmPassword}
-                aria-describedby={errors.confirmPassword ? 'err-confirm' : undefined}
+                aria-describedby={
+                  errors.confirmPassword ? "err-confirm" : undefined
+                }
                 className={`w-full px-3 py-2 text-sm rounded-lg border
                   focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
                   disabled:opacity-50 disabled:cursor-not-allowed
-                  ${errors.confirmPassword
-                    ? 'border-red-400 bg-red-50 focus:ring-red-200'
-                    : 'border-gray-300 focus:border-gray-400 focus:ring-gray-100'
+                  ${
+                    errors.confirmPassword
+                      ? "border-red-400 bg-red-50 focus:ring-red-200"
+                      : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
                   }`}
               />
               {errors.confirmPassword && (
@@ -464,28 +494,43 @@ export default function RegisterPage() {
             >
               {loading ? (
                 <>
-                  <svg className="animate-spin h-4 w-4 text-white"
-                       xmlns="http://www.w3.org/2000/svg"
-                       fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle className="opacity-25" cx="12" cy="12" r="10"
-                            stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <svg
+                    className="animate-spin h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
                   </svg>
                   Creating account…
                 </>
               ) : (
-                'Create my account'
+                "Create my account"
               )}
             </button>
 
             <p className="mt-5 text-center text-sm text-gray-500">
-              Already have an account?{' '}
-              <Link to="/login" className="font-medium text-gray-900 hover:underline">
+              Already have an account?{" "}
+              <Link
+                to="/login"
+                className="font-medium text-gray-900 hover:underline"
+              >
                 Sign in
               </Link>
             </p>
-
           </form>
         </div>
       </div>

@@ -64,7 +64,9 @@ const setAccessToken = (token) => {
 // ─────────────────────────────────────────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
-    const token = getAccessToken() // ✅ FIXED: reads from kyapture-auth
+    // Zustand persist stores as { state: { accessToken: "..." } }
+    const persisted = localStorage.getItem('kyapture-auth')
+    const token = persisted ? JSON.parse(persisted)?.state?.accessToken : null
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
