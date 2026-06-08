@@ -24,17 +24,20 @@ import PricingPage        from './pages/subscription/PricingPage'
 import LandingPage        from './pages/LandingPage'
 
 export default function App() {
-  // Selector pattern: subscribes only to `init`, not the entire store
   const init = useAuthStore((s) => s.init)
 
-  // Single owner of session re-hydration — never call init() anywhere else
   useEffect(() => {
     init()
   }, [init])
 
   return (
     <ToastProvider>
-      <BrowserRouter>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Routes>
           {/* Public */}
           <Route path="/"                element={<LandingPage />} />
