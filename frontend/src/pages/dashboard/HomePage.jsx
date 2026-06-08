@@ -5,7 +5,6 @@ import { galleriesApi } from '../../api/galleriesApi'
 import { subscriptionsApi } from '../../api/subscriptionsApi'
 import Badge from '../../components/ui/Badge'
 import { formatDate } from '../../utils/formatters'
-import { SUBSCRIPTION_STATUS_COLORS } from '../../utils/constants'
 
 export default function HomePage() {
   const { user } = useAuthStore()
@@ -15,16 +14,23 @@ export default function HomePage() {
 
   useEffect(() => {
     Promise.all([
-      galleriesApi.list().then((r) => setGalleries(r.data.results || r.data)),
-      subscriptionsApi.mySubscription().then((r) => setSub(r.data)).catch(() => {}),
+      // ✅ FIXED: getGalleries() returns data directly, not r.data
+      galleriesApi.getGalleries()
+        .then((data) => setGalleries(data.results || []))
+        .catch(() => setGalleries([])),
+
+      // ✅ CORRECT: subscriptionsApi returns full axios response, so r.data is right
+      subscriptionsApi.mySubscription()
+        .then((r) => setSub(r.data))
+        .catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
 
   const stats = [
-    { label: 'Total Galleries', value: galleries.length },
-    { label: 'Published', value: galleries.filter((g) => g.is_published).length },
-    { label: 'Protected', value: galleries.filter((g) => g.is_password_protected).length },
-    { label: 'Plan', value: sub ? sub.plan?.name : 'Free' },
+    { label: 'Total Galleries',  value: galleries.length },
+    { label: 'Published',        value: galleries.filter((g) => g.is_published).length },
+    { label: 'Protected',        value: galleries.filter((g) => g.has_password).length },
+    { label: 'Plan',             value: sub ? sub.plan?.name : 'Free' },
   ]
 
   return (
@@ -64,7 +70,10 @@ export default function HomePage() {
             </p>
           </div>
           <Badge
-            variant={sub.status === 'active' ? 'success' : sub.status === 'pending' ? 'warning' : 'danger'}
+            variant={
+              sub.status === 'active'  ? 'success' :
+              sub.status === 'pending' ? 'warning' : 'danger'
+            }
           >
             {sub.status}
           </Badge>
@@ -75,14 +84,17 @@ export default function HomePage() {
       <div className="animate-fade-up delay-300">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-serif text-2xl text-ink">Recent Galleries</h2>
-          <Link to="/dashboard/galleries" className="text-sm text-muted hover:text-ink underline underline-offset-2">
+          <Link
+            to="/dashboard/galleries"
+            className="text-sm text-muted hover:text-ink underline underline-offset-2"
+          >
             View all
           </Link>
         </div>
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1,2,3].map(i => (
+            {[1, 2, 3].map((i) => (
               <div key={i} className="skeleton h-40 rounded-2xl" />
             ))}
           </div>
@@ -101,7 +113,7 @@ export default function HomePage() {
             {galleries.slice(0, 6).map((gallery) => (
               <Link
                 key={gallery.id}
-                to={`/dashboard/galleries/${gallery.id}`}
+                to={`/dashboard/galleries/${gallery.slug}`}
                 className="group bg-white rounded-2xl border border-cream-200 overflow-hidden hover:border-cream-400 hover:shadow-sm transition-all duration-200"
               >
                 <div className="h-36 bg-cream-100 relative overflow-hidden">
@@ -130,7 +142,7 @@ export default function HomePage() {
                     <Badge variant={gallery.is_published ? 'success' : 'default'}>
                       {gallery.is_published ? 'Published' : 'Draft'}
                     </Badge>
-                    {gallery.is_password_protected && (
+                    {gallery.has_password && (
                       <Badge variant="warning">Protected</Badge>
                     )}
                   </div>
