@@ -1,15 +1,20 @@
 // frontend/src/pages/auth/RegisterPage.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 // WHAT: Registration page for new photographers.
-// WHY this file exists: Captures business name, email, credentials, and the
-//   username that becomes their public subdomain (username.kyapture.com).
-//   On success, navigates to /dashboard immediately.
+// WHY:  Captures business name, email, credentials, and the username that
+//       becomes their public subdomain (username.kyapture.com).
+//       On success, navigates to /dashboard immediately.
 //
-// ARCHITECTURAL NOTE ON STORE BINDINGS:
-//   This file uses useAuthStore selectors. The exact fields (isAuthenticated,
-//   register) must match your actual authStore.js. If your store exposes
-//   { accessToken, setAuth } instead, change the two selector lines and the
-//   try block accordingly. The rest of this file is store-agnostic.
+// ERROR RESPONSE CONTRACT — from core/exceptions.py:
+//   {
+//     "error":   "General message string",
+//     "details": { "field_name": ["Error message"] }
+//   }
+//   All error parsing in this file must match this exact shape.
+//
+// STORE BINDING NOTE:
+//   This file reads `isAuthenticated` and `register` from authStore.
+//   Confirm these fields exist in your actual authStore.js before shipping.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from 'react';
@@ -19,18 +24,6 @@ import { useAuthStore } from '../../store/authStore';
 export default function RegisterPage() {
   const navigate = useNavigate();
 
-  // ── Store bindings ──────────────────────────────────────────────────────
-  // WHY selector pattern (state => state.x):
-  // Subscribes this component only to the specific field it needs.
-  // Without a selector, any store change (even unrelated ones) re-renders
-  // this entire page. Selectors are not optional — they are required for
-  // performance correctness.
-  //
-  // NOTE: If your authStore.js does not have isAuthenticated and register,
-  // replace these two lines with:
-  //   const isAuthenticated = useAuthStore((state) => !!state.accessToken)
-  //   const setAuth         = useAuthStore((state) => state.setAuth)
-  // and update the try block to call authApi.register() + setAuth() directly.
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const register        = useAuthStore((state) => state.register);
 
@@ -46,15 +39,9 @@ export default function RegisterPage() {
   const [errors,       setErrors]       = useState({});
   const [loading,      setLoading]      = useState(false);
 
-  // ── Already-authenticated redirect ─────────────────────────────────────
-  // WHY useEffect for this case only:
-  // This handles exactly ONE scenario: a user who is already logged in
-  // navigates to /register (types the URL directly or follows a link).
-  // It fires on mount and on any isAuthenticated change.
-  //
-  // It does NOT handle the post-registration redirect. That happens
-  // directly in the try block to avoid an extra render cycle and
-  // the unmounted-component state update problem.
+  // Redirects already-authenticated users who land on /register.
+  // Does NOT handle post-registration redirect — that happens directly
+  // in the try block to prevent setLoading firing on an unmounted component.
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/dashboard', { replace: true });
@@ -64,11 +51,6 @@ export default function RegisterPage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-
-    // WHY only clear the changed field's error:
-    // A general server error ("email already registered") must remain
-    // visible while the user reads and acts on it. Clearing it on the
-    // first keystroke of any field removes it before they've finished reading.
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
@@ -126,64 +108,93 @@ export default function RegisterPage() {
       username:     form.username.toLowerCase().trim(),
       email:        form.email.trim(),
       password:     form.password,
+      // WHY password2 is included: backend developer confirmed the
+      // RegisterSerializer requires this field for server-side confirmation.
+      // TODO: verify this against the actual serializer code.
+      password2:    form.confirmPassword,
       display_name: form.displayName.trim(),
     };
 
     try {
       await register(payload);
-
-      // WHY navigate here and not rely on the useEffect:
-      // If navigation were left to the useEffect, the sequence is:
-      //   register() resolves → store updates → component re-renders →
-      //   useEffect fires → navigate() → unmount → finally runs setLoading(false)
-      //   on a dead component (React warning).
-      //
-      // Navigating directly here means:
-      //   register() resolves → navigate() → unmount
-      //   The finally block never runs because the component is gone.
-      //   No unmounted state update. No extra render cycle. Clean.
+      // Navigate directly — do not rely on useEffect.
+      // If useEffect handled this, setLoading(false) would fire on an
+      // unmounted component. Direct navigation prevents that.
       navigate('/dashboard', { replace: true });
 
     } catch (err) {
-      const responseData = err.response?.data || {};
-      const parsedErrors = {};
+      // ── Error response contract (core/exceptions.py) ──────────────────
+      // {
+      //   "error":   "General message string",
+      //   "details": { "field_name": ["Error message array"] }
+      // }
+      const responseData      = err.response?.data || {};
+      const validationDetails = responseData.details || {};
+      const parsedErrors      = {};
 
-      if (responseData.non_field_errors) {
-        parsedErrors.general = responseData.non_field_errors[0];
-      } else if (responseData.detail) {
-        parsedErrors.general = responseData.detail;
-      } else {
-        // WHY explicit keyMap over regex camelCase conversion:
-        // The regex approach converts any unknown backend key automatically,
-        // potentially mapping fields that do not exist in our form state.
-        // The explicit map only accepts fields we know about. Anything
-        // unexpected surfaces as a general error — visible to the user.
-        const keyMap = {
-          display_name: 'displayName',
-          username:     'username',
-          email:        'email',
-          password:     'password',
-        };
-        Object.entries(responseData).forEach(([key, value]) => {
-          const formKey      = keyMap[key] || null;
-          const errorMessage = Array.isArray(value) ? value[0] : value;
-          if (formKey) {
-            parsedErrors[formKey] = errorMessage;
-          } else {
-            parsedErrors.general = errorMessage;
-          }
-        });
+      // ── Step 1: Map field-level errors first ──────────────────────────
+      // WHY field errors first:
+      //   We must know what actionable feedback the user already has
+      //   BEFORE deciding whether the general banner adds anything.
+      //   Mapping first then checking parsedErrors gives the true picture.
+      const keyMap = {
+        display_name:     'displayName',
+        username:         'username',
+        email:            'email',
+        password:         'password',
+        password2:        'confirmPassword',
+        // non_field_errors can appear inside details for cross-field
+        // validation (e.g., passwords match check performed server-side).
+        // Mapped to general so it appears as a banner, not a field error.
+        non_field_errors: 'general',
+      };
+
+      Object.entries(validationDetails).forEach(([key, value]) => {
+        const formKey      = keyMap[key] || null;
+        const errorMessage = Array.isArray(value) ? value[0] : String(value);
+        if (formKey) {
+          parsedErrors[formKey] = errorMessage;
+        } else {
+          // Unknown backend field — surface as general rather than dropping.
+          // Append rather than overwrite in case multiple unknowns arrive.
+          parsedErrors.general = parsedErrors.general
+            ? `${parsedErrors.general} ${errorMessage}`
+            : errorMessage;
+        }
+      });
+
+      // ── Step 2: Decide whether to show the general error banner ───────
+      // WHY check parsedErrors here, not validationDetails:
+      //   We want to know whether the USER already has actionable feedback,
+      //   not whether the backend sent any detail keys.
+      //   An unrecognized backend key already falls to parsedErrors.general,
+      //   so checking parsedErrors gives us the real picture.
+      //
+      // WHY NOT hardcode 'An error occurred.' as a string comparison:
+      //   That string lives in core/exceptions.py. If the backend developer
+      //   changes it, this filter breaks silently with no warning.
+      //   Checking parsedErrors length is string-agnostic and future-proof.
+      const hasActionableFeedback = Object.keys(parsedErrors).length > 0;
+
+      if (responseData.error && !hasActionableFeedback) {
+        // General error banner adds value ONLY when the user has no
+        // field-level feedback yet. Examples: "Account suspended.",
+        // "Rate limit exceeded.", "Server error."
+        parsedErrors.general = responseData.error;
       }
 
+      // ── Step 3: Final fallback if nothing was parsed at all ───────────
+      // Covers network failure, timeout, or CORS error where
+      // err.response is undefined — responseData and details both {}.
       if (Object.keys(parsedErrors).length === 0) {
         parsedErrors.general = 'Failed to create account. Please try again.';
       }
 
       setErrors(parsedErrors);
-      // WHY setLoading(false) here and not in finally:
-      // On success, navigate() unmounts this component before finally runs.
-      // Calling setLoading on an unmounted component produces a React warning.
-      // On failure, the component stays mounted — setLoading here is safe.
+      // WHY here and not in finally:
+      //   On success, navigate() unmounts the component before finally runs.
+      //   setLoading on an unmounted component produces a React warning.
+      //   On failure, we stay mounted — this is safe.
       setLoading(false);
     }
   };
@@ -383,7 +394,6 @@ export default function RegisterPage() {
                              disabled:cursor-not-allowed"
                 >
                   {showPassword ? (
-                    // Eye-off icon — hide password
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                          viewBox="0 0 24 24" fill="none" stroke="currentColor"
                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -394,10 +404,6 @@ export default function RegisterPage() {
                       <line x1="1" y1="1" x2="23" y2="23"/>
                     </svg>
                   ) : (
-                    // Eye icon — show password
-                    // WHY the space before "8" in "11 8" matters:
-                    // "11-8" = x:11, y:-8 (negative, wrong shape)
-                    // "11 8" = x:11,  y:8 (positive, correct oval arc)
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                          viewBox="0 0 24 24" fill="none" stroke="currentColor"
                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -458,13 +464,9 @@ export default function RegisterPage() {
             >
               {loading ? (
                 <>
-                  <svg
-                    className="animate-spin h-4 w-4 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
+                  <svg className="animate-spin h-4 w-4 text-white"
+                       xmlns="http://www.w3.org/2000/svg"
+                       fill="none" viewBox="0 0 24 24" aria-hidden="true">
                     <circle className="opacity-25" cx="12" cy="12" r="10"
                             stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor"
@@ -479,10 +481,7 @@ export default function RegisterPage() {
 
             <p className="mt-5 text-center text-sm text-gray-500">
               Already have an account?{' '}
-              <Link
-                to="/login"
-                className="font-medium text-gray-900 hover:underline"
-              >
+              <Link to="/login" className="font-medium text-gray-900 hover:underline">
                 Sign in
               </Link>
             </p>
