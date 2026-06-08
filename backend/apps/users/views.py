@@ -92,3 +92,22 @@ class ChangePasswordView(APIView):
             serializer.save()
             return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class TotalUsersView(APIView):
+    """
+    GET /api/total-users
+    Public endpoint. Automatically queries PostgreSQL to return 
+    the active count of registered photographers for David's landing page [1.1.2].
+    """
+    permission_classes = [AllowAny]  # Open to guests [1.1.2]
+
+    def get(self, request):
+        # Count non-administrative photographers in the database [1.1.2]
+        count = User.objects.filter(is_superuser=False, is_staff=False).count()
+        
+        # Returns the exact JSON structure David's LandingPage.jsx expects 
+        return Response({
+            "total_count": count,
+            "latest_users": []
+        }, status=status.HTTP_200_OK)    
