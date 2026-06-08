@@ -7,10 +7,7 @@ from .models import Gallery
 
 
 class CoverPhotoSerializer(serializers.ModelSerializer):
-    """
-    Read-only. Returns highly compact cover photo metadata 
-    required for frontend grid aspect-ratio calculations [1.1.2].
-    """
+    """Read-only. Returns highly compact cover photo metadata."""
     class Meta:
         model = Photo
         fields = ['id', 'image', 'width', 'height']
@@ -21,65 +18,84 @@ class GalleryListSerializer(serializers.ModelSerializer):
     """
     GET /api/v1/galleries/
     Returns an optimized, lightweight array of galleries.
-    photo_count is annotated at the DB query level to prevent N+1 loops [1.1.2].
+    Bridges backend schema with David's expected frontend keys cleanly
     """
-    cover_photo = CoverPhotoSerializer(read_only=True)
-    photo_count = serializers.IntegerField(read_only=True)  # Populated via SQL annotation [1.1.2]
+    cover_url = serializers.SerializerMethodField()
+    photo_count = serializers.IntegerField(read_only=True)
+    is_downloadable = serializers.BooleanField(source='allow_download', read_only=True)
+    has_password = serializers.SerializerMethodField()
 
     class Meta:
         model = Gallery
         fields = [
-            'id', 'title', 'slug',
-            'cover_photo', 'photo_count',
-            'is_published', 'allow_download',
-            'is_password_protected',
-            'branding_color', 'created_at',
+            'id', 'title', 'slug', 'branding_color', 
+            'cover_url', 'photo_count', 'is_downloadable', 
+            'is_active', 'is_published', 'has_password', 
+            'created_at', 'updated_at'
         ]
         read_only_fields = fields
+
+    def get_cover_url(self, obj):
+        """Returns the absolute URL of the cover photo"""
+        request = self.context.get('request')
+        if obj.cover_photo and request:
+            return request.build_absolute_uri(obj.cover_photo.image.url)
+        return None
+
+    def get_has_password(self, obj):
+        """Converts password_hash existence into a clean boolean flag."""
+        return bool(obj.password_hash)
 
 
 class GalleryDetailSerializer(serializers.ModelSerializer):
     """
     GET /api/v1/galleries/{slug}/
-    Returns complete gallery settings. Protects password hash [1.1.2].
+    Returns complete gallery settings. Protects password hash.
     """
-    cover_photo = CoverPhotoSerializer(read_only=True)
+    cover_url = serializers.SerializerMethodField()
     photo_count = serializers.IntegerField(read_only=True)
-    photographer = serializers.UUIDField(source='photographer.id', read_only=True)
+    is_downloadable = serializers.BooleanField(source='allow_download', read_only=True)
+    has_password = serializers.SerializerMethodField()
 
     class Meta:
         model = Gallery
         fields = [
-            'id', 'photographer', 'title', 'slug',
-            'description', 'cover_photo', 'photo_count',
-            'branding_color', 'is_password_protected',
-            'password_hash', 'allow_download', 'watermark_enabled',
-            'is_published', 'expires_at', 'created_at', 'updated_at',
+            'id', 'title', 'slug', 'description', 'branding_color', 
+            'cover_url', 'photo_count', 'is_downloadable', 
+            'is_active', 'is_published', 'has_password', 
+            'password_hash', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'photographer', 'slug', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
         extra_kwargs = {
             'password_hash': {'write_only': True},
         }
 
+    def get_cover_url(self, obj):
+        request = self.context.get('request')
+        if obj.cover_photo and request:
+            return request.build_absolute_uri(obj.cover_photo.image.url)
+        return None
+
+    def get_has_password(self, obj):
+        return bool(obj.password_hash)
+
 
 class GalleryCreateSerializer(serializers.ModelSerializer):
-    """
-    POST /api/v1/galleries/
-    Auto-generates unique photographer-scoped slugs on creation [1.1.2, 1.2.7].
-    """
+    """POST /api/v1/galleries/"""
     password = serializers.CharField(
         write_only=True,
         required=False,
         allow_blank=True,
         default=''
     )
+    is_downloadable = serializers.BooleanField(source='allow_download', required=False, default=False)
 
     class Meta:
         model = Gallery
         fields = [
             'title', 'description', 'branding_color',
             'is_password_protected', 'password',
-            'allow_download', 'watermark_enabled',
+            'is_downloadable', 'watermark_enabled',
             'is_published', 'expires_at',
         ]
 
@@ -105,7 +121,6 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
         photographer = self.context['request'].user
         raw_password = validated_data.pop('password', '').strip()
 
-        # Generate unique slug scoped strictly to this photographer [1.1.2, 1.2.7]
         slug = generate_unique_slug(
             Gallery,
             validated_data['title'],
@@ -122,22 +137,20 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
         )
 
     def to_representation(self, instance):
-        # Return full annotated details immediately after creation [1.1.2]
+        # Set annotated fallback to prevent NameErrors on fresh instance returns 
+        instance.photo_count = 0
         return GalleryDetailSerializer(instance, context=self.context).data
 
 
 class GalleryUpdateSerializer(serializers.ModelSerializer):
-    """
-    PUT /api/v1/galleries/{slug}/
-    Permits cover photo updates while keeping slug immutable.
-    """
+    """PUT /api/v1/galleries/{slug}/"""
     password = serializers.CharField(
         write_only=True,
         required=False,
         allow_blank=True,
         default=''
     )
-    # Allows setting or updating the cover photo safely [1.1.2]
+    is_downloadable = serializers.BooleanField(source='allow_download', required=False)
     cover_photo = serializers.PrimaryKeyRelatedField(
         queryset=Photo.objects.all(),
         required=False,
@@ -149,7 +162,7 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'title', 'description', 'cover_photo',
             'branding_color', 'is_password_protected', 'password',
-            'allow_download', 'watermark_enabled', 'is_published', 'expires_at',
+            'is_downloadable', 'watermark_enabled', 'is_published', 'expires_at',
         ]
 
     def validate_branding_color(self, value):
@@ -184,4 +197,6 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
+        # Fallback counting evaluation for updates
+        instance.photo_count = instance.photos.count()
         return GalleryDetailSerializer(instance, context=self.context).data
