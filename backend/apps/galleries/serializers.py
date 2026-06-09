@@ -1,7 +1,12 @@
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
 
-from apps.core.utils import generate_unique_slug
+# Integrated get_user_subscription_metrics and raise_gating_violation for resource gating
+from apps.core.utils import (
+    generate_unique_slug, 
+    get_user_subscription_metrics, 
+    raise_gating_violation
+)
 from apps.photos.models import Photo
 from .models import Gallery
 
@@ -119,6 +124,17 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         photographer = self.context['request'].user
+
+        # ─── SUBSCRIPTION RESOURCE GATING ───
+        # Evaluate user's limits and usage before any DB write
+        metrics = get_user_subscription_metrics(photographer)
+        
+        if metrics["current_galleries_count"] >= metrics["max_galleries"]:
+            raise_gating_violation(
+                message=f"Gallery creation limit reached. Your active plan ({metrics['plan_name']}) restricts you to a maximum of {metrics['max_galleries']} galleries.",
+                code="gallery_limit_reached"
+            )
+
         raw_password = validated_data.pop('password', '').strip()
 
         slug = generate_unique_slug(

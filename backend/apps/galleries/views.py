@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
+# Dynamic permission routing prevents the Storage Lockout Paradox
+from apps.core.permissions import IsSubscribed
 from .models import Gallery
 from .serializers import (
     GalleryListSerializer,
@@ -16,9 +18,18 @@ from .serializers import (
 class GalleryListCreateView(APIView):
     """
     GET  /api/v1/galleries/  — List all active galleries for the logged-in photographer.
-    POST /api/v1/galleries/  — Create a new custom photographer gallery.
+    POST /api/v1/galleries/  — Create a new custom photographer gallery (Gated by Subscription) [1.1.2].
     """
-    permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        """
+        Enforce IsSubscribed strictly on write operations (POST).
+        Allows expired photographers to view their dashboard and see upgrade 
+        prompts, but blocks the creation of new resources [1.1.2].
+        """
+        if self.request.method == 'POST':
+            return [IsAuthenticated(), IsSubscribed()]
+        return [IsAuthenticated()]
 
     def get(self, request):
         # 1. Enforce strict tenant isolation (photographer=request.user) [1.1.2]
@@ -46,6 +57,7 @@ class GalleryListCreateView(APIView):
             context={'request': request}
         )
         if serializer.is_valid():
+            # Gating calculation is triggered inside serializer.create() [1.1.2]
             gallery = serializer.save()
             return Response(
                 serializer.to_representation(gallery),
@@ -59,6 +71,9 @@ class GalleryDetailView(APIView):
     GET    /api/v1/galleries/{slug}/  — View detailed settings of a specific gallery.
     PUT    /api/v1/galleries/{slug}/  — Update settings or cover photo parameters.
     DELETE /api/v1/galleries/{slug}/  — Soft-delete gallery (mark is_active=False) [1.1.2].
+    
+    NOTE: Left with IsAuthenticated permission to allow expired users to edit/delete 
+    assets to cleanly manage their database footprint and resolve plan limit blocks.
     """
     permission_classes = [IsAuthenticated]
 
@@ -127,5 +142,5 @@ class GalleryDetailView(APIView):
         
         return Response(
             {'message': 'Gallery deleted successfully.'},
-            status=status.HTTP_200_OK  # HTTP 200 returned because we provide a body
+            status=status.HTTP_200_OK
         )

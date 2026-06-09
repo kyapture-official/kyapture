@@ -1,11 +1,14 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+# Enforce clean subscription gating while preventing storage lockout traps
+from apps.core.permissions import IsSubscribed
 from apps.galleries.models import Gallery
 from .models import Photo
 from .serializers import PhotoListSerializer, PhotoUploadSerializer
@@ -14,13 +17,22 @@ from .serializers import PhotoListSerializer, PhotoUploadSerializer
 class PhotoListUploadView(APIView):
     """
     GET  /api/v1/photos/{gallery_slug}/ - Lists all photos inside an active gallery.
-    POST /api/v1/photos/{gallery_slug}/upload/ - Processes bulk image streams securely [1.1.2].
+    POST /api/v1/photos/{gallery_slug}/upload/ - Processes bulk image streams securely (Subscription Gated).
     """
-    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
+    def get_permissions(self):
+        """
+        Enforce IsSubscribed strictly on POST requests (Resource Allocation).
+        Allows expired photographers to fetch existing assets via GET, 
+        but blocks uploads with an immediate 403 Forbidden.
+        """
+        if self.request.method == 'POST':
+            return [IsAuthenticated(), IsSubscribed()]
+        return [IsAuthenticated()]
+
     def get_gallery(self, slug, user):
-        """Retrieves an active gallery scoped strictly to the requesting user [1.1.2]."""
+        """Retrieves an active gallery scoped strictly to the requesting user."""
         try:
             return Gallery.objects.get(slug=slug, photographer=user, is_active=True)
         except Gallery.DoesNotExist:
@@ -56,9 +68,11 @@ class PhotoListUploadView(APIView):
                         context={'request': request, 'gallery': gallery}
                     )
                     serializer.is_valid(raise_exception=True)
+                    # Resource gating occurs inside the serializer's create method [1.1.2]
                     photo = serializer.save(gallery=gallery)
                     uploaded_photos.append(photo)
         except Exception as e:
+            # PostgreSQL rolls back any files uploaded in this batch context
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
@@ -71,6 +85,9 @@ class PhotoDetailView(APIView):
     """
     GET    /api/v1/photos/photo/{photo_id}/ - Retrieve metadata of a single photo.
     DELETE /api/v1/photos/photo/{photo_id}/ - Purge a photo. Calls signal for file cleanup [1.1.2].
+    
+    NOTE: Enforces IsAuthenticated only. This ensures photographers with expired or
+    frozen accounts can always call DELETE to clean up space and regain storage compliance.
     """
     permission_classes = [IsAuthenticated]
 
