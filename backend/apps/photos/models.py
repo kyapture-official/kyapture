@@ -1,82 +1,147 @@
 import os
-import uuid
+from decimal import Decimal
 from django.db import models
 from apps.core.models import BaseModel
 
 
-def get_photo_upload_path(instance, filename):
+# ─────────────────────────────────────────────────────────────
+# DYNAMIC MULTI-TENANT STORAGE PATH GENERATORS
+# ─────────────────────────────────────────────────────────────
+
+def get_original_asset_path(instance, filename):
     """
-    Generates a secure, standardized, and isolated path for high-res photo uploads.
-    Format: photographers/{photographer_id}/galleries/{gallery_id}/photos/{uuid}.{ext}
+    Generates S3/local paths for original, full-res lossless source files.
+    Dynamically routes to 'photos' or 'videos' subdirectories.
     """
     ext = os.path.splitext(filename)[1].lower()
-    photo_uuid = instance.id if instance.id else uuid.uuid4()
     photographer_id = instance.gallery.photographer.id
     gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/photos/{photo_uuid}{ext}"
+    
+    # Dynamic folder segmentation based on choice field
+    folder = "photos" if instance.media_type == MediaAsset.MediaType.IMAGE else "videos"
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/{folder}/{instance.id}_original{ext}"
 
 
-def get_thumbnail_upload_path(instance, filename):
-    """
-    Generates a secure, isolated path for compressed client-facing thumbnails.
-    Format: photographers/{photographer_id}/galleries/{gallery_id}/thumbnails/{uuid}_thumb.{ext}
-    """
-    ext = os.path.splitext(filename)[1].lower()
-    photo_uuid = instance.id if instance.id else uuid.uuid4()
+def get_display_photo_path(instance, filename):
+    """Generates paths for 2048px WebP full-screen display images (null for videos)."""
     photographer_id = instance.gallery.photographer.id
     gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/thumbnails/{photo_uuid}_thumb{ext}"
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/photos/{instance.id}_display.webp"
 
 
-class Photo(BaseModel):
+def get_thumbnail_photo_path(instance, filename):
+    """Generates paths for 600px WebP grid thumbnails (null for videos)."""
+    photographer_id = instance.gallery.photographer.id
+    gallery_id = instance.gallery.id
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/thumbnails/{instance.id}_thumb.webp"
+
+
+def get_video_poster_path(instance, filename):
+    """Generates paths for frame-captured video poster thumbnails (null for images)."""
+    photographer_id = instance.gallery.photographer.id
+    gallery_id = instance.gallery.id
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_poster.webp"
+
+
+def get_video_preview_path(instance, filename):
+    """Generates paths for looping hover silent preview clips (null for images)."""
+    photographer_id = instance.gallery.photographer.id
+    gallery_id = instance.gallery.id
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_preview.webm"
+
+
+# ─────────────────────────────────────────────────────────────
+# UNIFIED MEDIA ASSET MODEL (The Production Standard)
+# ─────────────────────────────────────────────────────────────
+
+class MediaAsset(BaseModel):
     """
-    Stores metadata and file path configurations for individual photographs.
-    Utilizes secure, randomized paths for cloud bucket (S3) multi-tenancy.
+    Unified database table representing both photographs and videography assets.
+    Provides bulletproof sequential ordering, clean API serialization, and 
+    painless frontend grid calculations.
     """
-    # String reference completely prevents circular dependency imports
+    class MediaType(models.TextChoices):
+        IMAGE = 'image', 'Image'
+        VIDEO = 'video', 'Video'
+
+    # NEW: Processing states for both photos and videos
+    class ProcessingStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        PROCESSING = 'processing', 'Processing'
+        READY = 'ready', 'Ready'
+        FAILED = 'failed', 'Failed'
+
     gallery = models.ForeignKey(
         'galleries.Gallery',
         on_delete=models.CASCADE,
-        related_name='photos'
+        related_name='assets'
     )
     
-    # Files are routed dynamically to standardized folders
-    image = models.ImageField(upload_to=get_photo_upload_path, max_length=500)
-    thumbnail = models.ImageField(
-        upload_to=get_thumbnail_upload_path,
-        null=True,
-        blank=True,
-        max_length=500
+    # ─── Core Discriminator Flag ───
+    media_type = models.CharField(
+        max_length=10,
+        choices=MediaType.choices,
+        default=MediaType.IMAGE
     )
-    
-    # Optional metadata title vs. immutable system metadata
+
+    # ─── Shared Common Attributes ───
     title = models.CharField(max_length=200, blank=True)
     original_name = models.CharField(max_length=255)
+    file_size = models.PositiveIntegerField()
     
-    # Essential specifications for billing and frontend UI rendering
-    file_size = models.PositiveIntegerField()  # Stored in bytes (used to calculate storage limits)
-    width = models.PositiveIntegerField()     # Stored in pixels (required to render masonry grid safely)
-    height = models.PositiveIntegerField()    # Stored in pixels (required to render masonry grid safely)
+    # NEW: Decimal field replaces PositiveIntegerField to enable O(1) drag-and-drop insertions
+    order = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        default=Decimal('1.0')
+    )
+
+    # ─── Tier 1: Shared Original Source (Downloads) ───
+    original_file = models.FileField(upload_to=get_original_asset_path, max_length=500)
+
+    # ─── Image Specific Fields ───
+    display_file = models.ImageField(upload_to=get_display_photo_path, max_length=500, null=True, blank=True)
+    thumbnail_file = models.ImageField(upload_to=get_thumbnail_photo_path, max_length=500, null=True, blank=True)
+    blurhash = models.CharField(max_length=100, blank=True, null=True)
+    width = models.PositiveIntegerField(null=True, blank=True)   
+    height = models.PositiveIntegerField(null=True, blank=True)  
+
+    # ─── Video Specific Fields ───
+    stream_url = models.URLField(max_length=500, blank=True, null=True)  
+    poster_image = models.ImageField(upload_to=get_video_poster_path, max_length=500, null=True, blank=True)
+    preview_file = models.FileField(upload_to=get_video_preview_path, max_length=500, null=True, blank=True)
+    duration = models.PositiveIntegerField(null=True, blank=True)  
     
-    # User-defined drag-and-drop display order index
-    order = models.PositiveIntegerField(default=0)
+    # OLD video_status is now a unified asset processing status
+    processing_status = models.CharField(
+        max_length=20,
+        choices=ProcessingStatus.choices,
+        default=ProcessingStatus.PENDING
+    )
 
     class Meta:
-        db_table = 'photos'
+        db_table = 'media_assets'
         ordering = ['order', 'created_at']
-        
         indexes = [
-            # High-performance compound index for gallery loads and display sorting [1.1.2]
-            models.Index(
-                fields=['gallery', 'order'],
-                name='idx_gallery_photos_order'
-            ),
-            # Index for analytics/cleanups sorted by date
-            models.Index(
-                fields=['created_at'],
-                name='idx_photos_created_at'
-            ),
+            models.Index(fields=['gallery', 'order'], name='idx_gallery_assets_order'),
+            models.Index(fields=['gallery', 'media_type'], name='idx_gallery_assets_type'),
+            models.Index(fields=['created_at'], name='idx_assets_created_at'),
+            # NEW: Index for background worker processing sweeps
+            models.Index(fields=['processing_status'], name='idx_assets_proc_status'),
         ]
 
     def __str__(self):
-        return f"{self.gallery.title} — {self.original_name}"
+        return f"{self.get_media_type_display()}: {self.gallery.title} — {self.original_name} [{self.processing_status}]"
+
+    # NEW property helper shortcuts
+    @property
+    def is_ready(self):
+        return self.processing_status == self.ProcessingStatus.READY
+
+    @property
+    def is_photo(self):
+        return self.media_type == self.MediaType.IMAGE
+
+    @property
+    def is_video(self):
+        return self.media_type == self.MediaType.VIDEO

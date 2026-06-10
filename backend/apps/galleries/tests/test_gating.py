@@ -7,7 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.subscriptions.models import SubscriptionPlan, UserSubscription
 from apps.galleries.models import Gallery
-from apps.photos.models import Photo
+from apps.photos.models import MediaAsset
 
 User = get_user_model()
 
