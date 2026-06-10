@@ -1,26 +1,29 @@
-# backend/apps/subscriptions/urls.py
 from django.urls import path
 from .views import (
     PlanListView, 
     MySubscriptionView,
     ManualPaymentSubmitView, 
     ManualPaymentListView,
-    AdminPaymentApprovalView,
+    AdminPendingPaymentsView,  # Integrated Day 3: Administrative Pending Queue
+    AdminPaymentReviewView,    # Integrated Day 3: Stateful Administrative Approval View
 )
 
 urlpatterns = [
-    # Pricing Plans (Public)
+    # ── Pricing Plans (Public Access) ─────────────────────────────────────────
     path('plans/', PlanListView.as_view(), name='subscription-plans'),
 
-    # Current Subscription Status (Photographer)
+    # ── Subscription Status & Usage Metrics (Photographer) ────────────────────
     path('my-subscription/', MySubscriptionView.as_view(), name='my-subscription'),
 
-    # Submit Payment Screenshot (Photographer) [1.1.2]
+    # ── Manual Payment Screenshot Upload (Photographer) ──────────────────────
     path('pay/', ManualPaymentSubmitView.as_view(), name='payment-submit'),
 
-    # Payment Auditing History (Photographer / Admin Queue) [1.1.2]
+    # ── Personal Payment History Audits (Photographer) ────────────────────────
     path('payments/', ManualPaymentListView.as_view(), name='payment-list'),
 
-    # Admin Review and Plan Activation (Admin Only) [1.1.2]
-    path('payments/<uuid:payment_id>/review/', AdminPaymentApprovalView.as_view(), name='payment-review'),
+    # ── Admin Pending Review Queue (Admin Staff Only) ─────────────────────────
+    path('admin/payments/', AdminPendingPaymentsView.as_view(), name='admin-pending-payments'),
+
+    # ── Admin Decision & Activation Dispatcher (Admin Staff Only) ──────────────
+    path('payments/<uuid:payment_id>/review/', AdminPaymentReviewView.as_view(), name='admin-payment-review'),
 ]

@@ -2,9 +2,10 @@ from django.db import models
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import serializers
-from .models import ManualPayment
 from apps.photos.models import Photo
-from .models import SubscriptionPlan, UserSubscription
+from .models import SubscriptionPlan, UserSubscription, ManualPayment
+from rest_framework.exceptions import ValidationError
+
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
@@ -193,3 +194,109 @@ class ManualPaymentSubmitSerializer(serializers.ModelSerializer):
             status=ManualPayment.VerificationStatus.PENDING,
             **validated_data
         )    
+        
+        
+# ─────────────────────────────────────────────────────────────
+# 5. ADMIN PAYMENT LIST SERIALIZER (Read-Only)
+# GET /api/v1/subscriptions/admin/payments/
+# ─────────────────────────────────────────────────────────────
+class AdminPaymentListSerializer(serializers.ModelSerializer):
+    """
+    Production-Grade Read-Only Serializer for administrative reviews.
+    
+    Exposes complete relational data including plan specifics and 
+    photographer profile parameters by traversing ForeignKeys directly
+    to avoid N+1 query overhead at the serialization layer.
+    """
+    # Nested representation of the target subscription plan
+    plan = SubscriptionPlanSerializer(read_only=True)
+    payment_proof_url = serializers.SerializerMethodField()
+
+    # Direct database field traversal for related User entity properties
+    photographer_email = serializers.CharField(
+        source='user.email',
+        read_only=True
+    )
+    photographer_display_name = serializers.CharField(
+        source='user.display_name',
+        read_only=True
+    )
+
+    class Meta:
+        model = ManualPayment
+        fields = [
+            'id',
+            'photographer_email',
+            'photographer_display_name',
+            'plan',
+            'amount',
+            'payment_method',
+            'payment_proof_url',
+            'notes',
+            'status',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_payment_proof_url(self, obj):
+        """
+        Safely generates absolute URL for manual financial transaction proof receipts.
+        Handles both absolute domain prefixes and standard relative storage fallbacks.
+        """
+        request = self.context.get('request')
+        if not obj.payment_proof:
+            return None
+            
+        if request:
+            return request.build_absolute_uri(obj.payment_proof.url)
+            
+        # Fallback in environments where the request context is missing (e.g. background tasks / shells)
+        return obj.payment_proof.url
+
+
+# ─────────────────────────────────────────────────────────────
+# 6. ADMIN PAYMENT REVIEW SERIALIZER (Write-Only Validation)
+# POST /api/v1/subscriptions/payments/{id}/review/
+# ─────────────────────────────────────────────────────────────
+class AdminPaymentReviewSerializer(serializers.Serializer):
+    """
+    Validates administrative decisions on pending ledger entries.
+    
+    Enforces strict idempotency. Validates that the underlying entity
+    state is 'pending' before allowing any transitions to 'approved' 
+    or 'rejected'.
+    """
+    action = serializers.ChoiceField(choices=['approve', 'reject'])
+    admin_note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+        default=''
+    )
+
+    def validate(self, data):
+        """
+        Executes strict business-logic validations:
+        1. Guarantees that the target payment context is present.
+        2. Asserts state machine integrity (re-approving or re-rejecting is blocked).
+        """
+        payment = self.context.get('payment')
+        
+        # Guard Clause: Prevent code execution on invalid context configuration
+        if not payment:
+            raise ValidationError(
+                detail="System Error: Serializer execution context is missing the target payment record.",
+                code="missing_context"
+            )
+
+        # Idempotency Guard: State transitions can only originate from 'pending'
+        if payment.status != 'pending':
+            raise ValidationError(
+                detail={
+                    "action": f"This payment has already been evaluated and is marked as '{payment.status}'. Re-reviewing is blocked."
+                },
+                code="invalid_state_transition"
+            )
+            
+        return data        

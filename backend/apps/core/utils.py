@@ -4,6 +4,8 @@ from io import BytesIO
 from PIL import Image
 from django.core.files.base import ContentFile
 from django.utils.text import slugify
+from django.db.models import Sum, Count
+from rest_framework.exceptions import PermissionDenied
 
 
 def generate_unique_slug(model_class, title, **lookup_filters):
@@ -72,3 +74,73 @@ def generate_image_thumbnail(image_field, max_size=(800, 800), quality=85):
     except Exception as e:
         # Fallback safeguard: If image processing fails, return None so the system doesn't crash
         return None
+
+
+def get_user_subscription_metrics(user):
+    """
+    Computes a single-pass evaluation of a photographer's active subscription tier 
+    limits versus their actual real-time database usage.
+    
+    Dynamically imported inside the function to prevent circular dependency boots 
+    with apps.subscriptions, apps.galleries, and apps.photos.
+    """
+    from apps.subscriptions.models import UserSubscription, SubscriptionPlan
+    from apps.galleries.models import Gallery
+    from apps.photos.models import Photo
+
+    # Fallback default limits if no active plan is found (SaaS safety net)
+    default_limits = {
+        "plan_name": "Free (Trial)",
+        "max_galleries": 3,
+        "max_photos_per_gallery": 50,
+        "storage_bytes_limit": 2 * 1024 * 1024 * 1024,  # 2 GB Fallback
+        "current_galleries_count": 0,
+        "current_total_storage_bytes": 0,
+    }
+
+    # 1. Fetch current active subscription plan
+    try:
+        active_sub = UserSubscription.objects.select_related('plan').get(
+            user=user, 
+            status='active'
+        )
+        plan = active_sub.plan
+        limits = {
+            "plan_name": plan.name,
+            "max_galleries": plan.max_galleries,
+            "max_photos_per_gallery": plan.max_photos_per_gallery,
+            "storage_bytes_limit": plan.storage_gb * 1024 * 1024 * 1024,
+        }
+    except UserSubscription.DoesNotExist:
+        # Fall back to free tier or force subscription via standard metadata
+        limits = default_limits
+
+    # 2. Single-pass Aggregation for Current Usage
+    # Count only soft-deleted (is_active=True) galleries for accurate billing metrics
+    limits["current_galleries_count"] = Gallery.objects.filter(
+        photographer=user, 
+        is_active=True
+    ).count()
+
+    # Calculate total database storage footprints across active collections
+    storage_aggregation = Photo.objects.filter(
+        gallery__photographer=user,
+        gallery__is_active=True
+    ).aggregate(total_bytes=Sum('file_size'))
+
+    limits["current_total_storage_bytes"] = storage_aggregation['total_bytes'] or 0
+
+    return limits
+
+
+def raise_gating_violation(message, code):
+    """
+    Standardized validation exception raiser designed to match 
+    the core/exceptions.py standardized output format.
+    """
+    raise PermissionDenied(
+        detail={
+            "error": message,
+            "code": code
+        }
+    )    

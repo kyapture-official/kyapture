@@ -1,19 +1,20 @@
+from datetime import timedelta
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db import transaction
-from django.shortcuts import get_object_or_404
-from rest_framework.parsers import MultiPartParser, FormParser
 
-
-from datetime import timedelta
 from .models import SubscriptionPlan, UserSubscription, ManualPayment
 from .serializers import (
     SubscriptionPlanSerializer,
     UserSubscriptionSerializer,
     ManualPaymentSubmitSerializer,
+    AdminPaymentListSerializer,   # Integrated Day 3 Serializer
+    AdminPaymentReviewSerializer, # Integrated Day 3 Serializer
 )
 
 
@@ -131,70 +132,137 @@ class ManualPaymentListView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
-class AdminPaymentApprovalView(APIView):
+# ─────────────────────────────────────────────────────────────
+# 7. ADMIN PENDING PAYMENTS VIEW (Admin Staff Only)
+# GET /api/v1/subscriptions/admin/payments/
+# ─────────────────────────────────────────────────────────────
+class AdminPendingPaymentsView(APIView):
+    """
+    GET /api/v1/subscriptions/admin/payments/
+    Lists all pending manual payments waiting for administrative review.
+    IsAdminUser — Restricts access strictly to staff. Non-staff receives 403 [1.1.2].
+    Orders entries chronologically (oldest first) to enable a fair processing queue.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        # select_related avoids N+1 query loops when resolving related user & plan data
+        payments = (
+            ManualPayment.objects
+            .filter(status=ManualPayment.VerificationStatus.PENDING)
+            .select_related('plan', 'user')
+            .order_by('created_at')
+        )
+        serializer = AdminPaymentListSerializer(
+            payments,
+            many=True,
+            context={'request': request}
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────────
+# 8. ADMIN PAYMENT REVIEW VIEW (Admin Staff Only)
+# POST /api/v1/subscriptions/payments/{payment_id}/review/
+# ─────────────────────────────────────────────────────────────
+class AdminPaymentReviewView(APIView):
     """
     POST /api/v1/subscriptions/payments/{payment_id}/review/
-    Permits admins to approve or reject pending manual payments.
-    On approval: automatically calculates expirations, updates plan details,
-    and flips is_active_plan status inside a transaction block [1.1.2].
+    Allows platform administrators to approve or reject manual payment claims.
+    
+    Guarantees strict transaction safety (all or nothing) during multi-table writes:
+    - On Approve:
+        1. ManualPayment status transitions to APPROVED.
+        2. UserSubscription row is fetched or generated, and extended by 30 days.
+        3. User model global flag 'is_active_plan' is set to True.
+    - On Reject:
+        1. ManualPayment status transitions to REJECTED. (User billing status unchanged).
     """
-    permission_classes = [IsAdminUser]  # Hard-locked to Django administrators [1.1.2]
+    permission_classes = [IsAdminUser]
 
     def post(self, request, payment_id):
-        payment = get_object_or_404(ManualPayment, id=payment_id)
-        
-        # Enforce that we do not process already approved/rejected transactions
-        if payment.status != ManualPayment.VerificationStatus.PENDING:
-            return Response(
-                {"error": "This payment has already been reviewed."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        payment = get_object_or_404(
+            ManualPayment.objects.select_related('plan', 'user'), 
+            id=payment_id
+        )
 
-        action = request.data.get('action', '').strip().lower()
-        if action not in ['approve', 'reject']:
-            return Response(
-                {"error": "Invalid action. Must be 'approve' or 'reject'."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Utilize serializer validation to assert context-specific checks
+        serializer = AdminPaymentReviewSerializer(
+            data=request.data,
+            context={
+                'request': request,
+                'payment': payment
+            }
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Wrap database operations in an atomic block [1.1.2]
+        action = serializer.validated_data['action']
+        admin_note = serializer.validated_data.get('admin_note', '').strip()
+
+        # Wrap all structural multi-table modifications in a single SQL transaction
         try:
             with transaction.atomic():
                 if action == 'approve':
+                    # 1. Update verification state
                     payment.status = ManualPayment.VerificationStatus.APPROVED
                     payment.verified_by = request.user
-                    payment.save(update_fields=['status', 'verified_by'])
+                    if admin_note:
+                        payment.notes = admin_note
+                    payment.save(update_fields=['status', 'verified_by', 'notes'])
 
-                    # Dynamically calculate plan activation dates (30-day window) [1.1.2]
-                    starts_at = timezone.now()
-                    expires_at = starts_at + timedelta(days=30)
-
-                    # Create or update active subscription record [1.1.2]
-                    UserSubscription.objects.update_or_create(
+                    # 2. Stateful Create-or-Extend Math for Subscription Expirations
+                    now = timezone.now()
+                    subscription, created = UserSubscription.objects.get_or_create(
                         user=payment.user,
                         defaults={
                             'plan': payment.plan,
                             'status': UserSubscription.SubscriptionStatus.ACTIVE,
-                            'starts_at': starts_at,
-                            'expires_at': expires_at,
+                            'starts_at': now,
+                            'expires_at': now + timedelta(days=30),
                             'payment_method': UserSubscription.PaymentMethod.MANUAL
                         }
                     )
 
-                    # Authorize the photographer's global billing permission flag [1.1.2]
+                    if not created:
+                        # Photographer is renewing. Calculate base date sequentially:
+                        # If active: extend from future expiration. If expired: start from now.
+                        base_date = max(subscription.expires_at, now)
+                        subscription.plan = payment.plan
+                        subscription.status = UserSubscription.SubscriptionStatus.ACTIVE
+                        subscription.payment_method = UserSubscription.PaymentMethod.MANUAL
+                        subscription.expires_at = base_date + timedelta(days=30)
+                        subscription.save(update_fields=['plan', 'status', 'payment_method', 'expires_at'])
+
+                    # 3. Elevate user billing permission
                     photographer = payment.user
                     photographer.is_active_plan = True
                     photographer.save(update_fields=['is_active_plan'])
 
+                    # Serialize the successful active state to match API specs
+                    return Response({
+                        "message": "Payment approved. Subscription activated.",
+                        "payment": AdminPaymentListSerializer(payment, context={'request': request}).data,
+                        "subscription": UserSubscriptionSerializer(subscription, context={'request': request}).data
+                    }, status=status.HTTP_200_OK)
+
                 elif action == 'reject':
+                    # Rejections only modify the payment status log—no subscription or permission adjustments are made
                     payment.status = ManualPayment.VerificationStatus.REJECTED
                     payment.verified_by = request.user
-                    payment.save(update_fields=['status', 'verified_by'])
+                    if admin_note:
+                        payment.notes = admin_note
+                    payment.save(update_fields=['status', 'verified_by', 'notes'])
+
+                    return Response({
+                        "message": "Payment rejected.",
+                        "payment": AdminPaymentListSerializer(payment, context={'request': request}).data,
+                        "subscription": None
+                    }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": f"Transaction failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response(
-            {"message": f"Payment successfully {payment.get_status_display().lower()}."},
-            status=status.HTTP_200_OK
-        )    
+            # PostgreSQL rolls back any changes inside the context block on exception raised
+            return Response(
+                {"error": f"State machine transition aborted due to internal server error: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
