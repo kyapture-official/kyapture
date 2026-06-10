@@ -1,20 +1,15 @@
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
 
-# Integrated get_user_subscription_metrics and raise_gating_violation for resource gating
-from apps.core.utils import (
-    generate_unique_slug, 
-    get_user_subscription_metrics, 
-    raise_gating_violation
-)
-from apps.photos.models import Photo
+from apps.core.utils import generate_unique_slug
+from apps.photos.models import MediaAsset
 from .models import Gallery
 
 
 class CoverPhotoSerializer(serializers.ModelSerializer):
     """Read-only. Returns highly compact cover photo metadata."""
     class Meta:
-        model = Photo
+        model = MediaAsset
         fields = ['id', 'image', 'width', 'height']
         read_only_fields = fields
 
@@ -44,7 +39,7 @@ class GalleryListSerializer(serializers.ModelSerializer):
         """Returns the absolute URL of the cover photo"""
         request = self.context.get('request')
         if obj.cover_photo and request:
-            return request.build_absolute_uri(obj.cover_photo.image.url)
+            return request.build_absolute_uri(obj.cover_photo.thumbnail_file.url)
         return None
 
     def get_has_password(self, obj):
@@ -78,7 +73,7 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
     def get_cover_url(self, obj):
         request = self.context.get('request')
         if obj.cover_photo and request:
-            return request.build_absolute_uri(obj.cover_photo.image.url)
+            return request.build_absolute_uri(obj.cover_photo.display_file.url)
         return None
 
     def get_has_password(self, obj):
@@ -124,17 +119,6 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         photographer = self.context['request'].user
-
-        # ─── SUBSCRIPTION RESOURCE GATING ───
-        # Evaluate user's limits and usage before any DB write
-        metrics = get_user_subscription_metrics(photographer)
-        
-        if metrics["current_galleries_count"] >= metrics["max_galleries"]:
-            raise_gating_violation(
-                message=f"Gallery creation limit reached. Your active plan ({metrics['plan_name']}) restricts you to a maximum of {metrics['max_galleries']} galleries.",
-                code="gallery_limit_reached"
-            )
-
         raw_password = validated_data.pop('password', '').strip()
 
         slug = generate_unique_slug(
@@ -168,7 +152,7 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
     )
     is_downloadable = serializers.BooleanField(source='allow_download', required=False)
     cover_photo = serializers.PrimaryKeyRelatedField(
-        queryset=Photo.objects.all(),
+        queryset=MediaAsset.objects.all(),
         required=False,
         allow_null=True
     )

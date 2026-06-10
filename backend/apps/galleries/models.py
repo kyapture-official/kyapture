@@ -25,11 +25,11 @@ class Gallery(BaseModel):
     
     # We remove unique=True from the slug field. 
     # Uniqueness is scoped per-photographer using a UniqueConstraint in Meta.
-    slug = models.SlugField(max_length=100)
-    description = models.TextField(blank=True)
+    slug = models.SlugField(max_length=225)
+    description = models.TextField(blank=True, default='')
     
     cover_photo = models.ForeignKey(
-        'photos.Photo',
+        'photos.MediaAsset',
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

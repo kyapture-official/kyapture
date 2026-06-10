@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import serializers
-from apps.photos.models import Photo
+from apps.photos.models import MediaAsset
 from .models import SubscriptionPlan, UserSubscription, ManualPayment
 from rest_framework.exceptions import ValidationError
 
@@ -75,7 +75,7 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
         """
         if not hasattr(self, '_photo_metrics_cache'):
             # Single-pass database aggregation [1.1.2]
-            metrics = Photo.objects.filter(
+            metrics = MediaAsset.objects.filter(
                 gallery__photographer=user
             ).aggregate(
                 total_size=Sum('file_size'),

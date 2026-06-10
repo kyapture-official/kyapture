@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 
 # Dynamic permission routing prevents the Storage Lockout Paradox
 from apps.core.permissions import IsSubscribed
+from apps.core.utils import get_user_subscription_metrics
 from .models import Gallery
 from .serializers import (
     GalleryListSerializer,
@@ -52,12 +53,30 @@ class GalleryListCreateView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
+        photographer = request.user
+        
+        # 1. Single-pass metric calculations
+        metrics = get_user_subscription_metrics(photographer)
+        
+        # 2. Skip limit check for administrative staff
+        if not (photographer.is_superuser or photographer.is_staff):
+            if metrics["current_galleries_count"] >= metrics["max_galleries"]:
+                return Response({
+                    "error": "Gallery limit reached for your current plan.",
+                    "code": "gallery_limit_reached",
+                    "current_count": metrics["current_galleries_count"],
+                    "plan_limit": metrics["max_galleries"],
+                    "plan_name": metrics["plan_name"],
+                    "message": f"You have used {metrics['current_galleries_count']} of {metrics['max_galleries']} galleries on the {metrics['plan_name']} plan. Upgrade your plan to create more."
+                }, status=status.HTTP_403_FORBIDDEN)
+
+        # 3. Instantiate the serializer exactly once
         serializer = GalleryCreateSerializer(
             data=request.data,
             context={'request': request}
         )
+        
         if serializer.is_valid():
-            # Gating calculation is triggered inside serializer.create() [1.1.2]
             gallery = serializer.save()
             return Response(
                 serializer.to_representation(gallery),

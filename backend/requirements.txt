@@ -6,3 +6,4 @@ djangorestframework-simplejwt
 python-dotenv
 uuid6
 Pillow
+piexif
