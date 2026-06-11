@@ -14,9 +14,14 @@ def custom_exception_handler(exc, context):
         details = {}
 
         if isinstance(data, dict):
+            # NEW: If the exception is already standard-formatted (has 'error' and 'code'), bypass mangling
+            if 'error' in data and 'code' in data:
+                return response
+
             # If a direct 'detail' message exists (e.g. 401/403/404 errors), extract it [1.1.2]
             if 'detail' in data:
                 error_message = data.pop('detail')
+            
             elif 'non_field_errors' in data:
                 non_field_errors = data.pop('non_field_errors')
                 if isinstance(non_field_errors, list) and len(non_field_errors) > 0:
