@@ -25,7 +25,7 @@ class PlanListView(APIView):
     Accessible publicly without authentication (AllowAny) [1.1.2].
     """
     permission_classes = [AllowAny]
-
+    authentication_classes = []
     def get(self, request):
         plans = SubscriptionPlan.objects.filter(
             is_active=True
