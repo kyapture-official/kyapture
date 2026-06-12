@@ -5,6 +5,7 @@ from PIL.ImageOps import exif_transpose
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import serializers
 
+from apps.core.utils import validate_magic_bytes, strip_exif_gps
 from .models import MediaAsset
 
 MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB Limit
@@ -169,12 +170,16 @@ class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
 
     def validate_image(self, file):
         """Executes secure size-bound and Pillow binary header validations."""
+        # Layer 1: Enforce physical file size limits
         if file.size > MAX_FILE_SIZE_BYTES:
             size_mb = file.size / (1024 * 1024)
             raise serializers.ValidationError(
                 f"File size too large ({size_mb:.1f} MB). Maximum allowed limit is 25 MB."
             )
-
+        # Layer 2: Enforce strict magic byte file signature validation (Security)
+        validate_magic_bytes(file)
+        
+        # Layer 3: Binary header verification using Pillow
         try:
             file.seek(0)
             with PILImage.open(file) as img:
@@ -199,6 +204,9 @@ class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
         gallery = validated_data.pop('gallery')
         image_file = validated_data['image']
 
+        # Enforce strict EXIF GPS coordinate stripping (Privacy Protection)
+        image_file = strip_exif_gps(image_file)
+        
         # 1. Lazily extract pixel dimensions with EXIF rotation compensation
         image_file.seek(0)
         with PILImage.open(image_file) as img:

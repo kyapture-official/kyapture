@@ -163,3 +163,63 @@ class GalleryDetailView(APIView):
             {'message': 'Gallery deleted successfully.'},
             status=status.HTTP_200_OK
         )
+        
+
+class DashboardStatsView(APIView):
+    """
+    GET /api/v1/galleries/dashboard/stats/
+    
+    Unified high-performance statistics endpoint.
+    Retrieves the photographer's subscription tiers, storage footprints,
+    and cumulative guest session views in a single HTTP request.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        photographer = request.user
+        
+        # 1. Fetch single-pass subscription limit and storage byte aggregations
+        metrics = get_user_subscription_metrics(photographer)
+        
+        # 2. Extract active subscription expiration metadata safely
+        from apps.subscriptions.models import UserSubscription
+        from django.utils import timezone
+        
+        days_remaining = 0
+        expires_at = None
+        
+        try:
+            sub = UserSubscription.objects.get(user=photographer, status='active')
+            if sub.expires_at:
+                days_remaining = max(0, (sub.expires_at - timezone.now()).days)
+                expires_at = sub.expires_at
+        except UserSubscription.DoesNotExist:
+            pass
+
+        # 3. Calculate cumulative guest collection views across all active galleries
+        from apps.clients.models import ClientSession
+        total_views = ClientSession.objects.filter(
+            gallery__photographer=photographer,
+            gallery__is_active=True
+        ).count()
+
+        # 4. Construct unified JSON response payload for David's React homepage
+        return Response({
+            "plan": {
+                "name": metrics["plan_name"],
+                "expires_at": expires_at,
+                "days_remaining": days_remaining,
+            },
+            "storage": {
+                "used_bytes": metrics["current_total_storage_bytes"],
+                "limit_bytes": metrics["storage_bytes_limit"],
+                "percentage_used": round(
+                    (metrics["current_total_storage_bytes"] / metrics["storage_bytes_limit"]) * 100, 2
+                ) if metrics["storage_bytes_limit"] > 0 else 0.0
+            },
+            "metrics": {
+                "total_galleries_used": metrics["current_galleries_count"],
+                "max_galleries_allowed": metrics["max_galleries"],
+                "total_views": total_views,
+            }
+        }, status=status.HTTP_200_OK)
