@@ -5,83 +5,13 @@ from PIL.ImageOps import exif_transpose
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import serializers
 
-from apps.core.utils import validate_magic_bytes, strip_exif_gps
+from apps.core.utils import validate_magic_bytes, strip_exif_gps, process_image_pipeline
 from .models import MediaAsset
 
 MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB Limit
 ALLOWED_IMAGE_FORMATS = {'JPEG', 'JPG', 'PNG', 'WEBP', 'TIFF'}
 ALLOWED_FORMAT_NAMES = 'JPEG, JPG, PNG, WEBP, TIFF'
 
-
-# ─────────────────────────────────────────────────────────────
-# IN-MEMORY MULTI-TIER IMAGE GENERATORS
-# ─────────────────────────────────────────────────────────────
-
-def generate_display_webp(image_file):
-    """
-    Generates a web-optimized 2048px display variant in memory.
-    Saves as WebP at 80% quality to compress multi-megabyte files down to ~500KB.
-    """
-    image_file.seek(0)
-    img = PILImage.open(image_file)
-    img = exif_transpose(img)  # Correct DSLR rotation metadata
-    
-    # Scale Down preserving aspect ratio
-    img.thumbnail((2048, 2048), PILImage.Resampling.LANCZOS)
-    
-    output_stream = io.BytesIO()
-    img.save(output_stream, format='WEBP', quality=80)
-    output_stream.seek(0)
-    
-    filename = os.path.splitext(image_file.name)[0] + "_display.webp"
-    return SimpleUploadedFile(filename, output_stream.read(), content_type="image/webp")
-
-
-def generate_thumbnail_webp(image_file):
-    """
-    Generates a fast-loading 600px thumbnail variant in memory.
-    Saves as WebP at 70% quality to ensure grid rendering fits under 100KB per card.
-    """
-    image_file.seek(0)
-    img = PILImage.open(image_file)
-    img = exif_transpose(img)
-    
-    img.thumbnail((600, 600), PILImage.Resampling.LANCZOS)
-    
-    output_stream = io.BytesIO()
-    img.save(output_stream, format='WEBP', quality=70)
-    output_stream.seek(0)
-    
-    filename = os.path.splitext(image_file.name)[0] + "_thumb.webp"
-    return SimpleUploadedFile(filename, output_stream.read(), content_type="image/webp")
-
-
-def calculate_blurhash(image_file):
-    """
-    Generates a Base85 BlurHash text string.
-    Downsamples the target image to 100x100 first to prevent CPU spikes.
-    Includes dynamic package loading to prevent runtime crashes if blurhash-python is missing.
-    """
-    default_placeholder = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"  # Clean fallback gray hash
-    try:
-        import blurhash
-    except ImportError:
-        # Graceful fallback: run `pip install blurhash-python` to activate
-        return default_placeholder
-
-    try:
-        image_file.seek(0)
-        img = PILImage.open(image_file)
-        img = exif_transpose(img)
-        
-        # Keep dimensions extremely small to guarantee O(1) performance speeds
-        img.thumbnail((100, 100), PILImage.Resampling.LANCZOS)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-            
-        return blurhash.encode(img, x_components=4, y_components=4)
-    except Exception:
-        return default_placeholder
 
 
 # ─────────────────────────────────────────────────────────────
@@ -222,10 +152,8 @@ class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
         if not title:
             title = os.path.splitext(original_name)[0]
 
-        # 3. Generate optimized display and thumbnail variants in-memory
-        display_file = generate_display_webp(image_file)
-        thumbnail_file = generate_thumbnail_webp(image_file)
-        blurhash_str = calculate_blurhash(image_file)
+        # 3. Generate optimized display, thumbnail, and BlurHash variants in a single-pass in-memory pipeline
+        display_file, thumbnail_file, blurhash_str = process_image_pipeline(image_file)
 
         # 4. Instantiate and write the final record to PostgreSQL
         asset = MediaAsset(

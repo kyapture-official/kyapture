@@ -2,9 +2,11 @@ import os
 import secrets
 from io import BytesIO
 from PIL import Image
+from PIL.ImageOps import exif_transpose
 from django.core.files.base import ContentFile
 from django.utils.text import slugify
 from django.db.models import Sum, Count
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.exceptions import PermissionDenied
 from apps.subscriptions.models import UserSubscription, SubscriptionPlan
 from apps.galleries.models import Gallery
@@ -40,42 +42,6 @@ def generate_secure_token(length=32):
     """
     return secrets.token_urlsafe(length)
 
-
-def generate_image_thumbnail(image_field, max_size=(800, 800), quality=85):
-    """
-    Processes an uploaded original high-res image entirely in-memory using Pillow.
-    Converts color modes, scales keeping aspect ratios, applies optimization,
-    and returns a Django-compatible ContentFile ready for direct storage saving [1.1.2].
-    """
-    try:
-        # 1. Open the raw image file from the Django field
-        img = Image.open(image_field)
-        
-        # 2. Convert complex formats (RGBA/PNG/TIFF) to web-safe RGB
-        if img.mode in ('RGBA', 'P', 'CMYK'):
-            img = img.convert('RGB')
-            
-        # 3. Calculate aspect ratio and scale down to max boundaries using high-quality resampling
-        img.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        # 4. Stream binary data into an in-memory RAM buffer (avoiding slow disk writes) [1.1.2]
-        buffer = BytesIO()
-        
-        # Save as modern WebP format for superior compression and loading speeds
-        img.save(buffer, format='WEBP', quality=quality, optimize=True)
-        buffer.seek(0)
-        
-        # 5. Extract original extension and construct a clean output filename
-        original_filename = os.path.basename(image_field.name)
-        filename_root = os.path.splitext(original_filename)[0]
-        output_filename = f"{filename_root}_thumb.webp"
-        
-        # 6. Wrap memory buffer inside a Django-safe ContentFile [1.1.2]
-        return ContentFile(buffer.read(), name=output_filename)
-        
-    except Exception as e:
-        # Fallback safeguard: If image processing fails, return None so the system doesn't crash
-        return None
 
 
 def get_user_subscription_metrics(user):
@@ -247,4 +213,62 @@ def raise_gating_violation(message, code):
             "error": message,
             "code": code
         }
-    )    
+    )   
+    
+    
+def process_image_pipeline(image_file):
+    """
+    Unified High-Performance Image Processing Pipeline.
+    
+    Reads the original source file exactly once in memory, fixes EXIF orientation,
+    and generates:
+    1. Display WebP (Max 2048px on longest edge, 80% quality)
+    2. Thumbnail WebP (Max 600px on longest edge, 70% quality)
+    3. BlurHash Base85 string (calculated from a fast 100x100 downsampled frame)
+    
+    Returns tuple: (display_file, thumbnail_file, blurhash_str)
+    """
+    image_file.seek(0)
+    img = Image.open(image_file)
+    img = exif_transpose(img)  # Rotate image based on DSLR metadata orientation
+    
+    # ─── 1. Generate WebP Display File (2048px Lightbox View) ───
+    display_img = img.copy()
+    display_img.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+    
+    display_stream = io.BytesIO()
+    display_img.save(display_stream, format='WEBP', quality=80)
+    display_stream.seek(0)
+    
+    display_filename = os.path.splitext(image_file.name)[0] + "_display.webp"
+    display_file = SimpleUploadedFile(display_filename, display_stream.read(), content_type="image/webp")
+
+    # ─── 2. Generate WebP Thumbnail File (600px Grid View) ───
+    thumb_img = img.copy()
+    thumb_img.thumbnail((600, 600), Image.Resampling.LANCZOS)
+    
+    thumb_stream = io.BytesIO()
+    thumb_img.save(thumb_stream, format='WEBP', quality=70)
+    thumb_stream.seek(0)
+    
+    thumb_filename = os.path.splitext(image_file.name)[0] + "_thumb.webp"
+    thumbnail_file = SimpleUploadedFile(thumb_filename, thumb_stream.read(), content_type="image/webp")
+
+    # ─── 3. Generate BlurHash String ───
+    default_placeholder = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+    blurhash_str = default_placeholder
+    try:
+        import blurhash
+        blur_img = img.copy()
+        # Keep dimensions extremely small to guarantee immediate calculation speeds
+        blur_img.thumbnail((100, 100), Image.Resampling.LANCZOS)
+        if blur_img.mode != 'RGB':
+            blur_img = blur_img.convert('RGB')
+        blurhash_str = blurhash.encode(blur_img, x_components=4, y_components=4)
+    except Exception:
+        pass  # Gracefully falls back to grey placeholder if package is missing or errors out
+
+    # Reset stream pointers for S3 upload preservation
+    image_file.seek(0)
+    
+    return display_file, thumbnail_file, blurhash_str    
