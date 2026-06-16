@@ -1,67 +1,220 @@
-import React, { useEffect, useCallback } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 
-export default function PhotoLightbox({ photos, index, onClose, onChange }) {
-  const photo = photos[index]
+// ── ISO-MORPHIC LAYEPUT EFFECT ──
+// Safely executes useLayoutEffect in the browser and falls back to useEffect
+// on the server to prevent console warnings during SSR compilation [13].
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
-  const prev = useCallback(() => onChange(Math.max(0, index - 1)), [index, onChange])
-  const next = useCallback(() => onChange(Math.min(photos.length - 1, index + 1)), [index, onChange, photos.length])
+const FOCUSABLE = [
+  'button:not([disabled])',
+  'a[href]:not([aria-disabled="true"])',
+  '[tabindex]:not([tabindex="-1"]):not([disabled])',
+].join(', ')
 
+/**
+ * WHAT: Fullscreen Photo Lightbox Viewer
+ * WHY:  Enables immersive, high-contrast, keyboard-navigable image browsing.
+ *       Conforms strictly to W3C focus-containment and body-locking standards.
+ */
+export default function PhotoLightbox({ photos, currentIndex, onClose, onNavigate }) {
+  const lightboxRef = useRef(null)
+
+  const totalCount  = photos?.length ?? 0
+  const activePhoto = photos?.[currentIndex]
+  const isOpen      = totalCount > 0 && !!activePhoto
+
+  // ── REF ASSIGNMENTS (Concurrent-safe) ─────────────────────────────────────
+  const onCloseRef    = useRef(onClose)
+  const onNavigateRef = useRef(onNavigate)
+  const currentIndexRef = useRef(currentIndex)
+  const totalCountRef   = useRef(totalCount) // Symmetrical initialization matching props [12]
+
+  // No dependency array: intentional. This must mirror ALL prop changes into
+  // the refs after every commit so that the stable [isOpen] event listener
+  // always reads the latest values without a stale closure [12, 16].
+  useIsomorphicLayoutEffect(() => {
+    onCloseRef.current    = onClose
+    onNavigateRef.current = onNavigate
+    currentIndexRef.current = currentIndex
+    totalCountRef.current   = totalCount
+  })
+
+  // ── BODY SCROLL LOCK ──────────────────────────────────────────────────────
   useEffect(() => {
-    const handler = (e) => {
-      if (e.key === 'Escape') onClose()
-      if (e.key === 'ArrowLeft')  prev()
-      if (e.key === 'ArrowRight') next()
+    if (!isOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [isOpen])
+
+  // ── FOCUS CAPTURE & FOCUS RESTORATION ─────────────────────────────────────
+  // Fired strictly once on open/close to prevent snapping focus mid-session [10]
+  useEffect(() => {
+    if (!isOpen) return
+    const previouslyFocused = document.activeElement
+
+    const frame = requestAnimationFrame(() => {
+      const nextBtn  = lightboxRef.current?.querySelector('[aria-label="Next photo"]')
+      const closeBtn = lightboxRef.current?.querySelector('[aria-label="Close lightbox"]')
+      ;(nextBtn || closeBtn)?.focus()
+    })
+
+    return () => {
+      cancelAnimationFrame(frame)
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus()
+      }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [onClose, prev, next])
+  }, [isOpen])
+
+  // ── KEYBOARD CONTROLS & FOCUS TRAPPING ────────────────────────────────────
+  // Stable [isOpen] dependency eliminates listener re-registration churn [16]
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onCloseRef.current?.()
+        return
+      }
+
+      if (e.key === 'ArrowLeft') {
+        if (currentIndexRef.current > 0) {
+          onNavigateRef.current?.(currentIndexRef.current - 1)
+        }
+        return
+      }
+
+      if (e.key === 'ArrowRight') {
+        if (currentIndexRef.current < totalCountRef.current - 1) {
+          onNavigateRef.current?.(currentIndexRef.current + 1)
+        }
+        return
+      }
+
+      if (e.key === 'Tab' && lightboxRef.current) {
+        const focusableEls = Array.from(
+          lightboxRef.current.querySelectorAll(FOCUSABLE)
+        )
+        if (!focusableEls.length) return
+
+        const first = focusableEls[0]
+        const last  = focusableEls[focusableEls.length - 1]
+
+        if (!lightboxRef.current.contains(document.activeElement)) {
+          e.preventDefault()
+          ;(e.shiftKey ? last : first).focus()
+          return
+        }
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen])
+
+  if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/90 animate-fade-in">
-      {/* Close */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
+    <div
+      ref={lightboxRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
+      className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between select-none animate-fadeUp p-4"
+    >
+      {/* ── TOP CONTROL PANEL ── */}
+      <div className="flex items-center justify-between z-10 w-full pb-4 border-b border-white/10">
+        <span className="text-xs font-semibold font-mono text-gray-400">
+          {currentIndex + 1} of {totalCount}
+        </span>
 
-      {/* Prev */}
-      {index > 0 && (
         <button
-          onClick={prev}
-          className="absolute left-4 p-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors"
+          type="button"
+          onClick={() => onCloseRef.current?.()}
+          className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black"
+          aria-label="Close lightbox"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <line x1="18" y1="6"  x2="6"  y2="18" />
+            <line x1="6"  y1="6"  x2="18" y2="18" />
           </svg>
         </button>
-      )}
+      </div>
 
-      {/* Image */}
-      <img
-        src={photo.image}
-        alt={photo.title || photo.original_name}
-        className="max-h-[90vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
-      />
+      {/* ── CENTER ACTIVE IMAGE DISPLAY AREA ── */}
+      <div className="relative flex-1 flex items-center justify-center py-6 w-full max-h-[calc(100vh-140px)]">
 
-      {/* Next */}
-      {index < photos.length - 1 && (
-        <button
-          onClick={next}
-          className="absolute right-4 p-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors"
+        {/* Dynamic Screen-Reader Navigation Region [10]
+            aria-live="polite" non-disruptively announces slide transitions,
+            while aria-atomic="true" reads the entire string block cleanly [10]. */}
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+          {`Photo ${currentIndex + 1} of ${totalCount}${
+            activePhoto.original_name ? `: ${activePhoto.original_name}` : ''
+          }`}
+        </div>
+
+        {/* Left Arrow */}
+        <button
+          type="button"
+          onClick={() => currentIndex > 0 && onNavigateRef.current?.(currentIndex - 1)}
+          disabled={currentIndex === 0}
+          className="absolute left-2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          aria-label="Previous photo"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-      )}
 
-      {/* Counter */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-sm">
-        {index + 1} / {photos.length}
+        {/* Core Image Asset */}
+        <img
+          src={activePhoto.image_url}
+          alt={activePhoto.original_name || 'Gallery item'}
+          className="max-w-full max-h-full object-contain pointer-events-none select-none rounded-sm shadow-2xl"
+          draggable="false"
+        />
+
+        {/* Right Arrow */}
+        <button
+          type="button"
+          onClick={() => currentIndex < totalCount - 1 && onNavigateRef.current?.(currentIndex + 1)}
+          disabled={currentIndex === totalCount - 1}
+          className="absolute right-2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          aria-label="Next photo"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* ── BOTTOM METADATA BAR ── */}
+      <div className="flex items-center justify-center py-4 border-t border-white/10 z-10 w-full">
+        <p className="text-xs text-gray-400 font-medium truncate max-w-md">
+          {activePhoto.original_name || 'Untitled Image'}
+        </p>
       </div>
     </div>
   )
