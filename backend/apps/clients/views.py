@@ -20,7 +20,7 @@ class PublicGalleryView(APIView):
     and password session auditing [1.1.2].
     """
     permission_classes = [AllowAny]
-
+    authentication_classes = [] 
     def get_gallery(self, username, slug):
         """
         Retrieves a published, active gallery mapped to a specific photographer.
@@ -90,7 +90,7 @@ class GalleryUnlockView(APIView):
     On success, writes a ClientSession and returns a secure token [1.1.2].
     """
     permission_classes = [AllowAny]
-
+    authentication_classes = []
     def get_gallery(self, username, slug):
         """Retrieves targeted active gallery for validation."""
         try:

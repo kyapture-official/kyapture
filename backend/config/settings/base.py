@@ -106,3 +106,46 @@ MEDIA_ROOT = BASE_DIR / "backend" / "media"
 # Static files (Django Admin panel CSS, JavaScript, and Icons)
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "backend" / "staticfiles"
+
+
+# AWS S3 STATIC & MEDIA STORAGE (Self-Healing Hybrid Setup)
+
+
+# Load S3 credentials dynamically from your backend/.env file
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "us-east-1")
+
+if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
+    # 1. AWS Credentials are present: Activate Cloud Storage
+    if "storages" not in INSTALLED_APPS:
+        INSTALLED_APPS.append("storages")
+    
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "bucket_name": AWS_STORAGE_BUCKET_NAME,
+                "region_name": AWS_S3_REGION_NAME,
+                "default_acl": "private",     # Enforces that raw downloads require pre-signed URLs
+                "querystring_auth": True,     # Enables automatic generation of pre-signed expiry signatures
+                "querystring_expire": 3600,    # URLs automatically expire in 1 hour (Security standard)
+                "file_overwrite": False,       # Prevents files with duplicate names from overwriting each other
+            },
+        },
+        "staticfiles": {
+            # Keep admin static files local in development to avoid AWS overhead
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+else:
+    # 2. No AWS Credentials found: Gracefully fall back to local disk storage
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }

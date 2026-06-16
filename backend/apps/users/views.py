@@ -17,7 +17,7 @@ from .serializers import (
 class RegisterView(APIView):
     """POST /api/v1/auth/register/ - Open access registration [1.1.2]"""
     permission_classes = [AllowAny]
-
+    authentication_classes = [] 
     def post(self, request):
         # Always pass context on initialization to make request metadata available inside the serializer [1.1.2]
         serializer = RegisterSerializer(data=request.data, context={'request': request})
@@ -35,7 +35,7 @@ class RegisterView(APIView):
 class LoginView(APIView):
     """POST /api/v1/auth/login/ - Open access authentication [1.1.2]"""
     permission_classes = [AllowAny]
-
+    authentication_classes = [] 
     def post(self, request):
         # Matches RegisterView formatting [1.1.2]
         serializer = LoginSerializer(data=request.data, context={'request': request})
@@ -103,7 +103,7 @@ class TotalUsersView(APIView):
     the active count of registered photographers for David's landing page [1.1.2].
     """
     permission_classes = [AllowAny]  # Open to guests [1.1.2]
-
+    authentication_classes = [] 
     def get(self, request):
         # Count non-administrative photographers in the database [1.1.2]
         count = User.objects.filter(is_superuser=False, is_staff=False).count()

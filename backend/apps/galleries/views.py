@@ -163,3 +163,118 @@ class GalleryDetailView(APIView):
             {'message': 'Gallery deleted successfully.'},
             status=status.HTTP_200_OK
         )
+        
+
+class DashboardStatsView(APIView):
+    """
+    GET /api/v1/galleries/dashboard/stats/
+
+    Returns complete dashboard analytics for the logged-in photographer.
+    Uses our single-pass metrics utility to keep the database footprint at O(1)
+    while matching Claude's frontend contract keys perfectly.
+
+    David uses this to render:
+    - Storage progress bar (used vs limit)
+    - Gallery slots badge
+    - Expiration warning banners
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        photographer = request.user
+        from django.utils import timezone
+        from apps.photos.models import MediaAsset
+        from apps.subscriptions.models import UserSubscription
+
+        # 1. Fetch single-pass subscription limits and usage metrics from PostgreSQL
+        metrics = get_user_subscription_metrics(photographer)
+
+        # 2. Count total media assets (both photos and videos) across all active galleries
+        photos_used = MediaAsset.objects.filter(
+            gallery__photographer=photographer,
+            gallery__is_active=True
+        ).count()
+
+        # 3. Resolve active subscription expiration parameters safely
+        days_remaining = 0
+        expires_at = None
+        subscription_status = "no_subscription"
+
+        try:
+            sub = UserSubscription.objects.get(user=photographer, status='active')
+            subscription_status = sub.status
+            if sub.expires_at:
+                expires_at = sub.expires_at
+                if sub.expires_at > timezone.now():
+                    days_remaining = (sub.expires_at - timezone.now()).days
+        except UserSubscription.DoesNotExist:
+            pass
+
+        # 4. Handle Admin Bypass case cleanly
+        if photographer.is_superuser or photographer.is_staff:
+            return Response({
+                'galleries_used': metrics["current_galleries_count"],
+                'photos_used': photos_used,
+                'storage_used_bytes': metrics["current_total_storage_bytes"],
+                'storage_used_gb': round(metrics["current_total_storage_bytes"] / (1024 ** 3), 2),
+                'plan_name': 'Admin',
+                'plan_gallery_limit': None,
+                'plan_photo_limit': None,
+                'plan_storage_limit_gb': None,
+                'plan_storage_limit_bytes': None,
+                'galleries_remaining': None,
+                'storage_remaining_gb': None,
+                'subscription_status': 'admin',
+                'expires_at': None,
+                'days_remaining': None,
+            }, status=status.HTTP_200_OK)
+
+        # 5. Handle Unsubscribed case cleanly (No crash, returns zero bounds)
+        if subscription_status == "no_subscription":
+            return Response({
+                'galleries_used': metrics["current_galleries_count"],
+                'photos_used': photos_used,
+                'storage_used_bytes': metrics["current_total_storage_bytes"],
+                'storage_used_gb': round(metrics["current_total_storage_bytes"] / (1024 ** 3), 2),
+                'plan_name': None,
+                'plan_gallery_limit': None,
+                'plan_photo_limit': None,
+                'plan_storage_limit_gb': None,
+                'plan_storage_limit_bytes': None,
+                'galleries_remaining': None,
+                'storage_remaining_gb': None,
+                'subscription_status': 'no_subscription',
+                'expires_at': None,
+                'days_remaining': None,
+            }, status=status.HTTP_200_OK)
+
+        # 6. Calculate Remaining Quotas
+        storage_used_bytes = metrics["current_total_storage_bytes"]
+        plan_storage_bytes = metrics["storage_bytes_limit"]
+        
+        galleries_remaining = max(0, metrics["max_galleries"] - metrics["current_galleries_count"])
+        storage_remaining_gb = round(
+            max(0.0, (plan_storage_bytes - storage_used_bytes) / (1024 ** 3)), 
+            2
+        )
+
+        # 7. Deliver the structured JSON payload matching David's exact key mappings
+        return Response({
+            'galleries_used': metrics["current_galleries_count"],
+            'photos_used': photos_used,
+            'storage_used_bytes': storage_used_bytes,
+            'storage_used_gb': round(storage_used_bytes / (1024 ** 3), 2),
+            
+            'plan_name': metrics["plan_name"],
+            'plan_gallery_limit': metrics["max_galleries"],
+            'plan_photo_limit': metrics["max_photos_per_gallery"],
+            'plan_storage_limit_gb': metrics["storage_bytes_limit"] / (1024 ** 3),
+            'plan_storage_limit_bytes': plan_storage_bytes,
+            
+            'galleries_remaining': galleries_remaining,
+            'storage_remaining_gb': storage_remaining_gb,
+            
+            'subscription_status': subscription_status,
+            'expires_at': expires_at,
+            'days_remaining': days_remaining,
+        }, status=status.HTTP_200_OK)
