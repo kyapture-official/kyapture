@@ -560,7 +560,7 @@ export default function GalleryDetailPage() {
               Upload multiple images to populate this collection. Once uploaded, clients can browse, view in lightbox, and download.
             </p>
 
-            <DropZone onFilesSelected={handleFilesSelected} disabled={updating} />
+            <DropZone onFiles={handleFilesSelected} disabled={updating} />
 
             <PhotoGrid
               photos={photos}
