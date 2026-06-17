@@ -1,8 +1,9 @@
-from django.db.models import Count
+from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination 
 
 # Dynamic permission routing prevents the Storage Lockout Paradox
 from apps.core.permissions import IsSubscribed
@@ -33,24 +34,45 @@ class GalleryListCreateView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request):
-        # 1. Enforce strict tenant isolation (photographer=request.user) [1.1.2]
-        # 2. Filter out soft-deleted galleries (is_active=True) [1.1.2]
-        # 3. Use SQL Count annotation to eliminate N+1 query loops [1.1.2]
-        # 4. Use select_related to INNER JOIN the cover photo details [1.1.2]
-        galleries = (
+        # 1. Base Query: Strict tenant isolation and pre-fetch relationship joins
+        queryset = (
             Gallery.objects
             .filter(photographer=request.user, is_active=True)
             .select_related('cover_photo')
             .annotate(photo_count=Count('photos'))
-            .order_by('-created_at')
         )
 
+        # 2. Dynamic Filtering: Filter by published status if passed (e.g. ?is_published=true)
+        is_published = request.query_params.get('is_published')
+        if is_published is not None:
+            queryset = queryset.filter(is_published=is_published.lower() in ['true', '1'])
+
+        # 3. Dynamic Search: Case-insensitive match on title or description (e.g. ?search=wedding)
+        search_query = request.query_params.get('search', '').strip()
+        if search_query:
+            queryset = queryset.filter(
+                Q(title__icontains=search_query) | 
+                Q(description__icontains=search_query)
+            )
+
+        # 4. Dynamic Sorting: Safe field ordering whitelist to prevent SQL injection (e.g. ?ordering=-title)
+        ordering = request.query_params.get('ordering', '-created_at').strip()
+        safe_ordering_fields = ['created_at', '-created_at', 'title', '-title']
+        if ordering in safe_ordering_fields:
+            queryset = queryset.order_by(ordering)
+        else:
+            queryset = queryset.order_by('-created_at')
+
+        # 5. Manual Pagination (APIViews do not read settings.py pagination automatically)
+        paginator = PageNumberPagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request, view=self)
+        
         serializer = GalleryListSerializer(
-            galleries,
+            paginated_queryset,
             many=True,
             context={'request': request}
         )
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         photographer = request.user
