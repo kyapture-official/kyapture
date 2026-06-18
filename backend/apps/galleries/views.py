@@ -39,7 +39,7 @@ class GalleryListCreateView(APIView):
             Gallery.objects
             .filter(photographer=request.user, is_active=True)
             .select_related('cover_photo')
-            .annotate(photo_count=Count('photos'))
+            .annotate(photo_count=Count('assets'))
         )
 
         # 2. Dynamic Filtering: Filter by published status if passed (e.g. ?is_published=true)
@@ -127,7 +127,7 @@ class GalleryDetailView(APIView):
             return (
                 Gallery.objects
                 .select_related('cover_photo')
-                .annotate(photo_count=Count('photos'))
+                .annotate(photo_count=Count('assets'))
                 .get(slug=slug, photographer=user, is_active=True)
             )
         except Gallery.DoesNotExist:

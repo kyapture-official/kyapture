@@ -7,3 +7,7 @@ python-dotenv
 uuid6
 Pillow
 piexif
+celery
+redis
+boto3
+django-storages

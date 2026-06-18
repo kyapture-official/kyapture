@@ -149,3 +149,26 @@ else:
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
+    
+# ─────────────────────────────────────────────────────────────
+# CELERY BACKGROUND WORKER CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+
+# Dynamic Redis broker routing. Falls back to local Redis in development.
+# Database index /0 is used for task brokering, and /1 is used for storing results.
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/1")
+
+# Enforce secure JSON payload serialization
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+
+# Synchronize background task scheduling with Django's global timezone settings
+CELERY_TIMEZONE = TIME_ZONE
+
+# Prevent ghost tasks: Acknowledges task completion only after successful execution
+CELERY_TASK_ACKS_LATE = True
+
+# Limits active worker prefetching to prevent RAM spikes on large media transcodes
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
