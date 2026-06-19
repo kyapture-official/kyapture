@@ -1,96 +1,89 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { galleriesApi } from '../../api/galleriesApi'
+import { photosApi } from '../../api/photosApi'
 import { mockGalleries } from '../../utils/mockGalleries'
 import Spinner from '../../components/ui/Spinner'
 import DropZone from '../../components/ui/DropZone'
 import PhotoGrid from '../../components/shared/PhotoGrid'
+import PhotoLightbox from '../../components/shared/PhotoLightbox'
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'
 
 /**
  * WHAT: Gallery Detail Management Page
- * WHY:  Centralizes individual gallery settings, password controls, download access,
- *       and provides a fully interactive offline-safe photo upload simulator [14].
+ * WHY:  Coordinates individual gallery settings, password controls, download access,
+ *       and provides a fully unified, live-updating photo upload and sorting dashboard.
  */
 export default function GalleryDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const [gallery, setGallery]       = useState(null)
-  const [loading, setLoading]       = useState(true)
-  const [errorMsg, setErrorMsg]     = useState('')
-  const [updating, setUpdating]     = useState(false)   // Bug 1 Fix: setSubmitting → setUpdating
-  const [copied, setCopied]         = useState(false)
-  const [copyFailed, setCopyFailed] = useState(false)   // Bug 7 Fix: surface clipboard errors
+  const [gallery, setGallery] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('')
+  const [updating, setUpdating] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
 
-  // ── PHOTO-MANAGEMENT STATES ──────────────────────────────────────────────
-  const [photos, setPhotos]           = useState([])
+  // ── PHOTO-MANAGEMENT STATES ──
+  const [photos, setPhotos] = useState([])
   const [uploadQueue, setUploadQueue] = useState([])
+  const [lightboxIndex, setLightboxIndex] = useState(null) // Tracks currently open fullscreen photo
 
   // Local Form States
-  const [title, setTitle]               = useState('')
+  const [title, setTitle] = useState('')
   const [brandingColor, setBrandingColor] = useState('#000000')
   const [isDownloadable, setIsDownloadable] = useState(false)
-  const [password, setPassword]         = useState('')
-  const [hasPassword, setHasPassword]   = useState(false)
+  const [password, setPassword] = useState('')
+  const [hasPassword, setHasPassword] = useState(false)
 
-  const isMountedRef      = useRef(false)
-  const copyTimeoutRef    = useRef(null)
-  const skipNextLoadRef   = useRef(false)   // Bug 4 Fix: skip redundant reload after slug-change navigate
+  const isMountedRef = useRef(false)
+  const copyTimeoutRef = useRef(null)
+  const skipNextLoadRef = useRef(false)
+  const uploadQueueRef = useRef([]) // Mirrors `uploadQueue` so unmount cleanup always sees the latest value
+  const activeTimersRef = useRef(new Set()) // Tracks in-flight mock-upload intervals so they can be cleared on unmount
 
-  // ── NEW BUG A FIX: Track every interval spawned by the upload simulator ──
-  // The merged code created intervals inside handleFilesSelected but never stored
-  // them anywhere. On unmount, all in-progress intervals kept firing forever,
-  // calling setState on a dead component (wasting CPU + leaking closures).
-  const uploadIntervalsRef = useRef([])
+  // Keep the ref in sync without re-running the mount/unmount effect below.
+  useEffect(() => {
+    uploadQueueRef.current = uploadQueue
+  }, [uploadQueue])
 
-  // ── NEW BUG A+C FIX: Track every blob URL we create ──────────────────────
-  // Every URL.createObjectURL() call allocates browser memory that must be
-  // explicitly released with URL.revokeObjectURL(). We centralise the registry
-  // here so the unmount cleanup can free them all in one sweep regardless of
-  // which state array (uploadQueue vs photos) the URL ended up in.
-  const blobUrlsRef = useRef([])
-
-  // ── MOUNT / UNMOUNT LIFECYCLE ─────────────────────────────────────────────
-  // NEW BUG A FIX (critical): The merged code wrote this effect with [uploadQueue]
-  // as its dependency. That caused the cleanup function — which calls
-  // URL.revokeObjectURL for every item in the queue — to fire on EVERY progress
-  // update (every 300 ms). In practice this revoked the blob URL of every
-  // in-progress upload within 300 ms of it starting, permanently breaking all
-  // upload previews and the completed photo grid.
-  //
-  // The fix is simple but non-obvious: use an EMPTY dependency array [] so the
-  // effect runs only on true mount/unmount, never mid-session. Blob URL cleanup
-  // is handled via blobUrlsRef instead (see above), which always holds the full
-  // lifetime registry regardless of which state array items currently live in.
+  // Mount/unmount lifecycle — runs exactly ONCE.
+  // Cleanup only fires on actual unmount to prevent premature blob revoking.
   useEffect(() => {
     isMountedRef.current = true
     return () => {
       isMountedRef.current = false
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
 
-      // Kill all in-progress upload intervals (Bug A Fix)
-      uploadIntervalsRef.current.forEach(clearInterval)
+      // Stop any simulated/in-flight upload timers so they don't keep ticking after unmount.
+      activeTimersRef.current.forEach((timerId) => clearInterval(timerId))
+      activeTimersRef.current.clear()
 
-      // Revoke every blob URL created during this page session (Bug C Fix)
-      blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url))
+      // Only release blobs for uploads that never finished. Anything already promoted
+      // into `photos` must keep its URL alive for as long as it's being displayed.
+      uploadQueueRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl))
     }
-  }, []) // ← EMPTY — intentional. See note above.
+  }, [])
 
-  // ── Bug 3 Fix: Centralized form state synchronization helper ─────────────
+  /**
+   * Syncs the parent gallery configurations and local form inputs in a single thread.
+   * Defaults guard against undefined fields silently turning inputs into uncontrolled ones.
+   */
   const syncFormFromGallery = (data) => {
     setGallery(data)
-    setTitle(data.title)
-    setBrandingColor(data.branding_color)
-    setIsDownloadable(data.is_downloadable)
-    setHasPassword(data.has_password)
+    setTitle(data.title ?? '')
+    setBrandingColor(data.branding_color || '#000000')
+    setIsDownloadable(Boolean(data.is_downloadable))
+    setHasPassword(Boolean(data.has_password))
   }
 
   // ── DATA LOADING LIFE-CYCLE ───────────────────────────────────────────────
   useEffect(() => {
+    let cancelled = false // Guards against a stale response overwriting a newer one if `id` changes quickly
+
     async function loadGallery() {
-      // Bug 4 Fix: Skip reload when useParams id shifted but data is already hydrated
       if (skipNextLoadRef.current) {
         skipNextLoadRef.current = false
         setLoading(false)
@@ -101,125 +94,186 @@ export default function GalleryDetailPage() {
       setErrorMsg('')
 
       if (USE_MOCK_DATA) {
-        setTimeout(() => {
-          const match = mockGalleries.find((g) => g.slug === id)
-          if (!match) {
-            if (isMountedRef.current) {
-              setErrorMsg('Collection not found.')
-              setLoading(false)
-            }
-            return
-          }
-          if (isMountedRef.current) {
-            syncFormFromGallery(match)
-            setPhotos(match.slug === 'mila-portraits' ? [
-              { id: 'mock-img-1', image_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80' },
-              { id: 'mock-img-2', image_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80' },
-            ] : [])
-            setLoading(false)
-          }
-        }, 300)
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        if (cancelled || !isMountedRef.current) return
+
+        const match = mockGalleries.find((g) => g.slug === id)
+        if (!match) {
+          setErrorMsg('Collection not found.')
+          setLoading(false)
+          return
+        }
+
+        syncFormFromGallery(match)
+
+        // Seed mock photos dynamically inside our mock portfolios
+        setPhotos(match.slug === 'mila-portraits' ? [
+          { id: 'mock-img-1', image_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80', original_name: 'portrait_studio_01.jpg' },
+          { id: 'mock-img-2', image_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=800&q=80', original_name: 'portrait_studio_02.jpg' }
+        ] : [])
+
+        setLoading(false)
         return
       }
 
       try {
         const data = await galleriesApi.getGallery(id)
-        if (isMountedRef.current) {
-          syncFormFromGallery(data)
-          setPhotos(data.photos || [])
-        }
+        if (cancelled || !isMountedRef.current) return
+        syncFormFromGallery(data)
+        setPhotos(data.photos || [])
       } catch (err) {
-        if (isMountedRef.current) {
-          setErrorMsg(err.response?.data?.detail || 'Failed to retrieve collection configurations.')
-        }
+        if (cancelled || !isMountedRef.current) return
+        setErrorMsg(err.response?.data?.detail || 'Failed to retrieve collection configurations.')
       } finally {
-        // Bug 5 Fix: !USE_MOCK_DATA guard removed — always true here since mock path returns early
-        if (isMountedRef.current) {
+        if (!cancelled && isMountedRef.current) {
           setLoading(false)
         }
       }
     }
 
     loadGallery()
+
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
-  // ── PHOTO UPLOAD SIMULATOR ────────────────────────────────────────────────
-  const handleFilesSelected = (files) => {
-    const queueItems = files.map(file => {
-      const previewUrl = URL.createObjectURL(file)
+  // ── PHOTO UPLOAD ACTION ───────────────────────────────────────────────────
 
-      // NEW BUG A+C FIX: Register every blob URL at creation time.
-      // This means the unmount cleanup in useEffect([]) can always free them,
-      // regardless of whether the item is still in uploadQueue, already moved to
-      // photos, or somewhere in between when the component tears down.
-      blobUrlsRef.current.push(previewUrl)
-
-      return {
-        id: Math.random().toString(36).substring(2, 9),
-        file,
-        previewUrl,
-        progress: 0,
+  // Mock-only: animate a fake progress bar since there's no real backend to talk to.
+  const simulateMockUpload = useCallback((item) => {
+    const timerId = setInterval(() => {
+      if (!isMountedRef.current) {
+        clearInterval(timerId)
+        activeTimersRef.current.delete(timerId)
+        return
       }
-    })
 
-    setUploadQueue(prev => [...prev, ...queueItems])
-
-    queueItems.forEach(item => {
-      let currentProgress = 0
-
-      const interval = setInterval(() => {
-        currentProgress += Math.floor(Math.random() * 15) + 5
-
-        if (currentProgress >= 100) {
-          currentProgress = 100
-          clearInterval(interval)
-
-          // NEW BUG A FIX: Remove the completed interval from the registry so
-          // the unmount cleanup doesn't try to clear an already-cleared handle.
-          uploadIntervalsRef.current = uploadIntervalsRef.current.filter(i => i !== interval)
-
-          if (isMountedRef.current) {
-            setPhotos(prev => [...prev, { id: item.id, image_url: item.previewUrl }])
-            setUploadQueue(prev => prev.filter(q => q.id !== item.id))
-          }
-        } else {
-          if (isMountedRef.current) {
-            setUploadQueue(prev =>
-              prev.map(q => q.id === item.id ? { ...q, progress: currentProgress } : q)
-            )
-          }
+      setUploadQueue((prev) => {
+        const current = prev.find((q) => q.id === item.id)
+        if (!current) {
+          clearInterval(timerId)
+          activeTimersRef.current.delete(timerId)
+          return prev
         }
-      }, 300)
 
-      // NEW BUG A FIX: Store the interval ID so unmount can clear it
-      uploadIntervalsRef.current.push(interval)
-    })
-  }
+        const nextProgress = Math.min(100, current.progress + Math.floor(Math.random() * 15) + 5)
 
-  const handleDeletePhoto = (photoId) => {
-    setPhotos(prev => {
-      const photo = prev.find(p => p.id === photoId)
+        if (nextProgress >= 100) {
+          clearInterval(timerId)
+          activeTimersRef.current.delete(timerId)
+          // Move item from upload queue to the completed photos grid.
+          setPhotos((prevPhotos) => [
+            ...prevPhotos,
+            { id: item.id, image_url: item.previewUrl, original_name: item.file.name },
+          ])
+          return prev.filter((q) => q.id !== item.id)
+        }
 
-      // NEW BUG C FIX: When a locally-uploaded photo (blob: URL) is deleted,
-      // the original code left its object URL allocated forever. Revoke it here.
-      // We also remove it from blobUrlsRef so the unmount sweep doesn't attempt
-      // a double-revoke (which is a silent no-op but confusing during debugging).
-      if (photo?.image_url?.startsWith('blob:')) {
-        URL.revokeObjectURL(photo.image_url)
-        blobUrlsRef.current = blobUrlsRef.current.filter(u => u !== photo.image_url)
+        return prev.map((q) => (q.id === item.id ? { ...q, progress: nextProgress } : q))
+      })
+    }, 300)
+
+    activeTimersRef.current.add(timerId)
+  }, [])
+
+  /**
+   * WHAT: S3 Bulk Upload Handler
+   * WHY:  uploadBulk is a batch endpoint — it accepts many files in a single
+   *       multipart request. This batches every file from one selection/drop
+   *       into a single call and maps the response to the queue items [18].
+   */
+  const uploadFilesToServer = useCallback((queueItems) => {
+    const formData = new FormData()
+    queueItems.forEach((item) => formData.append('images', item.file))
+
+    const idsInBatch = new Set(queueItems.map((item) => item.id))
+
+    photosApi
+      .uploadBulk(id, formData, (percent) => {
+        if (!isMountedRef.current) return
+        // One combined request -> one shared progress value for every item in this batch
+        setUploadQueue((prev) =>
+          prev.map((q) => (idsInBatch.has(q.id) ? { ...q, progress: percent } : q))
+        )
+      })
+      .then((savedPhotos) => {
+        if (!isMountedRef.current) return
+
+        // Symmetrical cleanup: drop local memory blob links on successful S3 upload
+        queueItems.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+        setPhotos((prev) => [...prev, ...(savedPhotos || [])])
+        setUploadQueue((prev) => prev.filter((q) => !idsInBatch.has(q.id)))
+      })
+      .catch((err) => {
+        if (!isMountedRef.current) return
+
+        queueItems.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+        setUploadQueue((prev) => prev.filter((q) => !idsInBatch.has(q.id)))
+
+        const label = queueItems.length === 1
+          ? `"${queueItems[0].file.name}"`
+          : `${queueItems.length} files`
+        setErrorMsg(err.response?.data?.detail || `Failed to upload ${label}.`)
+      })
+  }, [id])
+
+  const handleFilesSelected = useCallback((files) => {
+    if (!files.length) return
+
+    const queueItems = files.map((file) => ({
+      id: Math.random().toString(36).substring(2, 9),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      progress: 0,
+    }))
+
+    setUploadQueue((prev) => [...prev, ...queueItems])
+
+    if (USE_MOCK_DATA) {
+      queueItems.forEach((item) => simulateMockUpload(item))
+    } else {
+      uploadFilesToServer(queueItems)
+    }
+  }, [simulateMockUpload, uploadFilesToServer])
+
+  // ── PHOTO DELETION ACTION (Symmetrical Bulk and Single) ───────────────────
+  const handleDeletePhotos = useCallback(async (photoIds) => {
+    setErrorMsg('')
+    try {
+      if (!USE_MOCK_DATA) {
+        await photosApi.deletePhotos(id, photoIds)
       }
 
-      return prev.filter(p => p.id !== photoId)
-    })
+      // Symmetrical Deletion: remove targets from the local UI state array
+      const idsSet = new Set(photoIds)
+      setPhotos((prev) => prev.filter((photo) => !idsSet.has(photo.id)))
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || 'Failed to delete selected photos.')
+      throw err // Re-throw to allow child grids to clear loading locks safely
+    }
+  }, [id])
 
-    // NOTE FOR REAL-API MODE: add a galleriesApi.deletePhoto(id, photoId) call
-    // here. Without it, the photo will reappear on next page load because the
-    // current deletion is purely optimistic/local. The mock simulator is fine
-    // as-is since there is no remote state to sync.
-  }
+  // ── PHOTO REORDERING ACTION ───────────────────────────────────────────────
+  const handleReorderPhotos = useCallback(async (orderedPhotoIds) => {
+    setErrorMsg('')
+    try {
+      if (!USE_MOCK_DATA) {
+        await photosApi.reorderPhotos(id, orderedPhotoIds)
+      }
 
-  // ── SETTINGS OPERATIONS ───────────────────────────────────────────────────
+      // Update local sorting state from the latest photos snapshot (avoids a stale closure)
+      setPhotos((prev) => {
+        const photoMap = new Map(prev.map((p) => [p.id, p]))
+        return orderedPhotoIds.map((pid) => photoMap.get(pid)).filter(Boolean)
+      })
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || 'Failed to save photo sorting configuration.')
+      throw err // Re-throw to allow child grids to roll back state on failure
+    }
+  }, [id])
 
+  // ── SETTINGS CONFIGURATION ACTIONS ────────────────────────────────────────
   const handleSaveSettings = async (e) => {
     e.preventDefault()
     if (!title.trim() || updating) return
@@ -236,8 +290,8 @@ export default function GalleryDetailPage() {
     try {
       let updated
       if (USE_MOCK_DATA) {
-        // Bug 6 Fix: Simulate backend slug recalculation so navigate fires in mock mode
         const mockSlug = payload.title
+          .trim()
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-+|-+$/g, '')
@@ -246,12 +300,9 @@ export default function GalleryDetailPage() {
         updated = await galleriesApi.updateGallery(id, payload)
       }
 
-      // Bug 3 Fix: Sync all form states to saved values so Save button disabled
-      // condition stays accurate after the server trims/transforms the title
       syncFormFromGallery(updated)
 
       if (updated.slug !== id) {
-        // Bug 4 Fix: Flag the upcoming useEffect([id]) run to skip the redundant refetch
         skipNextLoadRef.current = true
         navigate(`/dashboard/galleries/${updated.slug}`, { replace: true })
       }
@@ -260,7 +311,9 @@ export default function GalleryDetailPage() {
         setErrorMsg(err.response?.data?.detail || 'Failed to save collection configurations.')
       }
     } finally {
-      if (isMountedRef.current) setUpdating(false)
+      if (isMountedRef.current) {
+        setUpdating(false)
+      }
     }
   }
 
@@ -273,17 +326,19 @@ export default function GalleryDetailPage() {
 
     try {
       if (USE_MOCK_DATA) {
-        setGallery(prev => ({ ...prev, is_published: nextState }))
+        setGallery((prev) => ({ ...prev, is_published: nextState }))
       } else {
         await galleriesApi.publishGallery(id, nextState)
-        setGallery(prev => ({ ...prev, is_published: nextState }))
+        setGallery((prev) => ({ ...prev, is_published: nextState }))
       }
     } catch (err) {
       if (isMountedRef.current) {
         setErrorMsg(err.response?.data?.detail || 'Failed to update publication status.')
       }
     } finally {
-      if (isMountedRef.current) setUpdating(false)
+      if (isMountedRef.current) {
+        setUpdating(false)
+      }
     }
   }
 
@@ -291,8 +346,14 @@ export default function GalleryDetailPage() {
     e.preventDefault()
     if (updating) return
 
-    // Bug 8 Fix: Confirm before removing password protection
-    if (!password && hasPassword) {
+    const trimmedPassword = password.trim()
+
+    if (!trimmedPassword && !hasPassword) {
+      setErrorMsg('Enter a password to enable protection.')
+      return
+    }
+
+    if (!trimmedPassword && hasPassword) {
       const confirmed = window.confirm(
         'Remove password protection from this gallery? Clients will no longer need to authenticate.'
       )
@@ -304,14 +365,14 @@ export default function GalleryDetailPage() {
 
     try {
       if (USE_MOCK_DATA) {
-        const newHasPassword = Boolean(password)
+        const newHasPassword = Boolean(trimmedPassword)
         setHasPassword(newHasPassword)
-        setGallery(prev => ({ ...prev, has_password: newHasPassword }))
+        setGallery((prev) => ({ ...prev, has_password: newHasPassword }))
         setPassword('')
       } else {
-        const response = await galleriesApi.setGalleryPassword(id, password || null)
+        const response = await galleriesApi.setGalleryPassword(id, trimmedPassword || null)
         setHasPassword(response.has_password)
-        setGallery(prev => ({ ...prev, has_password: response.has_password }))
+        setGallery((prev) => ({ ...prev, has_password: response.has_password }))
         setPassword('')
       }
     } catch (err) {
@@ -319,33 +380,53 @@ export default function GalleryDetailPage() {
         setErrorMsg(err.response?.data?.detail || 'Failed to update security credentials.')
       }
     } finally {
-      if (isMountedRef.current) setUpdating(false)
+      if (isMountedRef.current) {
+        setUpdating(false)
+      }
     }
   }
 
   const handleCopyLink = async () => {
     if (!gallery) return
 
-    // Bug 2 Fix: Dynamic username from API data, not hardcoded 'kroman'
     const ownerUsername = gallery.owner_username ?? gallery.photographer_username ?? 'unknown'
     const clientURL = `${window.location.protocol}//${window.location.host}/g/${ownerUsername}/${gallery.slug}`
 
-    try {
-      await navigator.clipboard.writeText(clientURL)
+    const markCopied = () => {
       setCopied(true)
       setCopyFailed(false)
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
       copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy link:', err)
-      // Bug 7 Fix: Show failure state in the button — not just console
+    }
+
+    const markFailed = () => {
       setCopyFailed(true)
+      setCopied(false)
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
       copyTimeoutRef.current = setTimeout(() => setCopyFailed(false), 2000)
     }
-  }
 
-  // ── RENDERS ───────────────────────────────────────────────────────────────
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(clientURL)
+      } else {
+        // Fallback for browsers/contexts without the async Clipboard API (e.g. non-HTTPS).
+        const textarea = document.createElement('textarea')
+        textarea.value = clientURL
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        if (!ok) throw new Error('execCommand copy failed')
+      }
+      markCopied()
+    } catch (err) {
+      console.error('Failed to copy link:', err)
+      markFailed()
+    }
+  }
 
   if (loading) {
     return (
@@ -368,13 +449,12 @@ export default function GalleryDetailPage() {
     )
   }
 
-  // Bug 2 Fix: Single source of truth for owner username — used in slug preview + copy link
   const ownerUsername = gallery.owner_username ?? gallery.photographer_username ?? 'unknown'
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeUp">
-
-      {/* ── HEADER NAVIGATION ── */}
+      
+      {/* HEADER NAVIGATION */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-gray-200 mb-8">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -389,6 +469,7 @@ export default function GalleryDetailPage() {
           </h1>
         </div>
 
+        {/* Global Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -419,19 +500,19 @@ export default function GalleryDetailPage() {
         </div>
       )}
 
-      {/* ── CENTRALIZED SETTINGS GRID ── */}
+      {/* CENTRALIZED SETTINGS GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
+        
         {/* LEFT COLUMN: SETTINGS FORMS */}
         <div className="lg:col-span-2 space-y-8">
-
+          
           {/* Card 1: Configuration Form */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
             <h2 className="text-base font-semibold text-gray-900 mb-6 border-b border-gray-100 pb-3">
               Collection Configurations
             </h2>
             <form onSubmit={handleSaveSettings} noValidate className="space-y-6">
-
+              
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-700" htmlFor="gallery-title">
                   Gallery Title
@@ -448,13 +529,13 @@ export default function GalleryDetailPage() {
                 />
               </div>
 
-              {/* Slug Preview — Bug 2 Fix: dynamic ownerUsername */}
+              {/* Dynamic Slug Preview — mirrors the real share-link format used by handleCopyLink */}
               <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs">
                 <span className="font-semibold text-gray-400 uppercase tracking-wider block text-[10px]">
                   Live Slug Link
                 </span>
                 <p className="mt-1 font-semibold text-gray-600 truncate">
-                  yourname.kyapture.com/g/{ownerUsername}/
+                  {window.location.host}/g/{ownerUsername}/
                   <span className="text-gray-900 font-bold font-mono">
                     {title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'your-slug'}
                   </span>
@@ -472,7 +553,7 @@ export default function GalleryDetailPage() {
                     value={brandingColor}
                     onChange={(e) => setBrandingColor(e.target.value)}
                     disabled={updating}
-                    className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer overflow-hidden p-0 bg-transparent disabled:cursor-not-allowed"
+                    className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer overflow-hidden p-0 bg-transparent disabled:opacity-50"
                   />
                   <span className="text-xs text-gray-500 font-medium font-mono uppercase">
                     {brandingColor}
@@ -497,16 +578,7 @@ export default function GalleryDetailPage() {
               <div className="flex justify-end pt-4 border-t border-gray-100">
                 <button
                   type="submit"
-                  disabled={
-                    updating ||
-                    !title.trim() ||
-                    // Bug 3 Fix: compare trimmed value to avoid whitespace false-positives
-                    (
-                      title.trim() === gallery.title &&
-                      brandingColor === gallery.branding_color &&
-                      isDownloadable === gallery.is_downloadable
-                    )
-                  }
+                  disabled={updating || !title.trim() || (title.trim() === gallery.title && brandingColor === gallery.branding_color && isDownloadable === gallery.is_downloadable)}
                   className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {updating ? 'Saving...' : 'Save Settings'}
@@ -551,7 +623,7 @@ export default function GalleryDetailPage() {
             </form>
           </div>
 
-          {/* Card 3: Photo Management */}
+          {/* Photo Management Section */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
             <h2 className="text-base font-semibold text-gray-900 mb-2 border-b border-gray-100 pb-3">
               Photo Management
@@ -562,17 +634,20 @@ export default function GalleryDetailPage() {
 
             <DropZone onFiles={handleFilesSelected} disabled={updating} />
 
-            <PhotoGrid
-              photos={photos}
-              uploadQueue={uploadQueue}
-              onDeletePhoto={handleDeletePhoto}
+            {/* Symmetrical Component Linkage: Passes all multi-select and sorting handlers cleanly */}
+            <PhotoGrid 
+              photos={photos} 
+              uploadQueue={uploadQueue} 
+              onDeletePhotos={handleDeletePhotos}
+              onReorderPhotos={handleReorderPhotos}
+              onPhotoClick={setLightboxIndex} 
             />
           </div>
         </div>
 
         {/* RIGHT COLUMN: BRAND PREVIEW */}
         <div className="space-y-8">
-
+          
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-6 flex flex-col items-center justify-center text-center py-10 min-h-[300px]">
             {gallery.cover_url ? (
               <img
@@ -581,7 +656,7 @@ export default function GalleryDetailPage() {
                 className="w-24 h-24 rounded-full object-cover border border-gray-100 mb-4 shadow-sm"
               />
             ) : (
-              <div
+              <div 
                 className="w-16 h-16 rounded-full flex items-center justify-center text-white/30 mb-4"
                 style={{ backgroundColor: brandingColor }}
               >
@@ -593,8 +668,8 @@ export default function GalleryDetailPage() {
             )}
             <h3 className="text-sm font-semibold text-gray-900">{gallery.title}</h3>
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border mt-2 ${
-              gallery.is_published
-                ? 'bg-green-50 text-green-700 border-green-200'
+              gallery.is_published 
+                ? 'bg-green-50 text-green-700 border-green-200' 
                 : 'bg-yellow-50 text-yellow-700 border-yellow-200'
             }`}>
               {gallery.is_published ? 'Published' : 'Draft'}
@@ -603,6 +678,15 @@ export default function GalleryDetailPage() {
 
         </div>
       </div>
+
+      {/* Fullscreen Photo Lightbox Layer */}
+      <PhotoLightbox
+        photos={photos}
+        currentIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+        onNavigate={setLightboxIndex}
+      />
     </div>
   )
 }
+
