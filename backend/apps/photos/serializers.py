@@ -177,3 +177,26 @@ class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
             instance,
             context=self.context
         ).data
+    
+class PhotoBulkDeleteSerializer(serializers.Serializer):
+    """
+    Validates a batch of MediaAsset UUID primary keys for bulk deletion.
+    Gallery owner scoping and database writes are handled inside the view.
+    """
+    photo_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=False,
+        min_length=1
+    )
+
+
+class PhotoReorderSerializer(serializers.Serializer):
+    """
+    Validates the complete reordered sequence of MediaAsset UUID primary keys 
+    associated with a single gallery.
+    """
+    ordered_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=False,
+        min_length=1
+    )
