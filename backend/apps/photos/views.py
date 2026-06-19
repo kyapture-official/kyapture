@@ -1,5 +1,5 @@
-# C:\Users\LENOVO\Desktop\kyapture\backend\apps\photos\views.py
-
+import os
+from decimal import Decimal
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -8,18 +8,24 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from .tasks import process_photo_asset
 
 from apps.core.permissions import IsSubscribed
 from apps.core.utils import get_user_subscription_metrics
 from apps.galleries.models import Gallery
 from .models import MediaAsset
-from .serializers import MediaAssetSerializer, MediaAssetImageUploadSerializer
+from .serializers import (
+    MediaAssetSerializer, 
+    MediaAssetImageUploadSerializer,
+    PhotoBulkDeleteSerializer,
+    PhotoReorderSerializer
+)
 
 
 class PhotoListUploadView(APIView):
     """
     GET  /api/v1/photos/{gallery_slug}/ - Lists all media assets inside an active gallery.
-    POST /api/v1/photos/{gallery_slug}/upload/ - Processes bulk image streams securely (Subscription Gated).
+    POST /api/v1/photos/{gallery_slug}/upload/ - Processes bulk image streams securely.
     """
     parser_classes = [MultiPartParser, FormParser]
 
@@ -97,26 +103,46 @@ class PhotoListUploadView(APIView):
                     "message": f"This upload of {batch_mb:.1f} MB would push your account past your {allowed_gb:.1f} GB plan storage limit."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-        # ─── ENFORCEMENT CLEARED ───
+# ─── ENFORCEMENT CLEARED ───
         uploaded_assets = []
 
-        # Atomic transaction: If any single image processing fails, the entire batch rolls back
+        # Atomic transaction: If database saving fails, the batch rolls back safely
         try:
             with transaction.atomic():
                 for file_data in files:
+                    # Validate image size and magic-byte security first
                     serializer = MediaAssetImageUploadSerializer(
                         data={'image': file_data, 'title': request.data.get('title', '')},
                         context={'request': request, 'gallery': gallery}
                     )
                     serializer.is_valid(raise_exception=True)
-                    asset = serializer.save(gallery=gallery)
+                    
+                    title = request.data.get('title', '').strip()
+                    if not title:
+                        title = os.path.splitext(file_data.name)[0]
+
+                    # Create the raw asset under 'pending' status immediately
+                    asset = MediaAsset.objects.create(
+                        gallery=gallery,
+                        media_type=MediaAsset.MediaType.IMAGE,
+                        original_file=file_data,
+                        original_name=file_data.name,
+                        file_size=file_data.size,
+                        title=title,
+                        processing_status=MediaAsset.ProcessingStatus.PENDING,
+                        order=get_insertion_order(gallery.id)
+                    )
+                    
+                    # Dispatch Celery background task for WebP conversions and BlurHash encoding
+                    transaction.on_commit(lambda a_id=asset.id: process_photo_asset.delay(str(a_id)))
                     uploaded_assets.append(asset)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Return 202 Accepted immediately so David's frontend has the IDs to render skeleton loaders
         return Response(
             MediaAssetSerializer(uploaded_assets, many=True, context={'request': request}).data,
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_202_ACCEPTED
         )
 
 
@@ -157,3 +183,92 @@ class PhotoDetailView(APIView):
         # Deleting the model row. Signals.py handles physical file/S3 purges automatically.
         asset.delete()
         return Response({'message': 'Media asset deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+class PhotoBulkDeleteView(APIView):
+    """
+    POST /api/v1/photos/{gallery_slug}/delete-bulk/
+
+    Deletes multiple MediaAsset database rows in a single API request.
+    Scopes selection strictly to the authorized photographer and active gallery 
+    to prevent cross-tenant enumeration deletion attacks.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, gallery_slug):
+        gallery = get_object_or_404(
+            Gallery, 
+            slug=gallery_slug, 
+            photographer=request.user, 
+            is_active=True
+        )
+
+        serializer = PhotoBulkDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        photo_ids = serializer.validated_data['photo_ids']
+
+        # Restrict the QuerySet scope strictly to this photographer's target gallery.
+        # Unknown or forged IDs belong to other users will be silently ignored.
+        queryset = MediaAsset.objects.filter(gallery=gallery, id__in=photo_ids)
+
+        # NOTE: Django's bulk delete on QuerySets normally bypasses individual post_delete signals.
+        # However, because we registered post_delete hooks inside `apps/photos/signals.py`, Django
+        # automatically handles this by loading the objects and running individual model deletes,
+        # ensuring S3 and disk files are cleanly purged without leaving orphaned files.
+        deleted_count, _ = queryset.delete()
+
+        return Response({'deleted_count': deleted_count}, status=status.HTTP_200_OK)
+
+
+class PhotoReorderView(APIView):
+    """
+    PATCH /api/v1/photos/{gallery_slug}/reorder/
+
+    Accepts the complete array of asset UUIDs and reassigns clean, sequential 
+    decimal 'order' values (1.00, 2.00, 3.00...) to match David's frontend sequence.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, gallery_slug):
+        gallery = get_object_or_404(
+            Gallery, 
+            slug=gallery_slug, 
+            photographer=request.user, 
+            is_active=True
+        )
+
+        serializer = PhotoReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ordered_ids = serializer.validated_data['ordered_ids']
+
+        # Map assets belonging solely to this specific gallery in a dictionary for O(1) lookups
+        assets_by_id = {
+            str(asset.id): asset
+            for asset in MediaAsset.objects.filter(gallery=gallery, id__in=ordered_ids)
+        }
+
+        if not assets_by_id:
+            return Response(
+                {'error': 'None of the supplied photo IDs belong to this gallery.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        updated_assets = []
+        position = Decimal('1.0')
+        
+        for photo_id in ordered_ids:
+            asset = assets_by_id.get(str(photo_id))
+            if asset is None:
+                continue  # Skip any invalid or forged IDs silently
+            asset.order = position
+            updated_assets.append(asset)
+            position += Decimal('1.0')
+
+        # Execute bulk_update inside a transaction block to write to Postgres in a single hit
+        with transaction.atomic():
+            MediaAsset.objects.bulk_update(updated_assets, ['order'])
+
+        return Response({
+            'success': True,
+            'ordered_ids': [str(a.id) for a in updated_assets],
+        }, status=status.HTTP_200_OK)

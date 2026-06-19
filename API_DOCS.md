@@ -460,3 +460,46 @@ JSON
   "payment": { "status": "approved", "notes": "..." },
   "subscription": { "status": "active", "days_remaining": 29 }
 }
+
+### `POST /api/v1/photos/{gallery_slug}/delete-bulk/`
+*   **Description:** Deletes multiple media assets (both photos and videos) inside a target gallery in a single request.
+*   **Authentication:** Required (`IsAuthenticated`)
+*   **Request Body (JSON):**
+    ```json
+    {
+      "photo_ids": [
+        "0190104f-124b-723a-a4f2-90ab12f127a4",
+        "0190104f-944f-7f32-84b2-c0e86b0317e2"
+      ]
+    }
+    ```
+*   **Success Response (200 OK):**
+    *   *Returns the count of successfully deleted records. S3 files are automatically purged via background signals.*
+    ```json
+    {
+      "deleted_count": 2
+    }
+    ```
+
+### `PATCH /api/v1/photos/{gallery_slug}/reorder/`
+*   **Description:** Updates the manual drag-and-drop sequencing of all assets inside a gallery. Sets clean, sequential decimal order coordinates.
+*   **Authentication:** Required (`IsAuthenticated`)
+*   **Request Body (JSON):**
+    ```json
+    {
+      "ordered_ids": [
+        "0190104f-944f-7f32-84b2-c0e86b0317e2",
+        "0190104f-124b-723a-a4f2-90ab12f127a4"
+      ]
+    }
+    ```
+*   **Success Response (200 OK):**
+    ```json
+    {
+      "success": true,
+      "ordered_ids": [
+        "0190104f-944f-7f32-84b2-c0e86b0317e2",
+        "0190104f-124b-723a-a4f2-90ab12f127a4"
+      ]
+    }
+    ```
