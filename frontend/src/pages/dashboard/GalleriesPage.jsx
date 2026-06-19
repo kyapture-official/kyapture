@@ -202,7 +202,7 @@ export default function GalleriesPage() {
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeUp">
 
       {/* 1. Global Page Header */}
-      <DashboardHeader onCreateClick={openModal} galleryCount={galleryCount} />
+      <DashboardHeader onCreateClick={openModal} />
 
       {/* Error Banner Container */}
       <div>
@@ -251,11 +251,7 @@ export default function GalleriesPage() {
       {loading && <LoadingSkeleton />}
 
       {!loading && !error && galleryCount === 0 && (
-        <EmptyState
-          title="No galleries yet"
-          message="Create your first gallery to start delivering photos to your clients."
-          action={{ label: 'Create your first gallery', onClick: openModal }}
-        />
+        <EmptyState onCreateClick={openModal} />
       )}
 
       {!loading && !error && galleryCount > 0 && (
