@@ -1,5 +1,7 @@
 import os
 import secrets
+import subprocess  
+import tempfile 
 from io import BytesIO
 from PIL import Image
 from PIL.ImageOps import exif_transpose
@@ -200,7 +202,7 @@ def get_insertion_order(gallery_id, insert_after_id=None):
         return assets.last().order + Decimal('1.0')
 
 
-    return limits
+    
 
 
 def raise_gating_violation(message, code):
@@ -272,3 +274,101 @@ def process_image_pipeline(image_file):
     image_file.seek(0)
     
     return display_file, thumbnail_file, blurhash_str    
+
+def process_video_pipeline(video_file):
+    """
+    Unified Systems-Level Video Processing Pipeline.
+    
+    Spools an uploaded in-memory video stream to a temporary disk file, 
+    and executes safe subprocess pipelines calling FFprobe and FFmpeg to:
+    1. Query format metadata and extract the exact video duration in seconds.
+    2. Capture a high-res poster frame (JPEG) from the 2-second timestamp.
+    3. Transcode a 3-second silent looping WebM hover-preview clip (downsampled to 320px).
+    
+    Guarantees absolute filesystem hygiene by unlinking and purging all 
+    temporary files from disk inside a robust 'finally' block.
+    """
+    # Initialize variables for the finally-block cleanup safety net
+    temp_video_path = None
+    temp_poster_path = None
+    temp_preview_path = None
+
+    try:
+        # 1. Spool the in-memory video stream to a temporary secure disk path
+        video_file.seek(0)
+        video_bytes = video_file.read()
+        video_file.seek(0)
+
+        ext = os.path.splitext(video_file.name)[1].lower() or ".mp4"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_video:
+            temp_video.write(video_bytes)
+            temp_video_path = temp_video.name
+
+        # 2. Extract Video Duration using FFprobe
+        ffprobe_cmd = [
+            'ffprobe', '-v', 'error', 
+            '-show_entries', 'format=duration', 
+            '-of', 'default=noprint_wrappers=1:nokey=1', 
+            temp_video_path
+        ]
+        
+        # Run process safely (shell=False prevents command injection vulnerabilities)
+        duration_result = subprocess.run(
+            ffprobe_cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            text=True, 
+            check=True
+        )
+        duration = int(float(duration_result.stdout.strip()))
+
+        # 3. Extract Video Poster Frame (JPEG at 2-second mark) using FFmpeg
+        temp_poster_fd, temp_poster_path = tempfile.mkstemp(suffix=".jpg")
+        os.close(temp_poster_fd)
+
+        # -ss placed before -i activates fast input-seeking (O(1) execution speed)
+        ffmpeg_poster_cmd = [
+            'ffmpeg', '-y', '-ss', '00:00:02', 
+            '-i', temp_video_path, 
+            '-vframes', '1', '-f', 'image2', 
+            temp_poster_path
+        ]
+        subprocess.run(ffmpeg_poster_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+        # Read the generated JPEG poster back into a Django SimpleUploadedFile
+        with open(temp_poster_path, 'rb') as f:
+            poster_data = f.read()
+        poster_name = os.path.splitext(video_file.name)[0] + "_poster.jpg"
+        poster_file = SimpleUploadedFile(poster_name, poster_data, content_type="image/jpeg")
+
+        # 4. Transcode 3-second Silent WebM Hover Preview (Scale down to 320px width)
+        temp_preview_fd, temp_preview_path = tempfile.mkstemp(suffix=".webm")
+        os.close(temp_preview_fd)
+
+        ffmpeg_preview_cmd = [
+            'ffmpeg', '-y', '-ss', '00:00:02', '-t', '3', 
+            '-i', temp_video_path, 
+            '-vf', 'scale=320:-1', '-an', '-f', 'webm', 
+            temp_preview_path
+        ]
+        subprocess.run(ffmpeg_preview_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+        # Read the WebM preview clip back into a Django SimpleUploadedFile
+        with open(temp_preview_path, 'rb') as f:
+            preview_data = f.read()
+        preview_name = os.path.splitext(video_file.name)[0] + "_preview.webm"
+        preview_file = SimpleUploadedFile(preview_name, preview_data, content_type="video/webm")
+
+        return poster_file, preview_file, duration
+
+    except Exception as e:
+        raise RuntimeError(f"FFmpeg/FFprobe system processing execution failed: {str(e)}")
+
+    finally:
+        # Strict Filesystem Hygiene: Clean up all disk remnants regardless of success or failure
+        for path in [temp_video_path, temp_poster_path, temp_preview_path]:
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
