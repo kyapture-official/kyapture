@@ -8,8 +8,7 @@ const cleanBaseURL = rawBaseURL.replace(/\/+$/, '')
 
 const api = axios.create({
   baseURL: cleanBaseURL,
-  headers: { 'Content-Type': 'application/json' },
-})
+  })
 
 let isRefreshing = false
 let failedQueue = []
