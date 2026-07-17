@@ -1,221 +1,296 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+// File Location: frontend/src/components/shared/PhotoLightbox.jsx
 
-// ── ISO-MORPHIC LAYEPUT EFFECT ──
-// Safely executes useLayoutEffect in the browser and falls back to useEffect
-// on the server to prevent console warnings during SSR compilation [13].
-const useIsomorphicLayoutEffect =
-  typeof window !== 'undefined' ? useLayoutEffect : useEffect
+import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react'
+import Spinner from '../ui/Spinner'
 
-const FOCUSABLE = [
-  'button:not([disabled])',
-  'a[href]:not([aria-disabled="true"])',
-  '[tabindex]:not([tabindex="-1"]):not([disabled])',
-].join(', ')
+export default function PhotoLightbox({ photos, index, onClose, onChange }) {
+  const [imageLoading, setImageLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
+  const touchStartX = useRef(0)
+  const touchEndX = useRef(0)
+  const dialogRef = useRef(null)
+  const previousFocusRef = useRef(null)
 
-/**
- * WHAT: Fullscreen Photo Lightbox Viewer
- * WHY:  Enables immersive, high-contrast, keyboard-navigable image browsing.
- *       Conforms strictly to W3C focus-containment and body-locking standards.
- */
-export default function PhotoLightbox({ photos, currentIndex, onClose, onNavigate }) {
-  const lightboxRef = useRef(null)
-
-  const totalCount  = photos?.length ?? 0
-  const activePhoto = photos?.[currentIndex]
-  const isOpen      = totalCount > 0 && !!activePhoto
-
-  // ── REF ASSIGNMENTS (Concurrent-safe) ─────────────────────────────────────
-  const onCloseRef    = useRef(onClose)
-  const onNavigateRef = useRef(onNavigate)
-  const currentIndexRef = useRef(currentIndex)
-  const totalCountRef   = useRef(totalCount) // Symmetrical initialization matching props [12]
-
-  // No dependency array: intentional. This must mirror ALL prop changes into
-  // the refs after every commit so that the stable [isOpen] event listener
-  // always reads the latest values without a stale closure [12, 16].
-  useIsomorphicLayoutEffect(() => {
-    onCloseRef.current    = onClose
-    onNavigateRef.current = onNavigate
-    currentIndexRef.current = currentIndex
-    totalCountRef.current   = totalCount
+  /**
+   * Ref-stable mirror of the photos prop to isolate preloading loops from parent reference churn.
+   */
+  const photosRef = useRef(photos)
+  useEffect(() => {
+    photosRef.current = photos
   })
 
-  // ── BODY SCROLL LOCK ──────────────────────────────────────────────────────
+  const activePhoto = photos[index]
+
+  // Synchronize loading and error state metrics with current image index values.
+  // useLayoutEffect is utilized here to reset visual parameters synchronously before paint
+  // to prevent transient single-frame leaks of prior images during unmount/remount commits.
+  useLayoutEffect(() => {
+    setImageLoading(true)
+    setHasError(false)
+  }, [index])
+
+  /**
+   * Captures the active focus target, applies programmatic focus, and handles focus trapping.
+   */
   useEffect(() => {
-    if (!isOpen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [isOpen])
-
-  // ── FOCUS CAPTURE & FOCUS RESTORATION ─────────────────────────────────────
-  // Fired strictly once on open/close to prevent snapping focus mid-session [10]
-  useEffect(() => {
-    if (!isOpen) return
-    const previouslyFocused = document.activeElement
-
-    const frame = requestAnimationFrame(() => {
-      const nextBtn  = lightboxRef.current?.querySelector('[aria-label="Next photo"]')
-      const closeBtn = lightboxRef.current?.querySelector('[aria-label="Close lightbox"]')
-      ;(nextBtn || closeBtn)?.focus()
-    })
-
+    previousFocusRef.current = document.activeElement
+    dialogRef.current?.focus()
     return () => {
-      cancelAnimationFrame(frame)
-      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-        previouslyFocused.focus()
-      }
+      previousFocusRef.current?.focus()
     }
-  }, [isOpen])
+  }, [])
 
-  // ── KEYBOARD CONTROLS & FOCUS TRAPPING ────────────────────────────────────
-  // Stable [isOpen] dependency eliminates listener re-registration churn [16]
+  const handleNext = useCallback(() => {
+    if (index < photos.length - 1) {
+      onChange?.(index + 1)
+    }
+  }, [index, photos.length, onChange])
+
+  const handlePrev = useCallback(() => {
+    if (index > 0) {
+      onChange?.(index - 1)
+    }
+  }, [index, onChange])
+
+  /**
+   * Preloads adjacent images to keep slide transitions feeling instantaneous.
+   * Leverages photosRef to prevent dependency-triggered execution loops.
+   */
   useEffect(() => {
-    if (!isOpen) return
+    const currentPhotos = photosRef.current
+    if (!currentPhotos) return
 
+    const preloadIndices = [index - 1, index + 1]
+    preloadIndices.forEach((i) => {
+      if (i >= 0 && i < currentPhotos.length) {
+        const img = new Image()
+        img.src = currentPhotos[i].image
+      }
+    })
+  }, [index])
+
+  /**
+   * Freezes background scrolling on mount and restores original inline overflow style on unmount.
+   */
+  useEffect(() => {
+    const originalStyle = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = originalStyle
+    }
+  }, [])
+
+  /**
+   * Returns the focusable elements currently reachable by keyboard Tab inside the dialog.
+   * Filters out elements hidden via display: none or visibility: hidden using modern
+   * checkVisibility() with a robust fallback to prevent focus from leaking into back-page layers.
+   */
+  const getFocusableElements = useCallback(() => {
+    const candidates = dialogRef.current?.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+    if (!candidates) return []
+
+    return Array.from(candidates).filter((el) => {
+      if (typeof el.checkVisibility === 'function') {
+        return el.checkVisibility({ checkVisibilityCSS: true })
+      }
+      // Fallback for older layout engines lacking checkVisibility support
+      if (el.getClientRects().length === 0) return false
+      return window.getComputedStyle(el).visibility !== 'hidden'
+    })
+  }, [])
+
+  /**
+   * Global keyboard input processing (including native focus trapping).
+   */
+  useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        onCloseRef.current?.()
-        return
-      }
+        onClose?.()
+      } else if (e.key === 'ArrowRight') {
+        handleNext()
+      } else if (e.key === 'ArrowLeft') {
+        handlePrev()
+      } else if (e.key === 'Tab') {
+        // Native modal focus trap to prevent keyboard leaks into background layout.
+        const focusableElements = getFocusableElements()
+        if (focusableElements.length === 0) return
 
-      if (e.key === 'ArrowLeft') {
-        if (currentIndexRef.current > 0) {
-          onNavigateRef.current?.(currentIndexRef.current - 1)
-        }
-        return
-      }
+        const firstElement = focusableElements[0]
+        const lastElement = focusableElements[focusableElements.length - 1]
 
-      if (e.key === 'ArrowRight') {
-        if (currentIndexRef.current < totalCountRef.current - 1) {
-          onNavigateRef.current?.(currentIndexRef.current + 1)
-        }
-        return
-      }
-
-      if (e.key === 'Tab' && lightboxRef.current) {
-        const focusableEls = Array.from(
-          lightboxRef.current.querySelectorAll(FOCUSABLE)
-        )
-        if (!focusableEls.length) return
-
-        const first = focusableEls[0]
-        const last  = focusableEls[focusableEls.length - 1]
-
-        if (!lightboxRef.current.contains(document.activeElement)) {
-          e.preventDefault()
-          ;(e.shiftKey ? last : first).focus()
-          return
-        }
-
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault()
-          last.focus()
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault()
-          first.focus()
+        if (e.shiftKey) { // Tab + Shift
+          if (document.activeElement === firstElement) {
+            lastElement.focus()
+            e.preventDefault()
+          }
+        } else { // Tab
+          if (document.activeElement === lastElement) {
+            firstElement.focus()
+            e.preventDefault()
+          }
         }
       }
     }
 
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [handleNext, handlePrev, onClose, getFocusableElements])
 
-  if (!isOpen) return null
+  /**
+   * Native Touch Gestures (Swipe to Navigate)
+   */
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX
+    touchEndX.current = e.touches[0].clientX
+  }
+
+  const handleTouchMove = (e) => {
+    touchEndX.current = e.touches[0].clientX
+  }
+
+  const handleTouchEnd = () => {
+    const swipeDistance = touchStartX.current - touchEndX.current
+    const swipeThreshold = 50
+
+    if (Math.abs(swipeDistance) > swipeThreshold) {
+      if (swipeDistance > 0) {
+        handleNext() // Swipe Left -> Load Next
+      } else {
+        handlePrev() // Swipe Right -> Load Prev
+      }
+    }
+  }
+
+  const handleContextMenu = (e) => e.preventDefault()
+
+  if (!activePhoto) return null
 
   return (
     <div
-      ref={lightboxRef}
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Photo viewer"
-      className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between select-none animate-fadeUp p-4"
+      tabIndex={-1} // Allow programmatic focus targeting
+      className="fixed inset-0 z-[100] flex flex-col justify-between bg-black/95 select-none focus:outline-none"
+      onClick={onClose}
     >
-      {/* ── TOP CONTROL PANEL ── */}
-      <div className="flex items-center justify-between z-10 w-full pb-4 border-b border-white/10">
-        <span className="text-xs font-semibold font-mono text-gray-400">
-          {currentIndex + 1} of {totalCount}
+      {/* Top Header Controls */}
+      <header className="flex items-center justify-between px-6 py-4 w-full bg-gradient-to-b from-black/60 to-transparent pointer-events-none z-10">
+        <span className="text-white/60 text-xs tracking-widest font-light">
+          {index + 1} / {photos.length}
         </span>
-
         <button
-          type="button"
-          onClick={() => onCloseRef.current?.()}
-          className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black"
-          aria-label="Close lightbox"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose?.()
+          }}
+          className="pointer-events-auto p-2 text-white/70 hover:text-white transition-colors duration-200 focus:outline-none"
+          aria-label="Close Lightbox"
         >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <line x1="18" y1="6"  x2="6"  y2="18" />
-            <line x1="6"  y1="6"  x2="18" y2="18" />
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-      </div>
+      </header>
 
-      {/* ── CENTER ACTIVE IMAGE DISPLAY AREA ── */}
-      <div className="relative flex-1 flex items-center justify-center py-6 w-full max-h-[calc(100vh-140px)]">
+      {/* Main Image Container Area */}
+      <div
+        className="relative flex-1 flex items-center justify-center px-4 md:px-16"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Left Arrow Navigation Button */}
+        {index > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handlePrev()
+            }}
+            className="absolute left-4 z-10 hidden md:flex items-center justify-center w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white/70 hover:text-white border border-white/10 hover:border-white/20 transition-all duration-200"
+            aria-label="Previous Photo"
+          >
+            <svg className="w-5 h-5 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
 
-        {/* Dynamic Screen-Reader Navigation Region [10]
-            aria-live="polite" non-disruptively announces slide transitions,
-            while aria-atomic="true" reads the entire string block cleanly [10]. */}
+        {/* Loading Spinner Overlaid on Active Viewport */}
+        {imageLoading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Spinner className="w-8 h-8 text-white/50" />
+          </div>
+        )}
+
+        {/* Main Photo Visual Element */}
         <div
-          aria-live="polite"
-          aria-atomic="true"
-          className="sr-only"
+          className="relative max-h-[75vh] max-w-full flex items-center justify-center"
+          onClick={(e) => e.stopPropagation()}
         >
-          {`Photo ${currentIndex + 1} of ${totalCount}${
-            activePhoto.original_name ? `: ${activePhoto.original_name}` : ''
-          }`}
+          {hasError ? (
+            <div
+              role="alert" // Instantly alerts screen readers of layout failure
+              className="flex flex-col items-center justify-center p-8 text-center text-white/50 bg-black/40 rounded-xl border border-white/5 backdrop-blur-sm"
+            >
+              <svg className="w-8 h-8 text-white/30 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="text-xs font-light tracking-wide select-none">
+                This image is temporarily unavailable
+              </p>
+            </div>
+          ) : (
+            <img
+              key={index}
+              src={activePhoto.image}
+              alt={activePhoto.alt || activePhoto.original_name || 'Fullscreen view'}
+              draggable={false} // Prevents default desktop image dragging from breaking click events
+              onContextMenu={handleContextMenu}
+              onLoad={() => setImageLoading(false)}
+              onError={() => {
+                setImageLoading(false)
+                setHasError(true)
+              }}
+              className={`
+                max-h-[75vh] max-w-full object-contain pointer-events-none select-none transition-all duration-300 ease-out
+                ${imageLoading ? 'opacity-0 scale-95 blur-sm' : 'opacity-100 scale-100 blur-0'}
+              `}
+              style={{
+                WebkitTouchCallout: 'none',
+              }}
+            />
+          )}
         </div>
 
-        {/* Left Arrow */}
-        <button
-          type="button"
-          onClick={() => currentIndex > 0 && onNavigateRef.current?.(currentIndex - 1)}
-          disabled={currentIndex === 0}
-          className="absolute left-2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Previous photo"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        {/* Core Image Asset */}
-        <img
-          src={activePhoto.image_url}
-          alt={activePhoto.original_name || 'Gallery item'}
-          className="max-w-full max-h-full object-contain pointer-events-none select-none rounded-sm shadow-2xl"
-          draggable="false"
-        />
-
-        {/* Right Arrow */}
-        <button
-          type="button"
-          onClick={() => currentIndex < totalCount - 1 && onNavigateRef.current?.(currentIndex + 1)}
-          disabled={currentIndex === totalCount - 1}
-          className="absolute right-2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Next photo"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        {/* Right Arrow Navigation Button */}
+        {index < photos.length - 1 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleNext()
+            }}
+            className="absolute right-4 z-10 hidden md:flex items-center justify-center w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white/70 hover:text-white border border-white/10 hover:border-white/20 transition-all duration-200"
+            aria-label="Next Photo"
+          >
+            <svg className="w-5 h-5 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {/* ── BOTTOM METADATA BAR ── */}
-      <div className="flex items-center justify-center py-4 border-t border-white/10 z-10 w-full">
-        <p className="text-xs text-gray-400 font-medium truncate max-w-md">
+      {/* Footer Title Metadata Bar */}
+      <footer className="w-full text-center px-6 py-6 bg-gradient-to-t from-black/60 to-transparent pointer-events-none z-10">
+        <p className="text-white/80 text-sm font-light select-none tracking-wide max-w-xl mx-auto truncate">
           {activePhoto.original_name || 'Untitled Image'}
         </p>
-      </div>
+      </footer>
     </div>
   )
 }
