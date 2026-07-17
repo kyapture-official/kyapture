@@ -4,7 +4,6 @@ kyapture/
 ├── README.md
 ├── directory_structure.txt
 ├── docker-compose.yml
-├── temp_black_format.py
 ├── temp_tree.py
 ├── backend/
 │   ├── Dockerfile
@@ -263,6 +262,17 @@ kyapture/
 │   │   │   │   │   │   ├── thumbnails/
 │   │   │   │   │   │   │   ├── 019ed3e0-f153-7401-a12e-a9385f5b5b2f_thumb.webp
 │   │   │   │   │   │   │   ├── 019ed3e0-f160-770e-ad64-1d19a9b75b24_thumb.webp
+│   │   │   ├── 019edf2a-b7ed-7876-a44d-ae82125ede55/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019edf2a-ba97-7ba8-9e6c-0fbb5bc9cfdf/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019edf2a-bb6c-7ae9-a0e7-e5ed7f2d70b5_display.webp
+│   │   │   │   │   │   │   ├── 019edf2a-bb6c-7ae9-a0e7-e5ed7f2d70b5_original.jpg
+│   │   │   │   │   │   │   ├── 019edf2a-bb81-74c3-8681-db65aff3e29f_display.webp
+│   │   │   │   │   │   │   ├── 019edf2a-bb81-74c3-8681-db65aff3e29f_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019edf2a-bb6c-7ae9-a0e7-e5ed7f2d70b5_thumb.webp
+│   │   │   │   │   │   │   ├── 019edf2a-bb81-74c3-8681-db65aff3e29f_thumb.webp
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile

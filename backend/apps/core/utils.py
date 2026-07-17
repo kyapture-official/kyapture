@@ -118,6 +118,11 @@ _ALLOWED_SIGNATURES = [
     b'\x89PNG\r\n\x1a\n', # PNG
 ]
 
+# C:\Users\LENOVO\Desktop\kyapture\backend\apps\core\utils.py
+
+# ... (Replace ONLY the validate_magic_bytes function)
+
+
 def validate_magic_bytes(file_obj):
     """
     Reads the first 8 bytes of an upload stream to verify genuine binary signatures,
@@ -126,15 +131,18 @@ def validate_magic_bytes(file_obj):
     header = file_obj.read(8)
     file_obj.seek(0)  # Reset stream
 
-    for sig in _ALLOWED_SIGNATURES:
-        if header[:len(sig)] == sig:
-            return 'PNG' if sig.startswith(b'\x89PNG') else 'JPEG'
+    # All JPEGs globally start with the 2-byte SOI marker: FF D8
+    if header.startswith(b'\xff\xd8'):
+        return 'JPEG'
+    # All PNGs globally start with this standard 8-byte signature
+    if header.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'PNG'
 
     raise ValidationError(
         detail="Security violation: Uploaded file signature is invalid. Only genuine JPEG and PNG images are allowed.",
         code="invalid_file_signature"
     )
-
+    
 def strip_exif_gps(file_obj):
     """
     Strips raw GPS location coordinates from JPEG EXIF metadata to protect client privacy,
