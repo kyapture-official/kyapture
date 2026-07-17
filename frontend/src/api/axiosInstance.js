@@ -8,7 +8,6 @@ const cleanBaseURL = rawBaseURL.replace(/\/+$/, '')
 
 const api = axios.create({
   baseURL: cleanBaseURL,
-  
 })
 
 let isRefreshing = false
