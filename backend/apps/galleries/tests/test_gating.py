@@ -56,10 +56,9 @@ class SaaSResourceGatingTestCase(APITestCase):
         file_stream = io.BytesIO()
         image = PILImage.new("RGB", (50, 50), color="white")
         image.save(file_stream, "JPEG")
-        file_stream.seek(0)
         return SimpleUploadedFile(
             name=name,
-            content=file_stream.read(),
+            content=file_stream.getvalue(),  # Corrected to use stable getvalue()
             content_type="image/jpeg"
         )
 
@@ -100,12 +99,13 @@ class SaaSResourceGatingTestCase(APITestCase):
         # Upload Photo 1 (Success)
         img_1 = self.generate_dummy_image("file_1.jpg")
         response_1 = self.client.post(upload_url, {"image": [img_1]}, format="multipart")
-        self.assertEqual(response_1.status_code, status.HTTP_201_CREATED)
+
+        self.assertEqual(response_1.status_code, status.HTTP_202_ACCEPTED)  
 
         # Upload Photo 2 (Success)
         img_2 = self.generate_dummy_image("file_2.jpg")
         response_2 = self.client.post(upload_url, {"image": [img_2]}, format="multipart")
-        self.assertEqual(response_2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response_2.status_code, status.HTTP_202_ACCEPTED)  
 
         # Upload Photo 3 (Must Fail with Gating Violation)
         img_3 = self.generate_dummy_image("file_3.jpg")

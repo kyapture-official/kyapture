@@ -67,7 +67,7 @@ MIDDLEWARE = [
 # REST Framework Configuration (Versioned globally)
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.core.authentication.CookieJWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -76,6 +76,17 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
     
     "EXCEPTION_HANDLER": "apps.core.exceptions.custom_exception_handler",
+    
+    # Dynamic Throttling / Rate-Limiting Controls
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/day",                  # Standard guest threshold
+        "user": "1000/hour",                # Standard authenticated photographer threshold
+        "password_unlock": "5/minute",      # Tight brute-force security for private galleries
+    }
 }
 
 # SimpleJWT Configuration for scale-safe session management

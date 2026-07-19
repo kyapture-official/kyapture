@@ -133,6 +133,8 @@ class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
         """
         gallery = validated_data.pop('gallery')
         image_file = validated_data['image']
+        photographer = gallery.photographer
+
 
         # Enforce strict EXIF GPS coordinate stripping (Privacy Protection)
         image_file = strip_exif_gps(image_file)
@@ -151,9 +153,17 @@ class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
         title = validated_data.get('title', '').strip()
         if not title:
             title = os.path.splitext(original_name)[0]
+        
+        # Determine if a translucent copyright watermark should be applied
+        watermark_text = None
+        if gallery.watermark_enabled:
+            # Formats the photographer's exact business name (e.g. "© Kroman Studios")
+            watermark_text = f"© {photographer.display_name or photographer.username}"
 
         # 3. Generate optimized display, thumbnail, and BlurHash variants in a single-pass in-memory pipeline
-        display_file, thumbnail_file, blurhash_str = process_image_pipeline(image_file)
+        display_file, thumbnail_file, blurhash_str = process_image_pipeline(image_file, 
+            watermark_text=watermark_text
+            )
 
         # 4. Instantiate and write the final record to PostgreSQL
         asset = MediaAsset(

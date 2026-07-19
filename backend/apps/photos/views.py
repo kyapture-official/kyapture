@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from .tasks import process_photo_asset
 
 from apps.core.permissions import IsSubscribed
-from apps.core.utils import get_user_subscription_metrics
+from apps.core.utils import get_user_subscription_metrics, get_insertion_order
 from apps.galleries.models import Gallery
 from .models import MediaAsset
 from .serializers import (

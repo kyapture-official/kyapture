@@ -1,7 +1,7 @@
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
 
-from apps.core.utils import generate_unique_slug
+from apps.core.utils import generate_unique_slug, sanitize_text
 from apps.photos.models import MediaAsset
 from .models import Gallery
 
@@ -10,7 +10,7 @@ class CoverPhotoSerializer(serializers.ModelSerializer):
     """Read-only. Returns highly compact cover photo metadata."""
     class Meta:
         model = MediaAsset
-        fields = ['id', 'image', 'width', 'height']
+        fields = ['id', 'thumbnail_file', 'width', 'height']
         read_only_fields = fields
 
 
@@ -99,6 +99,14 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
             'is_published', 'expires_at',
         ]
 
+    def validate_title(self, value):
+        """Strips raw HTML/JS tags to defend against persistent XSS."""
+        return sanitize_text(value)
+
+    def validate_description(self, value):
+        """Strips raw HTML/JS tags to defend against persistent XSS."""
+        return sanitize_text(value)
+
     def validate_branding_color(self, value):
         import re
         if value and not re.match(r'^#[0-9a-fA-F]{6}$', value):
@@ -164,6 +172,14 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
             'branding_color', 'is_password_protected', 'password',
             'is_downloadable', 'watermark_enabled', 'is_published', 'expires_at',
         ]
+
+    def validate_title(self, value):
+        """Strips raw HTML/JS tags to defend against persistent XSS."""
+        return sanitize_text(value)
+
+    def validate_description(self, value):
+        """Strips raw HTML/JS tags to defend against persistent XSS."""
+        return sanitize_text(value)
 
     def validate_branding_color(self, value):
         import re

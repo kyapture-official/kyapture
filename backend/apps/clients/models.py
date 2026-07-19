@@ -65,3 +65,41 @@ class ClientSession(BaseModel):
         # Prevent string-null parsing issues when email is empty
         client_identifier = self.email if self.email else "Anonymous"
         return f"Session: {self.gallery.title} — {client_identifier}"
+    
+
+
+class DownloadLog(BaseModel):
+    """
+    Audits and logs high-resolution gallery downloads requested by guest clients.
+    Acts as the primary lead generation database for photographers, tracking
+    who downloaded their collections and when.
+    """
+    gallery = models.ForeignKey(
+        'galleries.Gallery',
+        on_delete=models.CASCADE,
+        related_name='download_logs'
+    )
+    
+    email = models.EmailField(
+        help_text="Enforced client email required to initiate a gallery archive download."
+    )
+    
+    ip_address = models.GenericIPAddressField(
+        null=True, 
+        blank=True,
+        help_text="Auditable IP address of the client device requesting the download."
+    )
+
+    class Meta:
+        db_table = 'download_logs'
+        ordering = ['-created_at']
+        indexes = [
+            # High-performance index for photographer analytics dashboards
+            models.Index(
+                fields=['gallery', 'created_at'],
+                name='idx_download_gallery_date'
+            )
+        ]
+
+    def __str__(self):
+        return f"Download: {self.gallery.title} — {self.email}"
