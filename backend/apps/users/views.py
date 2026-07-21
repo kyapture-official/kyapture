@@ -3,6 +3,9 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
@@ -239,4 +242,52 @@ class TotalUsersView(APIView):
         return Response({
             "total_count": count,
             "latest_users": []
+        }, status=status.HTTP_200_OK)
+
+class PasswordResetRequestView(APIView):
+    """
+    POST /api/v1/auth/password/reset/
+    
+    Processes photographer password reset requests.
+    To prevent malicious email harvesting attacks, this view always returns 
+    a successful generic message, concealing whether the email exists.
+    
+    If the email is registered, it compiles a secure password-reset link 
+    and prints it directly to your Django server console.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        if not email:
+            return Response(
+                {'error': 'A valid email address is required to reset passwords.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Query active users only
+            user = User.objects.get(email=email, is_active=True)
+            
+            # Generate standard Django cryptographic tokens and base64 UID
+            token = default_token_generator.make_token(user)
+            uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+            
+            # Construct the target local Vite React frontend route for confirmation
+            reset_url = f"http://localhost:5173/auth/password/reset/confirm/{uidb64}/{token}/"
+            
+            # Print the terminal alert (simulating safe local development SMTP)
+            print("\n" + "═"*80)
+            print(f"AWS SES SMTP IN-MEMORY SPOOL: PASSWORD RESET REQUEST FOR {user.email}")
+            print(f"Click the link below to configure your new credentials:")
+            print(reset_url)
+            print("═"*80 + "\n")
+            
+        except User.DoesNotExist:
+            # Catch silently to block user enumeration hacking
+            pass
+
+        return Response({
+            'message': 'If an active account is registered with that email, a secure password reset link has been compiled.'
         }, status=status.HTTP_200_OK)

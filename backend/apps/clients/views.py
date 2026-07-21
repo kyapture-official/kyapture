@@ -292,3 +292,56 @@ class PublicGalleryDownloadView(APIView):
                 {"error": f"Failed to compile download package: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class PublicPhotographerPortfolioView(APIView):
+    """
+    GET /api/v1/public/{username}/
+    
+    Public portfolio gateway.
+    Returns a photographer's public profile metadata (display name, bio, avatar)
+    along with an optimized array of all their published, active galleries.
+    """
+    permission_classes = [AllowAny]
+    # Enforces empty authentication to prevent guest view blocks on unauthenticated routes
+    authentication_classes = []
+
+    def get(self, request, username):
+        # Dynamic import to prevent circular dependency boots
+        from apps.users.models import User
+        from apps.galleries.models import Gallery
+        from apps.galleries.serializers import GalleryListSerializer
+
+        # 1. Fetch photographer safely. Returns 404 if user is inactive/absent
+        photographer = get_object_or_404(
+            User.objects.filter(is_active=True), 
+            username=username.strip().lower()
+        )
+
+        # 2. Fetch all published, active galleries belonging to this photographer
+        # select_related cover_photo and Count annotations are applied to eliminate N+1 SQL queries
+        galleries = (
+            Gallery.objects
+            .filter(photographer=photographer, is_published=True, is_active=True)
+            .select_related('cover_photo')
+            .annotate(photo_count=Count('assets'))
+            .order_by('-created_at')
+        )
+
+        # 3. Serialize the collections array safely
+        gallery_serializer = GalleryListSerializer(
+            galleries,
+            many=True,
+            context={'request': request}
+        )
+
+        # 4. Return unified photographer portfolio metadata to unblock ClientHomePage.jsx
+        return Response({
+            "photographer": {
+                "username": photographer.username,
+                "display_name": photographer.display_name or photographer.username,
+                "bio": photographer.bio,
+                "avatar": request.build_absolute_uri(photographer.avatar.url) if photographer.avatar else None,
+            },
+            "galleries": gallery_serializer.data
+        }, status=status.HTTP_200_OK)

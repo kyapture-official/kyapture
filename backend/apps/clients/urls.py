@@ -1,5 +1,10 @@
 from django.urls import path
-from .views import PublicGalleryView, GalleryUnlockView, PublicGalleryDownloadView
+from .views import (
+    PublicGalleryView, 
+    GalleryUnlockView, 
+    PublicGalleryDownloadView,
+    PublicPhotographerPortfolioView 
+)
 
 urlpatterns = [
     # ── 1. Suffixed Routes First (Prevents routing collisions) ────────────────
@@ -25,5 +30,14 @@ urlpatterns = [
         '<str:username>/<slug:slug>/',
         PublicGalleryView.as_view(),
         name='public-gallery'
+    ),
+    
+    # ── 3. Photographer Public Portfolio Homepage (Single Parameter) ──────────
+    
+    # Route: GET /api/v1/public/{username}/
+    path(
+        '<str:username>/',
+        PublicPhotographerPortfolioView.as_view(),
+        name='public-portfolio'
     ),
 ]

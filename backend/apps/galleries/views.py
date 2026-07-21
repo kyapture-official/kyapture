@@ -300,3 +300,73 @@ class DashboardStatsView(APIView):
             'expires_at': expires_at,
             'days_remaining': days_remaining,
         }, status=status.HTTP_200_OK)
+
+class GalleryPublishView(APIView):
+    """
+    POST /api/v1/galleries/{slug}/publish/
+    
+    Allows the authenticated photographer to dynamically publish or unpublish 
+    a specific gallery container.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, slug):
+        gallery = get_object_or_404(
+            Gallery, 
+            slug=slug, 
+            photographer=request.user, 
+            is_active=True
+        )
+        
+        # Expects a boolean flag 'is_published' in the request payload
+        is_published = request.data.get('is_published', True)
+        gallery.is_published = is_published
+        gallery.save(update_fields=['is_published'])
+        
+        return Response({
+            'status': 'success', 
+            'is_published': gallery.is_published
+        }, status=status.HTTP_200_OK)
+
+
+class GallerySetPasswordView(APIView):
+    """
+    POST /api/v1/galleries/{slug}/set-password/
+    
+    Allows the authenticated photographer to enable, disable, or modify 
+    the access-password security parameters of a specific gallery.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, slug):
+        gallery = get_object_or_404(
+            Gallery, 
+            slug=slug, 
+            photographer=request.user, 
+            is_active=True
+        )
+        
+        password = request.data.get('password', '').strip()
+        is_protected = request.data.get('is_password_protected', True)
+
+        if is_protected and not password:
+            return Response(
+                {'error': 'A password is required when enabling gallery protection.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from django.contrib.auth.hashers import make_password
+
+        if is_protected:
+            gallery.is_password_protected = True
+            gallery.password_hash = make_password(password)
+        else:
+            gallery.is_password_protected = False
+            gallery.password_hash = None
+
+        gallery.save(update_fields=['is_password_protected', 'password_hash'])
+        
+        return Response({
+            'status': 'success', 
+            'is_password_protected': gallery.is_password_protected
+        }, status=status.HTTP_200_OK)
