@@ -24,13 +24,17 @@ class GalleryListSerializer(serializers.ModelSerializer):
     photo_count = serializers.IntegerField(read_only=True)
     is_downloadable = serializers.BooleanField(source='allow_download', read_only=True)
     has_password = serializers.SerializerMethodField()
-
+    
+    # NEW: Scoped photographer metadata mappings
+    owner_username = serializers.CharField(source='photographer.username', read_only=True)
+    photographer_username = serializers.CharField(source='photographer.username', read_only=True)
     class Meta:
         model = Gallery
         fields = [
             'id', 'title', 'slug', 'branding_color', 
             'cover_url', 'photo_count', 'is_downloadable', 
             'is_active', 'is_published', 'has_password', 
+            'owner_username', 'photographer_username',
             'created_at', 'updated_at'
         ]
         read_only_fields = fields
@@ -56,13 +60,17 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
     photo_count = serializers.IntegerField(read_only=True)
     is_downloadable = serializers.BooleanField(source='allow_download', read_only=True)
     has_password = serializers.SerializerMethodField()
-
+    
+    # NEW: Scoped photographer metadata mappings
+    owner_username = serializers.CharField(source='photographer.username', read_only=True)
+    photographer_username = serializers.CharField(source='photographer.username', read_only=True)
     class Meta:
         model = Gallery
         fields = [
             'id', 'title', 'slug', 'description', 'branding_color', 
             'cover_url', 'photo_count', 'is_downloadable', 
             'is_active', 'is_published', 'has_password', 
+            'owner_username', 'photographer_username',
             'password_hash', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at']

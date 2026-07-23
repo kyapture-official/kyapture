@@ -291,3 +291,80 @@ class PasswordResetRequestView(APIView):
         return Response({
             'message': 'If an active account is registered with that email, a secure password reset link has been compiled.'
         }, status=status.HTTP_200_OK)
+        
+# C:\Users\LENOVO\Desktop\kyapture\backend\apps\users\views.py
+
+# ... (Keep all existing code intact. Append these imports and the class at the very end of the file)
+
+
+from django.utils.http import urlsafe_base64_decode
+
+
+class PasswordResetConfirmView(APIView):
+    """
+    POST /api/v1/auth/password/reset/confirm/
+    
+    Consumes, decodes, and validates the cryptographic token generated 
+    during the password-reset request.
+    
+    If valid, validates the strength of the new password and writes the 
+    hashed password directly to PostgreSQL.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        uidb64 = request.data.get('uidb64', '').strip()
+        token = request.data.get('token', '').strip()
+        new_password = request.data.get('new_password', '')
+        new_password2 = request.data.get('new_password2', '')
+
+        # 1. Enforce basic parameter presence validations
+        if not (uidb64 and token and new_password):
+            return Response(
+                {'error': 'UID, token, and new password parameters are all required.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if new_password != new_password2:
+            return Response(
+                {'error': 'Passwords do not match.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Decode the User UUID primary key safely
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = User.objects.get(pk=uid, is_active=True)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response(
+                {'error': 'Invalid reset link. The user associated with this token does not exist.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Validate the cryptographic token against Django's signing database
+        if not default_token_generator.check_token(user, token):
+            return Response(
+                {'error': 'This password reset link has expired or is invalid.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 4. Enforce security-bound password strength validation
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as e:
+            return Response(
+                {'error': list(e.messages)[0], 'details': list(e.messages)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 5. All validation checks passed: hash, save, and de-authorize active sessions
+        user.set_password(new_password)
+        user.save()
+
+        return Response({
+            'message': 'Password changed successfully. Please log in with your new credentials.'
+        }, status=status.HTTP_200_OK)

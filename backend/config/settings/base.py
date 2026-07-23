@@ -183,3 +183,51 @@ CELERY_TASK_ACKS_LATE = True
 
 # Limits active worker prefetching to prevent RAM spikes on large media transcodes
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# ─────────────────────────────────────────────────────────────
+# SYSTEM LOGGING CONFIGURATION (Audit & Security Compliance)
+# ─────────────────────────────────────────────────────────────
+
+# Dynamic Bootstrap: Enforce directory presence to prevent FileHandler initialization crashes
+LOGS_DIR = BASE_DIR / "backend" / "logs"
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+        "file": {
+            "level": "WARNING",  # Prevents disk-space inflation by logging only Warnings/Errors
+            "class": "logging.FileHandler",
+            "filename": os.path.join(LOGS_DIR, "django.log"),
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["file"],
+            "level": "ERROR",  # Captures unhandled 500 server crashes and bad HTTP requests
+            "propagate": False,
+        },
+    },
+}

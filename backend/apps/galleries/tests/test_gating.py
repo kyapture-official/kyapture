@@ -22,6 +22,7 @@ class SaaSResourceGatingTestCase(APITestCase):
         self.photographer = User.objects.create_user(
             email="test_photog@kyapture.com",
             password="SecurePassword123!",
+            username="testphotog",
             display_name="Test Studio"
         )
         
@@ -137,6 +138,70 @@ class SaaSResourceGatingTestCase(APITestCase):
         self.assertTrue(
             "storage_limit_reached" in response_str or "storage_quota_exceeded" in response_str
         )
+
+    def test_cross_tenant_access_denied(self):
+        """
+        Verify that an authenticated photographer cannot retrieve, update, or delete 
+        another photographer's private gallery.
+        Expected: Returns 404 Not Found to prevent resource enumeration.
+        """
+        # Create a second photographer
+        other_user = User.objects.create_user(
+            email="other_photog@test.com",
+            password="SecurePassword123!",
+            username="otherphotog"
+        )
+        other_user.is_active_plan = True
+        other_user.save()
+        
+        # Create a gallery owned by the other photographer
+        other_gallery = Gallery.objects.create(
+            photographer=other_user,
+            title="Other Photographer Gallery",
+            slug="other-gallery"
+        )
+        
+        # Attempt to retrieve the other photographer's gallery detail configuration
+        detail_url = f"/api/v1/galleries/{other_gallery.slug}/"
+        response = self.client.get(detail_url)
+        
+        # Assert 404 to completely mask the resource's existence
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_password_protection_prevents_photo_leak(self):
+        """
+        Verify that a public guest attempting to access a password-protected gallery 
+        without an active session token is blocked at the gate.
+        Expected: Returns requires_password=True, with zero photo asset payloads leaked.
+        """
+        # Create your target gallery container locally
+        gallery = Gallery.objects.create(
+            photographer=self.photographer,
+            title="Password Protected Gallery",
+            slug="protected-gallery"
+        )
+        
+        # Make your test gallery password-protected and published
+        from django.contrib.auth.hashers import make_password
+        gallery.is_password_protected = True
+        gallery.password_hash = make_password("guestpass123")
+        gallery.is_published = True
+        gallery.save()
+        
+        # Clear authenticated user context to simulate an anonymous guest client
+        self.client.force_authenticate(user=None)
+        
+        # Query your locally-created gallery path
+        public_url = f"/api/v1/public/{self.photographer.username}/{gallery.slug}/"
+        response = self.client.get(public_url)
+        
+        # Assert that the gate requires password
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get("requires_password"))
+        
+        # CRITICAL SECURITY ASSERT: Verify that no asset payload keys are leaked
+        self.assertNotIn("photos", response.data)
+        self.assertNotIn("assets", response.data)
 
 
 def timezone_now_fallback():

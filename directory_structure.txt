@@ -22,11 +22,13 @@ kyapture/
 │   │   │   ├── migrations/
 │   │   │   │   ├── 0001_initial.py
 │   │   │   │   ├── 0002_initial.py
+│   │   │   │   ├── 0003_downloadlog.py
 │   │   │   │   ├── __init__.py
 │   │   │   ├── tests/
 │   │   │   │   ├── __init__.py
 │   │   ├── core/
 │   │   │   ├── __init__.py
+│   │   │   ├── authentication.py
 │   │   │   ├── exceptions.py
 │   │   │   ├── models.py
 │   │   │   ├── pagination.py
@@ -68,6 +70,7 @@ kyapture/
 │   │   │   │   ├── __init__.py
 │   │   │   ├── tests/
 │   │   │   │   ├── __init__.py
+│   │   │   │   ├── test_async_uploads.py
 │   │   ├── subscriptions/
 │   │   │   ├── __init__.py
 │   │   │   ├── admin.py
@@ -98,6 +101,7 @@ kyapture/
 │   │   │   ├── views.py
 │   │   │   ├── migrations/
 │   │   │   │   ├── 0001_initial.py
+│   │   │   │   ├── 0002_user_phone_user_website.py
 │   │   │   │   ├── __init__.py
 │   │   │   ├── tests/
 │   │   │   │   ├── __init__.py
@@ -115,6 +119,8 @@ kyapture/
 │   │   │   ├── base.py
 │   │   │   ├── development.py
 │   │   │   ├── production.py
+│   ├── logs/
+│   │   ├── django.log
 │   ├── media/
 │   │   ├── test
 │   │   ├── photographers/
@@ -273,6 +279,106 @@ kyapture/
 │   │   │   │   │   │   ├── thumbnails/
 │   │   │   │   │   │   │   ├── 019edf2a-bb6c-7ae9-a0e7-e5ed7f2d70b5_thumb.webp
 │   │   │   │   │   │   │   ├── 019edf2a-bb81-74c3-8681-db65aff3e29f_thumb.webp
+│   │   │   ├── 019f6e99-892b-736a-8889-317107bc0e73/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f6e99-8be1-77ae-a7d4-a66d96ba80fe/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f6e99-8c82-796f-b970-db53d0537c33_original.jpg
+│   │   │   │   │   │   │   ├── 019f6e99-8c94-7628-a519-c042db0dbe9e_original.jpg
+│   │   │   ├── 019f7066-e5cb-7f4b-8a84-13ca25481d3f/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f7066-e8f8-79a8-af93-b284a5daf57d/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f7066-e9db-7838-a94a-46f40c9992fa_original.jpg
+│   │   │   │   │   │   │   ├── 019f7066-e9f1-7333-b143-bb9cd99c6af0_original.jpg
+│   │   │   ├── 019f748b-a1ae-77d7-860b-06d5506a156e/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f748b-a4bd-7ab3-bef3-6afd09710581/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f748b-a53f-7365-90bd-c3093f3f42d8_original.jpg
+│   │   │   │   │   │   │   ├── 019f748b-a552-7150-b364-fa53fa424a87_original.jpg
+│   │   │   ├── 019f74a8-7897-7e14-8faa-229a1ead27d7/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f74a8-7ba6-7aee-a042-825e36ea3993/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f74a8-7c6a-715c-be8e-060c6e483612_original.jpg
+│   │   │   │   │   │   │   ├── 019f74a8-7c7f-7ca5-bf70-5ca21f9505a3_original.jpg
+│   │   │   ├── 019f74d0-7b7d-71b2-b425-5852e5334b41/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f74d2-28c2-79fd-8927-520649877016/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f74ed-2c46-76e2-8771-c66186ea2060_original.png
+│   │   │   │   │   │   │   ├── 019f74ee-6934-7cf4-ae33-d45493415a87_original.png
+│   │   │   │   │   │   │   ├── 019f74f9-8921-746f-8dff-92109e86a501_display.webp
+│   │   │   │   │   │   │   ├── 019f74f9-8921-746f-8dff-92109e86a501_original.png
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019f74f9-8921-746f-8dff-92109e86a501_thumb.webp
+│   │   │   ├── 019f7ac8-c4b1-7b8c-b0d8-40ca807e3d0d/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f7ac8-c82f-78ed-9d2c-c6e20980239f/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f7ac8-c975-78e3-adf7-0f499c68639b_original.jpg
+│   │   │   │   │   │   │   ├── 019f7ac8-c995-7dc4-816e-a4acd9cf31e7_original.jpg
+│   │   │   ├── 019f7ae0-d997-788a-aa6b-b8b7c25d72f3/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f7ae0-dcb6-7151-b2e2-40a35e2bafe9/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f7ae0-dd14-7bbd-b25d-340dea2b5d25_original.jpg
+│   │   │   │   │   │   │   ├── 019f7ae0-dd47-7d9c-b22d-13693e55c68b_original.jpg
+│   │   │   ├── 019f84c0-8858-7274-8bf6-8ccae1a1c44b/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f84c0-8b72-715b-8fe9-9b4bee6877b2/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f84c0-8c56-7e8f-b78a-7fb1706f5059_original.jpg
+│   │   │   │   │   │   │   ├── 019f84c0-8c76-7b14-a44c-92b540eb27b2_original.jpg
+│   │   │   ├── 019f84c8-4913-7c15-85a2-c0999e79f5c9/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f84c8-4c2e-7db5-b159-cd841b54fd3f/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f84c8-4c8b-7967-8472-36638b4c163c_original.jpg
+│   │   │   │   │   │   │   ├── 019f84c8-4ca2-77f2-b8e9-7c258f8ad4c2_original.jpg
+│   │   │   ├── 019f8e56-77b1-7751-a651-5c681fea3e12/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f8e56-7a25-7806-b678-c124052e48af/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f8e56-7b0a-705c-925d-3a6678bdb89e_original.jpg
+│   │   │   │   │   │   │   ├── 019f8e56-7b1c-7886-a579-1a230e78a7d3_original.jpg
+│   │   │   ├── 019f8e81-88ca-7fd9-9680-4b186f57c352/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f8e81-8b6a-7362-8e12-bed4a083c232/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f8e81-8bfe-75f3-a317-bf753c4da6cb_original.jpg
+│   │   │   │   │   │   │   ├── 019f8e81-8c13-7df4-b248-aeedc9d6019b_original.jpg
+│   │   │   ├── 019f8e89-59e5-75aa-b18c-72ea4b37eba7/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f8e89-5c92-7e48-a7ca-c240e31e9e3b/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f8e89-5cdb-7c8e-b5b5-bf45be232be4_original.jpg
+│   │   │   │   │   │   │   ├── 019f8e89-5ceb-756f-b819-07dc2cae543d_original.jpg
+│   │   │   ├── 019f8e94-99fd-7cd4-be3e-79561e256c08/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f8e94-9cdb-7d04-9b50-892a1e9c5ae4/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f8e94-9d5f-7b9e-af21-96eda710d98d_original.jpg
+│   │   │   │   │   │   │   ├── 019f8e94-9d76-7b8c-b704-cc392a1f6c2d_original.jpg
+│   │   │   ├── 019f8e9c-e19e-74ce-adea-cc435aad0445/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f8e9c-e492-751f-949c-7680733e5872/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f8e9c-e501-7e48-b041-3a5cc877a36d_original.jpg
+│   │   │   │   │   │   │   ├── 019f8e9c-e51e-73a4-8366-51a7697a8663_original.jpg
+│   │   │   ├── 019f8ea0-0d66-7a42-acf8-862de1b9f064/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f8ea0-1098-7fd9-b4b0-0f3556455967/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f8ea0-1112-7cee-806a-b30583b7ca25_original.jpg
+│   │   │   │   │   │   │   ├── 019f8ea0-1150-718c-a22a-d5eb58abe755_original.jpg
+│   │   │   ├── 019f8ea3-4af3-7139-8141-21e9ca1b7c36/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019f8ea3-4e2a-7a81-839a-ebf853ad5a58/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019f8ea3-4e81-7f0d-b065-426c2c327f1a_original.jpg
+│   │   │   │   │   │   │   ├── 019f8ea3-4e96-7b45-9ebe-e790ada6633b_original.jpg
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile
