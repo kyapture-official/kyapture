@@ -1,17 +1,18 @@
-# Python Environment Isolation [1.1.2]
+# Python Environment Isolation
 .venv/
 venv/
 ENV/
 env/
 dist/
 build/
+*.egg-info/
 
 # Compiled Python Bytecode (Pre-compiled caching)
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Local Secret Configurations [1.1.2]
+# Local Secret Configurations
 .env
 *.env
 .env.local
@@ -47,3 +48,12 @@ Thumbs.db
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# ─── NEW: LOCAL SYSTEM LOGS (Security Leak Prevention) ────────────────────────
+*.log
+backend/logs/
+
+# ─── NEW: TEMPORARY DEVELOPMENT ARTIFACTS (Clutter Prevention) ───────────────
+temp_tree.py
+temp_black_format.py
+directory_structure.txt
