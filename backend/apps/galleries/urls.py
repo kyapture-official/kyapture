@@ -1,8 +1,14 @@
 from django.urls import path
-from .views import GalleryListCreateView, GalleryDetailView, DashboardStatsView
+from .views import (
+    GalleryListCreateView, 
+    GalleryDetailView, 
+    DashboardStatsView,
+    GalleryPublishView,      
+    GallerySetPasswordView   
+)
 
 urlpatterns = [
-    # Route: GET/POST /api/v1/galleries/ [1.1.2]
+    # Route: GET/POST /api/v1/galleries/ 
     path(
         '',
         GalleryListCreateView.as_view(),
@@ -16,7 +22,19 @@ urlpatterns = [
         name='dashboard-stats'
     ),
     
-    # Route: GET/PUT/DELETE /api/v1/galleries/{slug}/ [1.1.2]
+    
+    path(
+        '<slug:slug>/publish/',
+        GalleryPublishView.as_view(),
+        name='gallery-publish'
+    ),
+    path(
+        '<slug:slug>/set-password/',
+        GallerySetPasswordView.as_view(),
+        name='gallery-set-password'
+    ),
+
+    # Route: GET/PUT/DELETE /api/v1/galleries/{slug}/
     path(
         '<slug:slug>/',
         GalleryDetailView.as_view(),

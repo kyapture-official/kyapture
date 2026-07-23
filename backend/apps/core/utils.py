@@ -3,7 +3,7 @@ import secrets
 import subprocess  
 import tempfile 
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageOps import exif_transpose
 from django.core.files.base import ContentFile
 from django.utils.text import slugify
@@ -13,6 +13,12 @@ from rest_framework.exceptions import PermissionDenied
 from apps.subscriptions.models import UserSubscription, SubscriptionPlan
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
+import io
+import piexif
+from PIL import Image as PILImage
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from decimal import Decimal
+from rest_framework.exceptions import ValidationError
 
 def generate_unique_slug(model_class, title, **lookup_filters):
     """
@@ -102,13 +108,6 @@ def get_user_subscription_metrics(user):
     
     return limits
 
-import io
-import piexif
-from PIL import Image as PILImage
-from django.core.files.uploadedfile import InMemoryUploadedFile
-from decimal import Decimal
-from rest_framework.exceptions import ValidationError
-
 # Magic Byte Signatures for strict JPEG and PNG security verification
 _ALLOWED_SIGNATURES = [
     b'\xff\xd8\xff\xe0',  # JPEG JFIF
@@ -117,10 +116,6 @@ _ALLOWED_SIGNATURES = [
     b'\xff\xd8\xff\xdb',  # JPEG raw tables
     b'\x89PNG\r\n\x1a\n', # PNG
 ]
-
-# C:\Users\LENOVO\Desktop\kyapture\backend\apps\core\utils.py
-
-# ... (Replace ONLY the validate_magic_bytes function)
 
 
 def validate_magic_bytes(file_obj):
@@ -226,15 +221,69 @@ def raise_gating_violation(message, code):
     )   
     
     
-def process_image_pipeline(image_file):
+
+def apply_copyright_watermark(img, text):
+    """
+    Overlays a translucent white copyright text with a subtle dark drop shadow 
+    at the bottom-right corner of the image.
+    Calculates font-size dynamically relative to image width to support 4K/8K images.
+    """
+    try:
+        # 1. Create a transparent overlay layer matching original image dimensions
+        watermark_layer = Image.new('RGBA', img.size, (255, 255, 255, 0))
+        draw = ImageDraw.Draw(watermark_layer)
+        
+        # 2. Compute dynamic, scale-proportional font size (3% of image width)
+        width, height = img.size
+        font_size = max(16, int(width * 0.03))
+        
+        try:
+            # Fallback chain: Arial truetype -> default system font
+            font = ImageFont.truetype("arial.ttf", font_size)
+        except IOError:
+            font = ImageFont.load_default()
+
+        clean_text = f" {text} "
+
+        # 3. Calculate text bounding dimensions for bottom-right corner positioning
+        try:
+            left, top, right, bottom = draw.textbbox((0, 0), clean_text, font=font)
+            text_width = right - left
+            text_height = bottom - top
+        except AttributeError:
+            # Fallback for older Pillow installations
+            text_width, text_height = draw.textsize(clean_text, font=font) if hasattr(draw, 'textsize') else (100, 20)
+
+        # Set 5% margins from the image borders
+        margin_x = int(width * 0.05)
+        margin_y = int(height * 0.05)
+        x = width - text_width - margin_x
+        y = height - text_height - margin_y
+
+        # 4. Draw Translucent Shadow (Black at 35% opacity) for visibility on white backdrops
+        draw.text((x + 2, y + 2), clean_text, font=font, fill=(0, 0, 0, 90))
+
+        # 5. Draw Primary Text (White at 55% opacity)
+        draw.text((x, y), clean_text, font=font, fill=(255, 255, 255, 140))
+
+        # 6. Composite the transparent overlay back onto the original image
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+            
+        return Image.alpha_composite(img, watermark_layer).convert('RGB')
+    except Exception:
+        # Fallback security: If watermarking fails, return the original image un-watermarked
+        return img.convert('RGB') if img.mode != 'RGB' else img
+
+def process_image_pipeline(image_file, watermark_text=None):
     """
     Unified High-Performance Image Processing Pipeline.
     
     Reads the original source file exactly once in memory, fixes EXIF orientation,
-    and generates:
+    conditionally applies translucent copyright watermarks, and generates:
     1. Display WebP (Max 2048px on longest edge, 80% quality)
     2. Thumbnail WebP (Max 600px on longest edge, 70% quality)
-    3. BlurHash Base85 string (calculated from a fast 100x100 downsampled frame)
+    3. BlurHash Base85 string
     
     Returns tuple: (display_file, thumbnail_file, blurhash_str)
     """
@@ -246,6 +295,10 @@ def process_image_pipeline(image_file):
     display_img = img.copy()
     display_img.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
     
+    # Apply watermark if enabled
+    if watermark_text:
+        display_img = apply_copyright_watermark(display_img, watermark_text)
+        
     display_stream = io.BytesIO()
     display_img.save(display_stream, format='WEBP', quality=80)
     display_stream.seek(0)
@@ -257,6 +310,10 @@ def process_image_pipeline(image_file):
     thumb_img = img.copy()
     thumb_img.thumbnail((600, 600), Image.Resampling.LANCZOS)
     
+    # Apply watermark to thumbnails to protect gallery grid scraping
+    if watermark_text:
+        thumb_img = apply_copyright_watermark(thumb_img, watermark_text)
+        
     thumb_stream = io.BytesIO()
     thumb_img.save(thumb_stream, format='WEBP', quality=70)
     thumb_stream.seek(0)
@@ -281,7 +338,7 @@ def process_image_pipeline(image_file):
     # Reset stream pointers for S3 upload preservation
     image_file.seek(0)
     
-    return display_file, thumbnail_file, blurhash_str    
+    return display_file, thumbnail_file, blurhash_str
 
 def process_video_pipeline(video_file):
     """
@@ -380,3 +437,22 @@ def process_video_pipeline(video_file):
                     os.remove(path)
                 except OSError:
                     pass
+
+def sanitize_text(text):
+    """
+    Surgically strips all HTML/JS tags from user-provided input strings.
+    Prevents persistent Cross-Site Scripting (XSS) payload storage 
+    inside gallery titles, descriptions, and photographer bio fields.
+    """
+    if not text:
+        return ""
+        
+    try:
+        import bleach
+        # Strips out all HTML tags and attributes entirely
+        return bleach.clean(text, tags=[], strip=True)
+    except ImportError:
+        # Fallback safeguard: If bleach is not installed, run basic character stripping
+        import re
+        clean = re.sub('<[^<]+?>', '', text)
+        return clean

@@ -31,6 +31,20 @@ class User(AbstractUser):
         null=True, 
         blank=True
     )
+    # NEW: Optional photographer metadata fields
+    phone = models.CharField(
+        max_length=20, 
+        blank=True, 
+        default='',
+        help_text="Optional contact phone number."
+    )
+    website = models.URLField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        help_text="Optional professional portfolio website URL."
+    )
+    
     is_active_plan = models.BooleanField(default=False)
 
     # Automatically audit when a photographer registers or updates their profile

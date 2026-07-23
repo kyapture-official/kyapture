@@ -77,44 +77,32 @@ class MySubscriptionView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     
-class ManualPaymentSubmitView(APIView):
+class ManualPaymentView(APIView):
     """
-    POST /api/v1/subscriptions/pay/
-    Handles photographer manual payment screenshot submissions.
-    Enforces multipart/form-data parsing [1.1.2].
-    """
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
-
-    def post(self, request):
-        serializer = ManualPaymentSubmitSerializer(
-            data=request.data,
-            context={'request': request}
-        )
-        if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {"message": "Payment receipt submitted successfully. Admin review pending."},
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class ManualPaymentListView(APIView):
-    """
-    GET /api/v1/subscriptions/payments/
-    Lists payments. 
-    - Standard photographers see their own submission history [1.1.2].
-    - Administrative staff (is_staff=True) see all globally pending payments [1.1.2].
+        GET  /api/v1/subscriptions/payments/
+        Lists manual payment history records. Scoped strictly per-user
+        unless the requesting profile is administrative staff.
+        POST /api/v1/subscriptions/payments/
+        Submits a fresh manual bank, eSewa, or Khalti receipt screenshot.
     """
     permission_classes = [IsAuthenticated]
+
+    def get_parsers(self):
+        """
+        Dynamically applies MultiPartParser only to POST requests, 
+        ensuring secure multipart binary stream parsing for receipts 
+        while keeping GET requests running under lightweight default JSON parsers.
+        """
+        if self.request.method == 'POST':
+            return [MultiPartParser(), FormParser()]
+        return super().get_get_parsers() if hasattr(self, 'get_get_parsers') else [MultiPartParser(), FormParser()]
 
     def get(self, request):
         if request.user.is_staff:
-            # Admins see the complete global pending queue [1.1.2]
+            # Admins see the complete global pending queue
             payments = ManualPayment.objects.select_related('user', 'plan').all()
         else:
-            # Photographers are strictly isolated to their own history [1.1.2]
+            # Photographers are strictly isolated to their own history
             payments = ManualPayment.objects.select_related('plan').filter(user=request.user)
 
         # Basic inline serialization for quick audit list
@@ -131,6 +119,18 @@ class ManualPaymentListView(APIView):
 
         return Response(data, status=status.HTTP_200_OK)
 
+    def post(self, request):
+        serializer = ManualPaymentSubmitSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Payment receipt submitted successfully. Admin review pending."},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # ─────────────────────────────────────────────────────────────
 # 7. ADMIN PENDING PAYMENTS VIEW (Admin Staff Only)

@@ -1,6 +1,5 @@
 import os
 from .base import *  # Import all shared base settings
-
 # Explicitly override base configurations for local development safety
 DEBUG = True
 
@@ -22,3 +21,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Standard Vite development port
     "http://127.0.0.1:5173",
 ]
+
+# ─── LOCAL DEVELOPMENT CELERY BYPASS ───────────────────────────────────────
+# Forces Celery to run all background tasks synchronously inside the main thread.
+# This eliminates the requirement to have a Redis server running in development.
+CELERY_TASK_ALWAYS_EAGER = True
+
+# Propagates task exceptions directly to the Django console for easy debugging
+CELERY_TASK_EAGER_PROPAGATES = True

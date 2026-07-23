@@ -25,7 +25,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'username', 'display_name',
-            'bio', 'avatar', 'is_active_plan', 'created_at'
+            'bio', 'avatar', 'phone', 'website', 'is_active_plan', 'created_at'
         ]
         read_only_fields = ['id', 'email', 'is_active_plan', 'created_at']
 
@@ -61,7 +61,10 @@ class RegisterSerializer(serializers.ModelSerializer):
     """
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
     password2 = serializers.CharField(write_only=True, style={'input_type': 'password'})
-
+    
+    # Declare fields explicitly to allow clean optional parameters during registration
+    phone = serializers.CharField(required=False, allow_blank=True, default='')
+    website = serializers.URLField(required=False, allow_null=True, default=None)
     class Meta:
         model = User
         fields = ['email', 'username', 'display_name', 'password', 'password2']
