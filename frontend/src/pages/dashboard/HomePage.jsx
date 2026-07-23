@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { galleriesApi } from '../../api/galleriesApi'
@@ -6,32 +6,84 @@ import { subscriptionsApi } from '../../api/subscriptionsApi'
 import Badge from '../../components/ui/Badge'
 import { formatDate } from '../../utils/formatters'
 
+// Confirm this mapping against your backend's actual subscription-status enum —
+// anything not listed here falls back to the neutral 'default' badge instead of
+// silently reading as an error.
+const STATUS_BADGE_VARIANT = {
+  active: 'success',
+  trialing: 'success',
+  pending: 'warning',
+  past_due: 'warning',
+  incomplete: 'warning',
+  canceled: 'danger',
+  unpaid: 'danger',
+  expired: 'danger',
+}
+
 export default function HomePage() {
   const { user } = useAuthStore()
   const [galleries, setGalleries] = useState([])
   const [sub, setSub] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [galleriesError, setGalleriesError] = useState(false)
+  const [subError, setSubError] = useState(false)
+  const mountedRef = useRef(true)
 
-  useEffect(() => {
-    Promise.all([
-      // ✅ FIXED: getGalleries() returns data directly, not r.data
-      galleriesApi.getGalleries()
-        .then((data) => setGalleries(data.results || []))
-        .catch(() => setGalleries([])),
+  const loadDashboard = useCallback(() => {
+    setLoading(true)
+    setGalleriesError(false)
+    setSubError(false)
 
-      // ✅ CORRECT: subscriptionsApi returns full axios response, so r.data is right
-      subscriptionsApi.mySubscription()
-        .then((r) => setSub(r.data))
-        .catch(() => {}),
-    ]).finally(() => setLoading(false))
+    // UNVERIFIED FROM THIS FILE ALONE: assumes getGalleries() resolves with the
+    // unwrapped payload ({ results: [...] }), not a raw axios response. Confirm
+    // against galleriesApi.js.
+    const galleriesPromise = galleriesApi.getGalleries()
+      .then((data) => {
+        if (!mountedRef.current) return
+        setGalleries(data?.results || [])
+      })
+      .catch(() => {
+        if (!mountedRef.current) return
+        setGalleries([])
+        setGalleriesError(true)
+      })
+
+    // UNVERIFIED FROM THIS FILE ALONE: assumes mySubscription() resolves with the
+    // raw axios response (needs r.data) and that "no subscription" is a 404 on a
+    // standard axios rejection shape (err.response.status). If subscriptionsApi
+    // normalizes errors the way clientsApi.js does, this check needs to change.
+    const subPromise = subscriptionsApi.mySubscription()
+      .then((r) => {
+        if (!mountedRef.current) return
+        setSub(r.data)
+      })
+      .catch((err) => {
+        if (!mountedRef.current) return
+        setSub(null)
+        if (err?.response?.status !== 404) setSubError(true)
+      })
+
+    return Promise.all([galleriesPromise, subPromise]).finally(() => {
+      if (mountedRef.current) setLoading(false)
+    })
   }, [])
 
-  const stats = [
-    { label: 'Total Galleries',  value: galleries.length },
-    { label: 'Published',        value: galleries.filter((g) => g.is_published).length },
-    { label: 'Protected',        value: galleries.filter((g) => g.has_password).length },
-    { label: 'Plan',             value: sub ? sub.plan?.name : 'Free' },
-  ]
+  useEffect(() => {
+    mountedRef.current = true
+    loadDashboard()
+    return () => {
+      mountedRef.current = false
+    }
+  }, [loadDashboard])
+
+  const planName = sub?.plan?.name ?? 'Free'
+
+  const stats = useMemo(() => ([
+    { label: 'Total Galleries', value: galleries.length },
+    { label: 'Published', value: galleries.filter((g) => g.is_published).length },
+    { label: 'Protected', value: galleries.filter((g) => g.has_password).length },
+    { label: 'Plan', value: planName },
+  ]), [galleries, planName])
 
   return (
     <div>
@@ -61,20 +113,27 @@ export default function HomePage() {
       )}
 
       {/* Subscription status */}
-      {sub && (
+      {!loading && subError && (
+        <div className="mb-10 animate-fade-up delay-200 bg-white rounded-2xl border border-red-200 p-5 flex items-center justify-between">
+          <p className="text-sm text-muted">Couldn&apos;t load your subscription status.</p>
+          <button
+            onClick={loadDashboard}
+            className="text-sm font-medium text-ink underline underline-offset-2"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!loading && !subError && sub && (
         <div className="mb-10 animate-fade-up delay-200 bg-white rounded-2xl border border-cream-200 p-5 flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-ink mb-1">{sub.plan?.name} Plan</p>
+            <p className="text-sm font-medium text-ink mb-1">{planName} Plan</p>
             <p className="text-xs text-muted">
-              Expires {formatDate(sub.expires_at)} · via {sub.payment_method}
+              {sub.expires_at ? `Expires ${formatDate(sub.expires_at)}` : 'No expiration'} · via {sub.payment_method}
             </p>
           </div>
-          <Badge
-            variant={
-              sub.status === 'active'  ? 'success' :
-              sub.status === 'pending' ? 'warning' : 'danger'
-            }
-          >
+          <Badge variant={STATUS_BADGE_VARIANT[sub.status] || 'default'}>
             {sub.status}
           </Badge>
         </div>
@@ -98,6 +157,16 @@ export default function HomePage() {
               <div key={i} className="skeleton h-40 rounded-2xl" />
             ))}
           </div>
+        ) : galleriesError ? (
+          <div className="py-16 text-center bg-white rounded-2xl border border-red-200 border-dashed">
+            <p className="text-muted text-sm mb-4">Couldn&apos;t load your galleries.</p>
+            <button
+              onClick={loadDashboard}
+              className="inline-flex items-center gap-2 bg-ink text-cream-50 px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-stone-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         ) : galleries.length === 0 ? (
           <div className="py-16 text-center bg-white rounded-2xl border border-cream-200 border-dashed">
             <p className="text-muted text-sm mb-4">No galleries yet. Create your first one.</p>
@@ -120,7 +189,7 @@ export default function HomePage() {
                   {gallery.cover_photo ? (
                     <img
                       src={gallery.cover_photo.thumbnail || gallery.cover_photo.image}
-                      alt=""
+                      alt={gallery.title ? `${gallery.title} cover photo` : 'Gallery cover photo'}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   ) : (
@@ -131,10 +200,12 @@ export default function HomePage() {
                       </svg>
                     </div>
                   )}
-                  <div
-                    className="absolute top-2 right-2 w-3 h-3 rounded-full"
-                    style={{ backgroundColor: gallery.branding_color }}
-                  />
+                  {gallery.branding_color && (
+                    <div
+                      className="absolute top-2 right-2 w-3 h-3 rounded-full"
+                      style={{ backgroundColor: gallery.branding_color }}
+                    />
+                  )}
                 </div>
                 <div className="p-4">
                   <p className="font-medium text-ink text-sm truncate mb-1">{gallery.title}</p>

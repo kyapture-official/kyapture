@@ -13,12 +13,13 @@ const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'
  *       of local image files, track upload progress, and safely abort in-flight uploads.
  */
 export default function UploadPage() {
-  const { galleries, loading: galleriesLoading, error: galleriesError } = useGalleries()
+  const { galleries = [], loading: galleriesLoading, error: galleriesError } = useGalleries()
 
   const [selectedSlug, setSelectedSlug] = useState('')
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [successCount, setSuccessCount] = useState(0)
+  const [uploadedGallery, setUploadedGallery] = useState(null)
   const [errorMsg, setErrorMsg] = useState('')
 
   const isMountedRef = useRef(false)
@@ -35,7 +36,7 @@ export default function UploadPage() {
 
   // Auto-select the first available gallery in the list once loaded
   useEffect(() => {
-    if (galleries?.length > 0 && !selectedSlug) {
+    if (galleries.length > 0 && !selectedSlug) {
       setSelectedSlug(galleries[0].slug)
     }
   }, [galleries, selectedSlug])
@@ -48,6 +49,11 @@ export default function UploadPage() {
   const handleFilesSelected = useCallback(async (files) => {
     // Guard against empty drops, missing gallery selection, or duplicate trigger
     if (!files?.length || !selectedSlug || uploading) return
+
+    // Snapshot the destination gallery now. selectedSlug can change later — either
+    // while this upload is in flight, or after it finishes while the success panel
+    // is still showing — so the success summary must never read live state.
+    const targetGallery = galleries.find((g) => g.slug === selectedSlug)
 
     setUploading(true)
     setProgress(0)
@@ -72,7 +78,7 @@ export default function UploadPage() {
         // Simulated chunk-by-chunk upload sequence
         await new Promise((resolve, reject) => {
           let currentProgress = 0
-          
+
           const onAbort = () => {
             clearInterval(timer)
             signal.removeEventListener('abort', onAbort) // Symmetrical cleanup on reject path
@@ -97,9 +103,10 @@ export default function UploadPage() {
         if (isMountedRef.current) {
           setProgress(100)
           setSuccessCount(files.length)
+          setUploadedGallery(targetGallery)
         }
       } catch (err) {
-        if (err.name === 'AbortError') return
+        if (signal.aborted || err.name === 'AbortError') return
         if (isMountedRef.current) {
           setErrorMsg('Simulation error: Upload could not be completed.')
         }
@@ -121,9 +128,14 @@ export default function UploadPage() {
       )
       if (isMountedRef.current) {
         setSuccessCount(response.length || files.length)
+        setUploadedGallery(targetGallery)
       }
     } catch (err) {
-      if (err.name === 'AbortError') return
+      // Check signal.aborted first. Whatever HTTP client uploadBulk uses internally
+      // (axios, XHR, etc.) may not reject with an error literally named "AbortError"
+      // the way native fetch + AbortController does — trusting the signal directly
+      // means a deliberate cancel is never mistaken for a real upload failure.
+      if (signal.aborted || err.name === 'AbortError') return
       if (isMountedRef.current) {
         setErrorMsg(err.response?.data?.detail || 'Upload failed. Please verify S3 cloud configs.')
       }
@@ -135,15 +147,13 @@ export default function UploadPage() {
         setUploading(false)
       }
     }
-  }, [selectedSlug, uploading])
+  }, [selectedSlug, uploading, galleries])
 
   const handleCancelUpload = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
   }, [])
-
-  const activeGallery = galleries?.find(g => g.slug === selectedSlug)
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeUp">
@@ -263,7 +273,7 @@ export default function UploadPage() {
               <div>
                 <h4 className="text-sm font-semibold text-green-800">Upload Complete!</h4>
                 <p className="text-xs text-green-600 mt-1">
-                  Successfully imported <strong>{successCount}</strong> photos into "{activeGallery?.title}".
+                  Successfully imported <strong>{successCount}</strong> photos into "{uploadedGallery?.title}".
                 </p>
               </div>
 
@@ -276,7 +286,7 @@ export default function UploadPage() {
                   Upload More
                 </button>
                 <Link
-                  to={`/dashboard/galleries/${selectedSlug}`}
+                  to={`/dashboard/galleries/${uploadedGallery?.slug}`}
                   className="px-3 py-1.5 bg-green-700 text-white hover:bg-green-800 text-xs font-medium rounded-lg transition-colors text-center"
                   style={{ textDecoration: 'none' }}
                 >
