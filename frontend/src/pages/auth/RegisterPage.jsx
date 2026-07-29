@@ -64,7 +64,8 @@ export default function RegisterPage() {
     }
 
     const trimmedUsername = form.username.trim();
-    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+    // Enforces lowercase alphanumeric and single internal dashes only (Matching backend USERNAME_REGEX)
+    const usernameRegex = /^[a-z0-9](-?[a-z0-9])*$/;
 
     if (!trimmedUsername) {
       fieldErrors.username = "Username is required.";
@@ -73,7 +74,7 @@ export default function RegisterPage() {
     } else if (trimmedUsername.length > 30) {
       fieldErrors.username = "Username must be 30 characters or fewer.";
     } else if (!usernameRegex.test(trimmedUsername)) {
-      fieldErrors.username = "Only letters, numbers, underscores, and hyphens.";
+      fieldErrors.username = "Username must contain only lowercase letters, numbers, and single internal dashes (-). No underscores (_) or spaces.";
     }
 
     if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
@@ -488,9 +489,9 @@ export default function RegisterPage() {
               type="submit"
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 py-2.5 px-4
-                         bg-gray-900 text-white text-sm font-medium rounded-lg
-                         hover:bg-gray-800 transition-colors
-                         disabled:opacity-60 disabled:cursor-not-allowed"
+                        bg-gray-900 text-white text-sm font-medium rounded-lg
+                        hover:bg-gray-800 transition-colors
+                        disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>

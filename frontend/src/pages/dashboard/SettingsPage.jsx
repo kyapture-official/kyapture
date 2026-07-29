@@ -1,5 +1,3 @@
-// File Location: frontend/src/pages/dashboard/SettingsPage.jsx
-
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { authApi } from '../../api/authApi'
@@ -57,13 +55,14 @@ export default function SettingsPage() {
         branding_color: profile.branding_color,
       }
 
-      const { data } = await authApi.updateMe(payload)
-      updateUser(data)
+      // Fixed: Removed destructured { data } since authApi returns the raw object directly
+      const updatedUser = await authApi.updateMe(payload)
+      updateUser(updatedUser)
       setProfile({
-        display_name: data.display_name || '',
-        bio: data.bio || '',
-        username: data.username || '',
-        branding_color: data.branding_color || '#111827',
+        display_name: updatedUser.display_name || '',
+        bio: updatedUser.bio || '',
+        username: updatedUser.username || '',
+        branding_color: updatedUser.branding_color || '#111827',
       })
       toast('Profile updated!', 'success')
     } catch (err) {
@@ -77,7 +76,7 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Secure 2MB logo size validation gate [weekly tasks.txt]
+    // Secure 2MB logo size validation gate
     const MAX_SIZE = 2 * 1024 * 1024
     if (file.size > MAX_SIZE) {
       toast('Logo file exceeds the 2MB size limit.', 'error')
@@ -91,11 +90,10 @@ export default function SettingsPage() {
     formData.append('logo', file)
 
     try {
-      // POST the logo. content-type header is omitted to let Axios dynamically map boundaries.
-      // Cookies are attached automatically by our global axiosInstance credentials settings.
-      const { data } = await authApi.updateMe(formData)
-      updateUser(data)
-      setLogoURL(data.logo)
+      // Fixed: Removed destructured { data } since authApi returns the raw object directly
+      const updatedUser = await authApi.updateMe(formData)
+      updateUser(updatedUser)
+      setLogoURL(updatedUser.logo)
       toast('Logo uploaded successfully!', 'success')
     } catch (err) {
       toast(err.response?.data?.logo?.[0] || 'Logo upload failed.', 'error')
@@ -109,9 +107,9 @@ export default function SettingsPage() {
     setLogoUploading(true)
 
     try {
-      // Explicitly set the logo property to null to clear it on the backend
-      const { data } = await authApi.updateMe({ logo: null })
-      updateUser(data)
+      // Fixed: Removed destructured { data } since authApi returns the raw object directly
+      const updatedUser = await authApi.updateMe({ logo: null })
+      updateUser(updatedUser)
       setLogoURL(null)
       toast('Logo removed successfully.', 'success')
     } catch (err) {
@@ -288,7 +286,7 @@ export default function SettingsPage() {
 
         </div>
 
-        {/* Right Side: Professional Logo Upload Center [weekly tasks.txt] */}
+        {/* Right Side: Professional Logo Upload Center */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl border border-cream-200 p-6 shadow-sm flex flex-col items-center text-center space-y-6">
             <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase">Business Logo</h3>

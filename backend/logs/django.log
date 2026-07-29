@@ -1,0 +1,286 @@
+ERROR 2026-07-23 20:49:49,727 log 19924 11672 Internal Server Error: /api/v1/auth/register/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\users\views.py", line 73, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'website' was declared on serializer RegisterSerializer, but has not been included in the 'fields' option.
+ERROR 2026-07-23 20:49:49,742 log 19924 11672 "POST /api/v1/auth/register/ HTTP/1.1" 500 28743
+ERROR 2026-07-23 20:49:54,970 log 19924 6264 Internal Server Error: /api/v1/auth/register/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\users\views.py", line 73, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'website' was declared on serializer RegisterSerializer, but has not been included in the 'fields' option.
+ERROR 2026-07-23 20:49:54,977 log 19924 6264 "POST /api/v1/auth/register/ HTTP/1.1" 500 28743
+ERROR 2026-07-23 20:49:55,896 log 19924 12652 Internal Server Error: /api/v1/auth/register/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\users\views.py", line 73, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'website' was declared on serializer RegisterSerializer, but has not been included in the 'fields' option.
+ERROR 2026-07-23 20:49:55,905 log 19924 12652 "POST /api/v1/auth/register/ HTTP/1.1" 500 28743
+ERROR 2026-07-23 20:49:56,295 log 19924 19872 Internal Server Error: /api/v1/auth/register/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\users\views.py", line 73, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'website' was declared on serializer RegisterSerializer, but has not been included in the 'fields' option.
+ERROR 2026-07-23 20:49:56,303 log 19924 19872 "POST /api/v1/auth/register/ HTTP/1.1" 500 28743
+WARNING 2026-07-23 20:50:08,467 log 19924 14164 "POST /api/v1/auth/login/ HTTP/1.1" 400 51
+ERROR 2026-07-26 21:39:25,799 log 19956 12488 Internal Server Error: /api/v1/auth/register/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\users\views.py", line 73, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'website' was declared on serializer RegisterSerializer, but has not been included in the 'fields' option.
+ERROR 2026-07-26 21:39:25,817 log 19956 12488 "POST /api/v1/auth/register/ HTTP/1.1" 500 28768
+ERROR 2026-07-27 12:26:29,289 log 7140 15088 Internal Server Error: /api/v1/auth/register/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\users\views.py", line 73, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'phone' was declared on serializer RegisterSerializer, but has not been included in the 'fields' option.
+ERROR 2026-07-27 12:26:29,298 log 7140 15088 "POST /api/v1/auth/register/ HTTP/1.1" 500 28667
+WARNING 2026-07-27 12:42:37,181 log 10096 2912 "POST /api/v1/auth/register/ HTTP/1.1" 400 107
+WARNING 2026-07-27 12:47:07,128 log 19588 932 "POST /api/v1/auth/register/ HTTP/1.1" 400 107
+WARNING 2026-07-27 12:53:46,938 log 19588 9608 "POST /api/v1/galleries/ HTTP/1.1" 403 106

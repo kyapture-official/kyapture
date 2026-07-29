@@ -1,24 +1,25 @@
+import io
+import piexif
 import os
 import secrets
 import subprocess  
 import tempfile 
-from io import BytesIO
+from decimal import Decimal
+
 from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageOps import exif_transpose
+from PIL import Image as PILImage
+
 from django.core.files.base import ContentFile
 from django.utils.text import slugify
 from django.db.models import Sum, Count
-from django.core.files.uploadedfile import SimpleUploadedFile
-from rest_framework.exceptions import PermissionDenied
+from django.core.files.uploadedfile import SimpleUploadedFile, InMemoryUploadedFile
+
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from apps.subscriptions.models import UserSubscription, SubscriptionPlan
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
-import io
-import piexif
-from PIL import Image as PILImage
-from django.core.files.uploadedfile import InMemoryUploadedFile
-from decimal import Decimal
-from rest_framework.exceptions import ValidationError
+
 
 def generate_unique_slug(model_class, title, **lookup_filters):
     """
@@ -60,9 +61,6 @@ def get_user_subscription_metrics(user):
     Dynamically imported inside the function to prevent circular dependency boots 
     with apps.subscriptions, apps.galleries, and apps.photos.
     """
-    from apps.subscriptions.models import UserSubscription, SubscriptionPlan
-    from apps.galleries.models import Gallery
-    from apps.photos.models import MediaAsset
 
     # Fallback default limits if no active plan is found (SaaS safety net)
     default_limits = {

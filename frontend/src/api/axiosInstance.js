@@ -22,9 +22,7 @@ const joinPath = (path) => `${cleanBaseURL}${path.startsWith('/') ? path : `/${p
  */
 const api = axios.create({
   baseURL: cleanBaseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  withCredentials: true,    // CRITICAL: Forces browser to save/transmit secure cookies on
   timeout: 15000, // 15-second network timeout boundary
 })
 

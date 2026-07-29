@@ -15,12 +15,7 @@ import api from './axiosInstance'
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Asserts that `value` is a non-empty string. Throws a TypeError tagged with
- * `code: 'INVALID_ARGUMENT'` and `status: null`, matching the same shape
- * (`.status`, `.code`) that `normalizeError` produces for network/HTTP
- * failures — so any consumer doing uniform `error.status` checks gets a
- * consistent `null` rather than `undefined` regardless of which failure path
- * fired.
+ * Asserts that `value` is a non-empty string.
  */
 function assertNonEmptyString(value, paramName) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -49,10 +44,11 @@ function buildGalleryPath(username, slug) {
 }
 
 /**
- * Builds the `/public/{username}/{slug}/verify-password/` action path.
+ * Builds the `/public/{username}/{slug}/unlock/` action path.
  */
 const buildVerifyPasswordPath = (username, slug) => {
-  return `${buildGalleryPath(username, slug)}verify-password/`
+  // Fixed: Updated verify path from 'verify-password/' to 'unlock/' to match our certified backend views
+  return `${buildGalleryPath(username, slug)}unlock/`
 }
 
 /**
@@ -67,17 +63,7 @@ function isCanceled(error) {
 }
 
 /**
- * Converts raw network anomalies into standardized system Error payloads,
- * preventing field arrays from leaking as "[object Object]".
- * NOTE: Only reached for actual request/response failures — input validation
- * errors (see assertNonEmptyString) are thrown before any network call is
- * made and propagate as raw TypeErrors instead.
- *
- * NOTE: A backend-supplied data.error/data.message/data.detail string takes
- * precedence over authMessage/notFoundMessage on ANY status, including
- * 401/403/404. Confirm this is the intended UX — if backend error bodies
- * are written for developers rather than end users, this can leak internal
- * wording (e.g. "JWT signature invalid") in place of the curated copy.
+ * Converts raw network anomalies into standardized system Error payloads.
  */
 function normalizeError(error, { authMessage, notFoundMessage } = {}) {
   const status = error?.response?.status ?? null
@@ -94,8 +80,6 @@ function normalizeError(error, { authMessage, notFoundMessage } = {}) {
       ? 'Network error. Please check your connection and try again.'
       : 'Something went wrong. Please try again.'
 
-  // Returns the trimmed value, not the raw original — a backend body with
-  // stray leading/trailing whitespace must not leak into displayed UI text.
   const pick = (val) => (typeof val === 'string' && val.trim() ? val.trim() : null)
   const message = pick(data?.error) || pick(data?.message) || pick(data?.detail) || fallback
 
@@ -129,12 +113,9 @@ export const clientsApi = {
    * @param {Object} [options]
    * @param {AbortSignal} [options.signal] - Optional cancellation token.
    * @returns {Promise<{ profile: PhotographerProfile, galleries: Gallery[] }>}
-   * @throws {TypeError} Rejects with `code: 'INVALID_ARGUMENT'`, `status: null` if `username` is missing/blank.
    */
   getPhotographerProfile: async (username, options = {}) => {
-    // Assertions run synchronously before the try-catch block
     const path = buildProfilePath(username)
-    // Tolerates explicit null being passed as options (e.g. from condition-checks), not just undefined
     const { signal } = options || {}
     try {
       const res = await api.get(path, { signal })
@@ -153,19 +134,14 @@ export const clientsApi = {
    * @param {string} username - Photographer/subdomain identifier.
    * @param {string} slug - Unique gallery slug.
    * @param {string|Object} [accessTokenOrOptions] - Short-lived access token OR options object.
-   * @param {Object} [options] - Remaining parameters (ignored if signature 2 is used).
-   * @throws {TypeError} Rejects with `code: 'INVALID_ARGUMENT'`, `status: null` if `username`/`slug` are missing/blank.
+   * @param {Object} [options] - Remaining parameters.
    */
   getGallery: async (username, slug, accessTokenOrOptions = null, options = {}) => {
-    // Assertions run synchronously before the try-catch block
     const path = buildGalleryPath(username, slug)
 
     let token = null
     let signal = null
 
-    // Polymorphic Signature Resolver:
-    //   Signature 1 (Destructured): (username, slug, { accessToken, signal })
-    //   Signature 2 (Positional):   (username, slug, tokenString, { signal })
     if (accessTokenOrOptions && typeof accessTokenOrOptions === 'object') {
       token = accessTokenOrOptions.accessToken || accessTokenOrOptions.token
       signal = accessTokenOrOptions.signal
@@ -194,20 +170,17 @@ export const clientsApi = {
 
   /**
    * Verify a gallery's password and exchange it for a short-lived access token.
-   * URI: POST /api/v1/public/{username}/{slug}/verify-password/
+   * URI: POST /api/v1/public/{username}/{slug}/unlock/
    *
    * @param {string} username - Photographer/subdomain identifier.
    * @param {string} slug - Unique gallery slug.
    * @param {string} password - Password entered by the visitor.
    * @param {Object} [options]
    * @param {AbortSignal} [options.signal]
-   * @throws {TypeError} Rejects with `code: 'INVALID_ARGUMENT'`, `status: null` if any argument is missing/blank.
    */
   unlock: async (username, slug, password, options = {}) => {
-    // Assertions run synchronously before the try-catch block
     const path = buildVerifyPasswordPath(username, slug)
     assertNonEmptyString(password, 'password')
-    // Tolerates explicit null being passed as options (e.g. from condition-checks), not just undefined
     const { signal } = options || {}
 
     try {
@@ -223,4 +196,38 @@ export const clientsApi = {
 
   // Alias mapper to guarantee backward compatibility with legacy calls
   verifyPassword: (...args) => clientsApi.unlock(...args),
+
+  /**
+   * Request a secure, memory-safe ZIP archive of the gallery's high-res original assets.
+   * URI: POST /api/v1/public/{username}/{slug}/download/
+   *
+   * @param {string} username - Photographer/subdomain identifier.
+   * @param {string} slug - Unique gallery slug.
+   * @param {string} email - Guest client's email address (for auditing/lead capture).
+   * @param {string} [token] - Optional guest session access token (if password-protected).
+   * @param {Object} [options]
+   * @param {AbortSignal} [options.signal]
+   * @returns {Promise<Blob>}
+   */
+  requestDownload: async (username, slug, email, token = null, options = {}) => {
+    const path = `${buildGalleryPath(username, slug)}download/`
+    assertNonEmptyString(email, 'email')
+    const { signal } = options || {}
+
+    try {
+      // ENFORCE: responseType: 'blob' is mandatory in Axios to process
+      // binary ZIP streaming chunks safely without corrupting them into strings.
+      const res = await api.post(
+        path,
+        { email, token },
+        { signal, responseType: 'blob' }
+      )
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to download this gallery.',
+        notFoundMessage: 'This gallery could not be found.',
+      })
+    }
+  },
 }

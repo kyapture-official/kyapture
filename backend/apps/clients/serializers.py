@@ -1,4 +1,4 @@
-from django.contrib.auth.hashers import check_password
+import bcrypt
 from rest_framework import serializers
 
 from apps.galleries.models import Gallery
@@ -105,7 +105,18 @@ class GalleryUnlockSerializer(serializers.Serializer):
             raise serializers.ValidationError({"detail": "This gallery is not password protected."})
 
         # Constant-time password validation
-        if not check_password(password, gallery.password_hash):
+        is_valid = False
+        if gallery.password_hash:
+            try:
+                # Enforce strict UTF-8 byte encoding on both payload and database hash
+                is_valid = bcrypt.checkpw(
+                    password.encode('utf-8'), 
+                    gallery.password_hash.encode('utf-8')
+                )
+            except Exception:
+                pass
+
+        if not is_valid:
             raise serializers.ValidationError({"password": "Incorrect password."})
 
         return data

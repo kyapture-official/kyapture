@@ -64,6 +64,16 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# ─── CORS SECURITY CONFIGURATION ─────────────────────────────────────────────
+# Load allowed CORS origins from .env (comma-separated list), with safe fallback 
+# to local Vite React development ports.
+raw_cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
+
+# CRITICAL: Enforces Access-Control-Allow-Credentials header to permit browsers 
+# to save and transmit our secure HttpOnly access_token/refresh_token cookies.
+CORS_ALLOW_CREDENTIALS = True
+
 # REST Framework Configuration (Versioned globally)
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -109,6 +119,14 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
+
+# ─── SECURE COOKIE FALLBACKS (Development Default) ───────────────────────────
+# In development, SESSION_COOKIE_DOMAIN must be None so cookies are permitted 
+# to be shared across localhost ports. Secure flags default to False to avoid 
+# SSL redirect loops on unencrypted HTTP local connections.
+SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN", None)
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "False") == "True"
+CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "False") == "True"
 
 # Media files (Uploaded assets like photographer avatars and receipts)
 MEDIA_URL = "/media/"

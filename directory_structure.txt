@@ -71,6 +71,7 @@ kyapture/
 │   │   │   ├── tests/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── test_async_uploads.py
+│   │   │   │   ├── test_bulk_actions.py
 │   │   ├── subscriptions/
 │   │   │   ├── __init__.py
 │   │   │   ├── admin.py
@@ -379,6 +380,87 @@ kyapture/
 │   │   │   │   │   │   ├── photos/
 │   │   │   │   │   │   │   ├── 019f8ea3-4e81-7f0d-b065-426c2c327f1a_original.jpg
 │   │   │   │   │   │   │   ├── 019f8ea3-4e96-7b45-9ebe-e790ada6633b_original.jpg
+│   │   │   ├── 019fa26c-0b24-7dd0-a3ee-c549dd5e054c/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa26c-0d99-7e67-b37d-fc32d9e6fff2/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa26c-0ddd-71e2-90c3-6bc69e40043c_original.jpg
+│   │   │   ├── 019fa26c-0def-7163-a9a2-f42ed5ee8673/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa26c-106d-7818-9923-1b73ae4d44fc/
+│   │   │   │   │   │   ├── photos/
+│   │   │   ├── 019fa26c-106e-7781-b38c-e63f27936203/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa26c-12bf-72fd-b90c-0e740ae812d2/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa26c-12c0-75ef-b801-ade3e1dc7c3a_original.jpg
+│   │   │   ├── 019fa26c-12cf-765c-9fe6-b539a3d47216/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa26c-154f-7ab6-afc3-e1483792f325/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa26c-1550-7de7-9fab-7709ecb1efb7_original.jpg
+│   │   │   │   │   │   │   ├── 019fa26c-1556-7e78-8d98-5e8e3af781cf_original.jpg
+│   │   │   │   │   │   │   ├── 019fa26c-1558-7764-97d8-17329bb115dc_original.jpg
+│   │   │   ├── 019fa285-d03a-721c-a918-da5ab4618385/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa285-d294-7e6e-a142-a454c8fc9b04/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa285-d332-73b8-a3bc-e54f45489b20_original.jpg
+│   │   │   │   │   │   │   ├── 019fa285-d342-7091-9cbd-025e64dfbb6b_original.jpg
+│   │   │   ├── 019fa2a0-9315-747e-a14b-fd2ec6d2fd08/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa2a0-958b-7c40-8466-18828fbfe166/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa2a0-95d1-7893-9cc6-edd8b0e173eb_original.jpg
+│   │   │   │   │   │   │   ├── 019fa2a0-95ea-7486-aa2d-fd1e4a0fbb14_original.jpg
+│   │   │   ├── 019fa2c1-08c3-7ea1-ac1f-56fa847d0a3a/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa2c1-0b62-76da-854a-6dc6914ad00c/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa2c1-0ba1-7185-9c59-ff02f862c53a_original.jpg
+│   │   │   │   │   │   │   ├── 019fa2c1-0baf-70f8-b05e-9140eed9199a_original.jpg
+│   │   │   ├── 019fa2fc-b1ad-7809-95db-4253b3901807/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa2fc-b433-706e-98c2-3f1d906806bb/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa2fc-b47c-7255-86c5-dea7bcfc1ce9_original.jpg
+│   │   │   │   │   │   │   ├── 019fa2fc-b48c-729d-be5f-91e0278a023d_original.jpg
+│   │   │   ├── 019fa305-3073-739e-9436-eba21b76c95e/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa305-32f6-727d-9b0f-916b3383d0d3/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa305-3332-7587-a237-da082c3eeb74_original.jpg
+│   │   │   │   │   │   │   ├── 019fa305-3343-77fd-865a-943fcfb5f5a6_original.jpg
+│   │   │   ├── 019fa30b-b74c-745c-a492-2b2685ecc4a4/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa30b-b9a9-7558-b77b-03e4a633f2cc/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa30b-b9e5-70b9-bac3-2d54c999c999_original.jpg
+│   │   │   │   │   │   │   ├── 019fa30b-b9f2-7c45-8d77-260cbbc29003_original.jpg
+│   │   │   ├── 019fa327-382f-713c-90a2-646529f4f620/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa327-3a84-706a-9fd5-cd38c6921707/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa327-3ac8-7552-a4fe-65254e744d38_original.jpg
+│   │   │   │   │   │   │   ├── 019fa327-3ad6-7ba8-8386-45b9ce1e9d8e_original.jpg
+│   │   │   ├── 019fa35b-f500-74b1-b665-6c663d3c6375/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa35b-f7cd-7f8e-af0b-dce38f418921/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa35b-f81d-7bf1-9e55-b99b49f63822_original.jpg
+│   │   │   │   │   │   │   ├── 019fa35b-f82e-7bd5-9151-76050c4271e3_original.jpg
+│   │   │   ├── 019fa364-5bc1-7844-b32c-7c5f94c8d4f9/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa364-5e4e-7b75-9ac1-3e61fe8da83d/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa364-5e8d-750e-abf1-3f37e61c17f1_original.jpg
+│   │   │   │   │   │   │   ├── 019fa364-5e9a-79a3-b346-bdee412960f7_original.jpg
+│   │   │   ├── 019fa87a-5064-7a5f-9cd9-111d8a4c1c2e/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fa87a-5381-7283-8d83-28cc778c2b80/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fa87a-546f-75e6-b7f0-e6bc7ec2160f_original.jpg
+│   │   │   │   │   │   │   ├── 019fa87a-548a-740e-9d4e-f3e6b08924d7_original.jpg
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile
@@ -409,12 +491,14 @@ kyapture/
 │   │   │   │   ├── CreateGalleryModal.jsx
 │   │   │   │   ├── DashboardHeader.jsx
 │   │   │   │   ├── EmptyState.jsx
+│   │   │   │   ├── ErrorBoundary.jsx
 │   │   │   │   ├── GalleryCard.jsx
 │   │   │   │   ├── LoadingSkeleton.jsx
 │   │   │   │   ├── PasswordModal.jsx
 │   │   │   │   ├── PhotoGrid.jsx
 │   │   │   │   ├── PhotoLightbox.jsx
 │   │   │   │   ├── ProtectedRoute.jsx
+│   │   │   │   ├── PublicMasonryGrid.jsx
 │   │   │   │   ├── SubscriptionGuard.jsx
 │   │   │   ├── ui/
 │   │   │   │   ├── Badge.jsx

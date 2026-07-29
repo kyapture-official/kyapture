@@ -292,10 +292,6 @@ class PasswordResetRequestView(APIView):
             'message': 'If an active account is registered with that email, a secure password reset link has been compiled.'
         }, status=status.HTTP_200_OK)
         
-# C:\Users\LENOVO\Desktop\kyapture\backend\apps\users\views.py
-
-# ... (Keep all existing code intact. Append these imports and the class at the very end of the file)
-
 
 from django.utils.http import urlsafe_base64_decode
 

@@ -1,15 +1,17 @@
+
 import api from './axiosInstance'
 
 /**
- * WHAT: Network Service Client for Authentication Endpoints
- * WHY:  Centralizes all HTTP operations related to photographer credentials and sessions.
- *       Prevents components and stores from importing Axios directly [18].
+ * WHAT: Network Service Client for Authentication and Photographer Profile Endpoints.
+ * WHY:  Centralizes all HTTP operations. Prevents components from importing Axios directly.
  *
  * UNIFIED RETURN SHAPES:
- *   login()          → { access: string, refresh: string, user: UserProfile }
- *   register()       → { access: string, refresh: string, user: UserProfile }
- *   logout()         → void (HTTP 200/204 No Content)
+ *   login()          → { user: UserProfile }
+ *   register()       → { user: UserProfile }
+ *   logout()         → { message: string }
  *   me()             → UserProfile
+ *   updateMe()       → UserProfile
+ *   changePassword() → { message: string }
  *   forgotPassword() → { detail: string }
  *
  * USER PROFILE INTERFACE (UserProfile):
@@ -18,52 +20,52 @@ import api from './axiosInstance'
  *     username:       string,   ← Subdomain identifier (e.g., username.domain.com)
  *     email:          string,
  *     display_name:   string,   ← Business/Photographer display name
- *     logo:           string | null,
+ *     bio:            string,
+ *     avatar:         string | null,
+ *     phone:          string,   ← Optional contact phone metadata
+ *     website:        string | null,
  *     is_active_plan: boolean   ← Premium billing plan status (gated feature lock)
  *   }
  */
 export const authApi = {
 
   /**
-   * WHAT: Authenticates a photographer and returns active JWT credentials.
+   * WHAT: Authenticates a photographer. 
+   *       Backend sets secure HttpOnly cookies, returns only user profile.
    * URI:  POST /api/v1/auth/login/
    *
    * @param {{ email: string, password: string }} credentials
-   * @returns {Promise<{ access: string, refresh: string, user: UserProfile }>}
+   * @returns {Promise<{ user: UserProfile }>}
    */
   login: (credentials) =>
     api.post('/auth/login/', credentials).then((res) => res.data),
 
   /**
-   * WHAT: Creates a new photographer account and returns tokens immediately.
+   * WHAT: Creates a new photographer account.
+   *       Backend sets secure HttpOnly cookies, returns only user profile.
    * URI:  POST /api/v1/auth/register/
-   *
-   * NOTE: We return session tokens immediately after registration for optimized UX,
-   *       allowing photographers to skip manual secondary login pages.
    *
    * @param {{
    *   username:     string,
    *   email:        string,
    *   password:     string,
-   *   display_name: string
+   *   display_name: string,
+   *   phone?:       string,
+   *   website?:     string
    * }} payload
-   * @returns {Promise<{ access: string, refresh: string, user: UserProfile }>}
+   * @returns {Promise<{ user: UserProfile }>}
    */
   register: (payload) =>
     api.post('/auth/register/', payload).then((res) => res.data),
 
   /**
-   * WHAT: Blacklists the provided refresh token on the backend to terminate the session.
+   * WHAT: Instructs the backend to blacklist the refresh cookie and purge all session cookies.
    * URI:  POST /api/v1/auth/logout/
    *
-   * NOTE: We keep authApi pure. We pass the token as a parameter rather than loading the store,
-   *       preserving strict separation of concerns between our network and state layers.
-   *
-   * @param   {string}        refreshToken - JWT refresh string targeting database invalidation
-   * @returns {Promise<void>}
+   * @returns {Promise<{ message: string }>}
    */
-  logout: (refreshToken) =>
-    api.post('/auth/logout/', { refresh: refreshToken }).then((res) => res.data),
+  logout: () =>
+    api.post('/auth/logout/', {}).then((res) => res.data),
 
   /**
    * WHAT: Retrieves the currently authenticated photographer's profile settings.
@@ -73,6 +75,26 @@ export const authApi = {
    */
   me: () =>
     api.get('/auth/me/').then((res) => res.data),
+
+  /**
+   * WHAT: Partially updates photographer profile settings (bio, display name, avatar).
+   * URI:  PUT /api/v1/auth/me/
+   *
+   * @param   {FormData | object} payload - Can be raw JSON or FormData (if uploading avatar)
+   * @returns {Promise<UserProfile>}
+   */
+  updateMe: (payload) =>
+    api.put('/auth/me/', payload).then((res) => res.data),
+
+  /**
+   * WHAT: Updates the authenticated user's password securely.
+   * URI:  PUT /api/v1/auth/change-password/
+   *
+   * @param   {{ old_password: string, new_password: string, new_password2: string }} payload
+   * @returns {Promise<{ message: string }>}
+   */
+  changePassword: (payload) =>
+    api.put('/auth/change-password/', payload).then((res) => res.data),
 
   /**
    * WHAT: Dispatches a password recovery request instructions email.

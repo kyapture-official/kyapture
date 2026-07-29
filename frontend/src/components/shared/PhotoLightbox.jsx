@@ -64,7 +64,7 @@ export default function PhotoLightbox({ photos, index, onClose, onChange }) {
     preloadIndices.forEach((i) => {
       if (i >= 0 && i < currentPhotos.length) {
         const img = new Image()
-        img.src = currentPhotos[i].image
+        img.src = currentPhotos[i].display_url
       }
     })
   }, [index])
@@ -248,7 +248,7 @@ export default function PhotoLightbox({ photos, index, onClose, onChange }) {
           ) : (
             <img
               key={index}
-              src={activePhoto.image}
+              src={activePhoto.display_url}
               alt={activePhoto.alt || activePhoto.original_name || 'Fullscreen view'}
               draggable={false} // Prevents default desktop image dragging from breaking click events
               onContextMenu={handleContextMenu}

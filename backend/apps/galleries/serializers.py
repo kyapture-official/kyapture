@@ -1,4 +1,4 @@
-from django.contrib.auth.hashers import make_password
+import bcrypt 
 from rest_framework import serializers
 
 from apps.core.utils import generate_unique_slug, sanitize_text
@@ -143,7 +143,11 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
             photographer=photographer
         )
 
-        password_hash = make_password(raw_password) if raw_password else None
+        password_hash = (
+            bcrypt.hashpw(raw_password.encode(), bcrypt.gensalt()).decode()
+            if raw_password 
+            else None
+        )
 
         return Gallery.objects.create(
             photographer=photographer,
@@ -207,13 +211,23 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         return data
 
     def update(self, instance, validated_data):
+        """
+        Updates the gallery instance safely.
+        If a new password is submitted, hashes it using raw bcrypt.
+        """
+        # Safely extract and strip the incoming raw password from validated data
         raw_password = validated_data.pop('password', '').strip()
 
         if raw_password:
-            instance.password_hash = make_password(raw_password)
+            # Hash utilizing raw bcrypt salting
+            instance.password_hash = bcrypt.hashpw(
+                raw_password.encode('utf-8'), 
+                bcrypt.gensalt()
+            ).decode('utf-8')
         elif not validated_data.get('is_password_protected', instance.is_password_protected):
             instance.password_hash = None
 
+        # Dynamically write remaining updated attributes to the model instance
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 

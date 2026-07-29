@@ -341,7 +341,7 @@ export default function PhotoGrid({
               ].join(' ')}
             >
               <img
-                src={photo.image_url}
+                src={photo.thumbnail_url}
                 alt={photo.original_name || 'Gallery photo'}
                 loading="lazy"
                 className={`w-full h-full object-cover transition-transform duration-300 ease-out ${

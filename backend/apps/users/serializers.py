@@ -67,7 +67,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     website = serializers.URLField(required=False, allow_null=True, default=None)
     class Meta:
         model = User
-        fields = ['email', 'username', 'display_name', 'password', 'password2']
+        fields = ['email', 'username', 'phone', 'website', 'display_name', 'password', 'password2']
 
     def validate_email(self, value):
         """Sanitizes and normalizes the email, then checks for global database uniqueness."""

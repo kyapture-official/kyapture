@@ -1,3 +1,4 @@
+import bcrypt
 from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.response import Response
@@ -146,6 +147,12 @@ class GalleryDetailView(APIView):
             context={'request': request}
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+    def patch(self, request, slug):
+        """
+        PATCH /api/v1/galleries/{slug}/
+        Surgically forwards partial settings updates to the PUT handler.
+        """
+        return self.put(request, slug)
 
     def put(self, request, slug):
         gallery = self.get_object(slug, request.user)
@@ -346,27 +353,32 @@ class GallerySetPasswordView(APIView):
             is_active=True
         )
         
-        password = request.data.get('password', '').strip()
-        is_protected = request.data.get('is_password_protected', True)
+        # Safely extract password, converting NoneType to empty string
+        password = request.data.get('password')
+        password = password.strip() if password else ''
 
-        if is_protected and not password:
-            return Response(
-                {'error': 'A password is required when enabling gallery protection.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        from django.contrib.auth.hashers import make_password
-
-        if is_protected:
-            gallery.is_password_protected = True
-            gallery.password_hash = make_password(password)
-        else:
+        # 1. If password is empty, interpret as removing password-protection entirely
+        if not password:
             gallery.is_password_protected = False
             gallery.password_hash = None
+            gallery.save(update_fields=['is_password_protected', 'password_hash'])
+            return Response({
+                'status': 'success',
+                'is_password_protected': gallery.is_password_protected,
+                'has_password': False
+            }, status=status.HTTP_200_OK)
 
+        # 2. If password exists, hash utilizing raw bcrypt salting
+        gallery.is_password_protected = True
+        gallery.password_hash = bcrypt.hashpw(
+            password.encode('utf-8'), 
+            bcrypt.gensalt()
+        ).decode('utf-8')
+        
         gallery.save(update_fields=['is_password_protected', 'password_hash'])
         
         return Response({
-            'status': 'success', 
-            'is_password_protected': gallery.is_password_protected
+            'status': 'success',
+            'is_password_protected': gallery.is_password_protected,
+            'has_password': True 
         }, status=status.HTTP_200_OK)

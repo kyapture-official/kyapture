@@ -95,7 +95,7 @@ class ManualPaymentView(APIView):
         """
         if self.request.method == 'POST':
             return [MultiPartParser(), FormParser()]
-        return super().get_get_parsers() if hasattr(self, 'get_get_parsers') else [MultiPartParser(), FormParser()]
+        return super().get_get_parsers() 
 
     def get(self, request):
         if request.user.is_staff:
