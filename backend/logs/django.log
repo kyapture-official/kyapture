@@ -284,3 +284,69 @@ ERROR 2026-07-27 12:26:29,298 log 7140 15088 "POST /api/v1/auth/register/ HTTP/1
 WARNING 2026-07-27 12:42:37,181 log 10096 2912 "POST /api/v1/auth/register/ HTTP/1.1" 400 107
 WARNING 2026-07-27 12:47:07,128 log 19588 932 "POST /api/v1/auth/register/ HTTP/1.1" 400 107
 WARNING 2026-07-27 12:53:46,938 log 19588 9608 "POST /api/v1/galleries/ HTTP/1.1" 403 106
+WARNING 2026-07-29 08:09:54,406 log 11168 10244 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 08:09:54,432 log 11168 11140 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 08:11:23,930 log 11168 1664 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:11:26,354 log 11168 9196 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:20:00,435 log 11168 720 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:20:19,157 log 11168 1804 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+ERROR 2026-07-29 08:20:31,237 log 11168 21152 Internal Server Error: /api/v1/subscriptions/payments/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 498, in dispatch
+    request = self.initialize_request(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 399, in initialize_request
+    parsers=self.get_parsers(),
+            ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\subscriptions\views.py", line 98, in get_parsers
+    return super().get_get_parsers()
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'super' object has no attribute 'get_get_parsers'
+ERROR 2026-07-29 08:20:31,249 log 11168 21152 "GET /api/v1/subscriptions/payments/ HTTP/1.1" 500 26757
+ERROR 2026-07-29 08:20:31,288 log 11168 11624 Internal Server Error: /api/v1/subscriptions/payments/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 498, in dispatch
+    request = self.initialize_request(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 399, in initialize_request
+    parsers=self.get_parsers(),
+            ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\subscriptions\views.py", line 98, in get_parsers
+    return super().get_get_parsers()
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'super' object has no attribute 'get_get_parsers'
+ERROR 2026-07-29 08:20:31,293 log 11168 11624 "GET /api/v1/subscriptions/payments/ HTTP/1.1" 500 26757
+WARNING 2026-07-29 08:20:51,978 log 11168 21452 "POST /api/v1/subscriptions/payments/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:21:46,125 log 11168 15320 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:21:59,510 log 11168 2380 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:30:12,051 log 17640 7324 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 08:30:12,067 log 17640 8212 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 08:30:41,251 log 17640 2676 "POST /api/v1/auth/login/ HTTP/1.1" 400 51
+WARNING 2026-07-29 08:31:28,091 log 17640 17080 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:31:34,244 log 17640 21416 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:32:18,753 log 17640 15020 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:37:15,616 log 17640 20328 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:39:46,947 log 17640 18160 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:39:59,783 log 17640 4856 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-29 08:55:15,012 log 17640 9156 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 08:55:15,025 log 17640 21076 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 10:12:54,369 log 17640 15212 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 10:12:54,378 log 17640 5724 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 10:40:08,592 log 17640 23136 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-29 10:40:08,607 log 17640 1760 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
