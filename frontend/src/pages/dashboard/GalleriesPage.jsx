@@ -1,278 +1,278 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { useGalleries } from '../../hooks/useGalleries'
-import DashboardHeader    from '../../components/shared/DashboardHeader'
-import LoadingSkeleton    from '../../components/shared/LoadingSkeleton'
-import EmptyState         from '../../components/shared/EmptyState'
-import GalleryCard        from '../../components/shared/GalleryCard'
-import CreateGalleryModal from '../../components/shared/CreateGalleryModal'
+// File Location: frontend/src/pages/dashboard/GalleriesPage.jsx
+// VERSION: Production-Grade Galleries View — Week 10
+// Corrects API naming mismatches, resolves slug parameters, and handles 403 gating messages.
 
-// ── HOISTED MODULE-LEVEL UTILITIES ──────────────────────────────────────────
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { galleriesApi }        from '../../api/galleriesApi'
+import { useAuthStore }        from '../../store/authStore'
+import { useToast }            from '../../components/ui/Toast'
+import { getAlphaBrandingColor } from '../../utils/colorHelper'
+import Modal   from '../../components/ui/Modal'
+import Spinner from '../../components/ui/Spinner'
 
-/**
- * Parses and normalizes backend exception payloads into a guaranteed string.
- *
- * Priority chain (matches Django global exception handler contract):
- *   1. String type guard    — useGalleries may already normalize to a plain string.
- *   2. response.data.error  — custom DRF exception handler's primary key.
- *   3. response.data.detail — DRF's built-in validation/permission key.
- *   4. err.message          — Axios network-level string (e.g. ECONNREFUSED).
- *   5. defaultMsg           — caller-supplied hard fallback.
- *
- * FIX (Bug 1): All property accesses on `err` now use optional chaining via
- * `err?.response?.data` and `err?.message`. The previous code wrote
- * `err.response?.data`, which guarded `.data` but NOT the initial `.response`
- * access — meaning any non-object thrown value (null, undefined, a number)
- * caused a secondary TypeError inside the error parser itself, masking the
- * original failure and producing an unrecoverable blank error state.
- *
- * FIX (Bug 2): The Array.isArray branch now maps each item through an explicit
- * string coercion and filters blanks before joining. The previous `raw.join(' ')`
- * relied on implicit JS coercion, which turns nested objects from malformed
- * middleware into the literal string "[object Object]" in the user-facing banner.
- *
- * Non-string DRF payloads are serialized to a flat string so they never reach
- * JSX as an unrenderable type, preventing "Objects are not valid as a React
- * child" production crashes.
- */
-function parseActionError(err, defaultMsg) {
-  // Guard 1 — already a plain string (pre-normalized by useGalleries or a re-throw).
-  if (typeof err === 'string') return err || defaultMsg
+export default function GalleriesPage() {
+  const toast    = useToast()
+  const navigate = useNavigate()
 
-  // Guard 2 — BUG 1 FIX: `err?.response?.data` instead of `err.response?.data`.
-  // Protects against null, undefined, or primitive thrown values.
-  const data = err?.response?.data
-  if (data != null) {
-    // `error` is the primary key from our custom Django exception handler.
-    // `detail` is DRF's built-in key; it can be a string, string[], or field-error map.
-    const raw = data.error ?? data.detail
+  // BUG RESOLUTION: Retrieve photographer username from session store, not useSubdomain()
+  const username = useAuthStore((s) => s.user?.username)
 
-    if (raw != null) {
-      if (typeof raw === 'string') return raw
+  // Layout & UI States
+  const [galleries,  setGalleries]  = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [openCreate, setOpenCreate] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
-      // BUG 2 FIX: Explicitly coerce each item to a string and filter blank/falsy
-      // entries before joining. Implicit coercion via Array.join() produces the
-      // literal text "[object Object]" when middleware injects non-string items.
-      if (Array.isArray(raw)) {
-        const msg = raw
-          .map(item => (typeof item === 'string' ? item : String(item)))
-          .filter(Boolean)
-          .join(' ')
-        return msg || defaultMsg
+  const [formData, setFormData] = useState({
+    title: '',
+    branding_color: '#4a7c6f', // Kyapture brand primary green
+  })
+
+  // ── 1. Fetch galleries on mount ────────────────────────────────────────────
+  useEffect(() => {
+    galleriesApi.getGalleries()
+      .then((data) => {
+        // Defensive analysis: Safe check for paginated objects vs flat arrays
+        const list = data?.results || (Array.isArray(data) ? data : [])
+        setGalleries(list)
+      })
+      .catch(() => toast('Failed to load collections.', 'error'))
+      .finally(() => setLoading(false))
+  }, [toast])
+
+  // ── 2. Create collection ───────────────────────────────────────────────────
+  const handleCreateSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!formData.title.trim()) {
+      toast('Please enter a collection title.', 'warning')
+      return
+    }
+
+    setSubmitting(true)
+    const loaderId = toast('Creating your new collection…', 'loading')
+
+    try {
+      const newGallery = await galleriesApi.createGallery({
+        title:          formData.title.trim(),
+        branding_color: formData.branding_color,
+      })
+
+      toast.dismiss(loaderId)
+      toast('Collection created!', 'success')
+
+      setGalleries((prev) => [newGallery, ...prev])
+      setOpenCreate(false)
+      setFormData({ title: '', branding_color: '#4a7c6f' })
+    } catch (err) {
+      toast.dismiss(loaderId)
+
+      // ── SUBSCRIPTION PLAN GATING (403 FORBIDDEN INTERCEPTOR) ────────────────
+      // Resolves AI Studio bug by prioritizing custom limit error payloads
+      // (such as "You have used 3 of 3 galleries on the Free plan") over static strings.
+      if (err.response?.status === 403) {
+        const data = err.response?.data
+        const message = data?.message || data?.detail || 'Upgrade your plan to create more galleries.'
+
+        toast(message, 'warning')
+        setOpenCreate(false)
+        
+        setTimeout(() => navigate('/dashboard/billing'), 2200)
+      } else {
+        const errorMsg = err.response?.data?.error || err.response?.data?.detail || 'Failed to create collection.'
+        toast(errorMsg, 'error')
       }
-
-      // DRF field error map: { name: ["Too short."], slug: ["Already taken."] }
-      // Flatten all field messages into a single banner string.
-      const parsed = Object.values(raw).flat().join(' ')
-
-      // Ensure the parsed string is non-empty before returning, preventing
-      // silent blank alert boxes when `raw` is an empty object `{}`.
-      if (parsed) return parsed
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  // BUG 1 FIX: `err?.message` instead of `err.message`.
-  // Covers Axios network errors (ECONNREFUSED, etc.) and guards against
-  // null/undefined/non-object thrown values that would otherwise crash here.
-  return err?.message || defaultMsg
-}
-
-/**
- * WHAT: Master Galleries Dashboard Page Orchestrator
- * WHY:  Coordinates our custom state hook, loading skeletons, empty states,
- *       and overlay modal into a single declarative, layout-reconciled view.
- */
-export default function GalleriesPage() {
-  const {
-    galleries,
-    loading,
-    error,
-    refetch,
-    createGallery,
-    deleteGallery,
-    publishGallery,
-  } = useGalleries()
-
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [actionError, setActionError] = useState('')
-
-  // ── UNMOUNT GUARD ─────────────────────────────────────────────────────────
-  // Initialized to false — accurately reflects the pre-commit, pre-effect state.
-  // Flipped to true inside useEffect after the first commit, then back to false
-  // in the cleanup. Prevents setState on dead fibers when navigation occurs
-  // mid-flight.
-  const isMounted = useRef(false)
-  useEffect(() => {
-    isMounted.current = true
-    return () => { isMounted.current = false }
-  }, [])
-
-  // ── IN-FLIGHT ACTION GUARDS ───────────────────────────────────────────────
-  // Per-slug Set for publish/delete: allows concurrent actions on *different*
-  // galleries while blocking duplicate requests on the *same* slug.
-  const inFlightSlugs = useRef(new Set())
-
-  // BUG 3 FIX: Boolean guard for create operations.
-  // handlePublishToggle and handleDelete both guard against concurrent requests
-  // via inFlightSlugs. handleCreate previously had no guard at all — on a slow
-  // network a double-tap could fire two simultaneous createGallery calls.
-  // A boolean ref is used here because no slug exists yet to key off.
-  const isCreating = useRef(false)
-
-  // ── MODAL OPEN/CLOSE LIFECYCLES ───────────────────────────────────────────
-  // Clear stale action errors when the modal opens so the user starts fresh.
-  const openModal = useCallback(() => {
-    setActionError('')
-    setIsModalOpen(true)
-  }, [])
-
-  const closeModal = useCallback(() => {
-    setIsModalOpen(false)
-  }, [])
-
-  // ── CREATE ADAPTER ────────────────────────────────────────────────────────
-  // The try-catch wraps ONLY the async createGallery call so it exclusively
-  // handles backend/network errors. The null-result guard sits outside the
-  // catch block — keeping two distinct failure paths semantically independent.
-  //
-  // BUG 3 FIX: isCreating ref added to guard against concurrent submissions.
-  // The finally block always releases the lock so the ref never gets stuck,
-  // even if createGallery rejects or the component unmounts mid-flight.
-  const handleCreate = useCallback(async (payload) => {
-    if (isCreating.current) return
-    isCreating.current = true
-
-    let result
-    try {
-      result = await createGallery(payload)
-    } catch (err) {
-      throw new Error(parseActionError(err, 'Failed to create collection.'))
-    } finally {
-      isCreating.current = false
+  // ── 3. Copy public gallery link ────────────────────────────────────────────
+  // Compiles standard, path-based fallback links to match routing configurations.
+  const handleCopyLink = async (gallery) => {
+    if (!username) {
+      toast('Unable to build link — profile not loaded yet.', 'error')
+      return
     }
-
-    // Null guard is outside the catch — this is an internal sentinel, not a
-    // backend error, and must never be routed through parseActionError.
-    if (result == null) throw new Error('Something went wrong. Please try again.')
-    return result
-  }, [createGallery])
-
-  // ── ACTION HANDLERS ───────────────────────────────────────────────────────
-  const handlePublishToggle = useCallback(async (slug, isPublished) => {
-    if (inFlightSlugs.current.has(slug)) return
-    inFlightSlugs.current.add(slug)
+    
+    const link = `${window.location.origin}/g/${username}/${gallery.slug}`
+    
     try {
-      setActionError('')
-      await publishGallery(slug, isPublished)
-    } catch (err) {
-      if (isMounted.current) {
-        setActionError(parseActionError(err, 'Failed to update publish status.'))
-      }
-    } finally {
-      // Always release the lock — even on unmount — so the Set never leaks.
-      inFlightSlugs.current.delete(slug)
+      await navigator.clipboard.writeText(link)
+      toast('Gallery link copied!', 'success')
+    } catch {
+      toast('Could not copy link. Copy it manually from the address bar.', 'error')
     }
-  }, [publishGallery])
+  }
 
-  const handleDelete = useCallback(async (slug) => {
-    if (inFlightSlugs.current.has(slug)) return
-    inFlightSlugs.current.add(slug)
-    try {
-      setActionError('')
-      await deleteGallery(slug)
-    } catch (err) {
-      if (isMounted.current) {
-        setActionError(parseActionError(err, 'Failed to delete collection.'))
-      }
-    } finally {
-      inFlightSlugs.current.delete(slug)
-    }
-  }, [deleteGallery])
-
-  // ── ERROR NORMALIZATION ───────────────────────────────────────────────────
-  // Routes query-level errors through parseActionError so Django's custom
-  // exception payloads are surfaced here with the same fidelity as action errors.
-  const queryErrorMsg = error ? parseActionError(error, 'Failed to load collections.') : ''
-
-  // ── SAFE GALLERY COUNT ────────────────────────────────────────────────────
-  // Guards against un-hydrated undefined array states on initial mount.
-  const galleryCount = galleries?.length ?? 0
+  if (loading) {
+    return (
+      <div className="flex h-[60vh] w-full items-center justify-center">
+        <Spinner size="lg" className="text-ink" />
+      </div>
+    )
+  }
 
   return (
-    // Note: animate-fadeUp is a custom animation defined inside index.css
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeUp">
+    <div className="max-w-6xl mx-auto px-4 py-8 space-y-8" style={{ animation: 'fadeUp 0.5s ease both' }}>
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="font-serif text-4xl text-ink">My Collections</h1>
+          <p className="text-xs text-muted">Create, manage, and deliver photo collections to your clients [weekly tasks.txt].</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpenCreate(true)}
+          className="sm:self-start px-5 py-3 bg-ink hover:opacity-90 active:scale-[0.98] transition-all text-white text-xs uppercase tracking-widest rounded-lg font-medium cursor-pointer"
+        >
+          Create Gallery
+        </button>
+      </header>
 
-      {/* 1. Global Page Header */}
-      <DashboardHeader onCreateClick={openModal} />
-
-      {/* Error Banner Container */}
-      <div>
-        {/* Ephemeral Action Error — exposes ✕ button to clear stale state */}
-        {actionError && (
-          <div
-            role="alert"
-            className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-sans flex items-start justify-between gap-3 animate-fadeUp"
-          >
-            <span>{actionError}</span>
-            <button
-              type="button"
-              onClick={() => setActionError('')}
-              className="shrink-0 text-red-400 hover:text-red-600 transition-colors cursor-pointer"
-              aria-label="Dismiss error"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* Static Query Error — suppressed while a retry is in-flight (!loading)
-            so the skeleton and this banner never co-render simultaneously.
-            Exposes a Retry trigger instead of a dismiss button. */}
-        {!loading && queryErrorMsg && (
-          <div
-            role="alert"
-            className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-sans flex items-start justify-between gap-3 animate-fadeUp"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-2">
-              <span>{queryErrorMsg}</span>
-              <button
-                type="button"
-                onClick={refetch}
-                className="shrink-0 text-xs font-semibold px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-800 transition-colors rounded-lg cursor-pointer"
-                aria-label="Retry loading collections"
-              >
-                Retry
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 2. Centralised Content Lifecycle — explicit reconciler branches */}
-      {loading && <LoadingSkeleton />}
-
-      {!loading && !error && galleryCount === 0 && (
-        <EmptyState onCreateClick={openModal} />
-      )}
-
-      {!loading && !error && galleryCount > 0 && (
+      {/* Empty state */}
+      {galleries.length === 0 ? (
+        <div className="text-center py-24 border-2 border-dashed border-cream-300 rounded-2xl bg-cream-50/50 space-y-4">
+          <svg className="w-10 h-10 text-muted mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+          </svg>
+          <p className="text-sm text-muted font-light">No collections yet. Create your first gallery to begin.</p>
+        </div>
+      ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {galleries.map((gallery) => (
-            <GalleryCard
-              key={gallery.slug}
-              gallery={gallery}
-              onPublishToggle={handlePublishToggle}
-              onDeleteClick={handleDelete}
-            />
-          ))}
+          {galleries.map((gallery) => {
+            const highlightBg = getAlphaBrandingColor(gallery.branding_color, '14')
+
+            return (
+              <div
+                key={gallery.id}
+                className="group bg-white border border-cream-200 rounded-2xl overflow-hidden hover:shadow-md hover:border-cream-300 transition-all duration-300 flex flex-col h-full"
+              >
+                {/* Cover area */}
+                <div className="h-44 bg-cream-100 overflow-hidden relative flex-shrink-0">
+                  {gallery.cover_url ? (
+                    <img
+                      src={gallery.cover_url}
+                      alt=""
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    />
+                  ) : (
+                    <div className="w-full h-full" style={{ backgroundColor: highlightBg }} />
+                  )}
+
+                  <div
+                    className="absolute bottom-0 left-0 right-0 h-1"
+                    style={{ backgroundColor: gallery.branding_color }}
+                  />
+
+                  {gallery.has_password && (
+                    <div className="absolute top-3 right-3 bg-white/90 rounded-lg p-1.5 shadow-sm">
+                      <svg className="w-4 h-4 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+
+                {/* Card body */}
+                <div className="p-5 flex flex-col flex-1 justify-between gap-4">
+                  <div className="space-y-1">
+                    <h3 className="font-serif text-lg font-bold text-ink group-hover:text-stone-700 transition-colors line-clamp-1">
+                      {gallery.title}
+                    </h3>
+                    <p className="text-[10px] text-muted uppercase tracking-wider">
+                      {gallery.photo_count || 0} image{gallery.photo_count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {/* BUG RESOLUTION: Navigate via gallery.slug instead of UUID id */}
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/dashboard/galleries/${gallery.slug}`)}
+                      className="flex-1 py-2.5 border border-cream-300 hover:border-cream-400 text-ink text-xs uppercase tracking-widest rounded-lg font-medium transition-colors cursor-pointer bg-white"
+                    >
+                      Manage
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(gallery)}
+                      title="Copy public gallery link"
+                      aria-label="Copy public gallery link"
+                      className="px-3 py-2.5 border border-cream-300 hover:border-cream-400 text-muted hover:text-ink rounded-lg transition-colors cursor-pointer bg-white"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
-      {/* 3. Modal Forms Layer */}
-      <CreateGalleryModal
-        isOpen={isModalOpen}
-        onClose={closeModal}
-        onCreateSubmit={handleCreate}
-      />
-    </main>
+      {/* Create Gallery Modal Overlay */}
+      <Modal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        title="Create Collection"
+        size="sm"
+      >
+        <form onSubmit={handleCreateSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="gallery-title" className="block text-[10px] uppercase font-bold text-ink tracking-wider mb-2">
+              Collection Title
+            </label>
+            <input
+              id="gallery-title"
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData((f) => ({ ...f, title: e.target.value }))}
+              placeholder="e.g. Wedding of Sonal & Lalit"
+              disabled={submitting}
+              maxLength={60}
+              className="w-full border border-cream-300 p-3 rounded-lg text-xs text-ink focus:border-ink focus:ring-0 outline-none bg-white"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="gallery-color" className="block text-[10px] uppercase font-bold text-ink tracking-wider mb-2">
+              Primary Accent Color
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                id="gallery-color"
+                type="color"
+                value={formData.branding_color}
+                onChange={(e) => setFormData((f) => ({ ...f, branding_color: e.target.value }))}
+                disabled={submitting}
+                className="w-10 h-10 border-0 rounded cursor-pointer"
+              />
+              <span className="text-xs font-mono text-muted uppercase">{formData.branding_color}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-cream-100">
+            <button
+              type="button"
+              onClick={() => setOpenCreate(false)}
+              disabled={submitting}
+              className="w-1/2 py-3 border border-cream-300 hover:bg-cream-50 text-ink text-xs uppercase tracking-widest rounded-lg font-medium cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-1/2 py-3 bg-ink hover:opacity-90 text-white text-xs uppercase tracking-widest rounded-lg font-medium cursor-pointer disabled:opacity-50"
+            >
+              {submitting ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </div>
   )
 }
