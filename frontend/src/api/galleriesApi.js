@@ -1,4 +1,6 @@
-// frontend/src/api/galleriesApi.js
+//C:\Users\LENOVO\Desktop\kyapture\frontend\src\api\galleriesApi.js :
+
+
 // ─────────────────────────────────────────────────────────────
 // WHAT: Gallery API Service Client
 // WHY:  Single source of truth for all gallery HTTP operations.

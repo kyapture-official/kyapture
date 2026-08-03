@@ -67,7 +67,7 @@ export default function UploadPage() {
     // Build the standardized multipart payload
     const formData = new FormData()
     files.forEach((file) => {
-      formData.append('images', file)
+      formData.append('image', file)
     })
 
     // ── OFFLINE MOCK SYSTEM PATHWAY ──────────────────────────────────────────

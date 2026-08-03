@@ -1,3 +1,4 @@
+#C:\Users\LENOVO\Desktop\kyapture\backend\config\settings\base.py
 import os
 from datetime import timedelta
 from pathlib import Path

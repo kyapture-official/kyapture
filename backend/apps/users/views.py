@@ -6,6 +6,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
@@ -59,7 +61,7 @@ def set_auth_cookies(response, access_token, refresh_token):
 # ─────────────────────────────────────────────────────────────
 # VIEW CONTROLLERS
 # ─────────────────────────────────────────────────────────────
-
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class RegisterView(APIView):
     """
     POST /api/v1/auth/register/
@@ -85,7 +87,7 @@ class RegisterView(APIView):
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class LoginView(APIView):
     """
     POST /api/v1/auth/login/
@@ -195,7 +197,7 @@ class CookieTokenRefreshView(APIView):
         except TokenError:
             return Response({'error': 'Invalid or expired session.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class MeView(APIView):
     """GET/PUT /api/v1/auth/me/ - Requires authenticated cookie authorization"""
     permission_classes = [IsAuthenticated]

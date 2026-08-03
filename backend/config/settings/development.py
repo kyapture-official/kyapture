@@ -22,6 +22,13 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
+# CSRF trusts these origins for the Origin-header check on unsafe requests.
+# Must include the scheme, and must be exact — no automatic localhost/127.0.0.1 equivalence.
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 # ─── LOCAL DEVELOPMENT CELERY BYPASS ───────────────────────────────────────
 # Forces Celery to run all background tasks synchronously inside the main thread.
 # This eliminates the requirement to have a Redis server running in development.

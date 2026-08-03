@@ -50,6 +50,8 @@ export const useClientStore = create(
       // server, since hydration is skipped there — see skipHydration.
       hasHydrated: false,
 
+      setHasHydrated: (value) => set({ hasHydrated: value }),
+
       /**
        * WHAT: Cache Unlock Token Action
        * WHY:  Saves a newly issued access token mapped to the gallery's slug.
@@ -117,7 +119,7 @@ export const useClientStore = create(
         if (error) {
           console.error('Failed to rehydrate client session store:', error)
         }
-        useClientStore.setState({ hasHydrated: true })
+        state?.setHasHydrated(true)
       },
     }
   )

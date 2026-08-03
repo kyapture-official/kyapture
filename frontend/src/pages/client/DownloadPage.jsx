@@ -21,8 +21,8 @@ export default function DownloadPage() {
 
   // Unique session key prevents cross-tenant token collisions on identical gallery slugs
   const sessionKey = `${username}:${slug}`
-  const { sessions } = useClientStore()
-  const galleryToken = sessions[sessionKey] ?? null
+  const { unlockTokens } = useClientStore()
+  const galleryToken = unlockTokens[sessionKey] ?? null
 
   const [email,       setEmail]       = useState('')
   const [status,      setStatus]      = useState('idle')
@@ -51,17 +51,12 @@ export default function DownloadPage() {
       setProgressMsg('Compiling photos and generating ZIP archive…')
 
       // Dispatches request directly to the binary download API endpoint.
-      // We pass the gallery bypass token via 'X-Client-Token' (avoiding Authorization header collisions)
-      // and include an empty password string to satisfy backend payload validation requirements.
       const response = await api.post(
-        `/downloads/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`,
-        { email: email.trim(), password: '' },
+        `/public/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/download/`,
+        { email: email.trim(), token: galleryToken || undefined },
         {
           responseType: 'blob',     // Forces Axios to process the incoming response as binary ZIP data
           timeout: 120000,          // 2-minute timeout boundary for large zip compilations
-          headers: galleryToken
-            ? { 'X-Client-Token': galleryToken }   // passes the ephemeral gallery unlock token safely
-            : {},
           onDownloadProgress: (evt) => {
             if (evt.total) {
               const pct = Math.round((evt.loaded * 100) / evt.total)

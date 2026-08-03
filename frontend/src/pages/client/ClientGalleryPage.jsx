@@ -44,8 +44,8 @@ export default function ClientGalleryPage() {
 
   // Key scoped to username:slug ensures tenant isolation in shared client environments
   const sessionKey = `${username}:${slug}`
-  const { sessions, setSession, hasHydrated } = useClientStore()
-  const token = sessions[sessionKey] ?? null
+  const { unlockTokens, setUnlockToken, revokeToken, hasHydrated } = useClientStore()
+  const token = unlockTokens[sessionKey] ?? null
 
   // Gallery structural metadata
   const [galleryTitle,     setGalleryTitle]     = useState('')
@@ -113,7 +113,7 @@ export default function ClientGalleryPage() {
     setPwError(null)
 
     try {
-      const { data } = await clientsApi.getGallery(username, slug, currentToken, {
+      const data = await clientsApi.getGallery(username, slug, currentToken, {
         signal: controller.signal
       })
 
@@ -130,7 +130,7 @@ export default function ClientGalleryPage() {
 
         // Evict invalidated tokens to restore system equilibrium
         if (currentToken) {
-          setSession(sessionKey, null)
+          revokeToken(sessionKey)
         }
         setLocked(true)
         setPhotos([])
@@ -150,7 +150,7 @@ export default function ClientGalleryPage() {
       }
 
       if (status === 401) {
-        setSession(sessionKey, null)
+        revokeToken(sessionKey)
         setLocked(true)
         setPhotos([])
         return
@@ -163,7 +163,7 @@ export default function ClientGalleryPage() {
         setLoading(false)
       }
     }
-  }, [username, slug, sessionKey, applyGalleryData, setSession])
+  }, [username, slug, sessionKey, applyGalleryData, revokeToken])
 
   // Triggers on initial mount and on tenant navigation once hydration completes
   useEffect(() => {
@@ -202,10 +202,10 @@ export default function ClientGalleryPage() {
     setPwLoading(true)
     setPwError(null)
     try {
-      const { data } = await clientsApi.unlock(username, slug, password, {
+      const data = await clientsApi.unlock(username, slug, password, {
         signal: controller.signal
       })
-      setSession(sessionKey, data.access_token)
+      setUnlockToken(sessionKey, data.access_token)
 
       const currentFetchId = ++activeFetchId.current
       await fetchGallery(data.access_token, currentFetchId)

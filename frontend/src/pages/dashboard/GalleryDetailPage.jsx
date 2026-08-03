@@ -185,7 +185,7 @@ export default function GalleryDetailPage() {
    */
   const uploadFilesToServer = useCallback((queueItems) => {
     const formData = new FormData()
-    queueItems.forEach((item) => formData.append('images', item.file))
+    queueItems.forEach((item) => formData.append('image', item.file))
 
     const idsInBatch = new Set(queueItems.map((item) => item.id))
 
@@ -682,9 +682,9 @@ export default function GalleryDetailPage() {
       {/* Fullscreen Photo Lightbox Layer */}
       <PhotoLightbox
         photos={photos}
-        currentIndex={lightboxIndex}
+        index={lightboxIndex}
         onClose={() => setLightboxIndex(null)}
-        onNavigate={setLightboxIndex}
+        onChange={setLightboxIndex}
       />
     </div>
   )

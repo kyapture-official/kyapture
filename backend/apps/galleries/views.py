@@ -1,3 +1,4 @@
+#C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py
 import bcrypt
 from django.db.models import Count, Q
 from rest_framework import status

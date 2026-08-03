@@ -12,8 +12,8 @@ export default function ClientHomePage() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    clientsApi.listGalleries(username)
-      .then((r) => setData(r.data))
+    clientsApi.getPhotographerProfile(username)
+      .then((data) => setData(data))
       .catch(() => setError('Photographer not found.'))
       .finally(() => setLoading(false))
   }, [username])
@@ -64,9 +64,9 @@ export default function ClientHomePage() {
               style={{ animationDelay: `${i * 0.06}s` }}
             >
               <div className="h-48 bg-cream-100 overflow-hidden relative">
-                {gallery.cover_photo ? (
+                {gallery.cover_url ? (
                   <img
-                    src={gallery.cover_photo.thumbnail || gallery.cover_photo.image}
+                    src={gallery.cover_url}
                     alt=""
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
@@ -77,7 +77,7 @@ export default function ClientHomePage() {
                   className="absolute bottom-0 left-0 right-0 h-1"
                   style={{ backgroundColor: gallery.branding_color }}
                 />
-                {gallery.is_password_protected && (
+                {gallery.has_password && (
                   <div className="absolute top-3 right-3 bg-white/90 rounded-lg p-1.5">
                     <svg className="w-4 h-4 text-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

@@ -350,3 +350,75 @@ WARNING 2026-07-29 10:12:54,369 log 17640 15212 "GET /api/v1/auth/me/ HTTP/1.1" 
 WARNING 2026-07-29 10:12:54,378 log 17640 5724 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
 WARNING 2026-07-29 10:40:08,592 log 17640 23136 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
 WARNING 2026-07-29 10:40:08,607 log 17640 1760 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-30 21:56:59,131 log 5712 23984 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-30 21:56:59,146 log 5712 24660 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-30 21:58:06,362 log 5712 13732 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-30 21:59:48,627 log 5712 3000 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-30 22:10:23,056 log 5712 23468 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-30 22:10:36,114 log 5712 8628 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-30 22:13:41,681 log 5712 9124 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-07-30 22:13:43,672 log 5712 14228 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-07-30 22:16:57,675 log 5712 4072 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-07-30 22:17:01,677 log 5712 16944 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-07-30 22:18:05,712 log 5712 11240 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-30 22:27:03,557 log 1668 23628 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-30 22:27:03,576 log 1668 22264 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-30 22:28:30,703 log 1668 18964 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-31 00:05:34,628 log 1668 10076 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 00:05:34,636 log 1668 5020 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 00:06:06,258 log 14516 13372 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 00:06:06,269 log 14516 6432 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 00:12:29,605 log 14516 22088 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-31 00:23:23,665 log 14516 20400 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 01:28:04,189 log 25652 20020 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 01:28:04,203 log 25652 25052 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 01:28:04,205 log 25652 21852 "POST /api/v1/auth/token/refresh/ HTTP/1.1" 401 49
+WARNING 2026-07-31 01:28:58,267 log 25652 27268 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-31 01:29:53,181 log 25652 21820 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-31 01:29:58,141 log 25652 12312 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-07-31 01:53:13,775 log 25652 19124 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 01:53:13,781 log 25652 19128 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 02:43:03,394 log 25652 25260 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-07-31 02:43:03,405 log 25652 1876 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-01 16:09:04,251 log 22248 23244 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-01 16:09:04,278 log 22248 6756 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-01 16:10:36,010 log 22248 21016 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-08-01 16:12:22,607 log 22248 24640 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-08-01 16:12:24,788 log 22248 21672 "POST /api/v1/galleries/ HTTP/1.1" 403 120
+WARNING 2026-08-01 16:41:09,553 log 19372 5732 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-01 16:41:09,571 log 19372 9672 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-01 16:56:13,247 log 14108 25828 "GET /api/v1/galleries/giri-and-sari/ HTTP/1.1" 401 70
+WARNING 2026-08-01 16:56:13,261 log 14108 26864 "GET /api/v1/galleries/giri-and-sari/ HTTP/1.1" 401 70
+WARNING 2026-08-01 17:01:18,492 log 14108 21788 "GET /api/v1/public/kroman78/giri-and-sari/ HTTP/1.1" 404 30
+WARNING 2026-08-01 17:01:20,292 log 14108 26972 "GET /api/v1/public/kroman78/giri-and-sari/ HTTP/1.1" 404 30
+WARNING 2026-08-01 17:01:20,933 log 14108 14416 "GET /api/v1/public/kroman78/giri-and-sari/ HTTP/1.1" 404 30
+WARNING 2026-08-01 17:01:21,377 log 14108 4596 "GET /api/v1/public/kroman78/giri-and-sari/ HTTP/1.1" 404 30
+WARNING 2026-08-01 17:11:27,319 log 14108 25984 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-01 17:11:27,323 log 14108 26580 "GET /api/v1/subscriptions/me/ HTTP/1.1" 401 70
+WARNING 2026-08-01 17:11:27,354 log 14108 260 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-01 17:11:27,367 log 14108 16820 "GET /api/v1/subscriptions/me/ HTTP/1.1" 401 70
+ERROR 2026-08-01 17:18:07,581 log 14108 22180 Internal Server Error: /api/v1/galleries/giri-and-sari/publish/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 322, in post
+    gallery = get_object_or_404(
+              ^^^^^^^^^^^^^^^^^
+NameError: name 'get_object_or_404' is not defined
+ERROR 2026-08-01 17:18:07,590 log 14108 22180 "POST /api/v1/galleries/giri-and-sari/publish/ HTTP/1.1" 500 27318
