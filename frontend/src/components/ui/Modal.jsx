@@ -1,8 +1,11 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+// File Location: frontend/src/components/ui/Modal.jsx
 
-// ── MODULE-LEVEL KEYFRAME INJECTION ──────────────────────────────────────────
-// Injected once when the module loads to prevent head-tag accumulation
-// across repeated modal open/close cycles [16].
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+
+// ── KEYFRAME INJECTION ────────────────────────────────────────────────────────
+// Injected once at module load — prevents duplicate <style> tags across
+// repeated open/close cycles and React HMR.
 if (typeof document !== 'undefined') {
   const KEYFRAME_ID = 'modal-fade-up-keyframes'
   if (!document.getElementById(KEYFRAME_ID)) {
@@ -21,7 +24,7 @@ if (typeof document !== 'undefined') {
 }
 
 // Single source of truth for focusable elements — keeps auto-focus and the
-// Tab focus trap in perfect sync, preventing edge-case selector mismatches [10].
+// Tab focus trap in sync, preventing selector mismatches.
 const FOCUSABLE = [
   'button:not([disabled])',
   'input:not([disabled])',
@@ -34,29 +37,31 @@ const FOCUSABLE = [
 const widths = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' }
 
 /**
- * WHAT: Reusable, Fully Accessible Modal Overlay
- * WHY:  Wraps content in a highly secure, keyboard-trapped, accessible container.
- *       Conforms strictly to WCAG 2.1 SC 2.1.2 focus-containment standards [10].
+ * WHAT: Fully accessible, viewport-relative modal dialog via React Portal.
  *
- * @param {Object}      props
- * @param {boolean}     props.open     - If true, renders the modal card and backdrop
- * @param {Function}    props.onClose  - Callback function to execute on close triggers
- * @param {string}      [props.title]  - Optional title rendered inside the header
- * @param {React.ReactNode} props.children - Modal inner content
- * @param {'sm'|'md'|'lg'|'xl'} [props.size] - Target layout width constraint
+ * Renders via createPortal(…, document.body) — BUG FIX from AI Studio:
+ *   This breaks out of any CSS transform or filter on a parent <main> or
+ *   layout container that would otherwise shift a `fixed` child off-centre
+ *   (CSS Containing Block override). Solves the mobile off-centre issue.
+ *
+ * @param {boolean}           props.open     - Controls visibility
+ * @param {Function}          props.onClose  - Called on backdrop click / Escape
+ * @param {string}            [props.title]  - Header text
+ * @param {React.ReactNode}   props.children - Modal content
+ * @param {'sm'|'md'|'lg'|'xl'} [props.size='md'] - Width constraint
  */
 export default function Modal({ open, onClose, title, children, size = 'md' }) {
-  const modalRef = useRef(null)
+  const modalRef  = useRef(null)
   const onCloseRef = useRef(onClose)
 
-  // useLayoutEffect runs synchronously after DOM commit but before paint,
-  // preventing stale closure execution without render-phase mutations [12].
+  // Stable ref so event-handler closures always see the latest onClose
+  // without adding it to effect dependency arrays (which would re-register
+  // listeners on every render).
   useLayoutEffect(() => {
     onCloseRef.current = onClose
   })
 
   // ── BODY SCROLL LOCK ──────────────────────────────────────────────────────
-  // Locks background document scrolling to prevent trackpad shifts [10]
   useEffect(() => {
     if (!open) return
     const prev = document.body.style.overflow
@@ -65,8 +70,8 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
   }, [open])
 
   // ── AUTO-FOCUS & FOCUS RESTORATION ────────────────────────────────────────
-  // Captures active trigger element before opening and restores focus cleanly on unmount [10].
-  // Method-presence check handles both HTML and SVG elements via the HTMLOrSVGElement mixin [10].
+  // Captures the trigger element before opening so focus returns cleanly on
+  // close — essential for keyboard and screen reader users.
   useEffect(() => {
     if (!open) return
     const previouslyFocused = document.activeElement
@@ -84,7 +89,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
     }
   }, [open])
 
-  // ── KEYBOARD INTERACTION & FOCUS TRAP ─────────────────────────────────────
+  // ── KEYBOARD INTERACTION & FOCUS TRAP (WCAG 2.1 SC 2.1.2) ────────────────
   useEffect(() => {
     if (!open) return
 
@@ -102,7 +107,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
       const first = focusable[0]
       const last  = focusable[focusable.length - 1]
 
-      // Symmetrical Escape-recovery: respects Shift+Tab direction on out-of-modal clicks [10]
+      // Recover if focus drifts outside the modal (e.g. browser toolbar)
       if (!modalRef.current.contains(document.activeElement)) {
         e.preventDefault()
         ;(e.shiftKey ? last : first).focus()
@@ -124,8 +129,17 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
 
   if (!open) return null
 
-  return (
-    // Positional shell only — deliberately carries no ARIA role.
+  // ── PORTAL — renders to document.body ─────────────────────────────────────
+  // BUG FIX (AI Studio improvement, kept): createPortal breaks the modal
+  // out of any parent CSS transform/filter, guaranteeing viewport-relative
+  // centering on all screen sizes.
+  //
+  // WHY animation uses modalFadeUp, not toastSlideUp (AI Studio bug):
+  //   toastSlideUp is injected by Toast.jsx. If no toast is mounted,
+  //   the keyframe doesn't exist and the animation silently fails.
+  //   modalFadeUp has its own injection above — always available.
+  return createPortal(
+    // Outer shell: positioning only, no ARIA role (avoids double-scoping)
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
 
       {/* Backdrop */}
@@ -135,10 +149,9 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
         aria-hidden="true"
       />
 
-      {/* Modal Card
-          role="dialog" + aria-modal live here — on the element the user
-          perceives as the modal boundary — so screen readers correctly scope
-          the dialog region to the card content, not the full viewport [10]. */}
+      {/* Modal card — role="dialog" belongs HERE (the perceived boundary),
+          NOT on the outer positioning div. Placing it on the outer div
+          scopes the dialog region to the full viewport, confusing screen readers. */}
       <div
         ref={modalRef}
         role="dialog"
@@ -153,18 +166,22 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
               {title}
             </h3>
             <button
+              type="button"
               onClick={() => onCloseRef.current?.()}
               className="p-1.5 rounded-lg hover:bg-cream-200 text-muted transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1"
               aria-label="Close modal"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
               </svg>
             </button>
           </div>
         )}
         <div className="p-6">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

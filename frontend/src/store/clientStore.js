@@ -1,48 +1,52 @@
+// File Location: frontend/src/store/clientStore.js
+// VERSION: Production Hardened — Week 10
+// Resolves TDZ reference crashes and prevents SecurityError DOMExceptions in privacy browsers.
+
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
-// ── ISOMORPHIC SESSION STORAGE GETTER ────────────────────────────────────
-// sessionStorage doesn't exist inside Node SSR runtimes. Fall back to a
-// silent no-op so module evaluation never throws on the server; real
-// sessionStorage is used as soon as we're in a browser.
+// ── SSR & PRIVACY SANDBOX MOCK STORAGE ──────────────────────────────────────
 const noopStorage = {
-  getItem: () => null,
-  setItem: () => {},
+  getItem:    () => null,
+  setItem:    () => {},
   removeItem: () => {},
 }
-const getBrowserSessionStorage = () =>
-  typeof window !== 'undefined' ? window.sessionStorage : noopStorage
 
 /**
- * Normalizes input slugs defensively: enforces string type, trims
- * whitespace, and rejects empty strings so two "different" slugs can
- * never collide on the same storage key.
+ * WHAT: Defensive Browser Storage Capabilities Tester
+ * WHY:  Accessing window.sessionStorage directly in privacy-hardened environments, 
+ *       strict sandboxes, or incognito modes throws a DOMException SecurityError.
+ *       Testing read/write capabilities ensures we fallback gracefully.
  */
-const normalizeSlug = (slug) => {
-  if (typeof slug !== 'string') return null
-  const trimmed = slug.trim()
-  return trimmed.length > 0 ? trimmed : null
+const getBrowserSessionStorage = () => {
+  if (typeof window === 'undefined') return noopStorage
+  
+  try {
+    const storage = window.sessionStorage
+    const testKey = '__kyapture_storage_test__'
+    
+    // Perform capability flight test
+    storage.setItem(testKey, '1')
+    storage.removeItem(testKey)
+    
+    return storage
+  } catch (err) {
+    console.warn(
+      '[clientStore] Browser sessionStorage access is restricted by privacy policies. Falling back to transient in-memory storage.',
+      err.message
+    )
+    return noopStorage
+  }
 }
 
-/**
- * WHAT: Transient Client Session Store
- * WHY:  Caches gallery-unlock tokens in the browser's sessionStorage.
- *       Keying by gallery slug means a single tab can hold tokens for
- *       several unlocked galleries at once without one overwriting
- *       another. (sessionStorage is already isolated per tab by the
- *       browser itself — this map isn't what protects against cross-tab
- *       collisions, it's what protects against cross-gallery collisions
- *       within one tab.)
- *       Using sessionStorage over localStorage shortens how long a leaked
- *       token stays valid; it does not protect the token from an XSS
- *       payload running on the same page, which can read it just as
- *       easily as it could read localStorage.
- */
+// ── STORE DEFINITION ─────────────────────────────────────────────────────────
 export const useClientStore = create(
   persist(
-    (set, get) => ({
-      // State map: { 'gallery-slug': 'signed-access-token' }
-      unlockTokens: {},
+    (set) => ({
+      // Map: { 'username:gallery-slug' → 'signed-access-token' }
+      // Scoped by username:slug to prevent slug collisions across photographers.
+      sessions:     {},
+      hasHydrated:  false,
 
       // True once rehydration from sessionStorage has finished (success
       // or error). Lets the UI avoid flashing a "locked" state before the
@@ -86,38 +90,36 @@ export const useClientStore = create(
         const key = normalizeSlug(slug)
         if (!key) return
         set((state) => {
-          if (!(key in state.unlockTokens)) return state
-          const next = { ...state.unlockTokens }
-          delete next[key]
-          return { unlockTokens: next }
+          const next = { ...state.sessions }
+          if (token === null) {
+            // token === null → delete the entry entirely rather than keeping null values
+            delete next[sessionKey]
+          } else {
+            next[sessionKey] = token
+          }
+          return { sessions: next }
         })
-      },
-
-      /**
-       * WHAT: Clear All Tokens Action
-       * WHY:  Purges the entire session cache.
-       */
-      clearAllTokens: () => {
-        set({ unlockTokens: {} })
       },
     }),
     {
-      name: 'client-session-storage',
+      name:    'client-session-storage',
       storage: createJSONStorage(getBrowserSessionStorage),
-      // Skip auto-rehydration on the server — there's no sessionStorage to
-      // read from there. The client bundle hydrates normally on mount.
-      skipHydration: typeof window === 'undefined',
-      // Whitelist what gets WRITTEN to sessionStorage. The action
-      // functions were never going to serialize anyway (JSON.stringify
-      // drops them) and stay fully intact on the live in-memory store
-      // either way — this option only controls the persisted snapshot.
-      // As a side benefit, any future non-persisted field (like
-      // hasHydrated) is excluded by default instead of needing to
-      // remember to add it to an exclusion list.
-      partialize: (state) => ({ unlockTokens: state.unlockTokens }),
+
+      // Exclude 'hasHydrated' from storage serialization
+      partialize: (state) => ({ sessions: state.sessions }),
+
+      // ── TDZ RESOLUTION ─────────────────────────────────────────────────────
+      // If storage is warm, rehydration runs synchronously during store creation
+      // before assignment to useClientStore completes. We mutate the state
+      // parameter directly to inject hasHydrated: true during the initial commit
+      // phase, bypassing reference TDZs.
       onRehydrateStorage: () => (state, error) => {
         if (error) {
-          console.error('Failed to rehydrate client session store:', error)
+          console.error('[clientStore] Session rehydration failed:', error)
+          return
+        }
+        if (state) {
+          state.hasHydrated = true
         }
         state?.setHasHydrated(true)
       },

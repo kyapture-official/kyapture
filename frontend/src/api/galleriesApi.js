@@ -7,21 +7,7 @@
 //       Components and hooks never reference raw API endpoints.
 //       If an endpoint changes, this is the only file to update.
 //
-// ⚠️  SPEC SYNC REQUIRED (resolve with backend developer before Week 4):
-//     weekly_tasks.txt (Week 1 model) defines only `is_active`.
-//     file_and_folder_structure.txt defines both `is_active` and `is_published`.
-//     The field names for download and password also differ between documents.
-//     Confirm the final model fields before the Week 4 integration sprint.
-//
-// AGREED RETURN SHAPES (confirm against backend once built):
-//   getGalleries()  → { count: number, next: string|null,
-//                       previous: string|null, results: Gallery[] }
-//   getGallery()    → Gallery
-//   createGallery() → Gallery
-//   updateGallery() → Gallery
-//   deleteGallery() → void  (HTTP 204 — no body)
-//
-// Gallery object shape (⚠️ pending backend sync on is_published):
+// Gallery object shape (confirmed against GallerySerializer):
 //   {
 //     id:               string  (UUID)
 //     title:            string
@@ -29,7 +15,7 @@
 //     branding_color:   string  (hex, e.g. "#1a1a1a")
 //     is_downloadable:  boolean
 //     is_active:        boolean  (soft-delete flag — False = deleted)
-//     is_published:     boolean  (⚠️ exists only if backend implements it)
+//     is_published:     boolean  (confirmed real field — visibility, separate from is_active)
 //     has_password:     boolean  (presence flag — hash never exposed)
 //     cover_url:        string | null
 //     photo_count:      number
@@ -43,11 +29,11 @@ import api from './axiosInstance'
 export const galleriesApi = {
 
   /**
-   * WHAT: Fetch the authenticated photographer's gallery list (paginated).
+   * WHAT: Fetch the authenticated photographer's gallery list.
    * URI:  GET /api/v1/galleries/
    *
    * @param {Object}      params            - Optional DRF query parameters
-   * @param {number}      params.page       - Page number  (default: 1)
+   * @param {number}      params.page       - Page number (default: 1)
    * @param {number}      params.page_size  - Results per page (default: 20)
    * @param {string}      params.search     - Keyword filter on gallery title
    * @param {string}      params.ordering   - Sort field; prefix '-' = descending
@@ -66,6 +52,22 @@ export const galleriesApi = {
    */
   getGalleries: async (params = {}, signal = undefined) => {
     const { data } = await api.get('/galleries/', { params, signal })
+
+    // NORMALIZATION — backend confirmed to bypass pagination:
+    //   GalleryListCreateView (apps/galleries/views.py) is a plain APIView.
+    //   Its get() never calls paginate_queryset()/get_paginated_response(),
+    //   so despite DEFAULT_PAGINATION_CLASS being set globally in settings.py,
+    //   THIS endpoint returns Response(serializer.data) directly — a flat
+    //   JSON array, not the { count, next, previous, results } envelope
+    //   documented above.
+    //
+    //   We normalize here so every caller can trust the documented contract
+    //   without knowing this backend quirk. If the view is later converted
+    //   to a real ListAPIView with pagination wired up, the real envelope
+    //   passes through unchanged on the `return data` branch below.
+    if (Array.isArray(data)) {
+      return { count: data.length, next: null, previous: null, results: data }
+    }
     return data
   },
 
@@ -76,7 +78,7 @@ export const galleriesApi = {
    * WHY slug and not numeric ID:
    *   Numeric IDs expose database size (/galleries/3 reveals you have 3 records).
    *   Slugs are human-readable, SEO-friendly, and reveal nothing about scale.
-   *   The backend sets lookup_field = 'slug' on the ViewSet (Week 3 spec).
+   *   The backend sets lookup_field = 'slug' on the ViewSet.
    *
    * @param   {string}         slug
    * @returns {Promise<Gallery>}
@@ -164,8 +166,6 @@ export const galleriesApi = {
    * WHAT: Enable or remove password protection on a gallery.
    * URI:  POST /api/v1/galleries/{slug}/set-password/
    *
-   * @param {string}      slug
-   * @param {string|null} password
    *   Non-empty string → enables protection (backend hashes with bcrypt)
    *   null             → explicitly removes password protection
    *
@@ -175,6 +175,8 @@ export const galleriesApi = {
    *   The ?? operator converts undefined to null, ensuring the backend
    *   always receives a clear signal, never an accidental undefined.
    *
+   * @param {string}      slug
+   * @param {string|null} password
    * @returns {Promise<{ has_password: boolean }>}
    */
   setGalleryPassword: async (slug, password) => {
@@ -192,19 +194,9 @@ export const galleriesApi = {
    *   Publishing is a significant state change with potential backend
    *   side-effects. It has its own endpoint for that reason.
    *
-   * ⚠️  FIELD NAME PENDING BACKEND SYNC:
-   *   file_and_folder_structure.txt defines `is_published` as the visibility
-   *   field, separate from `is_active` (soft-delete).
-   *   weekly_tasks.txt Week 1 model does not define `is_published`.
-   *   Confirm with the backend developer which field this endpoint accepts
-   *   before the Week 4 integration sprint.
-   *   Current implementation follows file_and_folder_structure.txt.
-   *
    * @param   {string}  slug
    * @param   {boolean} isPublished  true = visible to clients, false = draft
    * @returns {Promise<Gallery>}
-   *   Returns the updated Gallery object.
-   *   (⚠️ confirm exact return shape with backend — may vary)
    */
   publishGallery: async (slug, isPublished) => {
     const { data } = await api.post(`/galleries/${slug}/publish/`, {
