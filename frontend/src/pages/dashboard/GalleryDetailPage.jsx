@@ -1,88 +1,60 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { galleriesApi } from '../../api/galleriesApi'
-import { photosApi } from '../../api/photosApi'
+import { photosApi }    from '../../api/photosApi'
 import { mockGalleries } from '../../utils/mockGalleries'
 import Spinner from '../../components/ui/Spinner'
 import DropZone from '../../components/ui/DropZone'
 import PhotoGrid from '../../components/shared/PhotoGrid'
-import PhotoLightbox from '../../components/shared/PhotoLightbox'
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'
 
-/**
- * WHAT: Gallery Detail Management Page
- * WHY:  Coordinates individual gallery settings, password controls, download access,
- *       and provides a fully unified, live-updating photo upload and sorting dashboard.
- */
 export default function GalleryDetailPage() {
-  const { id } = useParams()
+  const { id } = useParams()   // holds the gallery SLUG despite the param's name
   const navigate = useNavigate()
 
-  const [gallery, setGallery] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [errorMsg, setErrorMsg] = useState('')
-  const [updating, setUpdating] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [gallery, setGallery]       = useState(null)
+  const [loading, setLoading]       = useState(true)
+  const [errorMsg, setErrorMsg]     = useState('')
+  const [updating, setUpdating]     = useState(false)
+  const [copied, setCopied]         = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
 
-  // ── PHOTO-MANAGEMENT STATES ──
-  const [photos, setPhotos] = useState([])
-  const [uploadQueue, setUploadQueue] = useState([])
-  const [lightboxIndex, setLightboxIndex] = useState(null) // Tracks currently open fullscreen photo
+  const [photos, setPhotos]           = useState([])
+  const [uploadQueue, setUploadQueue] = useState([])   // in-progress uploads, rendered separately from PhotoGrid
 
-  // Local Form States
-  const [title, setTitle] = useState('')
-  const [brandingColor, setBrandingColor] = useState('#000000')
+  const [title, setTitle]                   = useState('')
+  const [brandingColor, setBrandingColor]   = useState('#000000')
   const [isDownloadable, setIsDownloadable] = useState(false)
-  const [password, setPassword] = useState('')
-  const [hasPassword, setHasPassword] = useState(false)
+  const [password, setPassword]             = useState('')
+  const [hasPassword, setHasPassword]       = useState(false)
 
-  const isMountedRef = useRef(false)
-  const copyTimeoutRef = useRef(null)
+  const isMountedRef    = useRef(false)
+  const copyTimeoutRef  = useRef(null)
   const skipNextLoadRef = useRef(false)
-  const uploadQueueRef = useRef([]) // Mirrors `uploadQueue` so unmount cleanup always sees the latest value
-  const activeTimersRef = useRef(new Set()) // Tracks in-flight mock-upload intervals so they can be cleared on unmount
+  const blobUrlsRef     = useRef([])   // preview blob: URLs still awaiting revocation
 
-  // Keep the ref in sync without re-running the mount/unmount effect below.
-  useEffect(() => {
-    uploadQueueRef.current = uploadQueue
-  }, [uploadQueue])
-
-  // Mount/unmount lifecycle — runs exactly ONCE.
-  // Cleanup only fires on actual unmount to prevent premature blob revoking.
   useEffect(() => {
     isMountedRef.current = true
     return () => {
       isMountedRef.current = false
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
-
-      // Stop any simulated/in-flight upload timers so they don't keep ticking after unmount.
-      activeTimersRef.current.forEach((timerId) => clearInterval(timerId))
-      activeTimersRef.current.clear()
-
-      // Only release blobs for uploads that never finished. Anything already promoted
-      // into `photos` must keep its URL alive for as long as it's being displayed.
-      uploadQueueRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+      // Safety net for any blob URLs never explicitly revoked
+      // (e.g. a failed upload the user never dismissed).
+      blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url))
     }
   }, [])
 
-  /**
-   * Syncs the parent gallery configurations and local form inputs in a single thread.
-   * Defaults guard against undefined fields silently turning inputs into uncontrolled ones.
-   */
   const syncFormFromGallery = (data) => {
     setGallery(data)
-    setTitle(data.title ?? '')
-    setBrandingColor(data.branding_color || '#000000')
-    setIsDownloadable(Boolean(data.is_downloadable))
-    setHasPassword(Boolean(data.has_password))
+    setTitle(data.title)
+    setBrandingColor(data.branding_color)
+    setIsDownloadable(data.is_downloadable)
+    setHasPassword(data.has_password)
   }
 
-  // ── DATA LOADING LIFE-CYCLE ───────────────────────────────────────────────
+  // ── DATA LOADING ─────────────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false // Guards against a stale response overwriting a newer one if `id` changes quickly
-
     async function loadGallery() {
       if (skipNextLoadRef.current) {
         skipNextLoadRef.current = false
@@ -94,186 +66,177 @@ export default function GalleryDetailPage() {
       setErrorMsg('')
 
       if (USE_MOCK_DATA) {
-        await new Promise((resolve) => setTimeout(resolve, 300))
-        if (cancelled || !isMountedRef.current) return
-
-        const match = mockGalleries.find((g) => g.slug === id)
-        if (!match) {
-          setErrorMsg('Collection not found.')
-          setLoading(false)
-          return
-        }
-
-        syncFormFromGallery(match)
-
-        // Seed mock photos dynamically inside our mock portfolios
-        setPhotos(match.slug === 'mila-portraits' ? [
-          { id: 'mock-img-1', image_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80', original_name: 'portrait_studio_01.jpg' },
-          { id: 'mock-img-2', image_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=800&q=80', original_name: 'portrait_studio_02.jpg' }
-        ] : [])
-
-        setLoading(false)
+        setTimeout(() => {
+          const match = mockGalleries.find((g) => g.slug === id)
+          if (!match) {
+            if (isMountedRef.current) {
+              setErrorMsg('Collection not found.')
+              setLoading(false)
+            }
+            return
+          }
+          if (isMountedRef.current) {
+            syncFormFromGallery(match)
+            setPhotos(match.slug === 'mila-portraits' ? [
+              { id: 'mock-img-1', thumbnail_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80' },
+              { id: 'mock-img-2', thumbnail_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80' },
+            ] : [])
+            setLoading(false)
+          }
+        }, 300)
         return
       }
 
       try {
-        const data = await galleriesApi.getGallery(id)
-        if (cancelled || !isMountedRef.current) return
-        syncFormFromGallery(data)
-        setPhotos(data.photos || [])
-      } catch (err) {
-        if (cancelled || !isMountedRef.current) return
-        setErrorMsg(err.response?.data?.detail || 'Failed to retrieve collection configurations.')
-      } finally {
-        if (!cancelled && isMountedRef.current) {
-          setLoading(false)
+        const [galleryData, photosData] = await Promise.all([
+          galleriesApi.getGallery(id),
+          photosApi.list(id),
+        ])
+        if (isMountedRef.current) {
+          syncFormFromGallery(galleryData)
+          setPhotos(photosData || [])
         }
+      } catch (err) {
+        if (isMountedRef.current) {
+          setErrorMsg(err.response?.data?.detail || 'Failed to retrieve collection configurations.')
+        }
+      } finally {
+        if (isMountedRef.current) setLoading(false)
       }
     }
 
     loadGallery()
-
-    return () => {
-      cancelled = true
-    }
   }, [id])
 
-  // ── PHOTO UPLOAD ACTION ───────────────────────────────────────────────────
-
-  // Mock-only: animate a fake progress bar since there's no real backend to talk to.
-  const simulateMockUpload = useCallback((item) => {
-    const timerId = setInterval(() => {
-      if (!isMountedRef.current) {
-        clearInterval(timerId)
-        activeTimersRef.current.delete(timerId)
-        return
-      }
-
-      setUploadQueue((prev) => {
-        const current = prev.find((q) => q.id === item.id)
-        if (!current) {
-          clearInterval(timerId)
-          activeTimersRef.current.delete(timerId)
-          return prev
-        }
-
-        const nextProgress = Math.min(100, current.progress + Math.floor(Math.random() * 15) + 5)
-
-        if (nextProgress >= 100) {
-          clearInterval(timerId)
-          activeTimersRef.current.delete(timerId)
-          // Move item from upload queue to the completed photos grid.
-          setPhotos((prevPhotos) => [
-            ...prevPhotos,
-            { id: item.id, image_url: item.previewUrl, original_name: item.file.name },
-          ])
-          return prev.filter((q) => q.id !== item.id)
-        }
-
-        return prev.map((q) => (q.id === item.id ? { ...q, progress: nextProgress } : q))
-      })
-    }, 300)
-
-    activeTimersRef.current.add(timerId)
-  }, [])
-
-  /**
-   * WHAT: S3 Bulk Upload Handler
-   * WHY:  uploadBulk is a batch endpoint — it accepts many files in a single
-   *       multipart request. This batches every file from one selection/drop
-   *       into a single call and maps the response to the queue items [18].
-   */
-  const uploadFilesToServer = useCallback((queueItems) => {
-    const formData = new FormData()
-    queueItems.forEach((item) => formData.append('images', item.file))
-
-    const idsInBatch = new Set(queueItems.map((item) => item.id))
-
-    photosApi
-      .uploadBulk(id, formData, (percent) => {
-        if (!isMountedRef.current) return
-        // One combined request -> one shared progress value for every item in this batch
-        setUploadQueue((prev) =>
-          prev.map((q) => (idsInBatch.has(q.id) ? { ...q, progress: percent } : q))
-        )
-      })
-      .then((savedPhotos) => {
-        if (!isMountedRef.current) return
-
-        // Symmetrical cleanup: drop local memory blob links on successful S3 upload
-        queueItems.forEach((item) => URL.revokeObjectURL(item.previewUrl))
-        setPhotos((prev) => [...prev, ...(savedPhotos || [])])
-        setUploadQueue((prev) => prev.filter((q) => !idsInBatch.has(q.id)))
-      })
-      .catch((err) => {
-        if (!isMountedRef.current) return
-
-        queueItems.forEach((item) => URL.revokeObjectURL(item.previewUrl))
-        setUploadQueue((prev) => prev.filter((q) => !idsInBatch.has(q.id)))
-
-        const label = queueItems.length === 1
-          ? `"${queueItems[0].file.name}"`
-          : `${queueItems.length} files`
-        setErrorMsg(err.response?.data?.detail || `Failed to upload ${label}.`)
-      })
-  }, [id])
-
-  const handleFilesSelected = useCallback((files) => {
-    if (!files.length) return
-
-    const queueItems = files.map((file) => ({
-      id: Math.random().toString(36).substring(2, 9),
-      file,
-      previewUrl: URL.createObjectURL(file),
-      progress: 0,
-    }))
-
-    setUploadQueue((prev) => [...prev, ...queueItems])
+  // ── PHOTO UPLOAD ─────────────────────────────────────────────────────────
+  const handleFilesSelected = async (files) => {
+    if (!files?.length) return
 
     if (USE_MOCK_DATA) {
-      queueItems.forEach((item) => simulateMockUpload(item))
-    } else {
-      uploadFilesToServer(queueItems)
-    }
-  }, [simulateMockUpload, uploadFilesToServer])
-
-  // ── PHOTO DELETION ACTION (Symmetrical Bulk and Single) ───────────────────
-  const handleDeletePhotos = useCallback(async (photoIds) => {
-    setErrorMsg('')
-    try {
-      if (!USE_MOCK_DATA) {
-        await photosApi.deletePhotos(id, photoIds)
-      }
-
-      // Symmetrical Deletion: remove targets from the local UI state array
-      const idsSet = new Set(photoIds)
-      setPhotos((prev) => prev.filter((photo) => !idsSet.has(photo.id)))
-    } catch (err) {
-      setErrorMsg(err.response?.data?.detail || 'Failed to delete selected photos.')
-      throw err // Re-throw to allow child grids to clear loading locks safely
-    }
-  }, [id])
-
-  // ── PHOTO REORDERING ACTION ───────────────────────────────────────────────
-  const handleReorderPhotos = useCallback(async (orderedPhotoIds) => {
-    setErrorMsg('')
-    try {
-      if (!USE_MOCK_DATA) {
-        await photosApi.reorderPhotos(id, orderedPhotoIds)
-      }
-
-      // Update local sorting state from the latest photos snapshot (avoids a stale closure)
-      setPhotos((prev) => {
-        const photoMap = new Map(prev.map((p) => [p.id, p]))
-        return orderedPhotoIds.map((pid) => photoMap.get(pid)).filter(Boolean)
+      const queueItems = files.map(file => {
+        const previewUrl = URL.createObjectURL(file)
+        blobUrlsRef.current.push(previewUrl)
+        return { id: Math.random().toString(36).slice(2, 9), file, previewUrl, progress: 0 }
       })
-    } catch (err) {
-      setErrorMsg(err.response?.data?.detail || 'Failed to save photo sorting configuration.')
-      throw err // Re-throw to allow child grids to roll back state on failure
+      setUploadQueue(prev => [...prev, ...queueItems])
+      queueItems.forEach(item => {
+        let progress = 0
+        const interval = setInterval(() => {
+          progress += Math.floor(Math.random() * 15) + 5
+          if (progress >= 100) {
+            clearInterval(interval)
+            if (isMountedRef.current) {
+              setPhotos(prev => [...prev, { id: item.id, thumbnail_url: item.previewUrl, original_name: item.file.name }])
+              setUploadQueue(prev => prev.filter(q => q.id !== item.id))
+              // Mock preview becomes the PERMANENT thumbnail_url for this
+              // photo in mock mode — do not revoke, it's still in use.
+            }
+          } else if (isMountedRef.current) {
+            setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, progress } : q))
+          }
+        }, 300)
+      })
+      return
     }
-  }, [id])
 
-  // ── SETTINGS CONFIGURATION ACTIONS ────────────────────────────────────────
+    const queueItems = files.map(file => {
+      const previewUrl = URL.createObjectURL(file)
+      blobUrlsRef.current.push(previewUrl)
+      return { id: Math.random().toString(36).slice(2, 9), file, previewUrl, progress: 0 }
+    })
+    setUploadQueue(prev => [...prev, ...queueItems])
+
+    for (const item of queueItems) {
+      const formData = new FormData()
+      formData.append('image', item.file)
+
+      try {
+        const uploaded = await photosApi.uploadBulk(
+          id,
+          formData,
+          (pct) => {
+            if (isMountedRef.current) {
+              setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, progress: pct } : q))
+            }
+          }
+        )
+        if (isMountedRef.current) {
+          const newAssets = Array.isArray(uploaded) ? uploaded : [uploaded]
+          setPhotos(prev => [...prev, ...newAssets])
+          setUploadQueue(prev => prev.filter(q => q.id !== item.id))
+        }
+
+        // BUG FIX (blob memory leak): revoke immediately on success.
+        // PhotoGrid now renders this photo from the server's thumbnail_url —
+        // the local blob preview is no longer referenced anywhere and would
+        // otherwise sit in browser memory until the whole page unmounts.
+        // Safe to revoke unconditionally here: the queue item (and its
+        // <img src={item.previewUrl}>) has already been removed above.
+        URL.revokeObjectURL(item.previewUrl)
+        blobUrlsRef.current = blobUrlsRef.current.filter(u => u !== item.previewUrl)
+
+      } catch (err) {
+        if (isMountedRef.current) {
+          setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, error: true } : q))
+          setErrorMsg(err.response?.data?.image?.[0] || `Failed to upload ${item.file.name}.`)
+        }
+        // NOT revoked here on purpose: the failed row stays visible in the
+        // queue (see handleDismissFailed below) still rendering
+        // item.previewUrl so the user can see WHICH photo failed. Revoking
+        // now would instantly break that thumbnail into a broken-image
+        // icon. It's revoked when the user dismisses the row instead, or
+        // by the unmount safety net if they navigate away first.
+      }
+    }
+  }
+
+  // Lets the user clear a failed upload row and reclaim its blob memory —
+  // closes the gap left by not revoking on error above.
+  const handleDismissFailed = (itemId) => {
+    setUploadQueue(prev => {
+      const item = prev.find(q => q.id === itemId)
+      if (item) {
+        URL.revokeObjectURL(item.previewUrl)
+        blobUrlsRef.current = blobUrlsRef.current.filter(u => u !== item.previewUrl)
+      }
+      return prev.filter(q => q.id !== itemId)
+    })
+  }
+
+  // ── PHOTO DELETE ─────────────────────────────────────────────────────────
+  const handleDeletePhoto = async (photoId) => {
+    // BUG FIX (rollback reorders the grid): capture the full array with its
+    // original ordering BEFORE the optimistic removal. On failure, restore
+    // this exact snapshot instead of appending the photo to the end —
+    // appending would move a deleted-then-restored photo from, say,
+    // position 3 of 10 to position 10 of 10, visibly scrambling the grid.
+    const originalPhotos = photos
+    const photo = originalPhotos.find(p => p.id === photoId)
+
+    setPhotos(prev => prev.filter(p => p.id !== photoId))
+
+    if (photo?.thumbnail_url?.startsWith('blob:')) {
+      URL.revokeObjectURL(photo.thumbnail_url)
+      blobUrlsRef.current = blobUrlsRef.current.filter(u => u !== photo.thumbnail_url)
+    }
+
+    if (USE_MOCK_DATA) return
+
+    try {
+      // Confirmed against photosApi.js: deletePhotos (plural) takes an
+      // array of IDs and fans out to DELETE /photos/photo/{id}/ per ID via
+      // Promise.allSettled. There is no singular deletePhoto method in this
+      // codebase — this call is already correct as written.
+      await photosApi.deletePhotos([photoId])
+    } catch {
+      if (isMountedRef.current) {
+        setPhotos(originalPhotos)   // restores exact original order/position
+        setErrorMsg('Failed to delete photo. Please try again.')
+      }
+    }
+  }
+
+  // ── SETTINGS ─────────────────────────────────────────────────────────────
   const handleSaveSettings = async (e) => {
     e.preventDefault()
     if (!title.trim() || updating) return
@@ -290,11 +253,7 @@ export default function GalleryDetailPage() {
     try {
       let updated
       if (USE_MOCK_DATA) {
-        const mockSlug = payload.title
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
+        const mockSlug = payload.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
         updated = { ...gallery, ...payload, slug: mockSlug }
       } else {
         updated = await galleriesApi.updateGallery(id, payload)
@@ -311,12 +270,14 @@ export default function GalleryDetailPage() {
         setErrorMsg(err.response?.data?.detail || 'Failed to save collection configurations.')
       }
     } finally {
-      if (isMountedRef.current) {
-        setUpdating(false)
-      }
+      if (isMountedRef.current) setUpdating(false)
     }
   }
 
+  // NOTE (backend gap): galleries/urls.py currently registers only two
+  // routes — '' and '<slug:slug>/'. Neither /publish/ nor /set-password/
+  // exist yet on the backend. These calls are written correctly against
+  // the documented API contract — flag to the backend, not a frontend fix.
   const handleTogglePublish = async () => {
     if (updating || !gallery) return
     setUpdating(true)
@@ -326,19 +287,17 @@ export default function GalleryDetailPage() {
 
     try {
       if (USE_MOCK_DATA) {
-        setGallery((prev) => ({ ...prev, is_published: nextState }))
+        setGallery(prev => ({ ...prev, is_published: nextState }))
       } else {
         await galleriesApi.publishGallery(id, nextState)
-        setGallery((prev) => ({ ...prev, is_published: nextState }))
+        setGallery(prev => ({ ...prev, is_published: nextState }))
       }
     } catch (err) {
       if (isMountedRef.current) {
         setErrorMsg(err.response?.data?.detail || 'Failed to update publication status.')
       }
     } finally {
-      if (isMountedRef.current) {
-        setUpdating(false)
-      }
+      if (isMountedRef.current) setUpdating(false)
     }
   }
 
@@ -346,14 +305,7 @@ export default function GalleryDetailPage() {
     e.preventDefault()
     if (updating) return
 
-    const trimmedPassword = password.trim()
-
-    if (!trimmedPassword && !hasPassword) {
-      setErrorMsg('Enter a password to enable protection.')
-      return
-    }
-
-    if (!trimmedPassword && hasPassword) {
+    if (!password && hasPassword) {
       const confirmed = window.confirm(
         'Remove password protection from this gallery? Clients will no longer need to authenticate.'
       )
@@ -365,14 +317,14 @@ export default function GalleryDetailPage() {
 
     try {
       if (USE_MOCK_DATA) {
-        const newHasPassword = Boolean(trimmedPassword)
+        const newHasPassword = Boolean(password)
         setHasPassword(newHasPassword)
-        setGallery((prev) => ({ ...prev, has_password: newHasPassword }))
+        setGallery(prev => ({ ...prev, has_password: newHasPassword }))
         setPassword('')
       } else {
-        const response = await galleriesApi.setGalleryPassword(id, trimmedPassword || null)
+        const response = await galleriesApi.setGalleryPassword(id, password || null)
         setHasPassword(response.has_password)
-        setGallery((prev) => ({ ...prev, has_password: response.has_password }))
+        setGallery(prev => ({ ...prev, has_password: response.has_password }))
         setPassword('')
       }
     } catch (err) {
@@ -380,54 +332,30 @@ export default function GalleryDetailPage() {
         setErrorMsg(err.response?.data?.detail || 'Failed to update security credentials.')
       }
     } finally {
-      if (isMountedRef.current) {
-        setUpdating(false)
-      }
+      if (isMountedRef.current) setUpdating(false)
     }
   }
 
   const handleCopyLink = async () => {
     if (!gallery) return
-
     const ownerUsername = gallery.owner_username ?? gallery.photographer_username ?? 'unknown'
     const clientURL = `${window.location.protocol}//${window.location.host}/g/${ownerUsername}/${gallery.slug}`
 
-    const markCopied = () => {
+    try {
+      await navigator.clipboard.writeText(clientURL)
       setCopied(true)
       setCopyFailed(false)
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
       copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
-    }
-
-    const markFailed = () => {
+    } catch (err) {
+      console.error('Failed to copy link:', err)
       setCopyFailed(true)
-      setCopied(false)
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
       copyTimeoutRef.current = setTimeout(() => setCopyFailed(false), 2000)
     }
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(clientURL)
-      } else {
-        // Fallback for browsers/contexts without the async Clipboard API (e.g. non-HTTPS).
-        const textarea = document.createElement('textarea')
-        textarea.value = clientURL
-        textarea.style.position = 'fixed'
-        textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
-        textarea.select()
-        const ok = document.execCommand('copy')
-        document.body.removeChild(textarea)
-        if (!ok) throw new Error('execCommand copy failed')
-      }
-      markCopied()
-    } catch (err) {
-      console.error('Failed to copy link:', err)
-      markFailed()
-    }
   }
 
+  // ── RENDER ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -442,7 +370,7 @@ export default function GalleryDetailPage() {
         <div role="alert" className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 mb-6">
           {errorMsg}
         </div>
-        <Link to="/dashboard/galleries" className="text-sm font-semibold text-gray-900 hover:underline">
+        <Link to="/dashboard/galleries" className="text-sm font-semibold text-ink hover:underline">
           ← Back to galleries
         </Link>
       </div>
@@ -453,28 +381,26 @@ export default function GalleryDetailPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeUp">
-      
-      {/* HEADER NAVIGATION */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-gray-200 mb-8">
+
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-cream-200 mb-8">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Link to="/dashboard/galleries" className="text-xs font-medium text-gray-500 hover:text-gray-900 hover:underline">
+            <Link to="/dashboard/galleries" className="text-xs font-medium text-muted hover:text-ink hover:underline">
               Collections
             </Link>
-            <span className="text-xs text-gray-300">/</span>
-            <span className="text-xs font-semibold text-gray-900">{gallery.title}</span>
+            <span className="text-xs text-cream-300">/</span>
+            <span className="text-xs font-semibold text-ink">{gallery.title}</span>
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight font-sans">
+          <h1 className="text-2xl font-semibold text-ink tracking-tight font-sans">
             {gallery.title}
           </h1>
         </div>
 
-        {/* Global Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleCopyLink}
-            className="px-3.5 py-2 border border-gray-200 text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors cursor-pointer shadow-sm flex items-center gap-2"
+            className="px-3.5 py-2 border border-cream-300 text-ink/80 hover:text-ink bg-white hover:bg-cream-50 text-sm font-medium rounded-lg transition-colors cursor-pointer shadow-sm flex items-center gap-2"
           >
             {copied ? 'Copied! ✓' : copyFailed ? 'Copy failed ✗' : 'Share Link'}
           </button>
@@ -486,7 +412,7 @@ export default function GalleryDetailPage() {
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer shadow-sm ${
               gallery.is_published
                 ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
-                : 'bg-gray-900 text-white hover:bg-gray-800'
+                : 'bg-ink text-white hover:opacity-90'
             }`}
           >
             {gallery.is_published ? 'Published' : 'Publish Collection'}
@@ -500,21 +426,18 @@ export default function GalleryDetailPage() {
         </div>
       )}
 
-      {/* CENTRALIZED SETTINGS GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* LEFT COLUMN: SETTINGS FORMS */}
+
         <div className="lg:col-span-2 space-y-8">
-          
-          {/* Card 1: Configuration Form */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-6 border-b border-gray-100 pb-3">
+
+          {/* Card 1: Configuration */}
+          <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
+            <h2 className="text-base font-semibold text-ink mb-6 border-b border-cream-100 pb-3">
               Collection Configurations
             </h2>
             <form onSubmit={handleSaveSettings} noValidate className="space-y-6">
-              
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-700" htmlFor="gallery-title">
+                <label className="text-xs font-semibold text-ink/80" htmlFor="gallery-title">
                   Gallery Title
                 </label>
                 <input
@@ -524,26 +447,25 @@ export default function GalleryDetailPage() {
                   maxLength={100}
                   onChange={(e) => setTitle(e.target.value)}
                   disabled={updating}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-100 transition-all disabled:opacity-50"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-cream-300 focus:border-ink focus:outline-none focus:ring-2 focus:ring-cream-200 transition-all disabled:opacity-50"
                   required
                 />
               </div>
 
-              {/* Dynamic Slug Preview — mirrors the real share-link format used by handleCopyLink */}
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs">
-                <span className="font-semibold text-gray-400 uppercase tracking-wider block text-[10px]">
+              <div className="p-4 bg-cream-50 rounded-xl border border-cream-100 text-xs">
+                <span className="font-semibold text-muted uppercase tracking-wider block text-[10px]">
                   Live Slug Link
                 </span>
-                <p className="mt-1 font-semibold text-gray-600 truncate">
-                  {window.location.host}/g/{ownerUsername}/
-                  <span className="text-gray-900 font-bold font-mono">
+                <p className="mt-1 font-semibold text-ink/70 truncate">
+                  yourname.kyapture.com/g/{ownerUsername}/
+                  <span className="text-ink font-bold font-mono">
                     {title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'your-slug'}
                   </span>
                 </p>
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-700" htmlFor="gallery-color">
+                <label className="text-xs font-semibold text-ink/80" htmlFor="gallery-color">
                   Photographer Brand Accent
                 </label>
                 <div className="flex items-center gap-3">
@@ -553,33 +475,41 @@ export default function GalleryDetailPage() {
                     value={brandingColor}
                     onChange={(e) => setBrandingColor(e.target.value)}
                     disabled={updating}
-                    className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer overflow-hidden p-0 bg-transparent disabled:opacity-50"
+                    className="w-10 h-10 rounded-lg border border-cream-300 cursor-pointer overflow-hidden p-0 bg-transparent disabled:cursor-not-allowed"
                   />
-                  <span className="text-xs text-gray-500 font-medium font-mono uppercase">
+                  <span className="text-xs text-muted font-medium font-mono uppercase">
                     {brandingColor}
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center gap-2 pt-2 border-t border-cream-100">
                 <input
                   id="gallery-download"
                   type="checkbox"
                   checked={isDownloadable}
                   onChange={(e) => setIsDownloadable(e.target.checked)}
                   disabled={updating}
-                  className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900 cursor-pointer disabled:cursor-not-allowed"
+                  className="w-4 h-4 rounded border-cream-300 text-ink focus:ring-ink cursor-pointer disabled:cursor-not-allowed"
                 />
-                <label className="text-xs font-semibold text-gray-700 cursor-pointer select-none" htmlFor="gallery-download">
+                <label className="text-xs font-semibold text-ink/80 cursor-pointer select-none" htmlFor="gallery-download">
                   Allow clients to download high-resolution photos
                 </label>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-gray-100">
+              <div className="flex justify-end pt-4 border-t border-cream-100">
                 <button
                   type="submit"
-                  disabled={updating || !title.trim() || (title.trim() === gallery.title && brandingColor === gallery.branding_color && isDownloadable === gallery.is_downloadable)}
-                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={
+                    updating ||
+                    !title.trim() ||
+                    (
+                      title.trim() === gallery.title &&
+                      brandingColor === gallery.branding_color &&
+                      isDownloadable === gallery.is_downloadable
+                    )
+                  }
+                  className="px-4 py-2 bg-ink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {updating ? 'Saving...' : 'Save Settings'}
                 </button>
@@ -587,18 +517,18 @@ export default function GalleryDetailPage() {
             </form>
           </div>
 
-          {/* Card 2: Security & Passwords */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-2 border-b border-gray-100 pb-3">
+          {/* Card 2: Password Protection */}
+          <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
+            <h2 className="text-base font-semibold text-ink mb-2 border-b border-cream-100 pb-3">
               Password Protection
             </h2>
-            <p className="text-xs text-gray-500 mb-6">
+            <p className="text-xs text-muted mb-6">
               When password protection is enabled, clients must authenticate before entering the public photo grid.
             </p>
 
             <form onSubmit={handleSavePassword} className="space-y-4">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-700" htmlFor="gallery-password">
+                <label className="text-xs font-semibold text-ink/80" htmlFor="gallery-password">
                   {hasPassword ? 'Update/Clear Password' : 'Set Protection Password'}
                 </label>
                 <div className="flex gap-3">
@@ -609,12 +539,12 @@ export default function GalleryDetailPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={updating}
-                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-100 transition-all disabled:opacity-50"
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-300 focus:border-ink focus:outline-none focus:ring-2 focus:ring-cream-200 transition-all disabled:opacity-50"
                   />
                   <button
                     type="submit"
                     disabled={updating}
-                    className="px-4 py-2 border border-gray-200 text-gray-700 hover:text-gray-900 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                    className="px-4 py-2 border border-cream-300 text-ink/80 hover:text-ink hover:bg-cream-50 text-sm font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {password ? 'Save' : hasPassword ? 'Clear Protection' : 'Set Lock'}
                   </button>
@@ -623,40 +553,68 @@ export default function GalleryDetailPage() {
             </form>
           </div>
 
-          {/* Photo Management Section */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-2 border-b border-gray-100 pb-3">
+          {/* Card 3: Photo Management */}
+          <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
+            <h2 className="text-base font-semibold text-ink mb-2 border-b border-cream-100 pb-3">
               Photo Management
             </h2>
-            <p className="text-xs text-gray-500 mb-6">
+            <p className="text-xs text-muted mb-6">
               Upload multiple images to populate this collection. Once uploaded, clients can browse, view in lightbox, and download.
             </p>
 
             <DropZone onFiles={handleFilesSelected} disabled={updating} />
 
-            {/* Symmetrical Component Linkage: Passes all multi-select and sorting handlers cleanly */}
-            <PhotoGrid 
-              photos={photos} 
-              uploadQueue={uploadQueue} 
-              onDeletePhotos={handleDeletePhotos}
-              onReorderPhotos={handleReorderPhotos}
-              onPhotoClick={setLightboxIndex} 
-            />
+            {uploadQueue.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {uploadQueue.map(item => (
+                  <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg bg-cream-50">
+                    <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 bg-cream-200">
+                      <img src={item.previewUrl} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs text-ink/70 truncate">{item.file.name}</div>
+                      <div className="h-1.5 bg-cream-200 rounded-full overflow-hidden mt-1">
+                        <div
+                          className={`h-full rounded-full transition-all ${item.error ? 'bg-red-400' : 'bg-ink'}`}
+                          style={{ width: `${item.error ? 100 : item.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                    {item.error ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDismissFailed(item.id)}
+                        className="text-[10px] text-red-600 hover:text-red-700 font-medium flex-shrink-0 cursor-pointer"
+                      >
+                        Failed · Dismiss
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-muted flex-shrink-0">
+                        {item.progress}%
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-6">
+              <PhotoGrid photos={photos} onDelete={handleDeletePhoto} showActions />
+            </div>
           </div>
         </div>
 
         {/* RIGHT COLUMN: BRAND PREVIEW */}
         <div className="space-y-8">
-          
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-6 flex flex-col items-center justify-center text-center py-10 min-h-[300px]">
+          <div className="bg-white rounded-2xl border border-cream-200 shadow-sm overflow-hidden p-6 flex flex-col items-center justify-center text-center py-10 min-h-[300px]">
             {gallery.cover_url ? (
               <img
                 src={gallery.cover_url}
                 alt={`${gallery.title} cover`}
-                className="w-24 h-24 rounded-full object-cover border border-gray-100 mb-4 shadow-sm"
+                className="w-24 h-24 rounded-full object-cover border border-cream-100 mb-4 shadow-sm"
               />
             ) : (
-              <div 
+              <div
                 className="w-16 h-16 rounded-full flex items-center justify-center text-white/30 mb-4"
                 style={{ backgroundColor: brandingColor }}
               >
@@ -666,27 +624,17 @@ export default function GalleryDetailPage() {
                 </svg>
               </div>
             )}
-            <h3 className="text-sm font-semibold text-gray-900">{gallery.title}</h3>
+            <h3 className="text-sm font-semibold text-ink">{gallery.title}</h3>
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border mt-2 ${
-              gallery.is_published 
-                ? 'bg-green-50 text-green-700 border-green-200' 
+              gallery.is_published
+                ? 'bg-green-50 text-green-700 border-green-200'
                 : 'bg-yellow-50 text-yellow-700 border-yellow-200'
             }`}>
               {gallery.is_published ? 'Published' : 'Draft'}
             </span>
           </div>
-
         </div>
       </div>
-
-      {/* Fullscreen Photo Lightbox Layer */}
-      <PhotoLightbox
-        photos={photos}
-        currentIndex={lightboxIndex}
-        onClose={() => setLightboxIndex(null)}
-        onNavigate={setLightboxIndex}
-      />
     </div>
   )
 }
-
