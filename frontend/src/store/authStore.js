@@ -137,3 +137,9 @@ export const useAuthStore = create(
     }
   )
 );
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth-session-expired', () => {
+    useAuthStore.setState({ user: null, isAuthenticated: false, loading: false })
+  })
+}

@@ -461,6 +461,12 @@ kyapture/
 │   │   │   │   │   │   ├── photos/
 │   │   │   │   │   │   │   ├── 019fa87a-546f-75e6-b7f0-e6bc7ec2160f_original.jpg
 │   │   │   │   │   │   │   ├── 019fa87a-548a-740e-9d4e-f3e6b08924d7_original.jpg
+│   │   │   ├── 019fabc2-5a02-7c09-b84e-702a5ea73161/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fabc2-5da4-7f38-911d-b43cfb39e4f2/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fabc2-5f11-72b5-8575-cfabe6e06ab9_original.jpg
+│   │   │   │   │   │   │   ├── 019fabc2-5f34-7533-ac34-08012d3d65ad_original.jpg
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile

@@ -48,8 +48,47 @@ export const useClientStore = create(
       sessions:     {},
       hasHydrated:  false,
 
-      setSession: (sessionKey, token) => {
-        if (typeof sessionKey !== 'string' || !sessionKey.trim()) return
+      // True once rehydration from sessionStorage has finished (success
+      // or error). Lets the UI avoid flashing a "locked" state before the
+      // cached token has had a chance to load. Always false on the
+      // server, since hydration is skipped there — see skipHydration.
+      hasHydrated: false,
+
+      setHasHydrated: (value) => set({ hasHydrated: value }),
+
+      /**
+       * WHAT: Cache Unlock Token Action
+       * WHY:  Saves a newly issued access token mapped to the gallery's slug.
+       */
+      setUnlockToken: (slug, token) => {
+        const key = normalizeSlug(slug)
+        if (!key || typeof token !== 'string') return
+        const value = token.trim()
+        if (!value) return
+        set((state) => ({
+          unlockTokens: { ...state.unlockTokens, [key]: value },
+        }))
+      },
+
+      /**
+       * WHAT: Retrieve Token Selector
+       * WHY:  Exposes a safe, synchronous getter to extract a cached token.
+       */
+      getUnlockToken: (slug) => {
+        const key = normalizeSlug(slug)
+        if (!key) return null
+        return get().unlockTokens[key] ?? null
+      },
+
+      /**
+       * WHAT: Revoke Token Action
+       * WHY:  Explicitly clears a cached token when a client session expires.
+       *       Returns the original state object if the key is already
+       *       missing, so zustand skips the update and no re-render fires.
+       */
+      revokeToken: (slug) => {
+        const key = normalizeSlug(slug)
+        if (!key) return
         set((state) => {
           const next = { ...state.sessions }
           if (token === null) {
@@ -82,6 +121,7 @@ export const useClientStore = create(
         if (state) {
           state.hasHydrated = true
         }
+        state?.setHasHydrated(true)
       },
     }
   )
