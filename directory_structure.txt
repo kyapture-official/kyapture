@@ -84,6 +84,7 @@ kyapture/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── commands/
 │   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── grant_subscription.py
 │   │   │   │   │   ├── seed_plans.py
 │   │   │   ├── migrations/
 │   │   │   │   ├── 0001_initial.py
@@ -124,6 +125,11 @@ kyapture/
 │   │   ├── django.log
 │   ├── media/
 │   │   ├── test
+│   │   ├── payment_proofs/
+│   │   │   ├── 019fa266-ece3-7a46-8215-3e0d9b2981f6/
+│   │   │   │   ├── 019fbd18-ea13-7967-b1f3-b9100dc13c75.jpg
+│   │   │   ├── 019fc75d-8291-7673-b873-e43151d5e443/
+│   │   │   │   ├── 019fc765-7007-7f88-b978-45d31ff9d5b9.jpg
 │   │   ├── photographers/
 │   │   │   ├── test
 │   │   │   ├── 019e6d88-6966-7c77-8fdb-3e9da4c6746e/
@@ -380,6 +386,17 @@ kyapture/
 │   │   │   │   │   │   ├── photos/
 │   │   │   │   │   │   │   ├── 019f8ea3-4e81-7f0d-b065-426c2c327f1a_original.jpg
 │   │   │   │   │   │   │   ├── 019f8ea3-4e96-7b45-9ebe-e790ada6633b_original.jpg
+│   │   │   ├── 019fa266-ece3-7a46-8215-3e0d9b2981f6/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fbd05-1558-7f46-8161-9ce059ef80f7/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fbd09-37a5-79ef-a11e-2dfaa80fa4d8_display.webp
+│   │   │   │   │   │   │   ├── 019fbd09-37a5-79ef-a11e-2dfaa80fa4d8_original.jpg
+│   │   │   │   │   │   │   ├── 019fbd0c-cedc-7027-ab83-85024d543146_display.webp
+│   │   │   │   │   │   │   ├── 019fbd0c-cedc-7027-ab83-85024d543146_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fbd09-37a5-79ef-a11e-2dfaa80fa4d8_thumb.webp
+│   │   │   │   │   │   │   ├── 019fbd0c-cedc-7027-ab83-85024d543146_thumb.webp
 │   │   │   ├── 019fa26c-0b24-7dd0-a3ee-c549dd5e054c/
 │   │   │   │   ├── galleries/
 │   │   │   │   │   ├── 019fa26c-0d99-7e67-b37d-fc32d9e6fff2/
@@ -467,6 +484,74 @@ kyapture/
 │   │   │   │   │   │   ├── photos/
 │   │   │   │   │   │   │   ├── 019fabc2-5f11-72b5-8575-cfabe6e06ab9_original.jpg
 │   │   │   │   │   │   │   ├── 019fabc2-5f34-7533-ac34-08012d3d65ad_original.jpg
+│   │   │   ├── 019fc75d-8291-7673-b873-e43151d5e443/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fc75f-327a-77a5-a01e-67415da640fe/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fc75f-caa1-7d2b-8ebb-5e2bdf46c655_display.webp
+│   │   │   │   │   │   │   ├── 019fc75f-caa1-7d2b-8ebb-5e2bdf46c655_original.jpg
+│   │   │   │   │   │   │   ├── 019fc75f-cad8-7a2a-a7e4-6e92563d83d3_display.webp
+│   │   │   │   │   │   │   ├── 019fc75f-cad8-7a2a-a7e4-6e92563d83d3_original.jpg
+│   │   │   │   │   │   │   ├── 019fc761-c8e1-71a0-84f5-b8f52416f817_display.webp
+│   │   │   │   │   │   │   ├── 019fc761-c8e1-71a0-84f5-b8f52416f817_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fc75f-caa1-7d2b-8ebb-5e2bdf46c655_thumb.webp
+│   │   │   │   │   │   │   ├── 019fc75f-cad8-7a2a-a7e4-6e92563d83d3_thumb.webp
+│   │   │   │   │   │   │   ├── 019fc761-c8e1-71a0-84f5-b8f52416f817_thumb.webp
+│   │   │   │   │   ├── 019fc760-aaa7-72aa-9146-ffce67ac3073/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fc761-839a-7736-a710-0b1c261b917e_display.webp
+│   │   │   │   │   │   │   ├── 019fc761-839a-7736-a710-0b1c261b917e_original.jpg
+│   │   │   │   │   │   │   ├── 019fc761-83cb-7656-937d-92aedb3fedd3_display.webp
+│   │   │   │   │   │   │   ├── 019fc761-83cb-7656-937d-92aedb3fedd3_original.jpg
+│   │   │   │   │   │   │   ├── 019fc761-83f2-7a55-b526-2927c85f54ab_display.webp
+│   │   │   │   │   │   │   ├── 019fc761-83f2-7a55-b526-2927c85f54ab_original.jpg
+│   │   │   │   │   │   │   ├── 019fc761-8415-7253-9748-62c65fd3c293_display.webp
+│   │   │   │   │   │   │   ├── 019fc761-8415-7253-9748-62c65fd3c293_original.jpg
+│   │   │   │   │   │   │   ├── 019fc762-0c6e-7782-b6fd-09c20fe27a16_display.webp
+│   │   │   │   │   │   │   ├── 019fc762-0c6e-7782-b6fd-09c20fe27a16_original.jpg
+│   │   │   │   │   │   │   ├── 019fd1bd-01ff-70b1-a3b2-d9414c0f4b3a_display.webp
+│   │   │   │   │   │   │   ├── 019fd1bd-01ff-70b1-a3b2-d9414c0f4b3a_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fc761-839a-7736-a710-0b1c261b917e_thumb.webp
+│   │   │   │   │   │   │   ├── 019fc761-83cb-7656-937d-92aedb3fedd3_thumb.webp
+│   │   │   │   │   │   │   ├── 019fc761-83f2-7a55-b526-2927c85f54ab_thumb.webp
+│   │   │   │   │   │   │   ├── 019fc761-8415-7253-9748-62c65fd3c293_thumb.webp
+│   │   │   │   │   │   │   ├── 019fc762-0c6e-7782-b6fd-09c20fe27a16_thumb.webp
+│   │   │   │   │   │   │   ├── 019fd1bd-01ff-70b1-a3b2-d9414c0f4b3a_thumb.webp
+│   │   │   │   │   ├── 019fd1c3-2e97-748e-8426-2832413c6907/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fd1c3-6c91-7c1f-ae17-d34f552c7e5c_display.webp
+│   │   │   │   │   │   │   ├── 019fd1c3-6c91-7c1f-ae17-d34f552c7e5c_original.jpg
+│   │   │   │   │   │   │   ├── 019fd1c3-7323-76dd-bd29-fa817dbf33b4_display.webp
+│   │   │   │   │   │   │   ├── 019fd1c3-7323-76dd-bd29-fa817dbf33b4_original.jpg
+│   │   │   │   │   │   │   ├── 019fd1c3-7aac-7a78-bd69-b23c57bf11fc_display.webp
+│   │   │   │   │   │   │   ├── 019fd1c3-7aac-7a78-bd69-b23c57bf11fc_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fd1c3-6c91-7c1f-ae17-d34f552c7e5c_thumb.webp
+│   │   │   │   │   │   │   ├── 019fd1c3-7323-76dd-bd29-fa817dbf33b4_thumb.webp
+│   │   │   │   │   │   │   ├── 019fd1c3-7aac-7a78-bd69-b23c57bf11fc_thumb.webp
+│   │   │   │   │   ├── 019fd731-4293-7421-8d23-40a79dcba555/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fd731-8333-720c-99a6-793cba8218af_display.webp
+│   │   │   │   │   │   │   ├── 019fd731-8333-720c-99a6-793cba8218af_original.jpg
+│   │   │   │   │   │   │   ├── 019fd731-8d10-74c4-ae91-1ea3a93ac63c_display.webp
+│   │   │   │   │   │   │   ├── 019fd731-8d10-74c4-ae91-1ea3a93ac63c_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fd731-8333-720c-99a6-793cba8218af_thumb.webp
+│   │   │   │   │   │   │   ├── 019fd731-8d10-74c4-ae91-1ea3a93ac63c_thumb.webp
+│   │   │   │   │   ├── 019fda41-762e-7c25-b946-23193b517acb/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fda42-1355-7156-890c-f8a5e45e6255_display.webp
+│   │   │   │   │   │   │   ├── 019fda42-1355-7156-890c-f8a5e45e6255_original.jpg
+│   │   │   │   │   │   │   ├── 019fda42-1ce7-7f53-be69-426a099d4407_display.webp
+│   │   │   │   │   │   │   ├── 019fda42-1ce7-7f53-be69-426a099d4407_original.jpg
+│   │   │   │   │   │   │   ├── 019fda42-2669-7287-9d44-7344ac214610_display.webp
+│   │   │   │   │   │   │   ├── 019fda42-2669-7287-9d44-7344ac214610_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fda42-1355-7156-890c-f8a5e45e6255_thumb.webp
+│   │   │   │   │   │   │   ├── 019fda42-1ce7-7f53-be69-426a099d4407_thumb.webp
+│   │   │   │   │   │   │   ├── 019fda42-2669-7287-9d44-7344ac214610_thumb.webp
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile
@@ -505,7 +590,7 @@ kyapture/
 │   │   │   │   ├── PhotoLightbox.jsx
 │   │   │   │   ├── ProtectedRoute.jsx
 │   │   │   │   ├── PublicMasonryGrid.jsx
-│   │   │   │   ├── SubscriptionGuard.jsx
+│   │   │   │   ├── SubscriptionGird.jsx
 │   │   │   ├── ui/
 │   │   │   │   ├── Badge.jsx
 │   │   │   │   ├── Button.jsx
@@ -537,6 +622,7 @@ kyapture/
 │   │   │   │   ├── SettingsPage.jsx
 │   │   │   │   ├── UploadPage.jsx
 │   │   │   ├── subscription/
+│   │   │   │   ├── BillingPage.jsx
 │   │   │   │   ├── PricingPage.jsx
 │   │   ├── store/
 │   │   │   ├── authStore.js
@@ -544,6 +630,7 @@ kyapture/
 │   │   ├── styles/
 │   │   │   ├── index.css
 │   │   ├── utils/
+│   │   │   ├── colorhelper.js
 │   │   │   ├── constants.js
 │   │   │   ├── formatters.js
 │   │   │   ├── mockGalleries.js

@@ -1,99 +1,116 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { useAuthStore } from '../../store/authStore'
-import { galleriesApi } from '../../api/galleriesApi'
-import { subscriptionsApi } from '../../api/subscriptionsApi'
-import Badge from '../../components/ui/Badge'
-import { formatDate } from '../../utils/formatters'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Link } from "react-router-dom";
+import { useAuthStore } from "../../store/authStore";
+import { galleriesApi } from "../../api/galleriesApi";
+import { subscriptionsApi } from "../../api/subscriptionsApi";
+import Badge from "../../components/ui/Badge";
+import { formatDate } from "../../utils/formatters";
 
 // Confirm this mapping against your backend's actual subscription-status enum —
 // anything not listed here falls back to the neutral 'default' badge instead of
 // silently reading as an error.
 const STATUS_BADGE_VARIANT = {
-  active: 'success',
-  trialing: 'success',
-  pending: 'warning',
-  past_due: 'warning',
-  incomplete: 'warning',
-  canceled: 'danger',
-  unpaid: 'danger',
-  expired: 'danger',
-}
+  active: "success",
+  trialing: "success",
+  pending: "warning",
+  past_due: "warning",
+  incomplete: "warning",
+  canceled: "danger",
+  unpaid: "danger",
+  expired: "danger",
+};
 
 export default function HomePage() {
-  const { user } = useAuthStore()
-  const [galleries, setGalleries] = useState([])
-  const [sub, setSub] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [galleriesError, setGalleriesError] = useState(false)
-  const [subError, setSubError] = useState(false)
-  const mountedRef = useRef(true)
+  const { user } = useAuthStore();
+  const [galleries, setGalleries] = useState([]);
+  const [sub, setSub] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [galleriesError, setGalleriesError] = useState(false);
+  const [subError, setSubError] = useState(false);
+  const mountedRef = useRef(true);
 
   const loadDashboard = useCallback(() => {
-    setLoading(true)
-    setGalleriesError(false)
-    setSubError(false)
+    setLoading(true);
+    setGalleriesError(false);
+    setSubError(false);
 
     // UNVERIFIED FROM THIS FILE ALONE: assumes getGalleries() resolves with the
     // unwrapped payload ({ results: [...] }), not a raw axios response. Confirm
     // against galleriesApi.js.
-    const galleriesPromise = galleriesApi.getGalleries()
+    const galleriesPromise = galleriesApi
+      .getGalleries()
       .then((data) => {
-        if (!mountedRef.current) return
-        setGalleries(data?.results || [])
+        if (!mountedRef.current) return;
+        setGalleries(data?.results || []);
       })
       .catch(() => {
-        if (!mountedRef.current) return
-        setGalleries([])
-        setGalleriesError(true)
-      })
+        if (!mountedRef.current) return;
+        setGalleries([]);
+        setGalleriesError(true);
+      });
 
     // UNVERIFIED FROM THIS FILE ALONE: assumes mySubscription() resolves with the
     // raw axios response (needs r.data) and that "no subscription" is a 404 on a
     // standard axios rejection shape (err.response.status). If subscriptionsApi
     // normalizes errors the way clientsApi.js does, this check needs to change.
-    const subPromise = subscriptionsApi.mySubscription()
-      .then((r) => {
-        if (!mountedRef.current) return
-        setSub(r.data)
+    const subPromise = subscriptionsApi
+      .getMyPlan()
+      .then((sub) => {
+        if (!mountedRef.current) return;
+        setSub(sub); // no `.data` — getMyPlan() already returns the parsed body
       })
       .catch((err) => {
-        if (!mountedRef.current) return
-        setSub(null)
-        if (err?.response?.status !== 404) setSubError(true)
-      })
+        if (!mountedRef.current) return;
+        setSub(null);
+        if (err?.response?.status !== 404) setSubError(true);
+      });
 
     return Promise.all([galleriesPromise, subPromise]).finally(() => {
-      if (mountedRef.current) setLoading(false)
-    })
-  }, [])
+      if (mountedRef.current) setLoading(false);
+    });
+  }, []);
 
   useEffect(() => {
-    mountedRef.current = true
-    loadDashboard()
+    mountedRef.current = true;
+    loadDashboard();
     return () => {
-      mountedRef.current = false
-    }
-  }, [loadDashboard])
+      mountedRef.current = false;
+    };
+  }, [loadDashboard]);
 
-  const planName = sub?.plan?.name ?? 'Free'
+  const planName = sub?.plan?.name ?? "Free";
 
-  const stats = useMemo(() => ([
-    { label: 'Total Galleries', value: galleries.length },
-    { label: 'Published', value: galleries.filter((g) => g.is_published).length },
-    { label: 'Protected', value: galleries.filter((g) => g.has_password).length },
-    { label: 'Plan', value: planName },
-  ]), [galleries, planName])
+  const stats = useMemo(
+    () => [
+      { label: "Total Galleries", value: galleries.length },
+      {
+        label: "Published",
+        value: galleries.filter((g) => g.is_published).length,
+      },
+      {
+        label: "Protected",
+        value: galleries.filter((g) => g.has_password).length,
+      },
+      { label: "Plan", value: planName },
+    ],
+    [galleries, planName],
+  );
 
   return (
     <div>
       {/* Greeting */}
       <div className="mb-10 animate-fade-up">
         <h1 className="font-serif text-4xl text-ink mb-1">
-          Good morning, {user?.display_name?.split(' ')[0] || user?.username} ✦
+          Good morning, {user?.display_name?.split(" ")[0] || user?.username} ✦
         </h1>
         <p className="text-muted text-sm">
-          Your studio at{' '}
+          Your studio at{" "}
           <code className="bg-cream-200 px-1.5 py-0.5 rounded text-xs text-ink">
             {user?.username}.kyapture.com
           </code>
@@ -104,7 +121,10 @@ export default function HomePage() {
       {!loading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10 animate-fade-up delay-100">
           {stats.map((s) => (
-            <div key={s.label} className="bg-white rounded-2xl border border-cream-200 p-5">
+            <div
+              key={s.label}
+              className="bg-white rounded-2xl border border-cream-200 p-5"
+            >
               <p className="text-xs text-muted mb-1">{s.label}</p>
               <p className="font-serif text-3xl text-ink">{s.value}</p>
             </div>
@@ -115,7 +135,9 @@ export default function HomePage() {
       {/* Subscription status */}
       {!loading && subError && (
         <div className="mb-10 animate-fade-up delay-200 bg-white rounded-2xl border border-red-200 p-5 flex items-center justify-between">
-          <p className="text-sm text-muted">Couldn&apos;t load your subscription status.</p>
+          <p className="text-sm text-muted">
+            Couldn&apos;t load your subscription status.
+          </p>
           <button
             onClick={loadDashboard}
             className="text-sm font-medium text-ink underline underline-offset-2"
@@ -130,10 +152,13 @@ export default function HomePage() {
           <div>
             <p className="text-sm font-medium text-ink mb-1">{planName} Plan</p>
             <p className="text-xs text-muted">
-              {sub.expires_at ? `Expires ${formatDate(sub.expires_at)}` : 'No expiration'} · via {sub.payment_method}
+              {sub.expires_at
+                ? `Expires ${formatDate(sub.expires_at)}`
+                : "No expiration"}{" "}
+              · via {sub.payment_method}
             </p>
           </div>
-          <Badge variant={STATUS_BADGE_VARIANT[sub.status] || 'default'}>
+          <Badge variant={STATUS_BADGE_VARIANT[sub.status] || "default"}>
             {sub.status}
           </Badge>
         </div>
@@ -159,7 +184,9 @@ export default function HomePage() {
           </div>
         ) : galleriesError ? (
           <div className="py-16 text-center bg-white rounded-2xl border border-red-200 border-dashed">
-            <p className="text-muted text-sm mb-4">Couldn&apos;t load your galleries.</p>
+            <p className="text-muted text-sm mb-4">
+              Couldn&apos;t load your galleries.
+            </p>
             <button
               onClick={loadDashboard}
               className="inline-flex items-center gap-2 bg-ink text-cream-50 px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-stone-700 transition-colors"
@@ -169,7 +196,9 @@ export default function HomePage() {
           </div>
         ) : galleries.length === 0 ? (
           <div className="py-16 text-center bg-white rounded-2xl border border-cream-200 border-dashed">
-            <p className="text-muted text-sm mb-4">No galleries yet. Create your first one.</p>
+            <p className="text-muted text-sm mb-4">
+              No galleries yet. Create your first one.
+            </p>
             <Link
               to="/dashboard/galleries"
               className="inline-flex items-center gap-2 bg-ink text-cream-50 px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-stone-700 transition-colors"
@@ -188,15 +217,31 @@ export default function HomePage() {
                 <div className="h-36 bg-cream-100 relative overflow-hidden">
                   {gallery.cover_photo ? (
                     <img
-                      src={gallery.cover_photo.thumbnail || gallery.cover_photo.image}
-                      alt={gallery.title ? `${gallery.title} cover photo` : 'Gallery cover photo'}
+                      src={
+                        gallery.cover_photo.thumbnail ||
+                        gallery.cover_photo.image
+                      }
+                      alt={
+                        gallery.title
+                          ? `${gallery.title} cover photo`
+                          : "Gallery cover photo"
+                      }
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-cream-300">
-                      <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
-                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                      <svg
+                        className="w-10 h-10"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1}
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
                       </svg>
                     </div>
                   )}
@@ -208,10 +253,14 @@ export default function HomePage() {
                   )}
                 </div>
                 <div className="p-4">
-                  <p className="font-medium text-ink text-sm truncate mb-1">{gallery.title}</p>
+                  <p className="font-medium text-ink text-sm truncate mb-1">
+                    {gallery.title}
+                  </p>
                   <div className="flex items-center gap-2">
-                    <Badge variant={gallery.is_published ? 'success' : 'default'}>
-                      {gallery.is_published ? 'Published' : 'Draft'}
+                    <Badge
+                      variant={gallery.is_published ? "success" : "default"}
+                    >
+                      {gallery.is_published ? "Published" : "Draft"}
                     </Badge>
                     {gallery.has_password && (
                       <Badge variant="warning">Protected</Badge>
@@ -224,5 +273,5 @@ export default function HomePage() {
         )}
       </div>
     </div>
-  )
+  );
 }

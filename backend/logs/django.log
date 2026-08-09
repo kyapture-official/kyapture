@@ -692,3 +692,121 @@ Traceback (most recent call last):
                            ^^^^^^^^^^^^^^^
 AttributeError: 'Gallery' object has no attribute 'photos'
 ERROR 2026-08-07 09:12:15,552 log 9612 25820 "PATCH /api/v1/galleries/rita-and-siyam/ HTTP/1.1" 500 27613
+WARNING 2026-08-09 10:23:01,700 log 14936 1508 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-09 10:23:01,712 log 14936 19372 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-09 11:14:19,026 log 14936 25732 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-09 11:14:19,032 log 14936 19304 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+ERROR 2026-08-09 11:16:16,219 log 14936 3788 Internal Server Error: /api/v1/galleries/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\base\base.py", line 279, in ensure_connection
+    self.connect()
+    ~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\asyncio.py", line 26, in inner
+    return func(*args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\base\base.py", line 256, in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\asyncio.py", line 26, in inner
+    return func(*args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\postgresql\base.py", line 333, in get_new_connection
+    connection = self.Database.connect(**conn_params)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\psycopg2\__init__.py", line 135, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+psycopg2.OperationalError: connection to server at "localhost" (::1), port 5432 failed: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 503, in dispatch
+    self.initial(request, *args, **kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 420, in initial
+    self.perform_authentication(request)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 330, in perform_authentication
+    request.user
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 232, in user
+    self._authenticate()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 385, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\core\authentication.py", line 34, in authenticate
+    user = self.get_user(validated_token)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework_simplejwt\authentication.py", line 132, in get_user
+    user = self.user_model.objects.get(**{api_settings.USER_ID_FIELD: user_id})
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\models\manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\models\query.py", line 635, in get
+    num = len(clone)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\models\query.py", line 372, in __len__
+    self._fetch_all()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\models\query.py", line 2000, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+                         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\models\query.py", line 95, in __iter__
+    results = compiler.execute_sql(
+        chunked_fetch=self.chunked_fetch, chunk_size=self.chunk_size
+    )
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\models\sql\compiler.py", line 1622, in execute_sql
+    cursor = self.connection.cursor()
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\asyncio.py", line 26, in inner
+    return func(*args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\base\base.py", line 320, in cursor
+    return self._cursor()
+           ~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\base\base.py", line 296, in _cursor
+    self.ensure_connection()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\asyncio.py", line 26, in inner
+    return func(*args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\base\base.py", line 278, in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\utils.py", line 94, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\base\base.py", line 279, in ensure_connection
+    self.connect()
+    ~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\asyncio.py", line 26, in inner
+    return func(*args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\base\base.py", line 256, in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\asyncio.py", line 26, in inner
+    return func(*args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\db\backends\postgresql\base.py", line 333, in get_new_connection
+    connection = self.Database.connect(**conn_params)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\psycopg2\__init__.py", line 135, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+django.db.utils.OperationalError: connection to server at "localhost" (::1), port 5432 failed: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+ERROR 2026-08-09 11:16:16,758 log 14936 3788 "GET /api/v1/galleries/ HTTP/1.1" 500 33594
+WARNING 2026-08-09 11:43:22,264 log 14936 17340 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-09 11:43:22,287 log 14936 25556 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-09 12:03:22,242 log 14936 21888 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-09 12:03:22,252 log 14936 13500 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-09 13:46:56,323 log 14936 11544 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-09 13:46:56,952 log 14936 21432 "GET /api/v1/galleries/ HTTP/1.1" 401 70
