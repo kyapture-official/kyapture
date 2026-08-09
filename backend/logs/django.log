@@ -810,3 +810,40 @@ WARNING 2026-08-09 12:03:22,242 log 14936 21888 "GET /api/v1/auth/me/ HTTP/1.1" 
 WARNING 2026-08-09 12:03:22,252 log 14936 13500 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
 WARNING 2026-08-09 13:46:56,323 log 14936 11544 "GET /api/v1/galleries/ HTTP/1.1" 401 70
 WARNING 2026-08-09 13:46:56,952 log 14936 21432 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-09 14:02:58,997 log 22216 5532 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-09 14:02:59,015 log 22216 22948 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+ERROR 2026-08-09 14:03:34,606 log 22216 14372 Internal Server Error: /api/v1/galleries/remi-and-jjk/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 157, in patch
+    return self.put(request, slug)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 176, in put
+    serializer.to_representation(updated_gallery),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\serializers.py", line 239, in to_representation
+    instance.photo_count = instance.photos.count()
+                           ^^^^^^^^^^^^^^^
+AttributeError: 'Gallery' object has no attribute 'photos'
+ERROR 2026-08-09 14:03:34,609 log 22216 14372 "PATCH /api/v1/galleries/remi-and-jjk/ HTTP/1.1" 500 27710
+WARNING 2026-08-09 14:19:06,360 log 22216 25984 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-09 14:19:06,371 log 22216 23344 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-09 15:01:09,799 log 22216 22040 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-09 15:31:35,788 log 24732 24352 "GET /api/v1/galleries/ HTTP/1.1" 401 70

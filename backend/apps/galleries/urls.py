@@ -2,7 +2,8 @@
 from django.urls import path
 from .views import (
     GalleryListCreateView, 
-    GalleryDetailView, 
+    GalleryDetailView,
+    GallerySearchView, 
     DashboardStatsView,
     GalleryPublishView,      
     GallerySetPasswordView   
@@ -14,6 +15,13 @@ urlpatterns = [
         '',
         GalleryListCreateView.as_view(),
         name='gallery-list-create'
+    ),
+    
+    # Static Route: GET /api/v1/galleries/search/?q=<query>
+    path(
+        'search/',
+        GallerySearchView.as_view(),
+        name='gallery-search'
     ),
     
     # Static Route: GET /api/v1/galleries/dashboard/stats/

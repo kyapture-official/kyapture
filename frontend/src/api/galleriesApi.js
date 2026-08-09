@@ -72,6 +72,22 @@ export const galleriesApi = {
   },
 
   /**
+   * WHAT: Dedicated search — hits a separate, non-paginated endpoint so
+   *       search always covers the photographer's FULL gallery set, not
+   *       just whatever page size getGalleries() returns.
+   * URI:  GET /api/v1/galleries/search/?q=<query>
+   *
+   * @param   {string} query
+   * @param   {AbortSignal} [signal]
+   * @returns {Promise<{ results: Gallery[], count: number, truncated: boolean }>}
+   */
+  searchGalleries: async (query, signal = undefined) => {
+    const { data } = await api.get('/galleries/search/', { params: { q: query }, signal })
+    return data
+  },
+
+
+  /**
    * WHAT: Fetch the full configuration of one specific gallery.
    * URI:  GET /api/v1/galleries/{slug}/
    *

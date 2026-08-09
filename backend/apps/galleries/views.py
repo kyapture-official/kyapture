@@ -19,6 +19,24 @@ from .serializers import (
     GalleryUpdateSerializer,
 )
 
+class GalleryListPagination(PageNumberPagination):
+    """
+    Scoped pagination for the galleries list endpoint only (browse view).
+    Global REST_FRAMEWORK PAGE_SIZE stays at 20 for every other view.
+
+    NOTE:GallerySearchView (below)
+    handles search independently of this page size, so search stays
+    correct no matter how many galleries a photographer has. This value
+    only affects the initial dashboard grid, which currently has no
+    "load more" control. Bumped modestly above the global default so a
+    Pro photographer's first screen shows more at once; a real fix
+    (infinite scroll / cursor pagination for the browse view) is a
+    separate, non-urgent follow-up now that search doesn't depend on it.
+    """
+    page_size = 60
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 
 class GalleryListCreateView(APIView):
     """
@@ -67,7 +85,7 @@ class GalleryListCreateView(APIView):
             queryset = queryset.order_by('-created_at')
 
         # 5. Manual Pagination (APIViews do not read settings.py pagination automatically)
-        paginator = PageNumberPagination()
+        paginator = GalleryListPagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request, view=self)
         
         serializer = GalleryListSerializer(
@@ -109,7 +127,53 @@ class GalleryListCreateView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class GallerySearchView(APIView):
+    """
+    GET /api/v1/galleries/search/?q=<query>
 
+    Dedicated, non-paginated search endpoint — deliberately decoupled from
+    GalleryListCreateView's pagination. Search-as-you-type needs to cover
+    the photographer's ENTIRE gallery set on every keystroke, not just
+    whatever page size the browse view happens to be capped at. Tying
+    search correctness to a page-size constant is a trap: it silently
+    misses matches once someone crosses that number.
+
+    Capped at SEARCH_RESULT_LIMIT so a broad query (e.g. a single letter)
+    can't return an unbounded result set. `truncated: true` signals the
+    frontend to prompt the user to refine their search rather than
+    silently dropping matches beyond the cap.
+    """
+    permission_classes = [IsAuthenticated]
+
+    SEARCH_RESULT_LIMIT = 100
+
+    def get(self, request):
+        query = request.query_params.get('q', '').strip()
+
+        if not query:
+            return Response({'results': [], 'count': 0, 'truncated': False}, status=status.HTTP_200_OK)
+
+        queryset = (
+            Gallery.objects
+            .filter(photographer=request.user, is_active=True)
+            .filter(Q(title__icontains=query) | Q(description__icontains=query))
+            .select_related('cover_photo')
+            .annotate(photo_count=Count('assets'))
+            .order_by('-created_at')
+        )
+
+        total_count = queryset.count()
+        limited_results = queryset[:self.SEARCH_RESULT_LIMIT]
+
+        serializer = GalleryListSerializer(
+            limited_results, many=True, context={'request': request}
+        )
+
+        return Response({
+            'results': serializer.data,
+            'count': total_count,
+            'truncated': total_count > self.SEARCH_RESULT_LIMIT,
+        }, status=status.HTTP_200_OK)
 class GalleryDetailView(APIView):
     """
     GET    /api/v1/galleries/{slug}/  — View detailed settings of a specific gallery.
