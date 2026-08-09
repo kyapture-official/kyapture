@@ -1,5 +1,6 @@
 #C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py
 import bcrypt
+from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.response import Response

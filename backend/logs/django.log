@@ -422,3 +422,273 @@ Traceback (most recent call last):
               ^^^^^^^^^^^^^^^^^
 NameError: name 'get_object_or_404' is not defined
 ERROR 2026-08-01 17:18:07,590 log 14108 22180 "POST /api/v1/galleries/giri-and-sari/publish/ HTTP/1.1" 500 27318
+WARNING 2026-08-03 17:07:30,700 log 22860 6688 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-03 17:07:30,716 log 22860 13272 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-03 17:07:30,723 log 22860 23912 "POST /api/v1/auth/token/refresh/ HTTP/1.1" 401 49
+WARNING 2026-08-03 17:07:54,028 log 22860 20860 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-03 17:07:54,044 log 22860 11844 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-03 17:07:54,101 log 22860 1736 "POST /api/v1/auth/token/refresh/ HTTP/1.1" 401 39
+ERROR 2026-08-03 17:12:37,557 log 22860 17608 Internal Server Error: /api/v1/galleries/degi-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 156, in patch
+    return self.put(request, slug)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 175, in put
+    serializer.to_representation(updated_gallery),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\serializers.py", line 239, in to_representation
+    instance.photo_count = instance.photos.count()
+                           ^^^^^^^^^^^^^^^
+AttributeError: 'Gallery' object has no attribute 'photos'
+ERROR 2026-08-03 17:12:37,582 log 22860 17608 "PATCH /api/v1/galleries/degi-and-priya/ HTTP/1.1" 500 27617
+ERROR 2026-08-03 17:14:42,103 log 22860 21232 Internal Server Error: /api/v1/galleries/degi-and-priya/publish/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 322, in post
+    gallery = get_object_or_404(
+              ^^^^^^^^^^^^^^^^^
+NameError: name 'get_object_or_404' is not defined
+ERROR 2026-08-03 17:14:42,173 log 22860 21232 "POST /api/v1/galleries/degi-and-priya/publish/ HTTP/1.1" 500 27227
+WARNING 2026-08-03 17:26:23,907 log 22860 3340 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-03 17:26:23,919 log 22860 20580 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+ERROR 2026-08-03 17:28:04,158 log 22860 9440 Internal Server Error: /api/v1/galleries/degi-and-priya/publish/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 322, in post
+    gallery = get_object_or_404(
+              ^^^^^^^^^^^^^^^^^
+NameError: name 'get_object_or_404' is not defined
+ERROR 2026-08-03 17:28:04,164 log 22860 9440 "POST /api/v1/galleries/degi-and-priya/publish/ HTTP/1.1" 500 27227
+ERROR 2026-08-03 17:30:15,250 log 8464 16196 Internal Server Error: /api/v1/galleries/degi-and-priya/publish/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 322, in post
+    gallery = get_object_or_404(
+              ^^^^^^^^^^^^^^^^^
+NameError: name 'get_object_or_404' is not defined
+ERROR 2026-08-03 17:30:15,261 log 8464 16196 "POST /api/v1/galleries/degi-and-priya/publish/ HTTP/1.1" 500 27227
+ERROR 2026-08-03 17:32:11,797 log 8464 18652 Internal Server Error: /api/v1/galleries/degi-and-priya/publish/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 322, in post
+    gallery = get_object_or_404(
+              ^^^^^^^^^^^^^^^^^
+NameError: name 'get_object_or_404' is not defined
+ERROR 2026-08-03 17:32:11,802 log 8464 18652 "POST /api/v1/galleries/degi-and-priya/publish/ HTTP/1.1" 500 27227
+ERROR 2026-08-03 17:32:14,819 log 8464 1704 Internal Server Error: /api/v1/galleries/degi-and-priya/publish/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 322, in post
+    gallery = get_object_or_404(
+              ^^^^^^^^^^^^^^^^^
+NameError: name 'get_object_or_404' is not defined
+ERROR 2026-08-03 17:32:14,832 log 8464 1704 "POST /api/v1/galleries/degi-and-priya/publish/ HTTP/1.1" 500 27227
+ERROR 2026-08-03 17:32:22,269 log 8464 5644 Internal Server Error: /api/v1/galleries/degi-and-priya/publish/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 322, in post
+    gallery = get_object_or_404(
+              ^^^^^^^^^^^^^^^^^
+NameError: name 'get_object_or_404' is not defined
+ERROR 2026-08-03 17:32:22,273 log 8464 5644 "POST /api/v1/galleries/degi-and-priya/publish/ HTTP/1.1" 500 27227
+WARNING 2026-08-03 17:44:44,395 log 21580 14140 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-03 17:44:44,412 log 21580 9620 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-03 18:39:05,084 log 21580 25956 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-03 18:39:05,095 log 21580 11756 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-05 17:26:09,011 log 20448 5648 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-05 17:26:09,038 log 20448 17432 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-05 18:00:50,198 log 22068 25224 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-05 18:00:50,206 log 22068 25228 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-05 18:53:18,533 log 22068 7912 "GET /api/v1/photos/rima-and-hari/ HTTP/1.1" 401 70
+WARNING 2026-08-05 18:53:18,534 log 22068 12800 "GET /api/v1/galleries/rima-and-hari/ HTTP/1.1" 401 70
+WARNING 2026-08-05 18:53:18,550 log 22068 556 "GET /api/v1/photos/rima-and-hari/ HTTP/1.1" 401 70
+WARNING 2026-08-05 18:53:18,551 log 22068 2420 "GET /api/v1/galleries/rima-and-hari/ HTTP/1.1" 401 70
+WARNING 2026-08-05 19:55:17,468 log 16468 19288 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-05 19:55:17,475 log 16468 25192 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-06 18:51:43,744 log 5584 9760 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-06 18:51:43,762 log 5584 4172 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+ERROR 2026-08-06 18:52:28,435 log 5584 1748 Internal Server Error: /api/v1/galleries/rima-and-hari/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 157, in patch
+    return self.put(request, slug)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 176, in put
+    serializer.to_representation(updated_gallery),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\serializers.py", line 239, in to_representation
+    instance.photo_count = instance.photos.count()
+                           ^^^^^^^^^^^^^^^
+AttributeError: 'Gallery' object has no attribute 'photos'
+ERROR 2026-08-06 18:52:28,440 log 5584 1748 "PATCH /api/v1/galleries/rima-and-hari/ HTTP/1.1" 500 26286
+WARNING 2026-08-06 19:17:12,338 log 5584 24552 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-07 09:10:19,001 log 9612 16656 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-07 09:10:19,017 log 9612 15120 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+ERROR 2026-08-07 09:12:15,539 log 9612 25820 Internal Server Error: /api/v1/galleries/rita-and-siyam/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 157, in patch
+    return self.put(request, slug)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 176, in put
+    serializer.to_representation(updated_gallery),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\serializers.py", line 239, in to_representation
+    instance.photo_count = instance.photos.count()
+                           ^^^^^^^^^^^^^^^
+AttributeError: 'Gallery' object has no attribute 'photos'
+ERROR 2026-08-07 09:12:15,552 log 9612 25820 "PATCH /api/v1/galleries/rita-and-siyam/ HTTP/1.1" 500 27613

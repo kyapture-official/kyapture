@@ -44,8 +44,8 @@ export default function ClientGalleryPage() {
 
   // Key scoped to username:slug ensures tenant isolation in shared client environments
   const sessionKey = `${username}:${slug}`
-  const { unlockTokens, setUnlockToken, revokeToken, hasHydrated } = useClientStore()
-  const token = unlockTokens[sessionKey] ?? null
+  const { sessions, setSession, hasHydrated } = useClientStore()
+  const token = sessions[sessionKey] ?? null
 
   // Gallery structural metadata
   const [galleryTitle,     setGalleryTitle]     = useState('')
@@ -130,7 +130,7 @@ export default function ClientGalleryPage() {
 
         // Evict invalidated tokens to restore system equilibrium
         if (currentToken) {
-          revokeToken(sessionKey)
+          setSession(sessionKey, null)
         }
         setLocked(true)
         setPhotos([])
@@ -150,7 +150,7 @@ export default function ClientGalleryPage() {
       }
 
       if (status === 401) {
-        revokeToken(sessionKey)
+        setSession(sessionKey, null)
         setLocked(true)
         setPhotos([])
         return
@@ -163,7 +163,7 @@ export default function ClientGalleryPage() {
         setLoading(false)
       }
     }
-  }, [username, slug, sessionKey, applyGalleryData, revokeToken])
+  }, [username, slug, sessionKey, applyGalleryData, setSession])
 
   // Triggers on initial mount and on tenant navigation once hydration completes
   useEffect(() => {
@@ -205,7 +205,7 @@ export default function ClientGalleryPage() {
       const data = await clientsApi.unlock(username, slug, password, {
         signal: controller.signal
       })
-      setUnlockToken(sessionKey, data.access_token)
+      setSession(sessionKey, data.access_token)
 
       const currentFetchId = ++activeFetchId.current
       await fetchGallery(data.access_token, currentFetchId)
