@@ -873,3 +873,344 @@ WARNING 2026-08-10 23:05:51,714 log 28168 6912 "GET /api/v1/auth/me/ HTTP/1.1" 4
 WARNING 2026-08-10 23:05:51,732 log 28168 6792 "POST /api/v1/auth/token/refresh/ HTTP/1.1" 401 39
 WARNING 2026-08-10 23:07:14,624 log 28168 28084 "POST /api/v1/galleries/ HTTP/1.1" 403 106
 WARNING 2026-08-10 23:23:04,188 log 28168 26616 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-11 08:59:14,220 log 9312 24320 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-11 08:59:14,239 log 9312 19804 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-11 09:23:42,099 log 9312 21196 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-11 09:23:42,104 log 9312 24544 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+ERROR 2026-08-11 09:38:31,156 log 9312 11308 Internal Server Error: /api/v1/galleries/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 221, in patch
+    return self.put(request, slug)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 240, in put
+    serializer.to_representation(updated_gallery),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\serializers.py", line 239, in to_representation
+    instance.photo_count = instance.photos.count()
+                           ^^^^^^^^^^^^^^^
+AttributeError: 'Gallery' object has no attribute 'photos'
+ERROR 2026-08-11 09:38:31,166 log 9312 11308 "PATCH /api/v1/galleries/sagar-and-priya/ HTTP/1.1" 500 27604
+WARNING 2026-08-11 09:38:45,778 log 9312 20972 "POST /api/v1/galleries/sagar-and-priya/set-password/ HTTP/1.1" 401 70
+ERROR 2026-08-11 09:41:31,726 log 9312 17748 Internal Server Error: /api/v1/galleries/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 221, in patch
+    return self.put(request, slug)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 240, in put
+    serializer.to_representation(updated_gallery),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\serializers.py", line 239, in to_representation
+    instance.photo_count = instance.photos.count()
+                           ^^^^^^^^^^^^^^^
+AttributeError: 'Gallery' object has no attribute 'photos'
+ERROR 2026-08-11 09:41:31,732 log 9312 17748 "PATCH /api/v1/galleries/sagar-and-priya/ HTTP/1.1" 500 27604
+ERROR 2026-08-11 09:43:09,050 log 9312 20972 Internal Server Error: /api/v1/galleries/remi-and-jjk/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 221, in patch
+    return self.put(request, slug)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 240, in put
+    serializer.to_representation(updated_gallery),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\serializers.py", line 239, in to_representation
+    instance.photo_count = instance.photos.count()
+                           ^^^^^^^^^^^^^^^
+AttributeError: 'Gallery' object has no attribute 'photos'
+ERROR 2026-08-11 09:43:09,056 log 9312 20972 "PATCH /api/v1/galleries/remi-and-jjk/ HTTP/1.1" 500 27589
+WARNING 2026-08-11 09:57:54,338 log 24204 2840 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-11 09:57:54,352 log 24204 22900 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-11 10:16:23,974 log 9160 7628 "POST /api/v1/galleries/sagar-and-priya/set-password/ HTTP/1.1" 401 70
+ERROR 2026-08-11 10:17:00,267 log 9160 20656 Internal Server Error: /api/v1/public/sagar23/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 422, in __getattr__
+    return getattr(_request, attr)
+AttributeError: 'WSGIRequest' object has no attribute 'get_session_token'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\clients\views.py", line 98, in get
+    token = request.get_session_token(request)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 424, in __getattr__
+    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+AttributeError: 'Request' object has no attribute 'get_session_token'
+ERROR 2026-08-11 10:17:00,276 log 9160 20656 "GET /api/v1/public/sagar23/sagar-and-priya/ HTTP/1.1" 500 27754
+ERROR 2026-08-11 10:17:02,731 log 9160 2028 Internal Server Error: /api/v1/public/sagar23/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 422, in __getattr__
+    return getattr(_request, attr)
+AttributeError: 'WSGIRequest' object has no attribute 'get_session_token'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\clients\views.py", line 98, in get
+    token = request.get_session_token(request)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 424, in __getattr__
+    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+AttributeError: 'Request' object has no attribute 'get_session_token'
+ERROR 2026-08-11 10:17:02,737 log 9160 2028 "GET /api/v1/public/sagar23/sagar-and-priya/ HTTP/1.1" 500 27754
+ERROR 2026-08-11 10:17:03,742 log 9160 24492 Internal Server Error: /api/v1/public/sagar23/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 422, in __getattr__
+    return getattr(_request, attr)
+AttributeError: 'WSGIRequest' object has no attribute 'get_session_token'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\clients\views.py", line 98, in get
+    token = request.get_session_token(request)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 424, in __getattr__
+    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+AttributeError: 'Request' object has no attribute 'get_session_token'
+ERROR 2026-08-11 10:17:03,747 log 9160 24492 "GET /api/v1/public/sagar23/sagar-and-priya/ HTTP/1.1" 500 27754
+ERROR 2026-08-11 10:18:09,173 log 9160 14304 Internal Server Error: /api/v1/public/sagar23/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 422, in __getattr__
+    return getattr(_request, attr)
+AttributeError: 'WSGIRequest' object has no attribute 'get_session_token'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\clients\views.py", line 98, in get
+    token = request.get_session_token(request)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 424, in __getattr__
+    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+AttributeError: 'Request' object has no attribute 'get_session_token'
+ERROR 2026-08-11 10:18:09,179 log 9160 14304 "GET /api/v1/public/sagar23/sagar-and-priya/ HTTP/1.1" 500 27754
+ERROR 2026-08-11 10:18:34,400 log 9160 17144 Internal Server Error: /api/v1/public/sagar23/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 422, in __getattr__
+    return getattr(_request, attr)
+AttributeError: 'WSGIRequest' object has no attribute 'get_session_token'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\clients\views.py", line 98, in get
+    token = request.get_session_token(request)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 424, in __getattr__
+    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+AttributeError: 'Request' object has no attribute 'get_session_token'
+ERROR 2026-08-11 10:18:34,406 log 9160 17144 "GET /api/v1/public/sagar23/sagar-and-priya/ HTTP/1.1" 500 27754
+ERROR 2026-08-11 10:18:38,704 log 9160 1268 Internal Server Error: /api/v1/public/sagar23/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 422, in __getattr__
+    return getattr(_request, attr)
+AttributeError: 'WSGIRequest' object has no attribute 'get_session_token'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\clients\views.py", line 98, in get
+    token = request.get_session_token(request)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 424, in __getattr__
+    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+AttributeError: 'Request' object has no attribute 'get_session_token'
+ERROR 2026-08-11 10:18:38,710 log 9160 1268 "GET /api/v1/public/sagar23/sagar-and-priya/ HTTP/1.1" 500 27754
+ERROR 2026-08-11 10:18:41,801 log 9160 10320 Internal Server Error: /api/v1/public/sagar23/sagar-and-priya/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 422, in __getattr__
+    return getattr(_request, attr)
+AttributeError: 'WSGIRequest' object has no attribute 'get_session_token'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\clients\views.py", line 98, in get
+    token = request.get_session_token(request)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\request.py", line 424, in __getattr__
+    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+AttributeError: 'Request' object has no attribute 'get_session_token'
+ERROR 2026-08-11 10:18:41,807 log 9160 10320 "GET /api/v1/public/sagar23/sagar-and-priya/ HTTP/1.1" 500 27754
+WARNING 2026-08-11 10:32:36,813 log 12120 23472 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-11 10:32:36,823 log 12120 11228 "GET /api/v1/auth/me/ HTTP/1.1" 401 70

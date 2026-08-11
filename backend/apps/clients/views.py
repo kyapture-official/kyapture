@@ -58,7 +58,23 @@ class PublicGalleryView(APIView):
             )
         except Gallery.DoesNotExist:
             return None
+# backend/apps/clients/views.py — inside PublicGalleryView
 
+    def get_session_token(self, request):
+        """
+        WHAT: Extracts the client's unlock token from either the Authorization
+        header or the legacy ?token= query param.
+        WHY:  Tokens shouldn't sit in a URL — server access logs and browser
+        history both capture query strings. The frontend already sends
+        it correctly as `Authorization: Bearer <token>`; this just makes
+        the backend actually check there. Query param kept as a fallback
+        only for compatibility with the older documented contract.
+    """
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            return auth_header[len('Bearer '):].strip()
+        return request.query_params.get('token', '').strip()
+    
     def validate_session_token(self, token, gallery):
         """Verifies if the client's local session token is active for this gallery [1.1.2]."""
         if not token:
@@ -79,7 +95,7 @@ class PublicGalleryView(APIView):
 
         # 2. Process password protection gateways [1.1.2]
         if gallery.is_password_protected:
-            token = request.query_params.get('token', '').strip()
+            token = self.get_session_token(request) 
 
             # No token provided: Instruct frontend to render password form (Status 200) [1.1.2]
             if not token:

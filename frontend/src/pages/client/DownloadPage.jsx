@@ -21,8 +21,8 @@ export default function DownloadPage() {
 
   // Unique session key prevents cross-tenant token collisions on identical gallery slugs
   const sessionKey = `${username}:${slug}`
-  const { unlockTokens } = useClientStore()
-  const galleryToken = unlockTokens[sessionKey] ?? null
+  const { sessions } = useClientStore()
+  const galleryToken = sessions[sessionKey] ?? null
 
   const [email,       setEmail]       = useState('')
   const [status,      setStatus]      = useState('idle')

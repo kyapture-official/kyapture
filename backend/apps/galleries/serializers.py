@@ -236,5 +236,5 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         # Fallback counting evaluation for updates
-        instance.photo_count = instance.photos.count()
+        instance.photo_count = instance.assets.count()
         return GalleryDetailSerializer(instance, context=self.context).data
