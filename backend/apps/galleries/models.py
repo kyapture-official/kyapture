@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/galleries/models.py
 from django.conf import settings
 from django.core.validators import RegexValidator
 from django.db import models

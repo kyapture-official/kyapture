@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/admin.py
 from django.contrib import admin
 from .models import SubscriptionPlan, UserSubscription, ManualPayment
 

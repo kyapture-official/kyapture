@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/GalleryCard.jsx
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'

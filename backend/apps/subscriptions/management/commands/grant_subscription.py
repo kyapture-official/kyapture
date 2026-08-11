@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/management/commands/grant_subscription.py
 from datetime import timedelta
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone

@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/signals.py
 import logging
 from django.db.models.signals import post_delete
 from django.dispatch import receiver

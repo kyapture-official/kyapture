@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/urls.py
 from django.urls import path
 from .views import (
     PhotoListUploadView,

@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/layout/CollectionSidebar.jsx
 import { NavLink, Link } from "react-router-dom";
 import { formatDate } from "../../utils/formatters";
 

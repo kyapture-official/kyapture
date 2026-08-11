@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/clients/models.py
 import secrets
 from django.db import models
 from apps.core.models import BaseModel

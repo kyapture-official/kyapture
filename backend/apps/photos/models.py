@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/models.py
 import os
 from decimal import Decimal
 from django.db import models

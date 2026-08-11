@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/models.py
 import os
 import uuid
 from django.conf import settings

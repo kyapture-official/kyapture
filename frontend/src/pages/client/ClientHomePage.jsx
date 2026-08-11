@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/pages/client/ClientHomePage.jsx
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { clientsApi } from '../../api/clientsApi'

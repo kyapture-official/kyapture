@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/clients/urls.py
 from django.urls import path
 from .views import (
     PublicGalleryView, 

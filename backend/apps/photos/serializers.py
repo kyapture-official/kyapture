@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/serializers.py
 import io
 import os
 from PIL import Image as PILImage, UnidentifiedImageError

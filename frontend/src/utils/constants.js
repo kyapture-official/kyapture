@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/utils/constants.js
 export const BASE_URL = import.meta.env.VITE_API_URL || ''
 export const MEDIA_URL = import.meta.env.VITE_MEDIA_URL || ''
 

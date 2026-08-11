@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/pages/dashboard/SettingsPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { authApi } from '../../api/authApi'

@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/views.py
 from datetime import timedelta
 from django.db import transaction
 from django.shortcuts import get_object_or_404

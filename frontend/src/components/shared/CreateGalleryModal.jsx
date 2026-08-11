@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/CreateGalleryModal.jsx
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 
 /**

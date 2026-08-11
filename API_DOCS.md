@@ -1,3 +1,4 @@
+<!-- C:/Users/LENOVO/Desktop/kyapture/API_DOCS.md
 Kaypture API v1 — Core Contract Specifications
 All API endpoints are prefixed with /api/v1/. Request and response payloads are strictly formatted in JSON. For file uploads, use multipart/form-data.
 🔐 1. Authentication App (apps/users)

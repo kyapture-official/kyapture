@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/galleries/serializers.py
 import bcrypt 
 from rest_framework import serializers
 

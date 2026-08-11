@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/apps.py
 from django.apps import AppConfig
 
 

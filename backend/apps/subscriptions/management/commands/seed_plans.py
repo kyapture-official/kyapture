@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/management/commands/seed_plans.py
 from django.core.management.base import BaseCommand
 from apps.subscriptions.models import SubscriptionPlan
 

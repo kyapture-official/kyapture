@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/urls.py
 from django.urls import path
 from .views import (
     PlanListView, 

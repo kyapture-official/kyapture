@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/core/utils.py
 import io
 import piexif
 import os

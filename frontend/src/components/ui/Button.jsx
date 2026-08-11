@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/ui/Button.jsx
 import { forwardRef } from 'react'
 
 // All cream-*/ink tokens require tailwind.config.js to define them under theme.extend.colors.

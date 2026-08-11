@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/core/permissions.py
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission

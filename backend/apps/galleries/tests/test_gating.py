@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/galleries/tests/test_gating.py
 import io
 from PIL import Image as PILImage
 from django.contrib.auth import get_user_model

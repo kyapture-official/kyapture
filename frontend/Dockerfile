@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/frontend/Dockerfile
 # Build stage
 FROM node:20-alpine AS builder
 WORKDIR /app

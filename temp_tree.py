@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/temp_tree.py
 import os
 
 def generate_tree(startpath, out_file):

@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/Dockerfile
 # backend/Dockerfile
 
 FROM python:3.12-slim

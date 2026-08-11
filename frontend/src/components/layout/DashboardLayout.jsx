@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/layout/DashboardLayout.jsx
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'

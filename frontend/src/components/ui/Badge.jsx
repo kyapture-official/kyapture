@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/ui/Badge.jsx
 const variants = {
   default: 'bg-cream-200 text-ink border border-cream-300',
   success: 'bg-emerald-100 text-emerald-700 border border-emerald-200',

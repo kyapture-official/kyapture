@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/ui/DropZone.jsx
 import { useRef, useState, useEffect, useCallback } from 'react'
 
 /**

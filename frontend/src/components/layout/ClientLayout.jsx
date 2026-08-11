@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/layout/ClientLayout.jsx
 import React from 'react'
 
 export default function ClientLayout({ children, photographer }) {

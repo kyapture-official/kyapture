@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/EmptyState.jsx
 const EmptyState = ({ title = "Nothing here yet", message = "", action }) => {
   return (
     <div className="empty-state">

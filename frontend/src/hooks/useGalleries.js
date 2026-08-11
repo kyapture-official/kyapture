@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/hooks/useGalleries.js
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { galleriesApi } from '../api/galleriesApi'
 import { mockGalleries } from '../utils/mockGalleries'

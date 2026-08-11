@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/core/management/commands/test_s3_connection.py
 from django.core.management.base import BaseCommand
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile

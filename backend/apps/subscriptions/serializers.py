@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/serializers.py
 from django.db import models
 from django.db.models import Sum
 from django.utils import timezone

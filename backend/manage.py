@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# C:/Users/LENOVO/Desktop/kyapture/backend/manage.py
 """Django's command-line utility for administrative tasks."""
 import os
 import sys

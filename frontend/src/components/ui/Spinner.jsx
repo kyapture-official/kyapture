@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/ui/Spinner.jsx
 const sizes = {
   sm: 'h-4 w-4',
   md: 'h-6 w-6',

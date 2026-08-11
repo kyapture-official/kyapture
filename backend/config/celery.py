@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/config/celery.py
 import os
 from celery import Celery
 

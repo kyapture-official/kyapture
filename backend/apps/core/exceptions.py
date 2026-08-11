@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/core/exceptions.py
 from rest_framework.views import exception_handler
 
 

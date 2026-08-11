@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/views.py
 import os
 from decimal import Decimal
 from django.db import transaction

@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/tasks.py
 from celery import shared_task
 import logging
 

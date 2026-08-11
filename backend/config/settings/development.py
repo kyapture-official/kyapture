@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/config/settings/development.py
 import os
 from .base import *  # Import all shared base settings
 # Explicitly override base configurations for local development safety

@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/tests/test_bulk_actions.py
 # backend/apps/photos/tests/test_bulk_actions.py
 
 import io

@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/core/models.py
 import uuid6
 from django.db import models
 

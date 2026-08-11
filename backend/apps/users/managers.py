@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/users/managers.py
 from django.contrib.auth.base_user import BaseUserManager
 
 

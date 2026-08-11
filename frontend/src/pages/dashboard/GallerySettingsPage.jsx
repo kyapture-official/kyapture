@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/pages/dashboard/GallerySettingsPage.jsx
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";

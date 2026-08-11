@@ -1,3 +1,4 @@
+// C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/LoadingSkeleton.jsx
 const LoadingSkeleton = ({ count = 6 }) => {
   return (
     <div className="loading-skeleton-grid">

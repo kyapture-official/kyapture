@@ -4,6 +4,7 @@ kyapture/
 ├── README.md
 ├── directory_structure.txt
 ├── docker-compose.yml
+├── temp_black_format.py
 ├── temp_tree.py
 ├── backend/
 │   ├── Dockerfile
@@ -552,6 +553,53 @@ kyapture/
 │   │   │   │   │   │   │   ├── 019fda42-1355-7156-890c-f8a5e45e6255_thumb.webp
 │   │   │   │   │   │   │   ├── 019fda42-1ce7-7f53-be69-426a099d4407_thumb.webp
 │   │   │   │   │   │   │   ├── 019fda42-2669-7287-9d44-7344ac214610_thumb.webp
+│   │   │   │   │   ├── 019fe59a-0272-7e6d-8d89-f37154ffd5b9/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fe59a-bc70-7f10-885f-0b7be3eb09e4_display.webp
+│   │   │   │   │   │   │   ├── 019fe59a-bc70-7f10-885f-0b7be3eb09e4_original.png
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fe59a-bc70-7f10-885f-0b7be3eb09e4_thumb.webp
+│   │   │   ├── 019fecb1-e926-747e-beca-bffd7f0dc3fb/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 019fecb3-f32a-7c78-ba8d-a6f9956bda9e/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019feed0-b324-7694-aa86-163221f44342_display.webp
+│   │   │   │   │   │   │   ├── 019feed0-b324-7694-aa86-163221f44342_original.png
+│   │   │   │   │   │   │   ├── 019feed0-b699-7453-88e3-e5281547218b_display.webp
+│   │   │   │   │   │   │   ├── 019feed0-b699-7453-88e3-e5281547218b_original.png
+│   │   │   │   │   │   │   ├── 019feed0-ecfd-75d7-a973-b4f6d2612241_display.webp
+│   │   │   │   │   │   │   ├── 019feed0-ecfd-75d7-a973-b4f6d2612241_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019feed0-b324-7694-aa86-163221f44342_thumb.webp
+│   │   │   │   │   │   │   ├── 019feed0-b699-7453-88e3-e5281547218b_thumb.webp
+│   │   │   │   │   │   │   ├── 019feed0-ecfd-75d7-a973-b4f6d2612241_thumb.webp
+│   │   │   │   │   ├── 019feed2-cf17-743a-a88a-c44bc196217e/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019ff011-898f-75af-8a94-b6b9afd6523f_display.webp
+│   │   │   │   │   │   │   ├── 019ff011-898f-75af-8a94-b6b9afd6523f_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019ff011-898f-75af-8a94-b6b9afd6523f_thumb.webp
+│   │   │   │   │   ├── 019feed2-e78a-714e-9fb0-8cdba0df5259/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fef34-7395-75ef-8d01-84afab7ca95a_display.webp
+│   │   │   │   │   │   │   ├── 019fef34-7395-75ef-8d01-84afab7ca95a_original.png
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fef34-7395-75ef-8d01-84afab7ca95a_thumb.webp
+│   │   │   │   │   ├── 019feed3-0004-7bfa-832b-881994c8d1d1/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fef31-5b31-79fc-94ea-253a4c9cfabf_display.webp
+│   │   │   │   │   │   │   ├── 019fef31-5b31-79fc-94ea-253a4c9cfabf_original.png
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fef31-5b31-79fc-94ea-253a4c9cfabf_thumb.webp
+│   │   │   │   │   ├── 019ff013-45c3-7bc1-9dfe-ce669ab62396/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019ff013-cb5f-7801-97d1-a3bd936c9ce5_display.webp
+│   │   │   │   │   │   │   ├── 019ff013-cb5f-7801-97d1-a3bd936c9ce5_original.jpg
+│   │   │   │   │   │   │   ├── 019ff013-d1b6-7103-b05b-7d9e31d237df_display.webp
+│   │   │   │   │   │   │   ├── 019ff013-d1b6-7103-b05b-7d9e31d237df_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019ff013-cb5f-7801-97d1-a3bd936c9ce5_thumb.webp
+│   │   │   │   │   │   │   ├── 019ff013-d1b6-7103-b05b-7d9e31d237df_thumb.webp
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile
@@ -577,6 +625,7 @@ kyapture/
 │   │   ├── components/
 │   │   │   ├── layout/
 │   │   │   │   ├── ClientLayout.jsx
+│   │   │   │   ├── CollectionSidebar.jsx
 │   │   │   │   ├── DashboardLayout.jsx
 │   │   │   ├── shared/
 │   │   │   │   ├── CreateGalleryModal.jsx
@@ -618,6 +667,9 @@ kyapture/
 │   │   │   │   ├── BillingPage.jsx
 │   │   │   │   ├── GalleriesPage.jsx
 │   │   │   │   ├── GalleryDetailPage.jsx
+│   │   │   │   ├── GalleryPhotosPage.jsx
+│   │   │   │   ├── GallerySettingsPage.jsx
+│   │   │   │   ├── GalleryWorkspaceLayout.jsx
 │   │   │   │   ├── HomePage.jsx
 │   │   │   │   ├── SettingsPage.jsx
 │   │   │   │   ├── UploadPage.jsx

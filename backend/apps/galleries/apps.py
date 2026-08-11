@@ -1,3 +1,4 @@
+# C:/Users/LENOVO/Desktop/kyapture/backend/apps/galleries/apps.py
 from django.apps import AppConfig
 
 class GalleriesConfig(AppConfig):
