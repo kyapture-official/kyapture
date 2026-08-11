@@ -1,34 +1,37 @@
-import React, { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuthStore } from './store/authStore'
-import { ToastProvider } from './components/ui/Toast'
-import ProtectedRoute     from './components/shared/ProtectedRoute'
-import DashboardLayout    from './components/layout/DashboardLayout'
+import React, { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuthStore } from "./store/authStore";
+import { ToastProvider } from "./components/ui/Toast";
+import ProtectedRoute from "./components/shared/ProtectedRoute";
+import DashboardLayout from "./components/layout/DashboardLayout";
 // Auth
-import LoginPage          from './pages/auth/LoginPage'
-import RegisterPage       from './pages/auth/RegisterPage'
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
+import LoginPage from "./pages/auth/LoginPage";
+import RegisterPage from "./pages/auth/RegisterPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 // Dashboard
-import HomePage           from './pages/dashboard/HomePage'
-import GalleriesPage      from './pages/dashboard/GalleriesPage'
-import GalleryDetailPage  from './pages/dashboard/GalleryDetailPage'
-import UploadPage         from './pages/dashboard/UploadPage'
-import SettingsPage       from './pages/dashboard/SettingsPage'
-import BillingPage        from './pages/dashboard/BillingPage'
+import HomePage from "./pages/dashboard/HomePage";
+import GalleriesPage from "./pages/dashboard/GalleriesPage";
+import UploadPage from "./pages/dashboard/UploadPage";
+import SettingsPage from "./pages/dashboard/SettingsPage";
+import BillingPage from "./pages/dashboard/BillingPage";
+// Gallery workspace (own shell — no DashboardLayout)
+import GalleryWorkspaceLayout from "./pages/dashboard/GalleryWorkspaceLayout";
+import GalleryPhotosPage from "./pages/dashboard/GalleryPhotosPage";
+import GallerySettingsPage from "./pages/dashboard/GallerySettingsPage";
 // Client portal
-import ClientHomePage     from './pages/client/ClientHomePage'
-import ClientGalleryPage  from './pages/client/ClientGalleryPage'
-import DownloadPage       from './pages/client/DownloadPage'
+import ClientHomePage from "./pages/client/ClientHomePage";
+import ClientGalleryPage from "./pages/client/ClientGalleryPage";
+import DownloadPage from "./pages/client/DownloadPage";
 // Public
-import PricingPage        from './pages/subscription/PricingPage'
-import LandingPage        from './pages/LandingPage'
+import PricingPage from "./pages/subscription/PricingPage";
+import LandingPage from "./pages/LandingPage";
 
 export default function App() {
-  const init = useAuthStore((s) => s.init)
+  const init = useAuthStore((s) => s.init);
 
   useEffect(() => {
-    init()
-  }, [init])
+    init();
+  }, [init]);
 
   return (
     <ToastProvider>
@@ -40,33 +43,44 @@ export default function App() {
       >
         <Routes>
           {/* Public */}
-          <Route path="/"                element={<LandingPage />} />
-          <Route path="/pricing"         element={<PricingPage />} />
-          <Route path="/login"           element={<LoginPage />} />
-          <Route path="/register"        element={<RegisterPage />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
           {/* Protected photographer dashboard */}
           <Route path="/dashboard" element={<ProtectedRoute />}>
+            {/* Standard pages — keep the persistent sidebar/topbar */}
             <Route element={<DashboardLayout />}>
-              <Route index                  element={<HomePage />} />
-              <Route path="galleries"       element={<GalleriesPage />} />
-              <Route path="galleries/:id"   element={<GalleryDetailPage />} />
-              <Route path="upload"          element={<UploadPage />} />
-              <Route path="settings"        element={<SettingsPage />} />
-              <Route path="billing"         element={<BillingPage />} />
+              <Route index element={<HomePage />} />
+              <Route path="galleries" element={<GalleriesPage />} />
+              <Route path="upload" element={<UploadPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="billing" element={<BillingPage />} />
+            </Route>
+
+            {/* Gallery workspace — full takeover, its own sidebar/chrome.
+                Deliberately a SIBLING of the block above, not nested inside
+                it, so DashboardLayout's global nav never renders here. */}
+            <Route path="galleries/:id" element={<GalleryWorkspaceLayout />}>
+              <Route index element={<GalleryPhotosPage />} />
+              <Route path="settings" element={<GallerySettingsPage />} />
             </Route>
           </Route>
 
           {/* Client portal */}
-          <Route path="/g/:username"                element={<ClientHomePage />} />
-          <Route path="/g/:username/:slug"          element={<ClientGalleryPage />} />
-          <Route path="/g/:username/:slug/download" element={<DownloadPage />} />
+          <Route path="/g/:username" element={<ClientHomePage />} />
+          <Route path="/g/:username/:slug" element={<ClientGalleryPage />} />
+          <Route
+            path="/g/:username/:slug/download"
+            element={<DownloadPage />}
+          />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </ToastProvider>
-  )
+  );
 }
