@@ -51,7 +51,7 @@ export const subscriptionsApi = {
    * @returns {Promise<{ message: string }>}
    */
   submitManualPayment: async (payload) => {
-    const { data } = await api.post('/subscriptions/pay/', payload)
+    const { data } = await api.post('/subscriptions/payments/', payload)
     return data
   },
 

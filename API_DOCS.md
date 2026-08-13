@@ -1,15 +1,28 @@
-<!-- C:/Users/LENOVO/Desktop/kyapture/API_DOCS.md
+<!--C:\Users\LENOVO\Desktop\kyapture\API_DOCS.md 
 Kaypture API v1 — Core Contract Specifications
-All API endpoints are prefixed with /api/v1/. Request and response payloads are strictly formatted in JSON. For file uploads, use multipart/form-data.
+
+API documentation
+
+All API endpoints are prefixed with /api/v1/, except the public total-users endpoint, which is registered at /api/total-users.
+
+Request and response payloads are strictly formatted as JSON. For file uploads, use multipart/form-data.
+
 🔐 1. Authentication App (apps/users)
+
 All protected endpoints require the following header:
+
 Authorization: Bearer <access_token>
+
+Register
+
 POST /api/v1/auth/register/
-Description: Public endpoint to create a new photographer account.
+
+Creates a new photographer account.
+
 Authentication: None (authentication_classes = [])
-Request Body (JSON):
-code
-JSON
+
+Request Body — JSON
+
 {
   "email": "photographer@test.com",
   "username": "kroman",
@@ -17,9 +30,9 @@ JSON
   "password": "SecurePassword123!",
   "password2": "SecurePassword123!"
 }
-Success Response (201 Created):
-code
-JSON
+
+Success Response — 201 Created
+
 {
   "user": {
     "id": "0190100d-9b1d-7eb4-8fd2-90113c231718",
@@ -34,28 +47,35 @@ JSON
   "access": "jwt_access_token_string",
   "refresh": "jwt_refresh_token_string"
 }
-Error Response (400 Bad Request):
-code
-JSON
+
+Error Response — 400 Bad Request
+
 {
   "error": "Invalid field 'username': Username is already taken.",
   "details": {
-    "username": ["This username is already taken."]
+    "username": [
+      "This username is already taken."
+    ]
   }
 }
+
+Login
+
 POST /api/v1/auth/login/
-Description: Authenticates credentials and returns JWT session tokens.
+
+Authenticates credentials and returns JWT session tokens.
+
 Authentication: None (authentication_classes = [])
-Request Body (JSON):
-code
-JSON
+
+Request Body — JSON
+
 {
   "email": "photographer@test.com",
   "password": "SecurePassword123!"
 }
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "user": {
     "id": "0190100d-9b1d-7eb4-8fd2-90113c231718",
@@ -70,42 +90,57 @@ JSON
   "access": "jwt_access_token_string",
   "refresh": "jwt_refresh_token_string"
 }
+
+Logout
+
 POST /api/v1/auth/logout/
-Description: Blacklists the active refresh token.
+
+Blacklists the active refresh token.
+
 Authentication: Required (IsAuthenticated)
-Request Body (JSON):
-code
-JSON
+
+Request Body — JSON
+
 {
   "refresh": "jwt_refresh_token_string"
 }
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "message": "Logged out successfully."
 }
+
+Refresh Access Token
+
 POST /api/v1/auth/token/refresh/
-Description: Generates a new short-lived access token from an active refresh token.
+
+Generates a new short-lived access token from an active refresh token.
+
 Authentication: None
-Request Body (JSON):
-code
-JSON
+
+Request Body — JSON
+
 {
   "refresh": "jwt_refresh_token_string"
 }
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "access": "new_jwt_access_token_string"
 }
+
+Current User
+
 GET /api/v1/auth/me/
-Description: Returns the active photographer's profile details.
+
+Returns the active photographer's profile details.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "id": "0190100d-9b1d-7eb4-8fd2-90113c231718",
   "email": "photographer@test.com",
@@ -116,48 +151,76 @@ JSON
   "is_active_plan": true,
   "created_at": "2026-06-13T10:30:00Z"
 }
+
+Update Profile
+
 PUT /api/v1/auth/me/
-Description: Partially updates photographer profile data (e.g. bio, avatar).
+
+Partially updates photographer profile data, such as bio or avatar.
+
 Authentication: Required (IsAuthenticated)
-Request Body (multipart/form-data):
+
+Request Body — multipart/form-data
+
 display_name: "Kroman Wedding Fine Art"
 bio: "Wedding fine art based in Nepal."
 avatar: [File] (Optional image up to 2MB)
-Success Response (200 OK): Updated user profile object.
+
+Success Response — 200 OK
+
+Returns the updated user profile object.
+
+Change Password
+
 PUT /api/v1/auth/change-password/
-Description: Updates the authenticated user's password safely.
+
+Updates the authenticated user's password safely.
+
 Authentication: Required (IsAuthenticated)
-Request Body (JSON):
-code
-JSON
+
+Request Body — JSON
+
 {
   "old_password": "SecurePassword123!",
   "new_password": "BrandNewPassword2026!",
   "new_password2": "BrandNewPassword2026!"
 }
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "message": "Password changed successfully."
 }
-GET /api/v1/auth/total-users/
-Description: Public dashboard/landing page registered user count counter.
+
+Total Users
+
+GET /api/total-users
+
+Public dashboard/landing page registered user count counter.
+
+Important: This endpoint is intentionally not under /api/v1/ and has no trailing slash.
+
 Authentication: None (authentication_classes = [])
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "total_count": 47,
   "latest_users": []
 }
+
 🖼 2. Galleries App (apps/galleries)
+
+List Galleries
+
 GET /api/v1/galleries/
-Description: Lists all active (non-soft-deleted) collections created by the photographer.
+
+Lists all active (non-soft-deleted) collections created by the photographer.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 [
   {
     "id": "0190101b-944f-7f32-84b2-c0e86b0317e2",
@@ -174,12 +237,17 @@ JSON
     "updated_at": "2026-06-13T14:30:00Z"
   }
 ]
+
+Create Gallery
+
 POST /api/v1/galleries/
-Description: Creates a new gallery collection. Gated by active plan limits.
+
+Creates a new gallery collection. Gated by active plan limits.
+
 Authentication: Required (IsAuthenticated & IsSubscribed)
-Request Body (JSON):
-code
-JSON
+
+Request Body — JSON
+
 {
   "title": "Sita and Hari Wedding",
   "description": "Fine art wedding coverage.",
@@ -191,10 +259,13 @@ JSON
   "is_published": false,
   "expires_at": null
 }
-Success Response (201 Created): Returns the detailed GalleryDetail object.
-Gated Error Response (403 Forbidden - Limit Reached):
-code
-JSON
+
+Success Response — 201 Created
+
+Returns the detailed GalleryDetail object.
+
+Gated Error Response — 403 Forbidden
+
 {
   "error": "Gallery limit reached for your current plan.",
   "code": "gallery_limit_reached",
@@ -205,12 +276,17 @@ JSON
     "message": "You have used 3 of 3 galleries on the Basic plan. Upgrade your plan to create more."
   }
 }
+
+Get Gallery
+
 GET /api/v1/galleries/{slug}/
-Description: Retrieves detailed parameters for a specific gallery.
+
+Retrieves detailed parameters for a specific gallery.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "id": "0190101b-944f-7f32-84b2-c0e86b0317e2",
   "title": "Sita and Hari Wedding",
@@ -226,33 +302,53 @@ JSON
   "created_at": "2026-06-13T12:00:00Z",
   "updated_at": "2026-06-13T14:30:00Z"
 }
+
+Update Gallery
+
 PUT /api/v1/galleries/{slug}/
-Description: Updates settings or cover photo UUID for a specific gallery.
+
+Updates settings or cover photo UUID for a specific gallery.
+
 Authentication: Required (IsAuthenticated)
-Request Body (JSON): Supports partial updates.
-code
-JSON
+
+Request Body — JSON
+
+Supports partial updates.
+
 {
   "title": "Sita and Hari Anniversary",
   "cover_photo": "0190104f-124b-723a-a4f2-90ab12f127a4",
   "branding_color": "#000000"
 }
-Success Response (200 OK): Updated detailed gallery object.
+
+Success Response — 200 OK
+
+Returns the updated detailed gallery object.
+
+Delete Gallery
+
 DELETE /api/v1/galleries/{slug}/
-Description: Soft-deletes a gallery (flips is_active = False). Keeps files intact to prevent accidental loss.
+
+Soft-deletes a gallery by flipping is_active = False. Files are kept intact to prevent accidental loss.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "message": "Gallery deleted successfully."
 }
+
+Dashboard Statistics
+
 GET /api/v1/galleries/dashboard/stats/
-Description: Single-pass optimized aggregate statistics of the photographer's account.
+
+Single-pass optimized aggregate statistics of the photographer's account.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "plan": {
     "name": "Basic",
@@ -270,13 +366,19 @@ JSON
     "total_views": 184
   }
 }
+
 📷 3. Photos/Media Assets App (apps/photos)
+
+List Gallery Media
+
 GET /api/v1/photos/{gallery_slug}/
-Description: Lists all photos and video assets inside an active gallery, sorted by manual order.
+
+Lists all photos and video assets inside an active gallery, sorted by manual order.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 [
   {
     "id": "0190104f-124b-723a-a4f2-90ab12f127a4",
@@ -299,16 +401,26 @@ JSON
     "created_at": "2026-06-13T12:30:00Z"
   }
 ]
+
+Upload Media
+
 POST /api/v1/photos/{gallery_slug}/upload/
-Description: Processes single or bulk uploads. Gated by storage quota and image thresholds.
+
+Processes single or bulk uploads. Gated by storage quota and image thresholds.
+
 Authentication: Required (IsAuthenticated & IsSubscribed)
-Request Body (multipart/form-data):
+
+Request Body — multipart/form-data
+
 image: [File] (One or many files; JPEGs/PNGs up to 25MB)
 title: "Anniversary Prep" (Optional metadata)
-Success Response (201 Created): Array of successfully serialized asset objects.
-Gated Error Response (400 Bad Request - Storage Exceeded):
-code
-JSON
+
+Success Response — 201 Created
+
+Returns an array of successfully serialized asset objects.
+
+Gated Error Response — 400 Bad Request
+
 {
   "error": "Storage quota limit exceeded.",
   "code": "storage_limit_reached",
@@ -319,27 +431,99 @@ JSON
     "message": "This upload of 120.4 MB would push your account past your 5.0 GB plan storage limit."
   }
 }
+
+Get Media Asset
+
 GET /api/v1/photos/photo/{photo_id}/
-Description: Retrieves metadata of a single asset.
+
+Retrieves metadata of a single asset.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK): Single asset JSON object.
+
+Success Response — 200 OK
+
+Returns a single asset JSON object.
+
+Delete Media Asset
+
 DELETE /api/v1/photos/photo/{photo_id}/
-Description: Purges an asset from the database and automatically triggers background signals to erase all physical variants (Original, display WebP, thumbnail WebP) from disk or AWS S3.
+
+Purges an asset from the database and automatically triggers background signals to erase all physical variants (Original, display WebP, thumbnail WebP) from disk or AWS S3.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "message": "Media asset deleted successfully."
 }
+
+Bulk Delete Media
+
+POST /api/v1/photos/{gallery_slug}/delete-bulk/
+
+Deletes multiple media assets (both photos and videos) inside a target gallery in a single request.
+
+Authentication: Required (IsAuthenticated)
+
+Request Body — JSON
+
+{
+  "photo_ids": [
+    "0190104f-124b-723a-a4f2-90ab12f127a4",
+    "0190104f-944f-7f32-84b2-c0e86b0317e2"
+  ]
+}
+
+Success Response — 200 OK
+
+Returns the count of successfully deleted records. S3 files are automatically purged via background signals.
+
+{
+  "deleted_count": 2
+}
+
+Reorder Media
+
+PATCH /api/v1/photos/{gallery_slug}/reorder/
+
+Updates the manual drag-and-drop sequencing of all assets inside a gallery. Sets clean, sequential decimal order coordinates.
+
+Authentication: Required (IsAuthenticated)
+
+Request Body — JSON
+
+{
+  "ordered_ids": [
+    "0190104f-944f-7f32-84b2-c0e86b0317e2",
+    "0190104f-124b-723a-a4f2-90ab12f127a4"
+  ]
+}
+
+Success Response — 200 OK
+
+{
+  "success": true,
+  "ordered_ids": [
+    "0190104f-944f-7f32-84b2-c0e86b0317e2",
+    "0190104f-124b-723a-a4f2-90ab12f127a4"
+  ]
+}
+
 👥 4. Public Clients App (apps/clients)
+
 These endpoints are configured with empty authentication classes. They ignore stale user header tokens.
+
+Public Gallery
+
 GET /api/v1/public/{username}/{slug}/
-Description: Main public gateway. Scoped by subdomain (username) and gallery name (slug).
+
+Main public gateway. Scoped by subdomain (username) and gallery name (slug).
+
 Authentication: None (authentication_classes = [])
-Success Response (200 OK - No Password / Unlocked):
-code
-JSON
+
+Success Response — 200 OK — No Password / Unlocked
+
 {
   "id": "0190101b-944f-7f32-84b2-c0e86b0317e2",
   "title": "Sita and Hari Wedding",
@@ -367,49 +551,64 @@ JSON
     }
   ]
 }
-Success Response (200 OK - Password Gate Required):
-David uses this to render the full-screen lock screen without throwing a 401.
-code
-JSON
+
+Success Response — 200 OK — Password Gate Required
+
+This is used to render the full-screen lock screen without throwing a 401.
+
 {
   "requires_password": true,
   "title": "Sita and Hari Wedding",
   "branding_color": "#1ABC9C"
 }
+
+Unlock Public Gallery
+
 POST /api/v1/public/{username}/{slug}/unlock/
-Description: Verifies guest password. Scopes a session token on success.
+
+Verifies the guest password and scopes a session token on success.
+
 Authentication: None (authentication_classes = [])
-Request Body (JSON):
-code
-JSON
+
+Request Body — JSON
+
 {
   "password": "sita_hari_pass",
   "email": "guest@weddingguests.com"
 }
-Success Response (200 OK):
-David saves this access_token in sessionStorage. To query the private gallery data, append it as a query parameter: /api/v1/public/{username}/{slug}/?token=<access_token>.
-code
-JSON
+
+Success Response — 200 OK
+
+The client saves this access_token in sessionStorage. To query the private gallery data, append it as a query parameter:
+
+/api/v1/public/{username}/{slug}/?token=<access_token>
+
 {
   "access_token": "CSPRNG_high_entropy_session_token_hash",
   "has_download_access": true
 }
-Error Response (401 Unauthorized):
-code
-JSON
+
+Error Response — 401 Unauthorized
+
 {
   "error": "Incorrect password.",
   "details": {
     "password": "Incorrect password."
   }
 }
+
 💳 5. Billing & Subscription App (apps/subscriptions)
+
+List Subscription Plans
+
 GET /api/v1/subscriptions/plans/
-Description: Lists available platforms and billing rules.
+
+Lists available platforms and billing rules.
+
 Authentication: None (authentication_classes = [])
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 [
   {
     "id": "0190106a-ef1a-7b3c-b2f2-10e82f1217e9",
@@ -421,86 +620,331 @@ JSON
     "storage_bytes": 5368709120
   }
 ]
+
+My Subscription
+
 GET /api/v1/subscriptions/my-subscription/
-Description: Retrieves authenticated photographer's subscription limits and usage metrics.
+
+Retrieves the authenticated photographer's subscription limits and usage metrics.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK): Identical structure to /stats/ mapping.
-POST /api/v1/subscriptions/pay/
-Description: Submits bank, eSewa, or Khalti transaction screenshot receipts for review.
+
+Success Response — 200 OK
+
+Identical structure to the /stats/ mapping.
+
+Submit Manual Payment
+
+POST /api/v1/subscriptions/payments/
+
+Submits bank, eSewa, or Khalti transaction screenshot receipts for review.
+
 Authentication: Required (IsAuthenticated)
-Request Body (multipart/form-data):
+
+Important: The registered endpoint is /api/v1/subscriptions/payments/, not /api/v1/subscriptions/pay/.
+
+Request Body — multipart/form-data
+
 plan: "0190106a-ef1a-7b3c-b2f2-10e82f1217e9"
 amount: "19.99"
 payment_proof: [File] (Receipt screenshot up to 5MB)
 notes: "Transacted via eSewa transaction ID 9831..."
-Success Response (210 Created):
-code
-JSON
+
+Success Response — 201 Created
+
 {
   "message": "Payment receipt submitted successfully. Admin review pending."
 }
+
+List Payment History
+
 GET /api/v1/subscriptions/payments/
-Description: Lists payment history. Photographers see their own history; administrative staff see the entire global review queue.
+
+Lists payment history. Photographers see their own history; administrative staff see the entire global review queue.
+
 Authentication: Required (IsAuthenticated)
-Success Response (200 OK): Array of submitted payment objects.
+
+Success Response — 200 OK
+
+Returns an array of submitted payment objects.
+
+Review Manual Payment
+
 POST /api/v1/subscriptions/payments/{payment_id}/review/
-Description: Admin-only approval or rejection of submitted manual payments.
+
+Admin-only approval or rejection of submitted manual payments.
+
 Authentication: Required (IsAdminUser)
-Request Body (JSON):
-code
-JSON
+
+Request Body — JSON
+
 {
   "action": "approve",
   "admin_note": "Verified amount. Transacted via transaction ID 9831."
 }
-Success Response (200 OK):
-code
-JSON
+
+Success Response — 200 OK
+
 {
   "message": "Payment approved. Subscription activated.",
-  "payment": { "status": "approved", "notes": "..." },
-  "subscription": { "status": "active", "days_remaining": 29 }
+  "payment": {
+    "status": "approved",
+    "notes": "..."
+  },
+  "subscription": {
+    "status": "active",
+    "days_remaining": 29
+  }
 }
 
-### `POST /api/v1/photos/{gallery_slug}/delete-bulk/`
-*   **Description:** Deletes multiple media assets (both photos and videos) inside a target gallery in a single request.
-*   **Authentication:** Required (`IsAuthenticated`)
-*   **Request Body (JSON):**
-    ```json
-    {
-      "photo_ids": [
-        "0190104f-124b-723a-a4f2-90ab12f127a4",
-        "0190104f-944f-7f32-84b2-c0e86b0317e2"
-      ]
-    }
-    ```
-*   **Success Response (200 OK):**
-    *   *Returns the count of successfully deleted records. S3 files are automatically purged via background signals.*
-    ```json
-    {
-      "deleted_count": 2
-    }
-    ```
+Endpoint Quick Reference
 
-### `PATCH /api/v1/photos/{gallery_slug}/reorder/`
-*   **Description:** Updates the manual drag-and-drop sequencing of all assets inside a gallery. Sets clean, sequential decimal order coordinates.
-*   **Authentication:** Required (`IsAuthenticated`)
-*   **Request Body (JSON):**
-    ```json
-    {
-      "ordered_ids": [
-        "0190104f-944f-7f32-84b2-c0e86b0317e2",
-        "0190104f-124b-723a-a4f2-90ab12f127a4"
-      ]
-    }
-    ```
-*   **Success Response (200 OK):**
-    ```json
-    {
-      "success": true,
-      "ordered_ids": [
-        "0190104f-944f-7f32-84b2-c0e86b0317e2",
-        "0190104f-124b-723a-a4f2-90ab12f127a4"
-      ]
-    }
-    ```
+Method
+
+Endpoint
+
+Authentication
+
+Purpose
+
+POST
+
+/api/v1/auth/register/
+
+None
+
+Register photographer
+
+POST
+
+/api/v1/auth/login/
+
+None
+
+Login
+
+POST
+
+/api/v1/auth/logout/
+
+Required
+
+Logout
+
+POST
+
+/api/v1/auth/token/refresh/
+
+None
+
+Refresh JWT
+
+GET
+
+/api/v1/auth/me/
+
+Required
+
+Get profile
+
+PUT
+
+/api/v1/auth/me/
+
+Required
+
+Update profile
+
+PUT
+
+/api/v1/auth/change-password/
+
+Required
+
+Change password
+
+GET
+
+/api/total-users
+
+None
+
+Public user count
+
+GET
+
+/api/v1/galleries/
+
+Required
+
+List galleries
+
+POST
+
+/api/v1/galleries/
+
+Subscribed
+
+Create gallery
+
+GET
+
+/api/v1/galleries/{slug}/
+
+Required
+
+Get gallery
+
+PUT
+
+/api/v1/galleries/{slug}/
+
+Required
+
+Update gallery
+
+DELETE
+
+/api/v1/galleries/{slug}/
+
+Required
+
+Delete gallery
+
+GET
+
+/api/v1/galleries/dashboard/stats/
+
+Required
+
+Dashboard statistics
+
+GET
+
+/api/v1/photos/{gallery_slug}/
+
+Required
+
+List media
+
+POST
+
+/api/v1/photos/{gallery_slug}/upload/
+
+Subscribed
+
+Upload media
+
+GET
+
+/api/v1/photos/photo/{photo_id}/
+
+Required
+
+Get media
+
+DELETE
+
+/api/v1/photos/photo/{photo_id}/
+
+Required
+
+Delete media
+
+POST
+
+/api/v1/photos/{gallery_slug}/delete-bulk/
+
+Required
+
+Bulk delete
+
+PATCH
+
+/api/v1/photos/{gallery_slug}/reorder/
+
+Required
+
+Reorder media
+
+GET
+
+/api/v1/public/{username}/{slug}/
+
+None
+
+Public gallery
+
+POST
+
+/api/v1/public/{username}/{slug}/unlock/
+
+None
+
+Unlock gallery
+
+GET
+
+/api/v1/subscriptions/plans/
+
+None
+
+List plans
+
+GET
+
+/api/v1/subscriptions/my-subscription/
+
+Required
+
+Get subscription
+
+GET
+
+/api/v1/subscriptions/payments/
+
+Required
+
+List payments
+
+POST
+
+/api/v1/subscriptions/payments/
+
+Required
+
+Submit payment
+
+POST
+
+/api/v1/subscriptions/payments/{payment_id}/review/
+
+Admin
+
+Review payment
+
+⚠️ Important Endpoint Corrections
+
+The following two routes are the corrected registered routes:
+
+1. Total Users
+
+GET /api/total-users
+
+Not:
+
+GET /api/v1/auth/total-users/
+
+2. Manual Payments
+
+POST /api/v1/subscriptions/payments/
+
+Not:
+
+POST /api/v1/subscriptions/pay/
+
+The payments endpoint is also used for:
+
+GET /api/v1/subscriptions/payments/
+
+to list payment history.

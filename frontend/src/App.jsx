@@ -14,7 +14,7 @@ import HomePage from "./pages/dashboard/HomePage";
 import GalleriesPage from "./pages/dashboard/GalleriesPage";
 import UploadPage from "./pages/dashboard/UploadPage";
 import SettingsPage from "./pages/dashboard/SettingsPage";
-import BillingPage from "./pages/dashboard/BillingPage";
+import BillingPage from "./pages/subscription/BillingPage";
 // Gallery workspace (own shell — no DashboardLayout)
 import GalleryWorkspaceLayout from "./pages/dashboard/GalleryWorkspaceLayout";
 import GalleryPhotosPage from "./pages/dashboard/GalleryPhotosPage";
