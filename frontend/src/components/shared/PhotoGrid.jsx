@@ -1,19 +1,19 @@
 // File Location: frontend/src/components/shared/PhotoGrid.jsx
 
-import { useState } from 'react'
-import PhotoLightbox from './PhotoLightbox'
-import { formatBytes } from '../../utils/formatters'
+import { useState } from "react";
+import PhotoLightbox from "./PhotoLightbox";
+import { formatBytes } from "../../utils/formatters";
 
 // ── KEYFRAME INJECTION ────────────────────────────────────────────────────
 // PhotoGrid gets its own dedicated keyframe rather than reusing Toast.jsx's
 // or Modal.jsx's — this keeps the entrance animation working regardless of
 // which other components happen to be mounted, instead of depending on
 // ToastProvider having loaded first.
-if (typeof document !== 'undefined') {
-  const KEYFRAME_ID = 'photo-grid-fade-up-keyframes'
+if (typeof document !== "undefined") {
+  const KEYFRAME_ID = "photo-grid-fade-up-keyframes";
   if (!document.getElementById(KEYFRAME_ID)) {
-    const style = document.createElement('style')
-    style.id = KEYFRAME_ID
+    const style = document.createElement("style");
+    style.id = KEYFRAME_ID;
     style.textContent = `
       @media (prefers-reduced-motion: no-preference) {
         @keyframes photoGridFadeUp {
@@ -21,68 +21,97 @@ if (typeof document !== 'undefined') {
           to   { opacity: 1; transform: translateY(0);    }
         }
       }
-    `
-    document.head.appendChild(style)
+    `;
+    document.head.appendChild(style);
   }
 }
 
 const BROKEN_IMAGE_ICON = (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18M10.5 5H18a2 2 0 012 2v10.5M6 6.5V18a2 2 0 002 2h10.5M9 13l1.5-1.5a1 1 0 011.4 0L15 14.5" />
+  <svg
+    width="28"
+    height="28"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    aria-hidden="true"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3 3l18 18M10.5 5H18a2 2 0 012 2v10.5M6 6.5V18a2 2 0 002 2h10.5M9 13l1.5-1.5a1 1 0 011.4 0L15 14.5"
+    />
   </svg>
-)
+);
 
-export default function PhotoGrid({ photos = [], onDelete, showActions = false }) {
-  const [lightbox, setLightbox]   = useState(null)
-  const [brokenIds, setBrokenIds] = useState(() => new Set())
+export default function PhotoGrid({
+  photos = [],
+  onDelete,
+  onSetCover,
+  showActions = false,
+}) {
+  const [lightbox, setLightbox] = useState(null);
+  const [brokenIds, setBrokenIds] = useState(() => new Set());
 
   if (!photos.length) {
     return (
       <div className="py-20 flex flex-col items-center gap-3 text-muted">
-        <svg className="w-12 h-12 opacity-40 text-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
-            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        <svg
+          className="w-12 h-12 opacity-40 text-ink"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1}
+            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
         </svg>
-        <p className="text-sm font-sans font-light">No photos in this collection yet.</p>
+        <p className="text-sm font-sans font-light">
+          No photos in this collection yet.
+        </p>
       </div>
-    )
+    );
   }
 
   // WCAG 2.1: lets keyboard users open the lightbox with Enter or Space
   // when a grid item is focused, without nesting an interactive element
   // inside another one.
   const handleKeyDown = (e, index) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      setLightbox(index)
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setLightbox(index);
     }
-  }
+  };
 
   const markBroken = (photoId) => {
-    setBrokenIds(prev => {
-      const next = new Set(prev)
-      next.add(photoId)
-      return next
-    })
-  }
+    setBrokenIds((prev) => {
+      const next = new Set(prev);
+      next.add(photoId);
+      return next;
+    });
+  };
 
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
         {photos.map((photo, idx) => {
-          const isBroken = brokenIds.has(photo.id)
+          const isBroken = brokenIds.has(photo.id);
 
           return (
             <div
               key={photo.id}
               tabIndex={0}
               role="button"
-              aria-label={`View ${photo.title || photo.original_name || 'Photo'}`}
+              aria-label={`View ${photo.title || photo.original_name || "Photo"}`}
               onKeyDown={(e) => handleKeyDown(e, idx)}
               onClick={() => setLightbox(idx)}
               className="group relative overflow-hidden rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 transition-all bg-cream-100"
               style={{
-                animation: 'photoGridFadeUp 0.3s ease-out both',
+                animation: "photoGridFadeUp 0.3s ease-out both",
                 animationDelay: `${idx * 0.04}s`,
               }}
             >
@@ -95,12 +124,18 @@ export default function PhotoGrid({ photos = [], onDelete, showActions = false }
                 // shows an honest "failed to load" state instead.
                 <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
                   {BROKEN_IMAGE_ICON}
-                  <span className="text-[10px] font-medium">Failed to load</span>
+                  <span className="text-[10px] font-medium">
+                    Failed to load
+                  </span>
                 </div>
               ) : (
                 <img
-                  src={photo.thumbnail_url || photo.display_url || photo.original_url}
-                  alt={photo.title || photo.original_name || 'Collection asset'}
+                  src={
+                    photo.thumbnail_url ||
+                    photo.display_url ||
+                    photo.original_url
+                  }
+                  alt={photo.title || photo.original_name || "Collection asset"}
                   className="w-full h-48 object-cover block transition-transform duration-500 group-hover:scale-105"
                   loading="lazy"
                   onError={() => markBroken(photo.id)}
@@ -113,29 +148,77 @@ export default function PhotoGrid({ photos = [], onDelete, showActions = false }
                 <button
                   type="button"
                   onClick={(e) => {
-                    e.stopPropagation()
-                    onDelete(photo.id)
+                    e.stopPropagation();
+                    onDelete(photo.id);
                   }}
                   className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/95 text-red-500
                              opacity-0 group-hover:opacity-100 transition-opacity duration-200
                              hover:bg-red-50 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 shadow-sm cursor-pointer"
-                  aria-label={`Delete ${photo.title || photo.original_name || 'photo'}`}
+                  aria-label={`Delete ${photo.title || photo.original_name || "photo"}`}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              )}
+
+              {/* NEW: set-as-cover action, top-left so it doesn't collide with delete (top-right) */}
+              {showActions && onSetCover && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSetCover(photo.id);
+                  }}
+                  className="absolute top-2 left-2 p-1.5 rounded-lg bg-white/95 text-ink
+                             opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                             hover:bg-cream-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink shadow-sm cursor-pointer"
+                  aria-label={`Set ${photo.title || photo.original_name || "photo"} as gallery cover`}
+                  title="Set as cover"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11.48 3.5a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.563.563 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
+                    />
                   </svg>
                 </button>
               )}
 
               {!isBroken && (
-                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-ink/70 to-transparent
-                                opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-b-xl pointer-events-none">
-                  <p className="text-white text-xs truncate font-medium">{photo.original_name}</p>
-                  <p className="text-white/70 text-[10px] font-light mt-0.5">{formatBytes(photo.file_size)}</p>
+                <div
+                  className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-ink/70 to-transparent
+                                opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-b-xl pointer-events-none"
+                >
+                  <p className="text-white text-xs truncate font-medium">
+                    {photo.original_name}
+                  </p>
+                  <p className="text-white/70 text-[10px] font-light mt-0.5">
+                    {formatBytes(photo.file_size)}
+                  </p>
                 </div>
               )}
             </div>
-          )
+          );
         })}
       </div>
 
@@ -148,5 +231,5 @@ export default function PhotoGrid({ photos = [], onDelete, showActions = false }
         />
       )}
     </>
-  )
+  );
 }

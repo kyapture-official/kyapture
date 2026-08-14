@@ -200,7 +200,7 @@ export default function PhotoLightbox({ photos, index, onClose, onChange }) {
 
       {/* Main Image Container Area */}
       <div
-        className="relative flex-1 flex items-center justify-center px-4 md:px-16"
+        className="relative flex-1 min-h-0 flex items-center justify-center px-4 md:px-16"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -230,7 +230,7 @@ export default function PhotoLightbox({ photos, index, onClose, onChange }) {
 
         {/* Main Photo Visual Element */}
         <div
-          className="relative max-h-[75vh] max-w-full flex items-center justify-center"
+          className="relative h-full w-full flex items-center justify-center"
           onClick={(e) => e.stopPropagation()}
         >
           {hasError ? (
@@ -258,7 +258,7 @@ export default function PhotoLightbox({ photos, index, onClose, onChange }) {
                 setHasError(true)
               }}
               className={`
-                max-h-[75vh] max-w-full object-contain pointer-events-none select-none transition-all duration-300 ease-out
+                max-h-full max-w-full object-contain pointer-events-none select-none transition-all duration-300 ease-out
                 ${imageLoading ? 'opacity-0 scale-95 blur-sm' : 'opacity-100 scale-100 blur-0'}
               `}
               style={{

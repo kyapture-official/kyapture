@@ -11,9 +11,11 @@ function LazyPhoto({ photo, index, onPhotoClick }) {
   const [loadedSrc, setLoadedSrc] = useState(null)
   const [errorSrc,  setErrorSrc]  = useState(null)
 
+  const imgSrc = photo.thumbnail_url || photo.display_url
+
   // Derived state calculations (evaluated synchronously during render execution)
-  const isLoaded = loadedSrc === photo.image
-  const hasError = errorSrc  === photo.image
+  const isLoaded = loadedSrc === imgSrc
+  const hasError = errorSrc  === imgSrc
 
   // Trigger loading 200px before the element enters the viewport to optimize perceived speed
   const { ref, inView } = useInView({
@@ -64,7 +66,7 @@ function LazyPhoto({ photo, index, onPhotoClick }) {
             </div>
           ) : (
             <img
-              src={photo.image}
+              src={imgSrc}
               alt={photo.alt || photo.original_name || 'Gallery item'}
               loading="lazy"
               decoding="async"
@@ -78,8 +80,8 @@ function LazyPhoto({ photo, index, onPhotoClick }) {
                 WebkitTouchCallout: 'none',
                 WebkitUserSelect: 'none',
               }}
-              onLoad={() => setLoadedSrc(photo.image)}
-              onError={() => setErrorSrc(photo.image)}
+              onLoad={() => setLoadedSrc(imgSrc)}
+              onError={() => setErrorSrc(imgSrc)}
             />
           )}
           {/* Subtle hover overlay to enhance interactive feedback */}

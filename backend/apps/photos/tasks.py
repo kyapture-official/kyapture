@@ -1,6 +1,9 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/tasks.py
 from celery import shared_task
 import logging
+# Defer imports to task execution time to completely bypass circular imports
+from apps.photos.models import MediaAsset
+from apps.core.utils import process_image_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +20,12 @@ def process_photo_asset(self, asset_id):
     failure, transitions status to FAILED, preserving the original file so 
     clients can still download the asset.
     """
-    # Defer imports to task execution time to completely bypass circular imports
-    from apps.photos.models import MediaAsset
-    from apps.core.utils import process_image_pipeline
+    
 
     asset = None
     try:
         # 1. Retrieve the target asset scoped strictly to image types
-        asset = MediaAsset.objects.get(
+        asset = MediaAsset.objects.select_related('gallery__photographer').get(
             id=asset_id,
             media_type=MediaAsset.MediaType.IMAGE
         )
@@ -41,7 +42,14 @@ def process_photo_asset(self, asset_id):
         logger.info(f"[Task] Starting single-pass image processing for asset {asset_id}...")
 
         # 4. Run your optimized, single-pass in-memory WebP and BlurHash generators
-        display_file, thumbnail_file, blurhash_str = process_image_pipeline(asset.original_file)
+        watermark_text = None
+        if asset.gallery.watermark_enabled:
+            photographer = asset.gallery.photographer
+            watermark_text = f"© {photographer.display_name or photographer.username}"
+
+        display_file, thumbnail_file, blurhash_str = process_image_pipeline(
+            asset.original_file, watermark_text=watermark_text
+        )
 
         # 5. Populate the processed tiers and transition status to 'ready'
         asset.display_file = display_file

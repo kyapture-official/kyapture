@@ -1,5 +1,6 @@
 // frontend/src/pages/dashboard/GalleryPhotosPage.jsx
 
+import { galleriesApi } from "../../api/galleriesApi";
 import { useState, useEffect, useRef } from "react";
 import { useOutletContext } from "react-router-dom";
 import { photosApi } from "../../api/photosApi";
@@ -17,7 +18,7 @@ const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
  *       makes it a true child route rather than a standalone page.
  */
 export default function GalleryPhotosPage() {
-  const { gallery, slug, isMountedRef } = useOutletContext();
+  const { gallery, setGallery, slug, isMountedRef } = useOutletContext();
 
   const [photos, setPhotos] = useState([]);
   const [photosLoading, setPhotosLoading] = useState(true);
@@ -213,6 +214,22 @@ export default function GalleryPhotosPage() {
     }
   };
 
+  //-cover
+  const handleSetCover = async (photoId) => {
+    try {
+      const updated = await galleriesApi.updateGallery(slug, {
+        cover_photo: photoId,
+      });
+      if (isMountedRef.current) {
+        setGallery((prev) => ({ ...prev, cover_url: updated.cover_url }));
+      }
+    } catch {
+      if (isMountedRef.current) {
+        setErrorMsg("Failed to set cover photo. Please try again.");
+      }
+    }
+  };
+
   // ── RENDER ───────────────────────────────────────────────────────────────
   return (
     <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
@@ -284,7 +301,7 @@ export default function GalleryPhotosPage() {
             <Spinner size="lg" />
           </div>
         ) : (
-          <PhotoGrid photos={photos} onDelete={handleDeletePhoto} showActions />
+          <PhotoGrid photos={photos} onDelete={handleDeletePhoto} onSetCover={handleSetCover} showActions />
         )}
       </div>
     </div>

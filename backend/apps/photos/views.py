@@ -10,9 +10,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .tasks import process_photo_asset
+from PIL import Image as PILImage
+from PIL.ImageOps import exif_transpose
 
 from apps.core.permissions import IsSubscribed
-from apps.core.utils import get_user_subscription_metrics, get_insertion_order
+from apps.core.utils import get_user_subscription_metrics, get_insertion_order, strip_exif_gps
 from apps.galleries.models import Gallery
 from .models import MediaAsset
 from .serializers import (
@@ -121,15 +123,26 @@ class PhotoListUploadView(APIView):
                     title = request.data.get('title', '').strip()
                     if not title:
                         title = os.path.splitext(file_data.name)[0]
+                        
+                    clean_file = strip_exif_gps(file_data)
+
+
+                    clean_file.seek(0)
+                    with PILImage.open(clean_file) as img:
+                        img = exif_transpose(img)
+                        width, height = img.size
+                    clean_file.seek(0)    
 
                     # Create the raw asset under 'pending' status immediately
                     asset = MediaAsset.objects.create(
                         gallery=gallery,
                         media_type=MediaAsset.MediaType.IMAGE,
-                        original_file=file_data,
+                        original_file=clean_file,
                         original_name=file_data.name,
-                        file_size=file_data.size,
+                        file_size=clean_file.size,
                         title=title,
+                        width=width,                
+                        height=height,
                         processing_status=MediaAsset.ProcessingStatus.PENDING,
                         order=get_insertion_order(gallery.id)
                     )

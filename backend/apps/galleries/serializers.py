@@ -72,6 +72,7 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
             'cover_url', 'photo_count', 'is_downloadable', 
             'is_active', 'is_published', 'has_password', 
             'owner_username', 'photographer_username',
+            'watermark_enabled',
             'password_hash', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at']

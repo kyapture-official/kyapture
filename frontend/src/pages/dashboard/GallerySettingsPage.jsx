@@ -24,6 +24,9 @@ export default function GallerySettingsPage() {
   const [isDownloadable, setIsDownloadable] = useState(gallery.is_downloadable);
   const [password, setPassword] = useState("");
   const [hasPassword, setHasPassword] = useState(gallery.has_password);
+  const [watermarkEnabled, setWatermarkEnabled] = useState(
+    gallery.watermark_enabled ?? false,
+  );
 
   const [updating, setUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -40,6 +43,7 @@ export default function GallerySettingsPage() {
       title: title.trim(),
       branding_color: brandingColor,
       is_downloadable: isDownloadable,
+      watermark_enabled: watermarkEnabled,
     };
 
     try {
@@ -61,6 +65,7 @@ export default function GallerySettingsPage() {
       setBrandingColor(updated.branding_color);
       setIsDownloadable(updated.is_downloadable);
       setHasPassword(updated.has_password);
+      setWatermarkEnabled(updated.watermark_enabled);
 
       // If the title change caused the slug to change, the URL is now stale —
       // redirect to the new slug's Settings URL without triggering a reload.
@@ -223,6 +228,23 @@ export default function GallerySettingsPage() {
               </label>
             </div>
 
+            <div className="flex items-center gap-2 pt-2 border-t border-cream-100">
+              <input
+                id="gallery-watermark"
+                type="checkbox"
+                checked={watermarkEnabled}
+                onChange={(e) => setWatermarkEnabled(e.target.checked)}
+                disabled={updating}
+                className="w-4 h-4 rounded border-cream-300 text-ink focus:ring-ink cursor-pointer disabled:cursor-not-allowed"
+              />
+              <label
+                className="text-xs font-semibold text-ink/80 cursor-pointer select-none"
+                htmlFor="gallery-watermark"
+              >
+                Apply copyright watermark to photos
+              </label>
+            </div>
+
             <div className="flex justify-end pt-4 border-t border-cream-100">
               <button
                 type="submit"
@@ -231,7 +253,8 @@ export default function GallerySettingsPage() {
                   !title.trim() ||
                   (title.trim() === gallery.title &&
                     brandingColor === gallery.branding_color &&
-                    isDownloadable === gallery.is_downloadable)
+                    isDownloadable === gallery.is_downloadable &&
+                    watermarkEnabled === (gallery.watermark_enabled ?? false))
                 }
                 className="px-4 py-2 bg-ink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
