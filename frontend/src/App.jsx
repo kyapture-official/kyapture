@@ -1,87 +1,111 @@
-// C:/Users/LENOVO/Desktop/kyapture/frontend/src/App.jsx
-import React, { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useAuthStore } from "./store/authStore";
-import { ToastProvider } from "./components/ui/Toast";
-import ProtectedRoute from "./components/shared/ProtectedRoute";
-import DashboardLayout from "./components/layout/DashboardLayout";
-// Auth
-import LoginPage from "./pages/auth/LoginPage";
-import RegisterPage from "./pages/auth/RegisterPage";
-import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
-// Dashboard
-import HomePage from "./pages/dashboard/HomePage";
-import GalleriesPage from "./pages/dashboard/GalleriesPage";
-import UploadPage from "./pages/dashboard/UploadPage";
-import SettingsPage from "./pages/dashboard/SettingsPage";
-import BillingPage from "./pages/subscription/BillingPage";
-// Gallery workspace (own shell — no DashboardLayout)
-import GalleryWorkspaceLayout from "./pages/dashboard/GalleryWorkspaceLayout";
-import GalleryPhotosPage from "./pages/dashboard/GalleryPhotosPage";
-import GallerySettingsPage from "./pages/dashboard/GallerySettingsPage";
-// Client portal
-import ClientHomePage from "./pages/client/ClientHomePage";
-import ClientGalleryPage from "./pages/client/ClientGalleryPage";
-import DownloadPage from "./pages/client/DownloadPage";
-// Public
-import PricingPage from "./pages/subscription/PricingPage";
-import LandingPage from "./pages/LandingPage";
+// frontend/src/App.jsx
+
+import { useEffect, lazy, Suspense } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useAuthStore } from './store/authStore'
+import { ToastProvider } from './components/ui/Toast'
+import ErrorBoundary      from './components/shared/ErrorBoundary'
+import ProtectedRoute     from './components/shared/ProtectedRoute'
+import DashboardLayout    from './components/layout/DashboardLayout'
+import Spinner            from './components/ui/Spinner'
+
+// ── SYNCHRONOUS INITIAL VIEW IMPORTS ─────────────────────────────────────────
+import LandingPage        from './pages/LandingPage'
+import LoginPage          from './pages/auth/LoginPage'
+import RegisterPage       from './pages/auth/RegisterPage'
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
+
+// ── LAZY-LOADED DASHBOARD CHUNKS ──────────────────────────────────────────────
+const HomePage           = lazy(() => import('./pages/dashboard/HomePage'))
+const GalleriesPage      = lazy(() => import('./pages/dashboard/GalleriesPage'))
+const GalleryDetailPage  = lazy(() => import('./pages/dashboard/GalleryDetailPage'))
+const UploadPage         = lazy(() => import('./pages/dashboard/UploadPage'))
+const SettingsPage       = lazy(() => import('./pages/dashboard/SettingsPage'))
+
+// C-1: correct import — pages/subscription/BillingPage, not the dead
+// pages/dashboard/BillingPage (which calls subscriptionsApi.plans() /
+// .mySubscription() / .submitPayment() — methods that no longer exist).
+const BillingPage        = lazy(() => import('./pages/subscription/BillingPage'))
+
+// ── LAZY-LOADED CLIENT PORTAL CHUNKS ──────────────────────────────────────────
+const ClientHomePage     = lazy(() => import('./pages/client/ClientHomePage'))
+const ClientGalleryPage  = lazy(() => import('./pages/client/ClientGalleryPage'))
+const DownloadPage       = lazy(() => import('./pages/client/DownloadPage'))
+const PricingPage        = lazy(() => import('./pages/subscription/PricingPage'))
 
 export default function App() {
-  const init = useAuthStore((s) => s.init);
+  const init    = useAuthStore((s) => s.init)
+  const logout  = useAuthStore((s) => s.logout)
+  const loading = useAuthStore((s) => s.loading)
 
   useEffect(() => {
-    init();
-  }, [init]);
+    init()
+  }, [init])
+
+  useEffect(() => {
+    const handleSessionExpiry = () => { logout() }
+    window.addEventListener('auth-session-expired', handleSessionExpiry)
+    return () => window.removeEventListener('auth-session-expired', handleSessionExpiry)
+  }, [logout])
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#fdfbf7]">
+        <Spinner size="lg" className="text-[#2C2825]" />
+      </div>
+    )
+  }
 
   return (
-    <ToastProvider>
-      <BrowserRouter
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      >
-        <Routes>
-          {/* Public */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+    // BUG FIX (repeat regression — same as last submission): ErrorBoundary
+    // was missing again. Suspense only handles the PENDING state of a
+    // lazy() import; a REJECTED one (network failure mid-download, or a
+    // client with a stale tab open after you redeploy and Vite's hashed
+    // chunk filenames change) throws as a render-time error that only an
+    // ErrorBoundary catches. Without it, a failed chunk load white-screens
+    // the app with zero recovery path.
+    <ErrorBoundary>
+      <ToastProvider>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
+          <Suspense
+            fallback={
+              <div className="flex h-screen w-screen items-center justify-center bg-[#fdfbf7]">
+                <Spinner size="md" className="text-[#2C2825]" />
+              </div>
+            }
+          >
+            <Routes>
+              <Route path="/"                element={<LandingPage />} />
+              <Route path="/pricing"         element={<PricingPage />} />
+              <Route path="/login"           element={<LoginPage />} />
+              <Route path="/register"        element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-          {/* Protected photographer dashboard */}
-          <Route path="/dashboard" element={<ProtectedRoute />}>
-            {/* Standard pages — keep the persistent sidebar/topbar */}
-            <Route element={<DashboardLayout />}>
-              <Route index element={<HomePage />} />
-              <Route path="galleries" element={<GalleriesPage />} />
-              <Route path="upload" element={<UploadPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="billing" element={<BillingPage />} />
-            </Route>
+              <Route path="/dashboard" element={<ProtectedRoute />}>
+                <Route element={<DashboardLayout />}>
+                  <Route index                  element={<HomePage />} />
+                  <Route path="galleries"       element={<GalleriesPage />} />
+                  <Route path="galleries/:id"   element={<GalleryDetailPage />} />
+                  <Route path="upload"          element={<UploadPage />} />
+                  <Route path="settings"        element={<SettingsPage />} />
+                  <Route path="billing"         element={<BillingPage />} />
+                </Route>
+              </Route>
 
-            {/* Gallery workspace — full takeover, its own sidebar/chrome.
-                Deliberately a SIBLING of the block above, not nested inside
-                it, so DashboardLayout's global nav never renders here. */}
-            <Route path="galleries/:id" element={<GalleryWorkspaceLayout />}>
-              <Route index element={<GalleryPhotosPage />} />
-              <Route path="settings" element={<GallerySettingsPage />} />
-            </Route>
-          </Route>
+              <Route path="/g/:username"                element={<ClientHomePage />} />
+              <Route path="/g/:username/:slug"          element={<ClientGalleryPage />} />
+              <Route path="/g/:username/:slug/download" element={<DownloadPage />} />
 
-          {/* Client portal */}
-          <Route path="/g/:username" element={<ClientHomePage />} />
-          <Route path="/g/:username/:slug" element={<ClientGalleryPage />} />
-          <Route
-            path="/g/:username/:slug/download"
-            element={<DownloadPage />}
-          />
-
-          {/* Catch-all */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </ToastProvider>
-  );
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </ToastProvider>
+    </ErrorBoundary>
+  )
 }

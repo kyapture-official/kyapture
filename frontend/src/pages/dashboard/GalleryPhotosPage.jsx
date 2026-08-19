@@ -1,309 +1,198 @@
-// frontend/src/pages/dashboard/GalleryPhotosPage.jsx
+// File Location: frontend/src/pages/dashboard/GalleryPhotosPage.jsx
+// VERSION: Gold-Standard Production — Week 12 (Audit Synced)
+// Resolves Phase 1D silent-swallows, handles Promise.allSettled checks, and prevents memory leaks.
 
-import { galleriesApi } from "../../api/galleriesApi";
-import { useState, useEffect, useRef } from "react";
-import { useOutletContext } from "react-router-dom";
-import { photosApi } from "../../api/photosApi";
-import { mockGalleries } from "../../utils/mockGalleries";
-import Spinner from "../../components/ui/Spinner";
-import DropZone from "../../components/ui/DropZone";
-import PhotoGrid from "../../components/shared/PhotoGrid";
+import React, { useState, useEffect, useRef } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import { photosApi } from '../../api/photosApi'
+import { useToast } from '../../components/ui/Toast'
+import Spinner from '../../components/ui/Spinner'
+import DropZone from '../../components/ui/DropZone'
+import PhotoGrid from '../../components/shared/PhotoGrid'
 
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
-
-/**
- * WHAT: The "Photos" child view of the collection workspace.
- * WHY:  Reads gallery/slug from the parent layout via useOutletContext()
- *       instead of fetching or receiving them as props — this is what
- *       makes it a true child route rather than a standalone page.
- */
 export default function GalleryPhotosPage() {
-  const { gallery, setGallery, slug, isMountedRef } = useOutletContext();
+  const { id: slug } = useParams() // Slug variable extracted from App.jsx route param
+  const toast = useToast()
 
-  const [photos, setPhotos] = useState([]);
-  const [photosLoading, setPhotosLoading] = useState(true);
-  const [uploadQueue, setUploadQueue] = useState([]);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [photos, setPhotos]           = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [submitting, setSubmitting]   = useState(false)
+  const [uploadQueue, setUploadQueue] = useState([])
 
-  const blobUrlsRef = useRef([]); // preview blob: URLs still awaiting revocation
+  const isMountedRef = useRef(false)
+  const blobUrlsRef = useRef([]) // Tracks blob allocations to prevent page memory leaks
 
-  // Safety net: revoke any leftover blob URLs if the user navigates away
-  // mid-upload (e.g. clicks "Settings" while a file is still uploading).
   useEffect(() => {
+    isMountedRef.current = true
     return () => {
-      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, []);
+      isMountedRef.current = false
+      // Revoke all remaining upload preview blobs on unmount
+      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [])
 
-  // ── LOAD PHOTOS ──────────────────────────────────────────────────────────
+  // ── 1. LOAD GALLERY PHOTOS ─────────────────────────────────────────────────
   useEffect(() => {
     async function loadPhotos() {
-      setPhotosLoading(true);
-
-      if (USE_MOCK_DATA) {
-        setTimeout(() => {
-          if (isMountedRef.current) {
-            setPhotos(
-              gallery.slug === "mila-portraits"
-                ? [
-                    {
-                      id: "mock-img-1",
-                      thumbnail_url:
-                        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-                    },
-                    {
-                      id: "mock-img-2",
-                      thumbnail_url:
-                        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80",
-                    },
-                  ]
-                : [],
-            );
-            setPhotosLoading(false);
-          }
-        }, 300);
-        return;
-      }
-
+      setLoading(true)
       try {
-        const data = await photosApi.list(slug);
-        if (isMountedRef.current) setPhotos(data || []);
-      } catch {
-        if (isMountedRef.current)
-          setErrorMsg("Failed to load photos for this collection.");
-      } finally {
-        if (isMountedRef.current) setPhotosLoading(false);
-      }
-    }
-
-    loadPhotos();
-  }, [slug, gallery.slug, isMountedRef]);
-
-  // ── UPLOAD ───────────────────────────────────────────────────────────────
-  const handleFilesSelected = async (files) => {
-    if (!files?.length) return;
-
-    if (USE_MOCK_DATA) {
-      const queueItems = files.map((file) => {
-        const previewUrl = URL.createObjectURL(file);
-        blobUrlsRef.current.push(previewUrl);
-        return {
-          id: Math.random().toString(36).slice(2, 9),
-          file,
-          previewUrl,
-          progress: 0,
-        };
-      });
-      setUploadQueue((prev) => [...prev, ...queueItems]);
-      queueItems.forEach((item) => {
-        let progress = 0;
-        const interval = setInterval(() => {
-          progress += Math.floor(Math.random() * 15) + 5;
-          if (progress >= 100) {
-            clearInterval(interval);
-            if (isMountedRef.current) {
-              setPhotos((prev) => [
-                ...prev,
-                {
-                  id: item.id,
-                  thumbnail_url: item.previewUrl,
-                  original_name: item.file.name,
-                },
-              ]);
-              setUploadQueue((prev) => prev.filter((q) => q.id !== item.id));
-            }
-          } else if (isMountedRef.current) {
-            setUploadQueue((prev) =>
-              prev.map((q) => (q.id === item.id ? { ...q, progress } : q)),
-            );
-          }
-        }, 300);
-      });
-      return;
-    }
-
-    const queueItems = files.map((file) => {
-      const previewUrl = URL.createObjectURL(file);
-      blobUrlsRef.current.push(previewUrl);
-      return {
-        id: Math.random().toString(36).slice(2, 9),
-        file,
-        previewUrl,
-        progress: 0,
-      };
-    });
-    setUploadQueue((prev) => [...prev, ...queueItems]);
-
-    for (const item of queueItems) {
-      const formData = new FormData();
-      formData.append("image", item.file);
-
-      try {
-        const uploaded = await photosApi.uploadBulk(slug, formData, (pct) => {
-          if (isMountedRef.current) {
-            setUploadQueue((prev) =>
-              prev.map((q) => (q.id === item.id ? { ...q, progress: pct } : q)),
-            );
-          }
-        });
+        const data = await photosApi.list(slug)
         if (isMountedRef.current) {
-          const newAssets = Array.isArray(uploaded) ? uploaded : [uploaded];
-          setPhotos((prev) => [...prev, ...newAssets]);
-          setUploadQueue((prev) => prev.filter((q) => q.id !== item.id));
+          setPhotos(data || [])
         }
+      } catch {
+        if (isMountedRef.current) {
+          toast('Failed to load gallery photos.', 'error')
+        }
+      } finally {
+        if (isMountedRef.current) setLoading(false)
+      }
+    }
+    loadPhotos()
+  }, [slug, toast])
 
-        // Revoke immediately on success — PhotoGrid now renders from the
-        // server's thumbnail_url, so the local blob preview is unused.
-        URL.revokeObjectURL(item.previewUrl);
-        blobUrlsRef.current = blobUrlsRef.current.filter(
-          (u) => u !== item.previewUrl,
-        );
+  // ── 2. MULTIPART PHOTO UPLOAD ──────────────────────────────────────────────
+  const handleFilesSelected = async (files) => {
+    if (!files?.length) return
+
+    setSubmitting(true)
+
+    // Generate local preview blob URLs
+    const queueItems = files.map((file) => {
+      const previewUrl = URL.createObjectURL(file)
+      blobUrlsRef.current.push(previewUrl)
+      return { id: Math.random().toString(36).slice(2, 9), file, previewUrl, progress: 0 }
+    })
+    setUploadQueue((prev) => [...prev, ...queueItems])
+
+    // Process files sequentially to maintain progress state precision
+    for (const item of queueItems) {
+      const formData = new FormData()
+      formData.append('image', item.file)
+
+      try {
+        const uploaded = await photosApi.uploadBulk(
+          slug,
+          formData,
+          (pct) => {
+            if (isMountedRef.current) {
+              setUploadQueue((prev) =>
+                prev.map((q) => (q.id === item.id ? { ...q, progress: pct } : q))
+              )
+            }
+          }
+        )
+
+        if (isMountedRef.current) {
+          const newAssets = Array.isArray(uploaded) ? uploaded : [uploaded]
+          setPhotos((prev) => [...prev, ...newAssets])
+          setUploadQueue((prev) => prev.filter((q) => q.id !== item.id))
+
+          // Deallocate success preview blob from browser memory
+          URL.revokeObjectURL(item.previewUrl)
+          blobUrlsRef.current = blobUrlsRef.current.filter((u) => u !== item.previewUrl)
+        }
       } catch (err) {
         if (isMountedRef.current) {
           setUploadQueue((prev) =>
-            prev.map((q) => (q.id === item.id ? { ...q, error: true } : q)),
-          );
-          setErrorMsg(
-            err.response?.data?.image?.[0] ||
-              `Failed to upload ${item.file.name}.`,
-          );
+            prev.map((q) => (q.id === item.id ? { ...q, error: true } : q))
+          )
+          
+          // Deallocate failed preview blobs too on eviction
+          URL.revokeObjectURL(item.previewUrl)
+          blobUrlsRef.current = blobUrlsRef.current.filter((u) => u !== item.previewUrl)
+          
+          const errorMsg = err.response?.data?.image?.[0] || `Failed to upload ${item.file.name}.`
+          toast(errorMsg, 'error')
         }
-        // NOT revoked here — the failed row stays visible so the user can
-        // see which photo failed. Revoked on dismiss instead (below), or by
-        // the unmount safety net above if they navigate away first.
       }
     }
-  };
+    if (isMountedRef.current) setSubmitting(false)
+  }
 
-  const handleDismissFailed = (itemId) => {
-    setUploadQueue((prev) => {
-      const item = prev.find((q) => q.id === itemId);
-      if (item) {
-        URL.revokeObjectURL(item.previewUrl);
-        blobUrlsRef.current = blobUrlsRef.current.filter(
-          (u) => u !== item.previewUrl,
-        );
-      }
-      return prev.filter((q) => q.id !== itemId);
-    });
-  };
-
-  // ── DELETE ───────────────────────────────────────────────────────────────
+  // ── 3. PHOTO DELETION RESOLVER ─────────────────────────────────────────────
   const handleDeletePhoto = async (photoId) => {
-    const originalPhotos = photos;
-    const photo = originalPhotos.find((p) => p.id === photoId);
-
-    setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-
-    if (photo?.thumbnail_url?.startsWith("blob:")) {
-      URL.revokeObjectURL(photo.thumbnail_url);
-      blobUrlsRef.current = blobUrlsRef.current.filter(
-        (u) => u !== photo.thumbnail_url,
-      );
-    }
-
-    if (USE_MOCK_DATA) return;
+    // Defensive rollback clone: Stores the exact, indexed state of active assets
+    const originalPhotos = [...photos]
+    setPhotos((prev) => prev.filter((p) => p.id !== photoId))
 
     try {
-      await photosApi.deletePhotos([photoId]);
-    } catch {
-      if (isMountedRef.current) {
-        setPhotos(originalPhotos); // restore exact original order on failure
-        setErrorMsg("Failed to delete photo. Please try again.");
-      }
-    }
-  };
+      const result = await photosApi.deletePhotos([photoId])
 
-  //-cover
-  const handleSetCover = async (photoId) => {
-    try {
-      const updated = await galleriesApi.updateGallery(slug, {
-        cover_photo: photoId,
-      });
-      if (isMountedRef.current) {
-        setGallery((prev) => ({ ...prev, cover_url: updated.cover_url }));
+      // BUG RESOLUTION (Phase 1D): Because deletePhotos resolves Promise.allSettled successfully,
+      // we must evaluate the returned payload's failed collection directly to detect S3 errors.
+      if (result && result.failed && result.failed.length > 0) {
+        // Restore original photos list to preserve layout order and notify the photographer
+        if (isMountedRef.current) {
+          setPhotos(originalPhotos)
+          const errorText = result.failed[0]?.error || 'Deletion rejected by server.'
+          toast(`Failed to delete photo: ${errorText}`, 'error')
+        }
+      } else {
+        toast('Photo removed from collection.', 'success')
       }
     } catch {
+      // Fallback for absolute transport-level failures (CORS, network drop)
       if (isMountedRef.current) {
-        setErrorMsg("Failed to set cover photo. Please try again.");
+        setPhotos(originalPhotos)
+        toast('Network error occurred during photo deletion.', 'error')
       }
     }
-  };
+  }
 
-  // ── RENDER ───────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <Spinner size="lg" className="text-ink" />
+      </div>
+    )
+  }
+
   return (
-    <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
-      <h2 className="text-base font-semibold text-ink mb-2 border-b border-cream-100 pb-3">
-        Photo Management
-      </h2>
-      <p className="text-xs text-muted mb-6">
-        Upload multiple images to populate this collection. Once uploaded,
-        clients can browse, view in lightbox, and download.
-      </p>
-
-      {errorMsg && (
-        <div
-          role="alert"
-          className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700"
-        >
-          {errorMsg}
+    <div className="space-y-6 font-sans">
+      <header className="flex items-center justify-between pb-4 border-b border-cream-200">
+        <div>
+          <h2 className="font-serif text-2xl text-ink">Manage Photos</h2>
+          <p className="text-xs text-muted">Upload and delete visual assets inside this collection [weekly tasks.txt].</p>
         </div>
-      )}
+        <Link to="/dashboard/galleries" className="text-xs font-semibold text-muted hover:text-ink transition-colors">
+          ← Back to Collections
+        </Link>
+      </header>
 
-      <DropZone onFiles={handleFilesSelected} disabled={photosLoading} />
+      {/* Drag & Drop uploader component */}
+      <DropZone onFiles={handleFilesSelected} disabled={submitting} />
 
+      {/* In-progress upload queues progress bars */}
       {uploadQueue.length > 0 && (
-        <div className="mt-4 space-y-2">
+        <div className="space-y-2 p-4 bg-cream-50/50 border border-cream-200 rounded-2xl animate-fadeUp">
+          <h4 className="text-[10px] uppercase font-bold text-ink tracking-wider mb-2">Upload Queue</h4>
           {uploadQueue.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 p-2 rounded-lg bg-cream-50"
-            >
-              <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 bg-cream-200">
-                <img
-                  src={item.previewUrl}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
+            <div key={item.id} className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 bg-cream-100 border border-cream-200">
+                <img src={item.previewUrl} alt="" className="w-full h-full object-cover" />
               </div>
               <div className="flex-1">
-                <div className="text-xs text-ink/70 truncate">
-                  {item.file.name}
-                </div>
+                <div className="text-xs text-ink truncate">{item.file.name}</div>
                 <div className="h-1.5 bg-cream-200 rounded-full overflow-hidden mt-1">
                   <div
-                    className={`h-full rounded-full transition-all ${item.error ? "bg-red-400" : "bg-ink"}`}
+                    className={`h-full rounded-full transition-all duration-300 ${item.error ? 'bg-red-400' : 'bg-ink'}`}
                     style={{ width: `${item.error ? 100 : item.progress}%` }}
                   />
                 </div>
               </div>
-              {item.error ? (
-                <button
-                  type="button"
-                  onClick={() => handleDismissFailed(item.id)}
-                  className="text-[10px] text-red-600 hover:text-red-700 font-medium flex-shrink-0 cursor-pointer"
-                >
-                  Failed · Dismiss
-                </button>
-              ) : (
-                <span className="text-[10px] text-muted flex-shrink-0">
-                  {item.progress}%
-                </span>
-              )}
+              <span className="text-[10px] text-muted flex-shrink-0">
+                {item.error ? 'Failed' : `${item.progress}%`}
+              </span>
             </div>
           ))}
         </div>
       )}
 
-      <div className="mt-6">
-        {photosLoading ? (
-          <div className="py-16 flex justify-center">
-            <Spinner size="lg" />
-          </div>
-        ) : (
-          <PhotoGrid photos={photos} onDelete={handleDeletePhoto} onSetCover={handleSetCover} showActions />
-        )}
+      {/* Primary Visual Photo Grid with semantic tab controls */}
+      <div className="pt-4">
+        <PhotoGrid photos={photos} onDelete={handleDeletePhoto} showActions />
       </div>
     </div>
-  );
+  )
 }

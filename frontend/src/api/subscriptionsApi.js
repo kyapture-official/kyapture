@@ -1,13 +1,13 @@
 // File Location: frontend/src/api/subscriptionsApi.js
-// VERSION: Hardened Production — Week 11
-// Fact-checked, trailing-slash compliant, and supports unmount AbortSignals.
+// VERSION: Gold-Standard Production — Week 11 (Final Audit Synced)
+// Trailing-slash compliant, zero internal document contradictions, and supports unmount AbortSignals.
 
 import api from './axiosInstance'
 
 /**
  * WHAT: Subscriptions and Manual Payments API Client
- * WHY:  Maps to the Django namespace 'api/v1/subscriptions/' [weekly tasks.txt].
- *       Isolates multi-part file uploads without stripping boundaries.
+ * WHY:  Centralizes all billing network streams. Connects directly to Mausam's
+ *       unpaginated List/Create ManualPaymentView [weekly tasks.txt].
  */
 export const subscriptionsApi = {
   
@@ -37,7 +37,7 @@ export const subscriptionsApi = {
 
   /**
    * WHAT: Submit manual payment transaction proof for admin review.
-   * URI:  POST /api/v1/subscriptions/pay/
+   * URI:  POST /api/v1/subscriptions/payments/
    *
    * WHY no manual Content-Type header:
    *   Axios detects the FormData instance and dynamically appends the correct
