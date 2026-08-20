@@ -4,7 +4,6 @@ kyapture/
 ├── README.md
 ├── directory_structure.txt
 ├── docker-compose.yml
-├── temp_black_format.py
 ├── temp_tree.py
 ├── backend/
 │   ├── Dockerfile
@@ -66,6 +65,11 @@ kyapture/
 │   │   │   ├── tasks.py
 │   │   │   ├── urls.py
 │   │   │   ├── views.py
+│   │   │   ├── management/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── commands/
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── backfill_dimensions.py
 │   │   │   ├── migrations/
 │   │   │   │   ├── 0001_initial.py
 │   │   │   │   ├── __init__.py
@@ -131,6 +135,8 @@ kyapture/
 │   │   │   │   ├── 019fbd18-ea13-7967-b1f3-b9100dc13c75.jpg
 │   │   │   ├── 019fc75d-8291-7673-b873-e43151d5e443/
 │   │   │   │   ├── 019fc765-7007-7f88-b978-45d31ff9d5b9.jpg
+│   │   │   ├── 019fecb1-e926-747e-beca-bffd7f0dc3fb/
+│   │   │   │   ├── 019ff9e2-4823-782f-95ca-65f783b64978.jpg
 │   │   ├── photographers/
 │   │   │   ├── test
 │   │   │   ├── 019e6d88-6966-7c77-8fdb-3e9da4c6746e/
@@ -573,6 +579,15 @@ kyapture/
 │   │   │   │   │   │   │   ├── 019feed0-b324-7694-aa86-163221f44342_thumb.webp
 │   │   │   │   │   │   │   ├── 019feed0-b699-7453-88e3-e5281547218b_thumb.webp
 │   │   │   │   │   │   │   ├── 019feed0-ecfd-75d7-a973-b4f6d2612241_thumb.webp
+│   │   │   │   │   ├── 019feed2-b7d9-750a-bf5f-e3f5f987b85b/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fffb7-c3be-738b-8c7a-84564ea56be1_display.webp
+│   │   │   │   │   │   │   ├── 019fffb7-c3be-738b-8c7a-84564ea56be1_original.jpg
+│   │   │   │   │   │   │   ├── 019fffb7-cd06-7300-804e-223b4ba93404_display.webp
+│   │   │   │   │   │   │   ├── 019fffb7-cd06-7300-804e-223b4ba93404_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fffb7-c3be-738b-8c7a-84564ea56be1_thumb.webp
+│   │   │   │   │   │   │   ├── 019fffb7-cd06-7300-804e-223b4ba93404_thumb.webp
 │   │   │   │   │   ├── 019feed2-cf17-743a-a88a-c44bc196217e/
 │   │   │   │   │   │   ├── photos/
 │   │   │   │   │   │   │   ├── 019ff011-898f-75af-8a94-b6b9afd6523f_display.webp
@@ -600,6 +615,39 @@ kyapture/
 │   │   │   │   │   │   ├── thumbnails/
 │   │   │   │   │   │   │   ├── 019ff013-cb5f-7801-97d1-a3bd936c9ce5_thumb.webp
 │   │   │   │   │   │   │   ├── 019ff013-d1b6-7103-b05b-7d9e31d237df_thumb.webp
+│   │   │   │   │   ├── 019fffe2-c28b-7e9d-a379-bef9c072e239/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 019fffe2-f236-776d-80a6-5bb973d2323c_display.webp
+│   │   │   │   │   │   │   ├── 019fffe2-f236-776d-80a6-5bb973d2323c_original.jpg
+│   │   │   │   │   │   │   ├── 019fffe2-fb64-7e2c-af6d-4f360f72dfaf_display.webp
+│   │   │   │   │   │   │   ├── 019fffe2-fb64-7e2c-af6d-4f360f72dfaf_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 019fffe2-f236-776d-80a6-5bb973d2323c_thumb.webp
+│   │   │   │   │   │   │   ├── 019fffe2-fb64-7e2c-af6d-4f360f72dfaf_thumb.webp
+│   │   │   │   │   ├── 01a00079-f6fd-7a74-b4fb-e2315259d19e/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 01a0007a-3175-7525-97e6-0ad84b05361f_display.webp
+│   │   │   │   │   │   │   ├── 01a0007a-3175-7525-97e6-0ad84b05361f_original.jpg
+│   │   │   │   │   │   │   ├── 01a0007a-3b8a-7e62-95f9-b85bcafa320c_display.webp
+│   │   │   │   │   │   │   ├── 01a0007a-3b8a-7e62-95f9-b85bcafa320c_original.jpg
+│   │   │   │   │   │   │   ├── 01a0007a-44dd-773c-b32e-1ff48a59c518_display.webp
+│   │   │   │   │   │   │   ├── 01a0007a-44dd-773c-b32e-1ff48a59c518_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 01a0007a-3175-7525-97e6-0ad84b05361f_thumb.webp
+│   │   │   │   │   │   │   ├── 01a0007a-3b8a-7e62-95f9-b85bcafa320c_thumb.webp
+│   │   │   │   │   │   │   ├── 01a0007a-44dd-773c-b32e-1ff48a59c518_thumb.webp
+│   │   │   │   │   ├── 01a0007b-3922-7e52-b4bc-05896361f250/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 01a0007e-c43d-70a2-8948-a6d45969d6e4_display.webp
+│   │   │   │   │   │   │   ├── 01a0007e-c43d-70a2-8948-a6d45969d6e4_original.jpg
+│   │   │   │   │   │   │   ├── 01a0007e-cbe2-7245-82cf-c74c12af3fdc_display.webp
+│   │   │   │   │   │   │   ├── 01a0007e-cbe2-7245-82cf-c74c12af3fdc_original.jpg
+│   │   │   │   │   │   │   ├── 01a0007e-d4a7-7335-9a53-594f9321f79f_display.webp
+│   │   │   │   │   │   │   ├── 01a0007e-d4a7-7335-9a53-594f9321f79f_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 01a0007e-c43d-70a2-8948-a6d45969d6e4_thumb.webp
+│   │   │   │   │   │   │   ├── 01a0007e-cbe2-7245-82cf-c74c12af3fdc_thumb.webp
+│   │   │   │   │   │   │   ├── 01a0007e-d4a7-7335-9a53-594f9321f79f_thumb.webp
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile
@@ -664,7 +712,6 @@ kyapture/
 │   │   │   │   ├── ClientHomePage.jsx
 │   │   │   │   ├── DownloadPage.jsx
 │   │   │   ├── dashboard/
-│   │   │   │   ├── BillingPage.jsx
 │   │   │   │   ├── GalleriesPage.jsx
 │   │   │   │   ├── GalleryDetailPage.jsx
 │   │   │   │   ├── GalleryPhotosPage.jsx

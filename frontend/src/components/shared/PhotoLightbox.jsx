@@ -1,6 +1,7 @@
 // File Location: frontend/src/components/shared/PhotoLightbox.jsx
 
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Spinner from '../ui/Spinner'
 
 export default function PhotoLightbox({ photos, index, onClose, onChange }) {
@@ -169,7 +170,7 @@ export default function PhotoLightbox({ photos, index, onClose, onChange }) {
 
   if (!activePhoto) return null
 
-  return (
+  return createPortal(
     <div
       ref={dialogRef}
       role="dialog"
@@ -291,6 +292,7 @@ export default function PhotoLightbox({ photos, index, onClose, onChange }) {
           {activePhoto.original_name || 'Untitled Image'}
         </p>
       </footer>
-    </div>
+    </div>,
+    document.body
   )
 }
