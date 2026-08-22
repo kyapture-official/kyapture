@@ -97,6 +97,7 @@ REST_FRAMEWORK = {
         "anon": "100/day",                  # Standard guest threshold
         "user": "1000/hour",                # Standard authenticated photographer threshold
         "password_unlock": "5/minute",      # Tight brute-force security for private galleries
+        "password_reset": "5/hour",
     }
 }
 
@@ -248,5 +249,35 @@ LOGGING = {
             "level": "ERROR",  # Captures unhandled 500 server crashes and bad HTTP requests
             "propagate": False,
         },
+        
+        "apps.users.views": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
+
+# ─────────────────────────────────────────────────────────────
+# TRANSACTIONAL EMAIL (password reset today; anything else later)
+# ─────────────────────────────────────────────────────────────
+# EMAIL_BACKEND is deliberately NOT set here — each environment file picks
+# its own:
+#   development.py -> django.core.mail.backends.console.EmailBackend
+#                      (prints to the runserver terminal, same convenience
+#                      the old print()-based stub had)
+#   production.py  -> django_ses.SESBackend
+#                      (real delivery via Amazon SES; hard-fails at boot
+#                      if DEFAULT_FROM_EMAIL isn't set — see production.py)
+# Leaving it undefined here means a brand-new environment file that forgets
+# to set EMAIL_BACKEND fails loudly the first time mail is sent, instead of
+# silently no-op'ing the way the previous print()-only implementation did.
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Kyapture <no-reply@kyapture.com>")
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+EMAIL_SUBJECT_PREFIX = "[Kyapture] "
+EMAIL_TIMEOUT = 10  # seconds — a stalled mail provider call should never hang a request/worker
+
+# Public origin of the deployed React SPA. Views build outgoing email links
+# (password reset, etc.) from this setting instead of hardcoding a hostname,
+# so the exact same view code produces a working link in every environment.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")

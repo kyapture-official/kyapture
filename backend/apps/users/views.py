@@ -1,14 +1,21 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/users/views.py
+import logging
+
 from django.conf import settings
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
+from django.utils.http import urlsafe_base64_decode
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
@@ -20,6 +27,7 @@ from .serializers import (
     ChangePasswordSerializer,
 )
 
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────
 # PRIVATE SECURITY HELPER: HTTPONLY COOKIE INJECTOR
@@ -247,19 +255,27 @@ class TotalUsersView(APIView):
             "latest_users": []
         }, status=status.HTTP_200_OK)
 
+# ─────────────────────────────────────────────────────────────
+# THROTTLES & PASSWORD RESET VIEWS
+# ─────────────────────────────────────────────────────────────
+
+# 1. Define the throttle class FIRST so Python registers it
+class PasswordResetRateThrottle(AnonRateThrottle):
+    """
+    Limits anonymous password-reset requests to the 'password_reset' rate
+    configured in REST_FRAMEWORK.DEFAULT_THROTTLE_RATES.
+    """
+    scope = 'password_reset'
+
+
+# 2. Define the view SECOND after its dependencies are declared
 class PasswordResetRequestView(APIView):
     """
     POST /api/v1/auth/password/reset/
-    
-    Processes photographer password reset requests.
-    To prevent malicious email harvesting attacks, this view always returns 
-    a successful generic message, concealing whether the email exists.
-    
-    If the email is registered, it compiles a secure password-reset link 
-    and prints it directly to your Django server console.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [PasswordResetRateThrottle]
 
     def post(self, request):
         email = request.data.get('email', '').strip().lower()
@@ -270,44 +286,46 @@ class PasswordResetRequestView(APIView):
             )
 
         try:
-            # Query active users only
             user = User.objects.get(email=email, is_active=True)
             
-            # Generate standard Django cryptographic tokens and base64 UID
             token = default_token_generator.make_token(user)
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
-            
-            # Construct the target local Vite React frontend route for confirmation
-            reset_url = f"http://localhost:5173/auth/password/reset/confirm/{uidb64}/{token}/"
-            
-            # Print the terminal alert (simulating safe local development SMTP)
-            print("\n" + "═"*80)
-            print(f"AWS SES SMTP IN-MEMORY SPOOL: PASSWORD RESET REQUEST FOR {user.email}")
-            print(f"Click the link below to configure your new credentials:")
-            print(reset_url)
-            print("═"*80 + "\n")
-            
+
+            reset_url = f"{settings.FRONTEND_URL}/auth/password/reset/confirm/{uidb64}/{token}/"
+
+            email_context = {
+                'display_name': user.display_name or user.username,
+                'reset_url': reset_url,
+            }
+            text_body = render_to_string('users/emails/password_reset_email.txt', email_context)
+            html_body = render_to_string('users/emails/password_reset_email.html', email_context)
+
+            try:
+                send_mail(
+                    subject='Reset your Kyapture password',
+                    message=text_body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                    html_message=html_body,
+                    fail_silently=False,
+                )
+                logger.info('Password reset email dispatched for user_id=%s', user.id)
+            except Exception:
+                logger.exception('Failed to send password reset email for user_id=%s', user.id)
+
+            logger.debug('Password reset link for %s: %s', user.email, reset_url)
+
         except User.DoesNotExist:
-            # Catch silently to block user enumeration hacking
             pass
 
         return Response({
             'message': 'If an active account is registered with that email, a secure password reset link has been compiled.'
         }, status=status.HTTP_200_OK)
-        
-
-from django.utils.http import urlsafe_base64_decode
 
 
 class PasswordResetConfirmView(APIView):
     """
     POST /api/v1/auth/password/reset/confirm/
-    
-    Consumes, decodes, and validates the cryptographic token generated 
-    during the password-reset request.
-    
-    If valid, validates the strength of the new password and writes the 
-    hashed password directly to PostgreSQL.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -318,7 +336,6 @@ class PasswordResetConfirmView(APIView):
         new_password = request.data.get('new_password', '')
         new_password2 = request.data.get('new_password2', '')
 
-        # 1. Enforce basic parameter presence validations
         if not (uidb64 and token and new_password):
             return Response(
                 {'error': 'UID, token, and new password parameters are all required.'}, 
@@ -331,7 +348,6 @@ class PasswordResetConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 2. Decode the User UUID primary key safely
         try:
             uid = urlsafe_base64_decode(uidb64).decode()
             user = User.objects.get(pk=uid, is_active=True)
@@ -341,14 +357,12 @@ class PasswordResetConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 3. Validate the cryptographic token against Django's signing database
         if not default_token_generator.check_token(user, token):
             return Response(
                 {'error': 'This password reset link has expired or is invalid.'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 4. Enforce security-bound password strength validation
         from django.contrib.auth.password_validation import validate_password
         from django.core.exceptions import ValidationError as DjangoValidationError
 
@@ -360,7 +374,6 @@ class PasswordResetConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 5. All validation checks passed: hash, save, and de-authorize active sessions
         user.set_password(new_password)
         user.save()
 

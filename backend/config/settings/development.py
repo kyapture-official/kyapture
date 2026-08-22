@@ -37,3 +37,15 @@ CELERY_TASK_ALWAYS_EAGER = True
 
 # Propagates task exceptions directly to the Django console for easy debugging
 CELERY_TASK_EAGER_PROPAGATES = True
+
+
+# ─── LOCAL EMAIL: console backend (C-10) ───────────────────────────────────
+# Prints every outgoing message — including the password-reset link — to
+# the `runserver` terminal instead of hitting a real mail provider. This is
+# the direct replacement for the old print(reset_url) stub in
+# PasswordResetRequestView, except it now goes through Django's real
+# django.core.mail API. That matters because it means the *view code*
+# never has to know or care which backend is active: swapping console for
+# django_ses.SESBackend in production.py is a settings-only change, zero
+# lines differ in apps/users/views.py between environments.
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

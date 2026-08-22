@@ -44,14 +44,43 @@ const BROKEN_IMAGE_ICON = (
   </svg>
 );
 
+// Six-dot grip icon — signals "drag me" without borrowing the delete/cover
+// icon language already used in the other two corners.
+const DRAG_HANDLE_ICON = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="9" cy="6" r="1.6" />
+    <circle cx="9" cy="12" r="1.6" />
+    <circle cx="9" cy="18" r="1.6" />
+    <circle cx="15" cy="6" r="1.6" />
+    <circle cx="15" cy="12" r="1.6" />
+    <circle cx="15" cy="18" r="1.6" />
+  </svg>
+);
+
 export default function PhotoGrid({
   photos = [],
   onDelete,
   onSetCover,
+  onReorder,
   showActions = false,
 }) {
   const [lightbox, setLightbox] = useState(null);
   const [brokenIds, setBrokenIds] = useState(() => new Set());
+
+  // ── DRAG-AND-DROP REORDER STATE ──────────────────────────────────────────
+  // Native HTML5 DnD, not a library — this project has no drag dependency
+  // yet and the interaction here is simple enough not to need one.
+  //
+  // Desktop-only by nature of the API: touch browsers don't fire dragstart/
+  // dragover/drop for arbitrary elements without a polyfill, so this is a
+  // pointer-and-mouse feature for now, not a touch one.
+  //
+  // draggedIndex  — index of the card currently being dragged
+  // dragOverIndex — index of the card currently under the pointer (drop target)
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const canReorder = showActions && typeof onReorder === "function";
+
 
   if (!photos.length) {
     return (
@@ -95,6 +124,61 @@ export default function PhotoGrid({
     });
   };
 
+  // ── DRAG-AND-DROP HANDLERS ────────────────────────────────────────────
+  const resetDragState = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Fired on the grip handle only — the handle is the sole draggable
+  // element, not the card, so an ordinary click on the thumbnail can never
+  // be misread as a drag attempt.
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox refuses to start a drag at all unless setData is called.
+    e.dataTransfer.setData("text/plain", String(index));
+
+    // Drag the whole card as the ghost image, not just the tiny grip icon
+    // the user actually grabbed — much clearer feedback about what's moving.
+    const card = e.currentTarget.closest("[data-photo-card]");
+    if (card) {
+      e.dataTransfer.setDragImage(card, card.offsetWidth / 2, card.offsetHeight / 2);
+    }
+  };
+
+  const handleDragEnter = (e, index) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    setDragOverIndex(index);
+  };
+
+  // Must call preventDefault or the browser refuses to allow a drop here
+  // at all — this is a real HTML5 DnD spec requirement, not a style choice.
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      resetDragState();
+      return;
+    }
+
+    // Splice-move within the FULL photos array (not just what's visible),
+    // then hand the complete reordered array to the parent. The parent is
+    // responsible for the optimistic setState + API call + rollback —
+    // this component only knows about drag mechanics, not persistence.
+    const reordered = [...photos];
+    const [moved] = reordered.splice(draggedIndex, 1);
+    reordered.splice(dropIndex, 0, moved);
+
+    resetDragState();
+    onReorder?.(reordered);
+  };
+
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -104,12 +188,18 @@ export default function PhotoGrid({
           return (
             <div
               key={photo.id}
+              data-photo-card
               tabIndex={0}
               role="button"
               aria-label={`View ${photo.title || photo.original_name || "Photo"}`}
               onKeyDown={(e) => handleKeyDown(e, idx)}
               onClick={() => setLightbox(idx)}
-              className="group relative overflow-hidden rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 transition-all bg-cream-100"
+              onDragEnter={(e) => handleDragEnter(e, idx)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, idx)}
+              className={`group relative overflow-hidden rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 transition-all bg-cream-100 ${
+              dragOverIndex === idx ? "ring-2 ring-ink scale-95" : ""
+            }`}
               style={{
                 animation: "photoGridFadeUp 0.3s ease-out both",
                 animationDelay: `${idx * 0.04}s`,
@@ -152,8 +242,8 @@ export default function PhotoGrid({
                     onDelete(photo.id);
                   }}
                   className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/95 text-red-500
-                             opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                             hover:bg-red-50 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 shadow-sm cursor-pointer"
+                            opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                            hover:bg-red-50 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 shadow-sm cursor-pointer"
                   aria-label={`Delete ${photo.title || photo.original_name || "photo"}`}
                 >
                   <svg
@@ -182,8 +272,8 @@ export default function PhotoGrid({
                     onSetCover(photo.id);
                   }}
                   className="absolute top-2 left-2 p-1.5 rounded-lg bg-white/95 text-ink
-                             opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                             hover:bg-cream-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink shadow-sm cursor-pointer"
+                            opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                            hover:bg-cream-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink shadow-sm cursor-pointer"
                   aria-label={`Set ${photo.title || photo.original_name || "photo"} as gallery cover`}
                   title="Set as cover"
                 >
@@ -202,6 +292,24 @@ export default function PhotoGrid({
                     />
                   </svg>
                 </button>
+              )}
+
+              {/* drag-to-reorder handle — top-center, the one corner not
+                  already claimed by delete or set-cover */}
+              {canReorder && !isBroken && (
+                <div
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragEnd={resetDragState}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-hidden="true"
+                  title="Drag to reorder"
+                  className="absolute top-2 left-1/2 -translate-x-1/2 z-10 p-1.5 rounded-lg bg-white/95 text-ink/50
+                            opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                            hover:bg-cream-100 hover:text-ink shadow-sm cursor-grab active:cursor-grabbing"
+                >
+                  {DRAG_HANDLE_ICON}
+                </div>
               )}
 
               {!isBroken && (

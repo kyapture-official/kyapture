@@ -1,5 +1,6 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/CreateGalleryModal.jsx
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { useAuthStore } from '../../store/authStore'
 
 /**
  * WHAT: Create Gallery Modal Overlay
@@ -47,8 +48,10 @@ if (typeof document !== 'undefined') {
 }
 
 export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) {
+  const defaultBrandingColor = useAuthStore((s) => s.user?.branding_color) ?? '#111827'
+
   const [title,        setTitle]        = useState('')
-  const [color,        setColor]        = useState('#000000')
+  const [color,        setColor]        = useState(defaultBrandingColor)
   const [downloadable, setDownloadable] = useState(false)
   const [submitting,   setSubmitting]   = useState(false)
   const [errorMsg,     setErrorMsg]     = useState('')
@@ -85,11 +88,11 @@ export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) 
   useEffect(() => {
     if (!isOpen) return
     setTitle('')
-    setColor('#000000')
+    setColor(defaultBrandingColor)
     setDownloadable(false)
     setErrorMsg('')
     setTitleInvalid(false)
-  }, [isOpen])
+}, [isOpen])
 
   // ── AUTO-FOCUS ────────────────────────────────────────────────────────────
   useEffect(() => {

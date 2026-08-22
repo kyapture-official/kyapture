@@ -3,6 +3,15 @@ import uuid6
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from .managers import CustomUserManager
+from django.core.validators import RegexValidator
+
+# Mirrors apps/galleries/models.py's hex_color_validator. Duplicated rather than
+# imported to avoid a cross-app import at model-load time (galleries only
+# references users via settings.AUTH_USER_MODEL, never the reverse — keep it that way).
+hex_color_validator = RegexValidator(
+    regex=r'^#[0-9a-fA-F]{6}$',
+    message='Color must be a valid 6-character HEX code (e.g., #FFFFFF).'
+)
 
 
 class User(AbstractUser):
@@ -58,6 +67,20 @@ class User(AbstractUser):
 
     # Attaching our custom scale-ready manager
     objects = CustomUserManager()
+
+
+    logo = models.ImageField(
+        upload_to='photographer_logos/',
+        null=True,
+        blank=True,
+        help_text="Business logo shown on this photographer's public gallery pages."
+    )
+    branding_color = models.CharField(
+        max_length=7,
+        default='#111827',
+        validators=[hex_color_validator],
+        help_text="Default brand accent color, pre-filled when creating new galleries."
+    )
 
     class Meta:
         db_table = 'users'

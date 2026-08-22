@@ -16,6 +16,21 @@ RESERVED_USERNAMES = {
 # Enforces RFC-compliant, URL-safe subdomains (lowercase alphanumeric, with single internal dashes)
 USERNAME_REGEX = re.compile(r'^[a-z0-9](-?[a-z0-9])*$')
 
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'username', 'display_name',
+            'bio', 'avatar', 'logo', 'branding_color',
+            'phone', 'website', 'is_active_plan', 'created_at'
+        ]
+        read_only_fields = ['id', 'email', 'is_active_plan', 'created_at']
+
+    def validate_branding_color(self, value):
+        if value and not re.match(r'^#[0-9a-fA-F]{6}$', value):
+            raise serializers.ValidationError('Color must be a valid hex code (e.g., #FF5733).')
+        return value
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """

@@ -28,9 +28,11 @@ export default function GalleriesPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const defaultBrandingColor = useAuthStore((s) => s.user?.branding_color) ?? "#111827";
+
   const [formData, setFormData] = useState({
-    title: "",
-    branding_color: "#4a7c6f", // Kyapture brand primary green
+      title: "",
+      branding_color: defaultBrandingColor,
   });
 
   // Single-flight guard: cancels a stale in-flight list/search request when a
@@ -132,7 +134,7 @@ export default function GalleriesPage() {
 
       setGalleries((prev) => [newGallery, ...prev]);
       setOpenCreate(false);
-      setFormData({ title: "", branding_color: "#4a7c6f" });
+      setFormData({ title: "", branding_color: defaultBrandingColor });
     } catch (err) {
       toast.dismiss(loaderId);
 

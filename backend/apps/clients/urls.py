@@ -4,6 +4,7 @@ from .views import (
     PublicGalleryView, 
     GalleryUnlockView, 
     PublicGalleryDownloadView,
+    PublicPhotoDownloadView,
     PublicPhotographerPortfolioView 
 )
 
@@ -23,6 +24,14 @@ urlpatterns = [
         PublicGalleryDownloadView.as_view(),
         name='gallery-download'
     ),
+
+
+    path(
+        '<str:username>/<slug:slug>/photo/<uuid:photo_id>/download/',
+        PublicPhotoDownloadView.as_view(),
+        name='public-photo-download'
+    ),
+
 
     # ── 2. Plain Dynamic Catch-All Route Last ─────────────────────────────────
     

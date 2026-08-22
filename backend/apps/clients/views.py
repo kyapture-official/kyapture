@@ -2,7 +2,7 @@
 import os
 import tempfile
 import zipfile
-from django.http import StreamingHttpResponse
+from django.http import StreamingHttpResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
 from rest_framework import status
@@ -115,7 +115,10 @@ class PublicGalleryView(APIView):
                 )
 
         # 3. Access granted: Return fully serialized public metadata [1.1.2]
-        serializer = PublicGallerySerializer(gallery, context={'request': request})
+        serializer = PublicGallerySerializer(
+            gallery,
+            context={'request': request, 'gallery': gallery}
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -311,6 +314,76 @@ class PublicGalleryDownloadView(APIView):
                 {"error": f"Failed to compile download package: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class PublicPhotoDownloadView(APIView):
+    """
+    GET /api/v1/public/{username}/{slug}/photo/{photo_id}/download/
+    GET /api/v1/public/{username}/{slug}/photo/{photo_id}/download/?token=<access_token>
+
+    Streams ONE original file with a forced Content-Disposition: attachment
+    header. This is what PublicMediaAssetSerializer.download_url points to —
+    never a bare S3/disk URL — because that's the only reliable way to force
+    a "Save As" prompt across browsers and storage backends.
+
+    Deliberately does NOT require an email (unlike the bulk ZIP endpoint).
+    A single-photo hover/lightbox download is meant to be frictionless once
+    a gallery is unlocked; the "Download All" button keeps the email-capture
+    step for lead generation.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_gallery(self, username, slug):
+        try:
+            return Gallery.objects.select_related('photographer').get(
+                slug=slug,
+                photographer__username=username,
+                is_published=True,
+                is_active=True,
+            )
+        except Gallery.DoesNotExist:
+            return None
+
+    def get(self, request, username, slug, photo_id):
+        gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
+        if not gallery:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not gallery.allow_download:
+            return Response(
+                {'error': 'Downloads are disabled for this gallery.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if gallery.is_password_protected:
+            token = request.query_params.get('token', '').strip()
+            valid_session = ClientSession.objects.filter(
+                access_token=token,
+                gallery=gallery
+            ).exists()
+            if not valid_session:
+                return Response(
+                    {'error': 'An active unlocked session is required to download this photo.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+        try:
+            asset = MediaAsset.objects.get(id=photo_id, gallery=gallery)
+        except MediaAsset.DoesNotExist:
+            return Response({'error': 'Photo not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not asset.original_file:
+            return Response({'error': 'Original file unavailable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            asset.original_file.open('rb')
+            file_data = asset.original_file.read()
+        finally:
+            asset.original_file.close()
+
+        response = HttpResponse(file_data, content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{asset.original_name}"'
+        return response
 
 
 class PublicPhotographerPortfolioView(APIView):

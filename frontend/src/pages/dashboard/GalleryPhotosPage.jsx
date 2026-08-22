@@ -230,6 +230,29 @@ export default function GalleryPhotosPage() {
     }
   };
 
+  // ── REORDER ──────────────────────────────────────────────────────────────
+  // PhotoGrid does the drag mechanics and array splicing; this is purely
+  // persistence — optimistic update first so the drag feels instant, with
+  // a rollback to the pre-drag order if the PATCH fails.
+  const handleReorder = async (reorderedPhotos) => {
+    const previousPhotos = photos;
+    setPhotos(reorderedPhotos);
+
+    if (USE_MOCK_DATA) return; // nothing to persist against in mock mode
+
+    try {
+      await photosApi.reorderPhotos(
+        slug,
+        reorderedPhotos.map((p) => p.id),
+      );
+    } catch {
+      if (isMountedRef.current) {
+        setPhotos(previousPhotos);
+        setErrorMsg("Failed to save the new photo order. Please try again.");
+      }
+    }
+  };
+
   // ── RENDER ───────────────────────────────────────────────────────────────
   return (
     <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
@@ -301,7 +324,13 @@ export default function GalleryPhotosPage() {
             <Spinner size="lg" />
           </div>
         ) : (
-          <PhotoGrid photos={photos} onDelete={handleDeletePhoto} onSetCover={handleSetCover} showActions />
+          <PhotoGrid
+            photos={photos}
+            onDelete={handleDeletePhoto}
+            onSetCover={handleSetCover}
+            onReorder={handleReorder}
+            showActions
+          />
         )}
       </div>
     </div>

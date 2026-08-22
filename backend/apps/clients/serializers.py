@@ -17,6 +17,7 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
     thumbnail_url = serializers.SerializerMethodField()
     poster_url = serializers.SerializerMethodField()
     preview_url = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaAsset
@@ -24,6 +25,7 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
             'id', 
             'media_type', 
             'title', 
+            'original_name',
             'display_url', 
             'thumbnail_url', 
             'blurhash', 
@@ -32,7 +34,8 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
             'stream_url', 
             'poster_url', 
             'preview_url', 
-            'duration'
+            'duration',
+            'download_url',
         ]
         read_only_fields = fields
 
@@ -60,6 +63,34 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.preview_file.url)
         return None
 
+    def get_download_url(self, obj):
+        """
+        Points to PublicPhotoDownloadView, NOT a raw file URL — see that
+        view's docstring for why. Returns None (frontend hides the button)
+        unless the photographer has downloads enabled for this gallery.
+
+        Reads 'gallery' from context rather than obj.gallery to avoid an
+        N+1 query per photo — the view already has the gallery instance
+        loaded once and passes it in explicitly.
+        """
+        request = self.context.get('request')
+        gallery = self.context.get('gallery')
+        if not request or not gallery or not gallery.allow_download:
+            return None
+        if not obj.original_file:
+            return None
+
+        from django.urls import reverse
+        path = reverse('public-photo-download', kwargs={
+            'username': gallery.photographer.username,
+            'slug': gallery.slug,
+            'photo_id': obj.id,
+        })
+        # No ?token= appended here on purpose — the frontend attaches it
+        # from the client session store, same convention clientsApi.getGallery()
+        # already uses for the main gallery fetch.
+        return request.build_absolute_uri(path)
+
 
 class PublicGallerySerializer(serializers.ModelSerializer):
     """
@@ -67,7 +98,7 @@ class PublicGallerySerializer(serializers.ModelSerializer):
     Exposes only safe, public metadata fields for client viewing.
     """
     photographer_name = serializers.SerializerMethodField()
-    
+    photographer_logo = serializers.SerializerMethodField()
     # Alias: maps the unified 'assets' relationship back to the 'photos' key for David's React app
     photos = PublicMediaAssetSerializer(source='assets', many=True, read_only=True)
 
@@ -75,7 +106,7 @@ class PublicGallerySerializer(serializers.ModelSerializer):
         model = Gallery
         fields = [
             'id', 'title', 'description', 'slug', 'branding_color',
-            'photographer_name', 'allow_download', 'watermark_enabled',
+            'photographer_name', 'photographer_logo', 'allow_download', 'watermark_enabled',
             'is_password_protected', 'photos',
         ]
         read_only_fields = fields
@@ -83,6 +114,13 @@ class PublicGallerySerializer(serializers.ModelSerializer):
     def get_photographer_name(self, obj):
         """Falls back to username if display_name is empty or null."""
         return obj.photographer.display_name or obj.photographer.username
+    
+    
+    def get_photographer_logo(self, obj):
+        request = self.context.get('request')
+        if obj.photographer.logo and request:
+            return request.build_absolute_uri(obj.photographer.logo.url)
+        return None
 
 
 class GalleryUnlockSerializer(serializers.Serializer):

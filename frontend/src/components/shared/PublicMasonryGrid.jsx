@@ -3,34 +3,46 @@ import React, { useState } from 'react'
 import { useInView } from 'react-intersection-observer'
 
 /**
+ * Appends the client's unlock token to a download_url, matching the same
+ * ?token= convention clientsApi.getGallery() already uses. download_url
+ * from the backend is deliberately token-less — see
+ * PublicMediaAssetSerializer.get_download_url for why.
+ */
+function buildDownloadHref(downloadUrl, token) {
+  if (!downloadUrl) return null
+  return token ? `${downloadUrl}?token=${encodeURIComponent(token)}` : downloadUrl
+}
+
+function DownloadIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+  )
+}
+
+/**
  * Individual image renderer managing intersection observation,
  * aspect-ratio containment, state-synchronization, and asset-theft protection.
  */
-function LazyPhoto({ photo, index, onPhotoClick }) {
-  // Track the actual loaded image URI rather than boolean triggers to bypass post-paint rendering lag
+function LazyPhoto({ photo, index, token, onPhotoClick }) {
   const [loadedSrc, setLoadedSrc] = useState(null)
   const [errorSrc,  setErrorSrc]  = useState(null)
 
   const imgSrc = photo.thumbnail_url || photo.display_url
+  const downloadHref = buildDownloadHref(photo.download_url, token)
 
-  // Derived state calculations (evaluated synchronously during render execution)
   const isLoaded = loadedSrc === imgSrc
   const hasError = errorSrc  === imgSrc
 
-  // Trigger loading 200px before the element enters the viewport to optimize perceived speed
   const { ref, inView } = useInView({
     triggerOnce: true,
     rootMargin: '200px 0px',
   })
 
-  // Calculate strict CSS aspect ratio to reserve container space and prevent Cumulative Layout Shift (CLS)
   const aspectRatio =
     photo.width && photo.height ? `${photo.width} / ${photo.height}` : '3 / 2'
 
-  /**
-   * Prevents standard browser right-click context menus.
-   * Mitigates casual image download theft for professional photographers.
-   */
   const handleContextMenu = (e) => e.preventDefault()
 
   return (
@@ -44,7 +56,6 @@ function LazyPhoto({ photo, index, onPhotoClick }) {
       {inView ? (
         <>
           {hasError ? (
-            // Graceful error UI fallback with proper semantic icon
             <div className="absolute inset-0 bg-cream-200 flex flex-col items-center justify-center p-4">
               <svg
                 className="w-5 h-5 text-cream-400 mb-1"
@@ -84,18 +95,34 @@ function LazyPhoto({ photo, index, onPhotoClick }) {
               onError={() => setErrorSrc(imgSrc)}
             />
           )}
-          {/* Subtle hover overlay to enhance interactive feedback */}
           <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+          {/* Only renders when the backend actually returned a download_url —
+              i.e. only when the photographer enabled downloads for this gallery. */}
+          {downloadHref && (
+            <a
+              href={downloadHref}
+              onClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => e.stopPropagation()}
+              className="absolute top-2 right-2 z-10 p-2 rounded-full bg-white/90 text-ink
+                        opacity-0 group-hover:opacity-100 focus-visible:opacity-100
+                        transition-opacity duration-200 hover:bg-white shadow-sm
+                        focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+              aria-label="Download this photo"
+              title="Download photo"
+            >
+              <DownloadIcon className="w-4 h-4" />
+            </a>
+          )}
         </>
       ) : (
-        // Skeleton placeholder matching the exact aspect ratio of the incoming image
         <div className="w-full h-full bg-cream-100 animate-pulse" />
       )}
     </div>
   )
 }
 
-export default function PublicMasonryGrid({ photos, onPhotoClick }) {
+export default function PublicMasonryGrid({ photos, token, onPhotoClick }) {
   if (!photos || photos.length === 0) return null
 
   return (
@@ -105,6 +132,7 @@ export default function PublicMasonryGrid({ photos, onPhotoClick }) {
           key={photo.id ?? index}
           photo={photo}
           index={index}
+          token={token}
           onPhotoClick={onPhotoClick}
         />
       ))}

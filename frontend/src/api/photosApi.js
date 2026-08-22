@@ -7,12 +7,16 @@ import api from './axiosInstance'
  * WHY:  Abstracts all multipart file-upload, single/bulk deletion, and
  *       listing operations against the backend MediaAsset endpoints.
  *
+ *     NOTE: /delete-bulk/ exists on the backend but is intentionally unused
+ *   here (see deletePhotos below, which fans out individual DELETEs).
+ *   PATCH /photos/{gallery_slug}/reorder/ backs the drag-and-drop reorder
+ *   feature in PhotoGrid.jsx — see reorderPhotos() below.
  * BACKEND ENDPOINT CONTRACT:
  *   GET    /api/v1/photos/{gallery_slug}/               → list assets
  *   POST   /api/v1/photos/{gallery_slug}/upload/        → bulk upload
  *   DELETE /api/v1/photos/photo/{photo_id}/             → single asset delete
  *
- *   NOTE: /delete-bulk/ and /reorder/ do NOT exist in the backend yet.
+ *   
  *
  * MEDIA ASSET INTERFACE (from MediaAssetSerializer):
  *   {
@@ -177,22 +181,30 @@ export const photosApi = {
   },
 
   /**
-   * WHAT: Reorder photos inside a gallery.
-   * STATUS: ⚠ NOT YET IMPLEMENTED ON THE BACKEND.
-   *         /photos/{slug}/reorder/ is not registered in urls.py.
-   *         This stub throws immediately so callers get a clear error
-   *         rather than a silent 404.
+   * WHAT: Persist a new manually-dragged sort order for a gallery's photos.
+   * URI:  PATCH /api/v1/photos/{gallery_slug}/reorder/
    *
-   * TODO: Wire this up once Mausam adds the PATCH reorder endpoint.
+   * WHY the caller must send the FULL ordered ID list, not just the moved
+   * item: the backend (PhotoReorderView) assigns fresh sequential Decimal
+   * `order` values only to the IDs present in the payload, in the order
+   * given. Any photo left out keeps its old order value untouched, which
+   * can leave it sorting inconsistently against the freshly-renumbered
+   * ones. Always pass every photo currently in the gallery.
    *
-   * @param {string}    gallerySlug
-   * @param {string[]}  orderedPhotoIds
+   * @param   {string}   gallerySlug
+   * @param   {string[]} orderedPhotoIds - Every photo ID in the gallery,
+   *                                       in the desired display sequence.
+   * @returns {Promise<{ success: boolean, ordered_ids: string[] }>}
    */
-  reorderPhotos: async (_gallerySlug, _orderedPhotoIds) => {
-    throw new Error(
-      'photosApi.reorderPhotos: the /reorder/ endpoint is not yet implemented on the backend. ' +
-      'Implement PATCH /api/v1/photos/{gallery_slug}/reorder/ first.'
+  reorderPhotos: async (gallerySlug, orderedPhotoIds) => {
++    assertNonEmptyString(gallerySlug, 'photosApi.reorderPhotos: gallerySlug')
+    assertStringIdArray(orderedPhotoIds, 'photosApi.reorderPhotos: orderedPhotoIds')
+
+    const { data } = await api.patch(
+      `/photos/${encodeURIComponent(gallerySlug)}/reorder/`,
+      { ordered_ids: orderedPhotoIds }
     )
+    return data
   },
 
   // ── BACKWARD-COMPATIBLE ALIAS ─────────────────────────────────────────────

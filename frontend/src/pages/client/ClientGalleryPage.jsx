@@ -347,14 +347,14 @@ export default function ClientGalleryPage() {
             <p className="text-sm text-muted font-light">No images in this collection yet.</p>
           </div>
         ) : (
-          <PublicMasonryGrid photos={photos} onPhotoClick={setLightboxIndex} />
+          <PublicMasonryGrid photos={photos} token={token} onPhotoClick={setLightboxIndex} />
         )}
 
-        {/* Immersive Fullscreen Lightbox Context */}
         {lightboxIndex !== null && (
           <PhotoLightbox
             photos={photos}
             index={lightboxIndex}
+            token={token}
             onClose={() => setLightboxIndex(null)}
             onChange={setLightboxIndex}
           />
