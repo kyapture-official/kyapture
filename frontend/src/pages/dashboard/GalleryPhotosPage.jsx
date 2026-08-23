@@ -1,7 +1,7 @@
 // frontend/src/pages/dashboard/GalleryPhotosPage.jsx
 
 import { galleriesApi } from "../../api/galleriesApi";
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useOutletContext } from "react-router-dom";
 import { photosApi } from "../../api/photosApi";
 import { mockGalleries } from "../../utils/mockGalleries";
@@ -10,6 +10,18 @@ import DropZone from "../../components/ui/DropZone";
 import PhotoGrid from "../../components/shared/PhotoGrid";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
+
+const isVideoFile = (file) => file.type.startsWith("video/");
+
+// Polling tuning for assets still processing in the background (Celery).
+// 3s cadence, capped at 5 minutes total per "session" (i.e. per continuous
+// stretch of having at least one pending/processing asset) — long enough
+// for a large 4K video on modest worker hardware, short enough that a
+// genuinely stuck task (e.g. worker down, ffmpeg missing) doesn't poll
+// forever. Applies to images too — they go through the exact same async
+// pending→ready window, just usually fast enough not to be noticed.
+const POLL_INTERVAL_MS = 3000;
+const MAX_POLL_ATTEMPTS = 100;
 
 /**
  * WHAT: The "Photos" child view of the collection workspace.
@@ -26,9 +38,15 @@ export default function GalleryPhotosPage() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const blobUrlsRef = useRef([]); // preview blob: URLs still awaiting revocation
+  const photosRef = useRef(photos);
+
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
 
   // Safety net: revoke any leftover blob URLs if the user navigates away
   // mid-upload (e.g. clicks "Settings" while a file is still uploading).
+
   useEffect(() => {
     return () => {
       blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -48,11 +66,13 @@ export default function GalleryPhotosPage() {
                 ? [
                     {
                       id: "mock-img-1",
+                      media_type: "image",
                       thumbnail_url:
                         "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
                     },
                     {
                       id: "mock-img-2",
+                      media_type: "image",
                       thumbnail_url:
                         "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80",
                     },
@@ -79,6 +99,73 @@ export default function GalleryPhotosPage() {
     loadPhotos();
   }, [slug, gallery.slug, isMountedRef]);
 
+  // ── AUTO-UPDATE PENDING/PROCESSING ASSETS ────────────────────────────────
+  // Fixes: video (and, latently, image) thumbnails getting stuck on
+  // "Processing…" until a manual refresh. Starts polling whenever any
+  // asset in state is still pending/processing, stops the moment none are.
+  const hasPendingAssets = useMemo(
+    () =>
+      photos.some(
+        (p) =>
+          p.processing_status === "pending" ||
+          p.processing_status === "processing",
+      ),
+    [photos],
+  );
+
+  useEffect(() => {
+    if (USE_MOCK_DATA) return; // mock mode never sets processing_status='pending'
+    if (!hasPendingAssets) return;
+
+    let attempts = 0;
+
+    const intervalId = setInterval(async () => {
+      attempts += 1;
+      if (attempts > MAX_POLL_ATTEMPTS) {
+        clearInterval(intervalId);
+        if (isMountedRef.current) {
+          setErrorMsg(
+            "Some items are still processing in the background — this is taking longer than usual. Refresh the page in a bit to check on them.",
+          );
+        }
+        return;
+      }
+
+      const pendingAssets = photosRef.current.filter(
+        (p) =>
+          p.processing_status === "pending" ||
+          p.processing_status === "processing",
+      );
+      if (pendingAssets.length === 0) return;
+
+      try {
+        const results = await Promise.allSettled(
+          pendingAssets.map((asset) => photosApi.getById(asset.id)),
+        );
+        if (!isMountedRef.current) return;
+
+        const updatesById = new Map();
+        results.forEach((result) => {
+          if (result.status === "fulfilled") {
+            updatesById.set(result.value.id, result.value);
+          }
+        });
+
+        if (updatesById.size > 0) {
+          setPhotos((prev) =>
+            prev.map((p) =>
+              updatesById.has(p.id) ? { ...p, ...updatesById.get(p.id) } : p,
+            ),
+          );
+        }
+      } catch {
+        // Transient network hiccup — next tick just retries.
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [hasPendingAssets, isMountedRef]);
+
   // ── UPLOAD ───────────────────────────────────────────────────────────────
   const handleFilesSelected = async (files) => {
     if (!files?.length) return;
@@ -92,6 +179,7 @@ export default function GalleryPhotosPage() {
           file,
           previewUrl,
           progress: 0,
+          isVideo: isVideoFile(file),
         };
       });
       setUploadQueue((prev) => [...prev, ...queueItems]);
@@ -106,7 +194,9 @@ export default function GalleryPhotosPage() {
                 ...prev,
                 {
                   id: item.id,
-                  thumbnail_url: item.previewUrl,
+                  media_type: item.isVideo ? "video" : "image", // <-- Naya
+                  thumbnail_url: item.isVideo ? null : item.previewUrl, // <-- Naya
+                  poster_url: item.isVideo ? null : undefined, // <-- Naya
                   original_name: item.file.name,
                 },
               ]);
@@ -130,13 +220,15 @@ export default function GalleryPhotosPage() {
         file,
         previewUrl,
         progress: 0,
+        isVideo: isVideoFile(file),
       };
     });
     setUploadQueue((prev) => [...prev, ...queueItems]);
 
     for (const item of queueItems) {
       const formData = new FormData();
-      formData.append("image", item.file);
+      // Route each file to the field the backend expects for its type
+      formData.append(item.isVideo ? "video" : "image", item.file); 
 
       try {
         const uploaded = await photosApi.uploadBulk(slug, formData, (pct) => {
@@ -152,8 +244,6 @@ export default function GalleryPhotosPage() {
           setUploadQueue((prev) => prev.filter((q) => q.id !== item.id));
         }
 
-        // Revoke immediately on success — PhotoGrid now renders from the
-        // server's thumbnail_url, so the local blob preview is unused.
         URL.revokeObjectURL(item.previewUrl);
         blobUrlsRef.current = blobUrlsRef.current.filter(
           (u) => u !== item.previewUrl,
@@ -163,14 +253,14 @@ export default function GalleryPhotosPage() {
           setUploadQueue((prev) =>
             prev.map((q) => (q.id === item.id ? { ...q, error: true } : q)),
           );
+
           setErrorMsg(
             err.response?.data?.image?.[0] ||
+              err.response?.data?.video?.[0] ||
+              err.response?.data?.error ||
               `Failed to upload ${item.file.name}.`,
           );
         }
-        // NOT revoked here — the failed row stays visible so the user can
-        // see which photo failed. Revoked on dismiss instead (below), or by
-        // the unmount safety net above if they navigate away first.
       }
     }
   };
@@ -214,7 +304,7 @@ export default function GalleryPhotosPage() {
     }
   };
 
-  //-cover
+// ── SET COVER (image or video poster) ──────────────────────────────────
   const handleSetCover = async (photoId) => {
     try {
       const updated = await galleriesApi.updateGallery(slug, {
@@ -234,21 +324,22 @@ export default function GalleryPhotosPage() {
   // PhotoGrid does the drag mechanics and array splicing; this is purely
   // persistence — optimistic update first so the drag feels instant, with
   // a rollback to the pre-drag order if the PATCH fails.
-  const handleReorder = async (reorderedPhotos) => {
+  const handleReorder = async (orderedIds) => {
     const previousPhotos = photos;
-    setPhotos(reorderedPhotos);
+    const photoMap = new Map(previousPhotos.map((p) => [p.id, p]));
+    const reorderedPhotos = orderedIds
+      .map((id) => photoMap.get(id))
+      .filter(Boolean);
+    setPhotos(reorderedPhotos); // optimistic
 
-    if (USE_MOCK_DATA) return; // nothing to persist against in mock mode
+    if (USE_MOCK_DATA) return;
 
     try {
-      await photosApi.reorderPhotos(
-        slug,
-        reorderedPhotos.map((p) => p.id),
-      );
+      await photosApi.reorderPhotos(slug, orderedIds);
     } catch {
       if (isMountedRef.current) {
-        setPhotos(previousPhotos);
-        setErrorMsg("Failed to save the new photo order. Please try again.");
+        setPhotos(previousPhotos); // rollback
+        setErrorMsg("Failed to save the new order. Please try again.");
       }
     }
   };
@@ -257,10 +348,10 @@ export default function GalleryPhotosPage() {
   return (
     <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
       <h2 className="text-base font-semibold text-ink mb-2 border-b border-cream-100 pb-3">
-        Photo Management
+        Photo & Video Management
       </h2>
       <p className="text-xs text-muted mb-6">
-        Upload multiple images to populate this collection. Once uploaded,
+        Upload photos and videos to populate this collection. Once uploaded,
         clients can browse, view in lightbox, and download.
       </p>
 
@@ -273,7 +364,37 @@ export default function GalleryPhotosPage() {
         </div>
       )}
 
-      <DropZone onFiles={handleFilesSelected} disabled={photosLoading} />
+      {/* DropZone Update */}
+      <DropZone
+        onFiles={handleFilesSelected}
+        disabled={photosLoading}
+        accept="image/*,video/mp4,video/quicktime,video/x-m4v"
+      >
+        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center border border-gray-300">
+          <svg
+            className="w-6 h-6 text-gray-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-900">
+            Drop photos or videos here
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            or click to browse — JPG, PNG, WEBP, MP4, MOV
+          </p>
+        </div>
+      </DropZone>
 
       {uploadQueue.length > 0 && (
         <div className="mt-4 space-y-2">
@@ -282,16 +403,38 @@ export default function GalleryPhotosPage() {
               key={item.id}
               className="flex items-center gap-3 p-2 rounded-lg bg-cream-50"
             >
-              <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 bg-cream-200">
-                <img
-                  src={item.previewUrl}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
+              <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 bg-cream-200 flex items-center justify-center">
+                {item.isVideo ? (
+                  <svg
+                    className="w-4 h-4 text-ink/50"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
+                    />
+                  </svg>
+                ) : (
+                  <img
+                    src={item.previewUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                )}
               </div>
               <div className="flex-1">
                 <div className="text-xs text-ink/70 truncate">
                   {item.file.name}
+                  {item.isVideo && (
+                    <span className="ml-1.5 text-[9px] uppercase tracking-wide text-muted">
+                      Video
+                    </span>
+                  )}
                 </div>
                 <div className="h-1.5 bg-cream-200 rounded-full overflow-hidden mt-1">
                   <div

@@ -53,6 +53,24 @@ services:
       - db
       - redis
 
+      # 4b. PERIODIC TASK SCHEDULER (Celery Beat)
+      # Ticks the schedule defined in config/celery.py's beat_schedule and
+      # hands due tasks off to celery_worker above. This is a SEPARATE process
+      # from the worker — Celery never runs beat inside a worker process, so
+      # skipping this service means beat_schedule silently never fires.
+  celery_beat:
+    build: ./backend
+    command: celery -A config beat -l info
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
+      - redis
+
   # 5. FRONTEND WEB SERVICE (React + Vite + Tailwind)
   frontend:
     build: ./frontend

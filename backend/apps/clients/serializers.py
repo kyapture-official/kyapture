@@ -6,6 +6,7 @@ from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
 from apps.core.utils import generate_secure_token
 from .models import ClientSession
+from django.urls import reverse
 
 
 class PublicMediaAssetSerializer(serializers.ModelSerializer):
@@ -18,6 +19,7 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
     poster_url = serializers.SerializerMethodField()
     preview_url = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
+    playback_url = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaAsset
@@ -35,6 +37,7 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
             'poster_url', 
             'preview_url', 
             'duration',
+            'playback_url',
             'download_url',
         ]
         read_only_fields = fields
@@ -90,6 +93,31 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
         # from the client session store, same convention clientsApi.getGallery()
         # already uses for the main gallery fetch.
         return request.build_absolute_uri(path)
+    
+    def get_playback_url(self, obj):
+        """
+        Absolute URL to PublicVideoStreamView — the endpoint that serves
+        the actual playable video (original_url isn't exposed on this
+        serializer at all; see that view's docstring). None for images.
+
+        Deliberately does NOT append the gallery's unlock token — this
+        serializer has no reliable way to know it (it's held client-side
+        only, never persisted server-side). The frontend appends
+        '?token=...' itself for password-protected galleries, the same
+        way it already does for the initial gallery fetch.
+        """
+        if obj.media_type != MediaAsset.MediaType.VIDEO:
+            return None
+        request = self.context.get('request')
+        username = self.context.get('username')
+        slug = self.context.get('slug')
+        if not request or not username or not slug:
+            return None
+        url = reverse(
+            'public-video-stream',
+            kwargs={'username': username, 'slug': slug, 'asset_id': obj.id}
+        )
+        return request.build_absolute_uri(url)
 
 
 class PublicGallerySerializer(serializers.ModelSerializer):

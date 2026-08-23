@@ -84,6 +84,7 @@ kyapture/
 │   │   │   ├── apps.py
 │   │   │   ├── models.py
 │   │   │   ├── serializers.py
+│   │   │   ├── tasks.py
 │   │   │   ├── urls.py
 │   │   │   ├── views.py
 │   │   │   ├── management/
@@ -92,6 +93,7 @@ kyapture/
 │   │   │   │   │   ├── __init__.py
 │   │   │   │   │   ├── grant_subscription.py
 │   │   │   │   │   ├── seed_plans.py
+│   │   │   │   │   ├── sweep_expired_subscriptions.py
 │   │   │   ├── migrations/
 │   │   │   │   ├── 0001_initial.py
 │   │   │   │   ├── 0002_initial.py
@@ -660,9 +662,30 @@ kyapture/
 │   │   │   │   │   │   │   ├── 01a01b14-85e3-7c6c-8df0-fffa5112e4b5_original.jpg
 │   │   │   │   │   │   │   ├── 01a01b14-c38c-79fe-950f-34d4bcbc0a33_display.webp
 │   │   │   │   │   │   │   ├── 01a01b14-c38c-79fe-950f-34d4bcbc0a33_original.jpg
+│   │   │   │   │   │   │   ├── 01a02954-2e00-78fc-8a9b-6ca8f2a55cf4_display.webp
+│   │   │   │   │   │   │   ├── 01a02954-2e00-78fc-8a9b-6ca8f2a55cf4_original.jpg
+│   │   │   │   │   │   │   ├── 01a02954-38cf-796a-af58-1118e586aaa9_display.webp
+│   │   │   │   │   │   │   ├── 01a02954-38cf-796a-af58-1118e586aaa9_original.jpg
+│   │   │   │   │   │   │   ├── 01a02954-421f-78b3-b496-b3d5ab979aac_display.webp
+│   │   │   │   │   │   │   ├── 01a02954-421f-78b3-b496-b3d5ab979aac_original.jpg
+│   │   │   │   │   │   │   ├── 01a02955-2230-7ed9-911a-93843f04bbf6_display.webp
+│   │   │   │   │   │   │   ├── 01a02955-2230-7ed9-911a-93843f04bbf6_original.jpg
+│   │   │   │   │   │   │   ├── 01a02955-2b55-7954-8bfb-208122835596_display.webp
+│   │   │   │   │   │   │   ├── 01a02955-2b55-7954-8bfb-208122835596_original.jpg
+│   │   │   │   │   │   │   ├── 01a02955-3803-782a-bf03-731bdcd21611_display.webp
+│   │   │   │   │   │   │   ├── 01a02955-3803-782a-bf03-731bdcd21611_original.jpg
+│   │   │   │   │   │   │   ├── 01a02955-44a1-739b-8e22-4b9a3fa6c71e_display.webp
+│   │   │   │   │   │   │   ├── 01a02955-44a1-739b-8e22-4b9a3fa6c71e_original.jpg
 │   │   │   │   │   │   ├── thumbnails/
 │   │   │   │   │   │   │   ├── 01a01b14-7c57-7b66-8a3a-6676928ee6ab_thumb.webp
 │   │   │   │   │   │   │   ├── 01a01b14-c38c-79fe-950f-34d4bcbc0a33_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02954-2e00-78fc-8a9b-6ca8f2a55cf4_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02954-38cf-796a-af58-1118e586aaa9_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02954-421f-78b3-b496-b3d5ab979aac_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02955-2230-7ed9-911a-93843f04bbf6_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02955-2b55-7954-8bfb-208122835596_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02955-3803-782a-bf03-731bdcd21611_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02955-44a1-739b-8e22-4b9a3fa6c71e_thumb.webp
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile

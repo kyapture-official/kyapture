@@ -5,7 +5,8 @@ from .views import (
     GalleryUnlockView, 
     PublicGalleryDownloadView,
     PublicPhotoDownloadView,
-    PublicPhotographerPortfolioView 
+    PublicPhotographerPortfolioView,
+    PublicVideoStreamView, 
 )
 
 urlpatterns = [
@@ -23,6 +24,12 @@ urlpatterns = [
         '<str:username>/<slug:slug>/download/',
         PublicGalleryDownloadView.as_view(),
         name='gallery-download'
+    ),
+
+path(
+        '<str:username>/<slug:slug>/video/<uuid:asset_id>/stream/',
+        PublicVideoStreamView.as_view(),
+        name='public-video-stream'
     ),
 
 

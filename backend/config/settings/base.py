@@ -98,6 +98,7 @@ REST_FRAMEWORK = {
         "user": "1000/hour",                # Standard authenticated photographer threshold
         "password_unlock": "5/minute",      # Tight brute-force security for private galleries
         "password_reset": "5/hour",
+        "login": "5/minute",                # Tight brute-force security for photographer login
     }
 }
 

@@ -9,7 +9,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .tasks import process_photo_asset
+from .tasks import process_photo_asset, process_video_asset
 from PIL import Image as PILImage
 from PIL.ImageOps import exif_transpose
 
@@ -20,6 +20,7 @@ from .models import MediaAsset
 from .serializers import (
     MediaAssetSerializer, 
     MediaAssetImageUploadSerializer,
+    MediaAssetVideoUploadSerializer,
     PhotoBulkDeleteSerializer,
     PhotoReorderSerializer
 )
@@ -29,6 +30,15 @@ class PhotoListUploadView(APIView):
     """
     GET  /api/v1/photos/{gallery_slug}/ - Lists all media assets inside an active gallery.
     POST /api/v1/photos/{gallery_slug}/upload/ - Processes bulk image streams securely.
+    
+    Accepts two independent multipart field keys in the same request:
+    - 'image' — one or many image files (JPEG/PNG/WEBP/TIFF)
+    - 'video' — one or many video files (MP4/MOV/M4V)
+    Either or both may be present, so a single mixed drag-and-drop batch
+    (photos + videos together) uploads in one call. Note: within a mixed
+    batch, all images are assigned display order before all videos,
+    regardless of original drop order — a minor cosmetic quirk of routing
+    by form field, fixable afterward via drag-reorder in the grid.
     """
     parser_classes = [MultiPartParser, FormParser]
 
@@ -63,34 +73,44 @@ class PhotoListUploadView(APIView):
         gallery = self.get_gallery(gallery_slug, request.user)
         if not gallery:
             return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        image_files = request.FILES.getlist('image')
+        video_files = request.FILES.getlist('video')
 
-        # Retrieve file list from the 'image' form-data key
-        files = request.FILES.getlist('image')
-        if not files:
-            return Response({"image": ["No image file provided."]}, status=status.HTTP_400_BAD_REQUEST)
+        if not image_files and not video_files:
+            return Response(
+                {"error": "No files provided.", "details": {"image": ["No image or video file provided."]}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         photographer = request.user
+        total_new_files = len(image_files) + len(video_files)
 
         # ─── BATCH-LEVEL GATING (O(1) Database Efficiency) ───
         metrics = get_user_subscription_metrics(photographer)
 
         if not (photographer.is_superuser or photographer.is_staff):
-            # Check 1: Max Media Assets per Gallery
+            # Check 1: Max media assets per gallery. Shared cap — applies to
+            # photos and videos identically. This is a pre-existing,
+            # unrelated business rule (per-gallery item count), not a
+            # video-specific duration/quality limit, so it stays as-is.
             current_assets_in_gallery = MediaAsset.objects.filter(gallery=gallery).count()
-            projected_assets_count = current_assets_in_gallery + len(files)
+            projected_assets_count = current_assets_in_gallery + total_new_files
             
             if projected_assets_count > metrics["max_photos_per_gallery"]:
                 return Response({
                     "error": "Photo limit reached for this gallery on your plan.",
                     "code": "photo_limit_reached",
                     "current_count": current_assets_in_gallery,
-                    "batch_count": len(files),
+                    "batch_count": total_new_files,
                     "plan_limit": metrics["max_photos_per_gallery"],
-                    "message": f"Uploading these {len(files)} assets would exceed your plan's maximum of {metrics['max_photos_per_gallery']} assets per gallery."
+                    "message": f"Uploading these {total_new_files} assets would exceed your plan's maximum of {metrics['max_photos_per_gallery']} assets per gallery."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check 2: Total Plan Storage footprint (Pre-calculate total batch size)
-            total_batch_size_bytes = sum(f.size for f in files)
+            # Check 2: Total plan storage footprint. This is the ONLY gate
+            # that applies to video length/quality — there is no separate
+            # duration or resolution check anywhere in this pipeline.
+            total_batch_size_bytes = sum(f.size for f in image_files) + sum(f.size for f in video_files)
             projected_storage_bytes = metrics["current_total_storage_bytes"] + total_batch_size_bytes
             
             if projected_storage_bytes > metrics["storage_bytes_limit"]:
@@ -112,7 +132,7 @@ class PhotoListUploadView(APIView):
         # Atomic transaction: If database saving fails, the batch rolls back safely
         try:
             with transaction.atomic():
-                for file_data in files:
+                for file_data in image_files:
                     # Validate image size and magic-byte security first
                     serializer = MediaAssetImageUploadSerializer(
                         data={'image': file_data, 'title': request.data.get('title', '')},
@@ -125,7 +145,6 @@ class PhotoListUploadView(APIView):
                         title = os.path.splitext(file_data.name)[0]
                         
                     clean_file = strip_exif_gps(file_data)
-
 
                     clean_file.seek(0)
                     with PILImage.open(clean_file) as img:
@@ -150,6 +169,34 @@ class PhotoListUploadView(APIView):
                     # Dispatch Celery background task for WebP conversions and BlurHash encoding
                     transaction.on_commit(lambda a_id=asset.id: process_photo_asset.delay(str(a_id)))
                     uploaded_assets.append(asset)
+                    
+                    # ── Videos ──
+                for file_data in video_files:
+                    serializer = MediaAssetVideoUploadSerializer(
+                        data={'video': file_data, 'title': request.data.get('title', '')},
+                        context={'request': request, 'gallery': gallery}
+                    )
+                    serializer.is_valid(raise_exception=True)
+
+                    title = request.data.get('title', '').strip()
+                    if not title:
+                        title = os.path.splitext(file_data.name)[0]
+
+                    asset = MediaAsset.objects.create(
+                        gallery=gallery,
+                        media_type=MediaAsset.MediaType.VIDEO,
+                        original_file=file_data,
+                        original_name=file_data.name,
+                        file_size=file_data.size,
+                        title=title,
+                        processing_status=MediaAsset.ProcessingStatus.PENDING,
+                        order=get_insertion_order(gallery.id)
+                    )
+
+                    transaction.on_commit(lambda a_id=asset.id: process_video_asset.delay(str(a_id)))
+                    uploaded_assets.append(asset)
+                    
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

@@ -68,7 +68,7 @@ export default function UploadPage() {
     // Build the standardized multipart payload
     const formData = new FormData()
     files.forEach((file) => {
-      formData.append('image', file)
+      formData.append(file.type.startsWith('video/') ? 'video' : 'image', file)
     })
 
     // ── OFFLINE MOCK SYSTEM PATHWAY ──────────────────────────────────────────
@@ -218,7 +218,11 @@ export default function UploadPage() {
 
           {/* Interactive Upload Area */}
           {!uploading && successCount === 0 && (
-            <DropZone onFiles={handleFilesSelected} disabled={uploading} />
+            <DropZone
+            onFiles={handleFilesSelected} 
+            disabled={uploading} 
+            accept="image/*,video/mp4,video/quicktime,video/x-m4v"
+          />
           )}
 
           {/* Active Uploading Progress Tracker */}

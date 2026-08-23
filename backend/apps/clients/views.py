@@ -2,9 +2,10 @@
 import os
 import tempfile
 import zipfile
-from django.http import StreamingHttpResponse, HttpResponse
+from django.http import StreamingHttpResponse, HttpResponse, FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
+from django.core.files.storage import default_storage
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -114,10 +115,19 @@ class PublicGalleryView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED
                 )
 
-        # 3. Access granted: Return fully serialized public metadata [1.1.2]
+                # 3. Access granted: Return fully serialized public metadata 
+        # username/slug passed through context so PublicMediaAssetSerializer
+        # can build each video's playback_url. gallery.photographer is
+        # already select_related here, so reading it once is free — reading
+        # obj.gallery.photographer per-video inside the child serializer
+        # would NOT be cached and would re-query once per video (N+1).
         serializer = PublicGallerySerializer(
             gallery,
-            context={'request': request, 'gallery': gallery}
+            context={
+                'request': request,
+                'username': gallery.photographer.username,
+                'slug': gallery.slug,
+            }
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -314,6 +324,104 @@ class PublicGalleryDownloadView(APIView):
                 {"error": f"Failed to compile download package: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class PublicVideoStreamView(APIView):
+    """
+    GET /api/v1/public/{username}/{slug}/video/{asset_id}/stream/
+    GET .../stream/?token=<access_token>   (password-protected galleries)
+
+    Serves the ORIGINAL video file for in-gallery playback. Deliberately
+    distinct from PublicGalleryDownloadView: no email capture, no ZIP
+    compilation — this exists purely so a client can click a video and
+    watch it inline, the same way they can already view full-quality
+    2048px images inline with no email required. The gated ZIP archive
+    is still the only bulk/lead-capture download path, and still respects
+    gallery.allow_download — this view does not, matching how inline image
+    viewing has never respected that flag either (it only ever gated the
+    ZIP). There is currently no downsized/watermarked "safe" streaming
+    variant for video (see H-7 follow-up notes) — this serves the same
+    file the ZIP would contain.
+
+    Respects the same password-gallery session-token gate as
+    PublicGalleryView. A <video src="..."> is loaded directly by the
+    browser with no custom headers possible, so the token travels as a
+    query param — the same fallback PublicGalleryView.get_session_token()
+    already supports.
+
+    Range-request support (required for seeking/scrubbing):
+      - Remote/object storage (S3 in production): redirects to a
+        short-lived presigned URL, which natively supports Range.
+      - Local disk (dev): streams via Django's FileResponse, which
+        handles Range requests automatically.
+
+    NOTE: video content served this way has no extra anti-download
+    protection beyond controlsList="nodownload" on the frontend <video>
+    tag (a UI hint only, trivially bypassed) — unlike images, which get a
+    weak but real "right-click disabled" nudge. There's no strong general
+    fix for this short of DRM, which is out of scope here.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_gallery(self, username, slug):
+        try:
+            return Gallery.objects.select_related('photographer').get(
+                slug=slug,
+                photographer__username=username,
+                is_published=True,
+                is_active=True,
+            )
+        except Gallery.DoesNotExist:
+            return None
+
+    def get_session_token(self, request):
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            return auth_header[len('Bearer '):].strip()
+        return request.query_params.get('token', '').strip()
+
+    def validate_session_token(self, token, gallery):
+        if not token:
+            return False
+        return ClientSession.objects.filter(access_token=token, gallery=gallery).exists()
+
+    def get(self, request, username, slug, asset_id):
+        gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
+        if not gallery:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if gallery.is_password_protected:
+            token = self.get_session_token(request)
+            if not self.validate_session_token(token, gallery):
+                return Response(
+                    {'error': 'Invalid or expired access token.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+        try:
+            asset = MediaAsset.objects.get(
+                id=asset_id,
+                gallery=gallery,
+                media_type=MediaAsset.MediaType.VIDEO,
+            )
+        except MediaAsset.DoesNotExist:
+            return Response({'error': 'Video not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not asset.original_file:
+            return Response({'error': 'Video file is not available.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Any storage backend other than local disk is treated as remote
+        # object storage (S3 in this project) — redirect to its own
+        # presigned, Range-capable URL rather than proxying bytes ourselves.
+        if default_storage.__class__.__name__ != 'FileSystemStorage':
+            return HttpResponseRedirect(asset.original_file.url)
+
+        # Local disk (dev) — FileResponse handles Range headers automatically
+        # and guesses content-type from the stored filename's extension.
+        asset.original_file.open('rb')
+        return FileResponse(asset.original_file)
+    
 
 class PublicPhotoDownloadView(APIView):
     """

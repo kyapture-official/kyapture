@@ -180,6 +180,20 @@ export const photosApi = {
     return { deleted, failed }
   },
 
+    /**
+   * WHAT: Fetch current status/metadata for a single asset.
+   * URI:  GET /api/v1/photos/photo/{photo_id}/
+   *
+   * Used for polling assets still in 'pending'/'processing' state after
+   * upload (e.g. videos awaiting FFmpeg poster-frame generation) so the
+   * UI can pick up the finished thumbnail without a manual page refresh.
+   */
+  getById: async (photoId, signal) => {
+    assertNonEmptyString(photoId, 'photosApi.getById: photoId')
+    const { data } = await api.get(`/photos/photo/${encodeURIComponent(photoId)}/`, { signal })
+    return data
+  },
+
   /**
    * WHAT: Persist a new manually-dragged sort order for a gallery's photos.
    * URI:  PATCH /api/v1/photos/{gallery_slug}/reorder/
@@ -196,13 +210,14 @@ export const photosApi = {
    *                                       in the desired display sequence.
    * @returns {Promise<{ success: boolean, ordered_ids: string[] }>}
    */
-  reorderPhotos: async (gallerySlug, orderedPhotoIds) => {
-+    assertNonEmptyString(gallerySlug, 'photosApi.reorderPhotos: gallerySlug')
+  reorderPhotos: async (gallerySlug, orderedPhotoIds, signal) => { 
+    assertNonEmptyString(gallerySlug, 'photosApi.reorderPhotos: gallerySlug')
     assertStringIdArray(orderedPhotoIds, 'photosApi.reorderPhotos: orderedPhotoIds')
 
     const { data } = await api.patch(
       `/photos/${encodeURIComponent(gallerySlug)}/reorder/`,
-      { ordered_ids: orderedPhotoIds }
+      { ordered_ids: orderedPhotoIds },
+      { signal } 
     )
     return data
   },

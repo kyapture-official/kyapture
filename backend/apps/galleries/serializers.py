@@ -41,11 +41,23 @@ class GalleryListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_cover_url(self, obj):
-        """Returns the absolute URL of the cover photo"""
+        """Returns the absolute URL of the cover's thumbnail-scale image.
+        Falls back to poster_image when the cover is a video — videos have
+        no thumbnail_file of their own (only images get a small WebP grid
+        thumbnail generated)."""
+        
         request = self.context.get('request')
-        if obj.cover_photo and request:
-            return request.build_absolute_uri(obj.cover_photo.thumbnail_file.url)
-        return None
+        cover = obj.cover_photo
+        if not cover or not request:
+            return None
+        image_field = (
+            cover.thumbnail_file
+            if cover.media_type == MediaAsset.MediaType.IMAGE
+            else cover.poster_image
+        )
+        if not image_field:
+            return None
+        return request.build_absolute_uri(image_field.url)
 
     def get_has_password(self, obj):
         """Converts password_hash existence into a clean boolean flag."""
@@ -82,9 +94,17 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
 
     def get_cover_url(self, obj):
         request = self.context.get('request')
-        if obj.cover_photo and request:
-            return request.build_absolute_uri(obj.cover_photo.display_file.url)
-        return None
+        cover = obj.cover_photo
+        if not cover or not request:
+            return None
+        image_field = (
+            cover.display_file
+            if cover.media_type == MediaAsset.MediaType.IMAGE
+            else cover.poster_image
+        )
+        if not image_field:
+            return None
+        return request.build_absolute_uri(image_field.url)
 
     def get_has_password(self, obj):
         return bool(obj.password_hash)

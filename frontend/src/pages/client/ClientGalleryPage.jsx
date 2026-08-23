@@ -357,6 +357,7 @@ export default function ClientGalleryPage() {
             token={token}
             onClose={() => setLightboxIndex(null)}
             onChange={setLightboxIndex}
+            videoAccessToken={token}
           />
         )}
       </main>

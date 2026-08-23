@@ -408,6 +408,14 @@ class GallerySetPasswordView(APIView):
     
     Allows the authenticated photographer to enable, disable, or modify 
     the access-password security parameters of a specific gallery.
+    
+    SECURITY: Every successful call revokes all existing ClientSession rows
+    for this gallery. Without this, validate_session_token() (apps/clients/
+    views.py) has no way to know a session was issued under a now-stale
+    password — it only checks (access_token, gallery) — so anyone who had
+    already unlocked the gallery would silently keep access forever, even
+    after the photographer rotated the password specifically to cut them
+    off (leaked link, ex-client, etc).
     """
     permission_classes = [IsAuthenticated]
 
@@ -422,16 +430,34 @@ class GallerySetPasswordView(APIView):
         # Safely extract password, converting NoneType to empty string
         password = request.data.get('password')
         password = password.strip() if password else ''
+        
+        
+        # Deferred import: avoids a module-load-time circular dependency
+        # between apps.galleries.views and apps.clients.models (the two
+        # apps don't otherwise import each other at import time).
+        
+        from apps.clients.models import ClientSession
+
 
         # 1. If password is empty, interpret as removing password-protection entirely
         if not password:
             gallery.is_password_protected = False
             gallery.password_hash = None
             gallery.save(update_fields=['is_password_protected', 'password_hash'])
+            
+            # Revoke every session tied to this gallery. Technically the
+            # gallery is now open to anyone regardless of token, but we
+            # clear these anyway so a stale access_token is never treated
+            # as meaningful once the password state has changed underneath it.
+            
+            revoked_count, _ = ClientSession.objects.filter(gallery=gallery).delete()
+
+            
             return Response({
                 'status': 'success',
                 'is_password_protected': gallery.is_password_protected,
-                'has_password': False
+                'has_password': False,
+                'revoked_sessions': revoked_count,
             }, status=status.HTTP_200_OK)
 
         # 2. If password exists, hash utilizing raw bcrypt salting
@@ -443,8 +469,17 @@ class GallerySetPasswordView(APIView):
         
         gallery.save(update_fields=['is_password_protected', 'password_hash'])
         
+        # Revoke every session issued under the OLD password. This is the
+        # actual security fix (H-4): without it, everyone who already
+        # unlocked the gallery keeps their access_token valid indefinitely —
+        # the password change accomplishes nothing for them.
+        revoked_count, _ = ClientSession.objects.filter(gallery=gallery).delete()
+        
+
+        
         return Response({
             'status': 'success',
             'is_password_protected': gallery.is_password_protected,
-            'has_password': True 
+            'has_password': True,
+            'revoked_sessions': revoked_count, 
         }, status=status.HTTP_200_OK)

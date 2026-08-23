@@ -1,8 +1,9 @@
 // File Location: frontend/src/components/shared/PhotoGrid.jsx
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import PhotoLightbox from "./PhotoLightbox";
-import { formatBytes } from "../../utils/formatters";
+import Spinner from "../ui/Spinner";
+import { formatBytes, formatDuration } from "../../utils/formatters";
 
 // ── KEYFRAME INJECTION ────────────────────────────────────────────────────
 // PhotoGrid gets its own dedicated keyframe rather than reusing Toast.jsx's
@@ -44,16 +45,15 @@ const BROKEN_IMAGE_ICON = (
   </svg>
 );
 
-// Six-dot grip icon — signals "drag me" without borrowing the delete/cover
-// icon language already used in the other two corners.
-const DRAG_HANDLE_ICON = (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <circle cx="9" cy="6" r="1.6" />
-    <circle cx="9" cy="12" r="1.6" />
-    <circle cx="9" cy="18" r="1.6" />
-    <circle cx="15" cy="6" r="1.6" />
-    <circle cx="15" cy="12" r="1.6" />
-    <circle cx="15" cy="18" r="1.6" />
+const PLAY_ICON = (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="white"
+    aria-hidden="true"
+  >
+    <path d="M8 5v14l11-7z" />
   </svg>
 );
 
@@ -77,10 +77,46 @@ export default function PhotoGrid({
   //
   // draggedIndex  — index of the card currently being dragged
   // dragOverIndex — index of the card currently under the pointer (drop target)
-  const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+  const dragIndexRef = useRef(null);
   const canReorder = showActions && typeof onReorder === "function";
 
+  const handleDragStart = (e, index) => {
+    if (!canReorder) return;
+    dragIndexRef.current = index;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
+  };
+
+  const handleDragOver = (e, index) => {
+    if (!canReorder || dragIndexRef.current === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== index) setDragOverIndex(index);
+  };
+
+  const handleDragLeave = (index) => {
+    setDragOverIndex((prev) => (prev === index ? null : prev));
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    if (!canReorder) return;
+    e.preventDefault();
+    const dragIndex = dragIndexRef.current;
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+    if (dragIndex === null || dragIndex === dropIndex) return;
+
+    const reordered = [...photos];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(dropIndex, 0, moved);
+    onReorder(reordered.map((p) => p.id));
+  };
+
+  const handleDragEnd = () => {
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+  };
 
   if (!photos.length) {
     return (
@@ -124,66 +160,18 @@ export default function PhotoGrid({
     });
   };
 
-  // ── DRAG-AND-DROP HANDLERS ────────────────────────────────────────────
-  const resetDragState = () => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  // Fired on the grip handle only — the handle is the sole draggable
-  // element, not the card, so an ordinary click on the thumbnail can never
-  // be misread as a drag attempt.
-  const handleDragStart = (e, index) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = "move";
-    // Firefox refuses to start a drag at all unless setData is called.
-    e.dataTransfer.setData("text/plain", String(index));
-
-    // Drag the whole card as the ghost image, not just the tiny grip icon
-    // the user actually grabbed — much clearer feedback about what's moving.
-    const card = e.currentTarget.closest("[data-photo-card]");
-    if (card) {
-      e.dataTransfer.setDragImage(card, card.offsetWidth / 2, card.offsetHeight / 2);
-    }
-  };
-
-  const handleDragEnter = (e, index) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === index) return;
-    setDragOverIndex(index);
-  };
-
-  // Must call preventDefault or the browser refuses to allow a drop here
-  // at all — this is a real HTML5 DnD spec requirement, not a style choice.
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
-
-  const handleDrop = (e, dropIndex) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === dropIndex) {
-      resetDragState();
-      return;
-    }
-
-    // Splice-move within the FULL photos array (not just what's visible),
-    // then hand the complete reordered array to the parent. The parent is
-    // responsible for the optimistic setState + API call + rollback —
-    // this component only knows about drag mechanics, not persistence.
-    const reordered = [...photos];
-    const [moved] = reordered.splice(draggedIndex, 1);
-    reordered.splice(dropIndex, 0, moved);
-
-    resetDragState();
-    onReorder?.(reordered);
-  };
-
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
         {photos.map((photo, idx) => {
           const isBroken = brokenIds.has(photo.id);
+          const isVideo = photo.media_type === "video";
+          const isFailed = photo.processing_status === "failed";
+          const thumbSrc = isVideo
+            ? photo.poster_url
+            : photo.thumbnail_url || photo.display_url || photo.original_url;
+          const showPlaceholder = !thumbSrc && !isBroken && !isFailed;
+          const isDragOver = dragOverIndex === idx;
 
           return (
             <div
@@ -194,18 +182,23 @@ export default function PhotoGrid({
               aria-label={`View ${photo.title || photo.original_name || "Photo"}`}
               onKeyDown={(e) => handleKeyDown(e, idx)}
               onClick={() => setLightbox(idx)}
-              onDragEnter={(e) => handleDragEnter(e, idx)}
-              onDragOver={handleDragOver}
+              draggable={canReorder}
+              onDragStart={(e) => handleDragStart(e, idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDragLeave={() => handleDragLeave(idx)}
               onDrop={(e) => handleDrop(e, idx)}
-              className={`group relative overflow-hidden rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 transition-all bg-cream-100 ${
-              dragOverIndex === idx ? "ring-2 ring-ink scale-95" : ""
-            }`}
+              onDragEnd={handleDragEnd}
+              className={`group relative overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 transition-all bg-cream-100 ${
+                canReorder
+                  ? "cursor-grab active:cursor-grabbing"
+                  : "cursor-pointer"
+              } ${dragOverIndex === idx ? "ring-2 ring-ink ring-offset-2 scale-95" : ""}`}
               style={{
                 animation: "photoGridFadeUp 0.3s ease-out both",
                 animationDelay: `${idx * 0.04}s`,
               }}
             >
-              {isBroken ? (
+              {isBroken || isFailed ? (
                 // BUG FIX: previously silently swapped a broken photo for a
                 // random stock image (photo-1544005313-...) with no
                 // indication anything failed. A photographer or client would
@@ -215,21 +208,38 @@ export default function PhotoGrid({
                 <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
                   {BROKEN_IMAGE_ICON}
                   <span className="text-[10px] font-medium">
-                    Failed to load
+                    {isFailed ? "Processing failed" : "Failed to load"}
                   </span>
                 </div>
+              ) : showPlaceholder ? (
+                <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
+                  <Spinner className="w-5 h-5" />
+                  <span className="text-[10px] font-medium">Processing…</span>
+                </div>
               ) : (
-                <img
-                  src={
-                    photo.thumbnail_url ||
-                    photo.display_url ||
-                    photo.original_url
-                  }
-                  alt={photo.title || photo.original_name || "Collection asset"}
-                  className="w-full h-48 object-cover block transition-transform duration-500 group-hover:scale-105"
-                  loading="lazy"
-                  onError={() => markBroken(photo.id)}
-                />
+                <>
+                  <img
+                    src={thumbSrc}
+                    alt={
+                      photo.title || photo.original_name || "Collection asset"
+                    }
+                    className="w-full h-48 object-cover block transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
+                    onError={() => markBroken(photo.id)}
+                  />
+                  {isVideo && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                        {PLAY_ICON}
+                      </div>
+                    </div>
+                  )}
+                  {isVideo && photo.duration != null && (
+                    <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-medium tabular-nums pointer-events-none">
+                      {formatDuration(photo.duration)}
+                    </span>
+                  )}
+                </>
               )}
 
               <div className="absolute inset-0 bg-ink/0 group-hover:bg-ink/30 transition-all duration-300 rounded-xl pointer-events-none" />
@@ -292,24 +302,6 @@ export default function PhotoGrid({
                     />
                   </svg>
                 </button>
-              )}
-
-              {/* drag-to-reorder handle — top-center, the one corner not
-                  already claimed by delete or set-cover */}
-              {canReorder && !isBroken && (
-                <div
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, idx)}
-                  onDragEnd={resetDragState}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-hidden="true"
-                  title="Drag to reorder"
-                  className="absolute top-2 left-1/2 -translate-x-1/2 z-10 p-1.5 rounded-lg bg-white/95 text-ink/50
-                            opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                            hover:bg-cream-100 hover:text-ink shadow-sm cursor-grab active:cursor-grabbing"
-                >
-                  {DRAG_HANDLE_ICON}
-                </div>
               )}
 
               {!isBroken && (

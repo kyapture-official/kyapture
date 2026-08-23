@@ -96,6 +96,17 @@ class RegisterView(APIView):
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class LoginRateThrottle(AnonRateThrottle):
+    """
+    Limits anonymous login attempts to the custom 'login' rate (5/minute)
+    configured in settings. Mirrors the same brute-force protection pattern
+    already used by PasswordUnlockRateThrottle for gallery unlocks — the
+    photographer's own account credentials deserve at least the same
+    protection as a guest-facing gallery password.
+    """
+    scope = 'login'
+
+
 @method_decorator(ensure_csrf_cookie, name='dispatch')
 class LoginView(APIView):
     """
@@ -103,7 +114,8 @@ class LoginView(APIView):
     Authenticates photographer credentials and sets secure session cookies.
     """
     permission_classes = [AllowAny]
-    authentication_classes = [] 
+    authentication_classes = []
+    throttle_classes = [LoginRateThrottle] 
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data, context={'request': request})

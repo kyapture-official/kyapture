@@ -117,6 +117,27 @@ _ALLOWED_SIGNATURES = [
 ]
 
 
+def validate_video_magic_bytes(file_obj):
+    """
+    Reads the first 12 bytes of an upload stream to verify a genuine
+    ISO-BMFF container signature (MP4/MOV/M4V), preventing disguised
+    binaries from being accepted as "video". All ISO-BMFF containers open
+    with a 4-byte box size followed by a 4-byte box type — the first box
+    in a valid camera/phone/editing-tool export is virtually always 'ftyp'.
+    This is a best-effort container check (same spirit as
+    validate_magic_bytes above), not a full codec validator.
+    """
+    header = file_obj.read(12)
+    file_obj.seek(0)
+
+    if len(header) >= 8 and header[4:8] == b'ftyp':
+        return 'ISO-BMFF'
+
+    raise ValidationError(
+        detail="Security violation: Uploaded file signature is invalid. Only genuine MP4 and MOV video files are allowed.",
+        code="invalid_file_signature"
+    )
+
 def validate_magic_bytes(file_obj):
     """
     Reads the first 8 bytes of an upload stream to verify genuine binary signatures,

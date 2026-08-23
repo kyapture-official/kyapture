@@ -1,6 +1,7 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/PublicMasonryGrid.jsx
 import React, { useState } from 'react'
 import { useInView } from 'react-intersection-observer'
+import { formatDuration } from '../../utils/formatters'
 
 /**
  * Appends the client's unlock token to a download_url, matching the same
@@ -21,6 +22,12 @@ function DownloadIcon({ className }) {
   )
 }
 
+const PLAY_ICON = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+    <path d="M8 5v14l11-7z" />
+  </svg>
+)
+
 /**
  * Individual image renderer managing intersection observation,
  * aspect-ratio containment, state-synchronization, and asset-theft protection.
@@ -29,11 +36,19 @@ function LazyPhoto({ photo, index, token, onPhotoClick }) {
   const [loadedSrc, setLoadedSrc] = useState(null)
   const [errorSrc,  setErrorSrc]  = useState(null)
 
-  const imgSrc = photo.thumbnail_url || photo.display_url
+  const isVideo = photo.media_type === 'video'
+
   const downloadHref = buildDownloadHref(photo.download_url, token)
 
+  // Videos have no thumbnail_url/display_url — those are image-only
+  // derived variants. poster_url is the generated frame grab.
+  const imgSrc = isVideo ? photo.poster_url : (photo.thumbnail_url || photo.display_url)
+
   const isLoaded = loadedSrc === imgSrc
-  const hasError = errorSrc  === imgSrc
+  // Guard against both being undefined/null "matching" and producing a
+  // false-positive error state — this was the exact bug behind the
+  // "Unavailable" placeholder video assets were hitting.
+  const hasError = errorSrc === imgSrc && imgSrc != null
 
   const { ref, inView } = useInView({
     triggerOnce: true,
@@ -45,17 +60,32 @@ function LazyPhoto({ photo, index, token, onPhotoClick }) {
 
   const handleContextMenu = (e) => e.preventDefault()
 
+  // No thumbnail yet because the asset is still processing (not because
+  // something actually failed) — show a quiet placeholder instead of the
+  // scary "Unavailable" state. Applies to images too: they go through the
+  // same async pending→ready window, just usually fast enough not to be
+  // noticed by the time a client opens the link.
+  const stillProcessing =
+    !imgSrc &&
+    (photo.processing_status === 'pending' || photo.processing_status === 'processing');
+
   return (
     <div
       ref={ref}
-      onClick={() => onPhotoClick?.(index)}
-      className="group relative w-full overflow-hidden rounded-lg bg-cream-100 cursor-pointer mb-3 break-inside-avoid shadow-sm hover:shadow-md transition-shadow duration-300 select-none"
+      onClick={() => !stillProcessing && onPhotoClick?.(index)}
+      className={`group relative w-full overflow-hidden rounded-lg bg-cream-100 mb-3 break-inside-avoid shadow-sm hover:shadow-md transition-shadow duration-300 select-none ${
+        stillProcessing ? '' : 'cursor-pointer'
+      }`}
       style={{ aspectRatio }}
       onContextMenu={handleContextMenu}
     >
       {inView ? (
         <>
-          {hasError ? (
+          {stillProcessing ? (
+            <div className="absolute inset-0 bg-cream-100 animate-pulse flex items-center justify-center">
+              <span className="text-cream-400 text-[10px] font-light select-none">Processing…</span>
+            </div>
+          ) : hasError ? (
             <div className="absolute inset-0 bg-cream-200 flex flex-col items-center justify-center p-4">
               <svg
                 className="w-5 h-5 text-cream-400 mb-1"
@@ -76,29 +106,47 @@ function LazyPhoto({ photo, index, token, onPhotoClick }) {
               </span>
             </div>
           ) : (
-            <img
-              src={imgSrc}
-              alt={photo.alt || photo.original_name || 'Gallery item'}
-              loading="lazy"
-              decoding="async"
-              className={`
-                w-full h-full object-cover pointer-events-none
-                transition-[opacity,transform] duration-500 ease-out
-                group-hover:scale-[1.03]
-                ${isLoaded ? 'opacity-100' : 'opacity-0'}
-              `}
-              style={{
-                WebkitTouchCallout: 'none',
-                WebkitUserSelect: 'none',
-              }}
-              onLoad={() => setLoadedSrc(imgSrc)}
-              onError={() => setErrorSrc(imgSrc)}
-            />
+            // 🎬 CLAUDE LE DEKO VIDEO LOGIC YAHA MERGE GARIEKO CHHA
+            <>
+              <img
+                src={imgSrc}
+                alt={photo.alt || photo.original_name || 'Gallery item'}
+                loading="lazy"
+                decoding="async"
+                className={`
+                  w-full h-full object-cover pointer-events-none
+                  transition-[opacity,transform] duration-500 ease-out
+                  group-hover:scale-[1.03]
+                  ${isLoaded ? 'opacity-100' : 'opacity-0'}
+                `}
+                style={{
+                  WebkitTouchCallout: 'none',
+                  WebkitUserSelect: 'none',
+                }}
+                onLoad={() => setLoadedSrc(imgSrc)}
+                onError={() => setErrorSrc(imgSrc)}
+              />
+              
+              {/* Video Play Icon */}
+              {isVideo && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-11 h-11 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                    {PLAY_ICON}
+                  </div>
+                </div>
+              )}
+              
+              {/* Video Duration */}
+              {isVideo && photo.duration != null && (
+                <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-medium tabular-nums pointer-events-none">
+                  {formatDuration(photo.duration)}
+                </span>
+              )}
+            </>
           )}
+          
           <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-          {/* Only renders when the backend actually returned a download_url —
-              i.e. only when the photographer enabled downloads for this gallery. */}
           {downloadHref && (
             <a
               href={downloadHref}
@@ -121,6 +169,8 @@ function LazyPhoto({ photo, index, token, onPhotoClick }) {
     </div>
   )
 }
+
+
 
 export default function PublicMasonryGrid({ photos, token, onPhotoClick }) {
   if (!photos || photos.length === 0) return null
