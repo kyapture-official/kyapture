@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { validateEmail } from '../../utils/validator'
 
 /**
  * WHAT: Core Authentication Login Portal
@@ -54,8 +55,9 @@ export default function LoginPage() {
    */
   function validate() {
     const e = {}
-    if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) {
-      e.email = 'Enter a valid email address'
+    const emailCheck = validateEmail(form.email)
+    if (!emailCheck.isValid) {
+      e.email = emailCheck.error
     }
     if (!form.password) {
       e.password = 'Please enter your password'

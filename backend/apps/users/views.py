@@ -15,6 +15,8 @@ from django.utils.decorators import method_decorator
 from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 
 
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -324,8 +326,6 @@ class PasswordResetRequestView(APIView):
                 logger.info('Password reset email dispatched for user_id=%s', user.id)
             except Exception:
                 logger.exception('Failed to send password reset email for user_id=%s', user.id)
-
-            logger.debug('Password reset link for %s: %s', user.email, reset_url)
 
         except User.DoesNotExist:
             pass

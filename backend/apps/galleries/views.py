@@ -9,7 +9,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination 
 
 # Dynamic permission routing prevents the Storage Lockout Paradox
-from apps.core.permissions import IsSubscribed
 from apps.core.utils import get_user_subscription_metrics
 from .models import Gallery
 from .serializers import (
@@ -44,15 +43,7 @@ class GalleryListCreateView(APIView):
     POST /api/v1/galleries/  — Create a new custom photographer gallery (Gated by Subscription) [1.1.2].
     """
     
-    def get_permissions(self):
-        """
-        Enforce IsSubscribed strictly on write operations (POST).
-        Allows expired photographers to view their dashboard and see upgrade 
-        prompts, but blocks the creation of new resources [1.1.2].
-        """
-        if self.request.method == 'POST':
-            return [IsAuthenticated(), IsSubscribed()]
-        return [IsAuthenticated()]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         # 1. Base Query: Strict tenant isolation and pre-fetch relationship joins
@@ -103,7 +94,7 @@ class GalleryListCreateView(APIView):
         
         # 2. Skip limit check for administrative staff
         if not (photographer.is_superuser or photographer.is_staff):
-            if metrics["current_galleries_count"] >= metrics["max_galleries"]:
+            if metrics["max_galleries"] is not None and metrics["current_galleries_count"] >= metrics["max_galleries"]:
                 return Response({
                     "error": "Gallery limit reached for your current plan.",
                     "code": "gallery_limit_reached",
@@ -326,18 +317,24 @@ class DashboardStatsView(APIView):
 
         # 5. Handle Unsubscribed case cleanly (No crash, returns zero bounds)
         if subscription_status == "no_subscription":
+            storage_used_bytes = metrics["current_total_storage_bytes"]
+            plan_storage_bytes = metrics["storage_bytes_limit"]
+            storage_remaining_gb = round(
+                max(0.0, (plan_storage_bytes - storage_used_bytes) / (1024 ** 3)), 2
+            )
             return Response({
                 'galleries_used': metrics["current_galleries_count"],
                 'photos_used': photos_used,
-                'storage_used_bytes': metrics["current_total_storage_bytes"],
-                'storage_used_gb': round(metrics["current_total_storage_bytes"] / (1024 ** 3), 2),
-                'plan_name': None,
-                'plan_gallery_limit': None,
-                'plan_photo_limit': None,
-                'plan_storage_limit_gb': None,
-                'plan_storage_limit_bytes': None,
+                'storage_used_bytes': storage_used_bytes,
+                'storage_used_gb': round(storage_used_bytes / (1024 ** 3), 2),
+                'plan_name': metrics["plan_name"],
+                'plan_gallery_limit': metrics["max_galleries"],
+                'plan_photo_limit': metrics["max_photos_per_gallery"],
+                'plan_storage_limit_gb': plan_storage_bytes / (1024 ** 3),
+                'plan_storage_limit_bytes': plan_storage_bytes,
                 'galleries_remaining': None,
-                'storage_remaining_gb': None,
+                'storage_remaining_gb': storage_remaining_gb,
+                'allow_video': metrics["allow_video"],
                 'subscription_status': 'no_subscription',
                 'expires_at': None,
                 'days_remaining': None,

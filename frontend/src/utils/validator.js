@@ -47,8 +47,29 @@ export const validateSubdomain = (username) => {
  * Validates basic email formatting
  */
 export const validateEmail = (email) => {
-  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email.trim()) return { isValid: false, error: 'Email address is required.' };
-  if (!regex.test(email)) return { isValid: false, error: 'Invalid email address format.' };
-  return { isValid: true, error: null };
-};
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const clean = (email || '').trim()
+  if (!clean) return { isValid: false, error: 'Email address is required.' }
+  if (!regex.test(clean)) return { isValid: false, error: 'Enter a valid email address.' }
+  return { isValid: true, error: null }
+}
+
+/**
+ * Validates username formatting (matching backend USERNAME_REGEX)
+ */
+export const validateUsername = (username) => {
+  const clean = (username || '').trim()
+  const usernameRegex = /^[a-z0-9](-?[a-z0-9])*$/
+
+  if (!clean) return { isValid: false, error: 'Username is required.' }
+  if (clean.length < 3) return { isValid: false, error: 'Username must be at least 3 characters.' }
+  if (clean.length > 30) return { isValid: false, error: 'Username must be 30 characters or fewer.' }
+  if (!usernameRegex.test(clean)) {
+    return {
+      isValid: false,
+      error: 'Username must contain only lowercase letters, numbers, and single internal dashes (-). No underscores (_) or spaces.'
+    }
+  }
+
+  return { isValid: true, error: null }
+}

@@ -68,26 +68,6 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def _get_photo_metrics(self, user):
-        """
-        Caches aggregated photo metrics on the serializer instance [1.1.2].
-        Combines total storage size and overall photo counts into a single 
-        SQL pass, preventing redundant subqueries [1.1.2].
-        """
-        if not hasattr(self, '_photo_metrics_cache'):
-            # Single-pass database aggregation [1.1.2]
-            metrics = MediaAsset.objects.filter(
-                gallery__photographer=user
-            ).aggregate(
-                total_size=Sum('file_size'),
-                total_count=models.Count('id')
-            )
-            # Normalize SQL NULL values (None) to integer 0 [1.1.2]
-            self._photo_metrics_cache = {
-                'total_size': metrics['total_size'] or 0,
-                'total_count': metrics['total_count'] or 0
-            }
-        return self._photo_metrics_cache
 
     def get_days_remaining(self, obj):
         """Calculates exact days left in active session. Protects negative values."""
@@ -103,25 +83,25 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
         return timezone.now() > obj.expires_at
 
     def get_storage_used_bytes(self, obj):
-        """Returns aggregate photographer storage footprint in bytes [1.1.2]."""
-        metrics = self._get_photo_metrics(obj.user)
-        return metrics['total_size']
+        from apps.core.utils import get_user_subscription_metrics
+        if not hasattr(self, '_metrics_cache'):
+            self._metrics_cache = get_user_subscription_metrics(obj.user)
+        return self._metrics_cache['current_total_storage_bytes']
 
     def get_storage_used_gb(self, obj):
-        """Translates and rounds total storage usage to 2-decimal gigabytes."""
-        total_bytes = self.get_storage_used_bytes(obj)
-        gb = total_bytes / (1024 ** 3)
-        return round(gb, 2)
+        return round(self.get_storage_used_bytes(obj) / (1024 ** 3), 2)
 
     def get_galleries_used(self, obj):
-        """Counts total active galleries created by the photographer."""
-        return obj.user.galleries.count()
+        from apps.core.utils import get_user_subscription_metrics
+        if not hasattr(self, '_metrics_cache'):
+            self._metrics_cache = get_user_subscription_metrics(obj.user)
+        return self._metrics_cache['current_galleries_count']
 
     def get_photos_used(self, obj):
-        """Returns total active photos uploaded by the photographer."""
-        metrics = self._get_photo_metrics(obj.user)
-        return metrics['total_count']
-
+        from apps.core.utils import get_user_subscription_metrics
+        if not hasattr(self, '_metrics_cache'):
+            self._metrics_cache = get_user_subscription_metrics(obj.user)
+        return self._metrics_cache['current_photos_count']
 
 class ManualPaymentSubmitSerializer(serializers.ModelSerializer):
     """

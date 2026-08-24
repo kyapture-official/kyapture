@@ -125,6 +125,7 @@ class PublicGalleryView(APIView):
             gallery,
             context={
                 'request': request,
+                'gallery': gallery,
                 'username': gallery.photographer.username,
                 'slug': gallery.slug,
             }

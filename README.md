@@ -1,9 +1,9 @@
 <!-- C:/Users/LENOVO/Desktop/kyapture/README.md
-Kaypture (SaaS for client photo delivery and photographer management)
+Kyapture (SaaS for client photo delivery and photographer management)
 
 
 
-Built for pros, Kaypture runs fast even when many users are active at once. Access stays safe through private galleries clients can view only with permission. Images load quickly thanks to smart resizing that adapts on the fly. Each file gets stamped with a precise timestamp-based ID so nothing loses its place. Communication between systems flows smoothly using a streamlined connection setup.
+Built for pros, Kyapture runs fast even when many users are active at once. Access stays safe through private galleries clients can view only with permission. Images load quickly thanks to smart resizing that adapts on the fly. Each file gets stamped with a precise timestamp-based ID so nothing loses its place. Communication between systems flows smoothly using a streamlined connection setup.
 
 
 

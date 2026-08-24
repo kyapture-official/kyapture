@@ -6,6 +6,11 @@ from apps.core.utils import generate_unique_slug, sanitize_text
 from apps.photos.models import MediaAsset
 from .models import Gallery
 
+RESERVED_GALLERY_SLUGS = {
+    'search', 'dashboard', 'stats',
+    'publish', 'set-password',
+    'unlock', 'download', 'video', 'photo', 'stream',
+}
 
 class CoverPhotoSerializer(serializers.ModelSerializer):
     """Read-only. Returns highly compact cover photo metadata."""
@@ -162,6 +167,7 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
         slug = generate_unique_slug(
             Gallery,
             validated_data['title'],
+            reserved_words=RESERVED_GALLERY_SLUGS,
             photographer=photographer
         )
 
@@ -232,10 +238,17 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
                 })
         return data
 
-    def update(self, instance, validated_data):
-        """
+        def update(self, instance, validated_data):
+        
+            """
         Updates the gallery instance safely.
         If a new password is submitted, hashes it using raw bcrypt.
+        If the title actually changed, regenerates the slug — scoped
+        per-photographer and checked against RESERVED_GALLERY_SLUGS, the
+        same way GalleryCreateSerializer.create() does. exclude_pk=instance.pk
+        is mandatory here (create() has no need for it): without it, the
+        gallery's own current slug row would count as a self-collision
+        and get bumped with a pointless numeric suffix.
         """
         # Safely extract and strip the incoming raw password from validated data
         raw_password = validated_data.pop('password', '').strip()
@@ -248,6 +261,20 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
             ).decode('utf-8')
         elif not validated_data.get('is_password_protected', instance.is_password_protected):
             instance.password_hash = None
+
+        # Regenerate slug only when the title is actually part of this
+        # request AND differs from the current title. Guards PATCH calls
+        # that never touch 'title' at all, and no-op edits that resubmit
+        # the same value.
+        new_title = validated_data.get('title')
+        if new_title is not None and new_title != instance.title:
+            instance.slug = generate_unique_slug(
+                Gallery,
+                new_title,
+                reserved_words=RESERVED_GALLERY_SLUGS,
+                exclude_pk=instance.pk,
+                photographer=instance.photographer,
+            )
 
         # Dynamically write remaining updated attributes to the model instance
         for attr, value in validated_data.items():

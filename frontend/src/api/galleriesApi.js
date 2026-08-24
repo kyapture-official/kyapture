@@ -165,17 +165,18 @@ export const galleriesApi = {
    *   recovery path. We protect against accidental data loss.
    *
    * WHY this returns void:
-   *   The backend returns HTTP 204 No Content. Axios sets response.data
-   *   to empty string '' on 204. Returning '' to the caller is meaningless.
-   *   The calling hook removes the gallery from its local state after
-   *   this promise resolves — the API layer has no role in that.
+   *   The backend actually returns HTTP 200 with a small JSON body
+   *   ({ message: 'Gallery deleted successfully.' }), not 204 — but that
+   *   message is just a static confirmation string with nothing the caller
+   *   needs. The calling hook removes the gallery from its local state
+   *   after this promise resolves — the API layer has no role in that.
    *
    * @param   {string}       slug
    * @returns {Promise<void>}
    */
   deleteGallery: async (slug) => {
     await api.delete(`/galleries/${slug}/`)
-    // Intentionally returns nothing.
+    // Intentionally discards the { message } body — nothing to act on.
   },
 
   /**
@@ -193,7 +194,7 @@ export const galleriesApi = {
    *
    * @param {string}      slug
    * @param {string|null} password
-   * @returns {Promise<{ has_password: boolean }>}
+   * @returns {Promise<{ status: string, is_password_protected: boolean, has_password: boolean, revoked_sessions: number }>}
    */
   setGalleryPassword: async (slug, password) => {
     const { data } = await api.post(`/galleries/${slug}/set-password/`, {
@@ -212,7 +213,7 @@ export const galleriesApi = {
    *
    * @param   {string}  slug
    * @param   {boolean} isPublished  true = visible to clients, false = draft
-   * @returns {Promise<Gallery>}
+   * @returns {Promise<{ status: string, is_published: boolean }>}
    */
   publishGallery: async (slug, isPublished) => {
     const { data } = await api.post(`/galleries/${slug}/publish/`, {
@@ -220,5 +221,4 @@ export const galleriesApi = {
     })
     return data
   },
-
 }

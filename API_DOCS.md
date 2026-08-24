@@ -1,5 +1,5 @@
 <!--C:\Users\LENOVO\Desktop\kyapture\API_DOCS.md 
-Kaypture API v1 — Core Contract Specifications
+Kyapture API v1 — Core Contract Specifications
 
 API documentation
 

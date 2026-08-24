@@ -2,6 +2,7 @@
 import React, { useState } from 'react'
 import { useInView } from 'react-intersection-observer'
 import { formatDuration } from '../../utils/formatters'
+import { getBlurhashDataUrl } from '../../utils/blurhashDataUrl'
 
 /**
  * Appends the client's unlock token to a download_url, matching the same
@@ -50,6 +51,10 @@ function LazyPhoto({ photo, index, token, onPhotoClick }) {
   // "Unavailable" placeholder video assets were hitting.
   const hasError = errorSrc === imgSrc && imgSrc != null
 
+  // Videos never get a blurhash (only process_image_pipeline computes one),
+  // so this is null for video assets — no placeholder, no regression.
+  const blurDataUrl = getBlurhashDataUrl(photo.blurhash)
+
   const { ref, inView } = useInView({
     triggerOnce: true,
     rootMargin: '200px 0px',
@@ -76,7 +81,14 @@ function LazyPhoto({ photo, index, token, onPhotoClick }) {
       className={`group relative w-full overflow-hidden rounded-lg bg-cream-100 mb-3 break-inside-avoid shadow-sm hover:shadow-md transition-shadow duration-300 select-none ${
         stillProcessing ? '' : 'cursor-pointer'
       }`}
-      style={{ aspectRatio }}
+      style={{
+        aspectRatio,
+        ...(blurDataUrl && !isLoaded && {
+          backgroundImage: `url(${blurDataUrl})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }),
+      }}
       onContextMenu={handleContextMenu}
     >
       {inView ? (

@@ -5,10 +5,12 @@ import { subscriptionsApi } from '../api/subscriptionsApi'
 import { useAuthStore } from '../store/authStore'
 
 const FREE_PLAN_LIMITS = {
-  max_galleries: 3,
-  max_photos_per_gallery: 100,
-  storage_gb: 2,
+  max_galleries: null,
+  max_photos_per_gallery: null,
+  storage_gb: 3,
+  allow_video: false,
 }
+
 
 export function useSubscription() {
   const isMountedRef       = useRef(false)
@@ -88,6 +90,7 @@ export function useSubscription() {
           max_galleries:          plan.max_galleries,
           max_photos_per_gallery: plan.max_photos_per_gallery,
           storage_gb:             plan.storage_gb,
+          allow_video:            true,
         }
       : FREE_PLAN_LIMITS
   }, [isSubscribed, plan])

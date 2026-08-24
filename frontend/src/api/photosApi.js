@@ -141,43 +141,60 @@ export const photosApi = {
     return data
   },
 
-  /**
-   * WHAT: Delete multiple photos.
-   * URI:  DELETE /api/v1/photos/photo/{photo_id}/  (called once per ID)
+    /**
+   * WHAT: Delete one or more photos in a single request.
+   * URI:  POST /api/v1/photos/{gallery_slug}/delete-bulk/
    *
-   * WHY individual calls, not a bulk endpoint:
-   *   The backend has no /delete-bulk/ route — only single-photo deletion
-   *   at /photos/photo/{photo_id}/.  We fan out with Promise.allSettled
-   *   so a single failure doesn't block the rest of the batch.
+   * CORRECTION (M-3): this doc previously claimed "the backend has no
+   * /delete-bulk/ route" and fanned out N individual DELETE calls via
+   * Promise.allSettled instead. That was never true — PhotoBulkDeleteView
+   * (apps/photos/views.py) has always existed, registered at
+   * '<slug:gallery_slug>/delete-bulk/' in apps/photos/urls.py.
    *
+   * WHY gallerySlug is now required:
+   *   The bulk endpoint is scoped by gallery in the URL path (unlike the
+   *   old per-photo DELETE, which only needed the photo UUID). Every
+   *   current call site already has the slug in scope.
+   *
+   * RESPONSE SHAPE LIMITATION:
+   *   The backend returns only { deleted_count } — not which specific IDs
+   *   succeeded. Non-matching IDs (wrong gallery/owner, already deleted)
+   *   are silently excluded server-side, not reported individually. This
+   *   is exact for every current caller (always a single ID: deleted_count
+   *   1 = success, 0 = failure). If a future multi-select bulk-delete UI
+   *   ever sends more than one ID and the count comes back short, we
+   *   deliberately do NOT guess which ones succeeded — see the partial
+   *   branch below.
+   *
+   * @param   {string}      gallerySlug
    * @param   {string[]}    photoIds  - Non-empty array of photo UUIDs
    * @param   {AbortSignal} [signal]
-   * @returns {Promise<{ deleted: string[], failed: string[] }>}
-   *          Callers can show partial-failure feedback from these arrays.
+   * @returns {Promise<{ deleted: string[], failed: string[], partialDeletedCount?: number }>}
    */
-  deletePhotos: async (photoIds, signal) => {
+  deletePhotos: async (gallerySlug, photoIds, signal) => {
+    assertNonEmptyString(gallerySlug, 'photosApi.deletePhotos: gallerySlug')
     assertStringIdArray(photoIds, 'photosApi.deletePhotos: photoIds')
 
-    // Deduplicate so we never send the same DELETE twice in one batch
+    // Deduplicate so we never send the same ID twice in one batch
     const uniqueIds = [...new Set(photoIds)]
 
-    const results = await Promise.allSettled(
-      uniqueIds.map((id) =>
-        api.delete(`/photos/photo/${encodeURIComponent(id)}/`, { signal })
-      )
+    const { data } = await api.post(
+      `/photos/${encodeURIComponent(gallerySlug)}/delete-bulk/`,
+      { photo_ids: uniqueIds },
+      { signal }
     )
 
-    const deleted = []
-    const failed  = []
-    results.forEach((result, i) => {
-      if (result.status === 'fulfilled') {
-        deleted.push(uniqueIds[i])
-      } else {
-        failed.push(uniqueIds[i])
-      }
-    })
+    const deletedCount = data?.deleted_count ?? 0
 
-    return { deleted, failed }
+    if (deletedCount === uniqueIds.length) {
+      return { deleted: uniqueIds, failed: [] }
+    }
+    if (deletedCount === 0) {
+      return { deleted: [], failed: uniqueIds }
+    }
+    // Partial batch failure with no per-id attribution available from the
+    // backend. Reported honestly as "some failed," not faked as specific IDs.
+    return { deleted: [], failed: uniqueIds, partialDeletedCount: deletedCount }
   },
 
     /**

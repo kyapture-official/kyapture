@@ -13,7 +13,6 @@ from .tasks import process_photo_asset, process_video_asset
 from PIL import Image as PILImage
 from PIL.ImageOps import exif_transpose
 
-from apps.core.permissions import IsSubscribed
 from apps.core.utils import get_user_subscription_metrics, get_insertion_order, strip_exif_gps
 from apps.galleries.models import Gallery
 from .models import MediaAsset
@@ -41,16 +40,8 @@ class PhotoListUploadView(APIView):
     by form field, fixable afterward via drag-reorder in the grid.
     """
     parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated]
 
-    def get_permissions(self):
-        """
-        Enforce IsSubscribed strictly on POST requests (Resource Allocation).
-        Allows expired photographers to fetch existing assets via GET, 
-        but blocks uploads with an immediate 403 Forbidden.
-        """
-        if self.request.method == 'POST':
-            return [IsAuthenticated(), IsSubscribed()]
-        return [IsAuthenticated()]
 
     def get_gallery(self, slug, user):
         """Retrieves an active gallery scoped strictly to the requesting user."""
@@ -73,7 +64,7 @@ class PhotoListUploadView(APIView):
         gallery = self.get_gallery(gallery_slug, request.user)
         if not gallery:
             return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
-        
+
         image_files = request.FILES.getlist('image')
         video_files = request.FILES.getlist('video')
 
@@ -85,34 +76,35 @@ class PhotoListUploadView(APIView):
 
         photographer = request.user
         total_new_files = len(image_files) + len(video_files)
-
-        # ─── BATCH-LEVEL GATING (O(1) Database Efficiency) ───
         metrics = get_user_subscription_metrics(photographer)
 
         if not (photographer.is_superuser or photographer.is_staff):
-            # Check 1: Max media assets per gallery. Shared cap — applies to
-            # photos and videos identically. This is a pre-existing,
-            # unrelated business rule (per-gallery item count), not a
-            # video-specific duration/quality limit, so it stays as-is.
-            current_assets_in_gallery = MediaAsset.objects.filter(gallery=gallery).count()
-            projected_assets_count = current_assets_in_gallery + total_new_files
-            
-            if projected_assets_count > metrics["max_photos_per_gallery"]:
+            # Check 0: free tier is images-only — reject the whole batch so
+            # nothing uploads partially.
+            if video_files and not metrics["allow_video"]:
                 return Response({
-                    "error": "Photo limit reached for this gallery on your plan.",
-                    "code": "photo_limit_reached",
-                    "current_count": current_assets_in_gallery,
-                    "batch_count": total_new_files,
-                    "plan_limit": metrics["max_photos_per_gallery"],
-                    "message": f"Uploading these {total_new_files} assets would exceed your plan's maximum of {metrics['max_photos_per_gallery']} assets per gallery."
-                }, status=status.HTTP_400_BAD_REQUEST)
+                    "error": "Video uploads require an active subscription plan.",
+                    "code": "video_upload_requires_subscription",
+                    "message": "Your current plan supports image uploads only. Upgrade your plan to upload videos."
+                }, status=status.HTTP_403_FORBIDDEN)
 
-            # Check 2: Total plan storage footprint. This is the ONLY gate
-            # that applies to video length/quality — there is no separate
-            # duration or resolution check anywhere in this pipeline.
+            # Check 1: per-gallery photo cap — skipped when plan has none
+            if metrics["max_photos_per_gallery"] is not None:
+                current_assets_in_gallery = MediaAsset.objects.filter(gallery=gallery).count()
+                projected_assets_count = current_assets_in_gallery + total_new_files
+                if projected_assets_count > metrics["max_photos_per_gallery"]:
+                    return Response({
+                        "error": "Photo limit reached for this gallery on your plan.",
+                        "code": "photo_limit_reached",
+                        "current_count": current_assets_in_gallery,
+                        "batch_count": total_new_files,
+                        "plan_limit": metrics["max_photos_per_gallery"],
+                        "message": f"Uploading these {total_new_files} assets would exceed your plan's maximum of {metrics['max_photos_per_gallery']} assets per gallery."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check 2: total storage — the only hard cap for every free user
             total_batch_size_bytes = sum(f.size for f in image_files) + sum(f.size for f in video_files)
             projected_storage_bytes = metrics["current_total_storage_bytes"] + total_batch_size_bytes
-            
             if projected_storage_bytes > metrics["storage_bytes_limit"]:
                 allowed_gb = metrics["storage_bytes_limit"] / (1024 ** 3)
                 current_mb = metrics["current_total_storage_bytes"] / (1024 ** 2)
@@ -123,7 +115,7 @@ class PhotoListUploadView(APIView):
                     "current_storage_mb": f"{current_mb:.1f}",
                     "upload_batch_mb": f"{batch_mb:.1f}",
                     "plan_limit_gb": f"{allowed_gb:.1f}",
-                    "message": f"This upload of {batch_mb:.1f} MB would push your account past your {allowed_gb:.1f} GB plan storage limit."
+                    "message": f"This upload of {batch_mb:.1f} MB would push your account past your {allowed_gb:.1f} GB storage limit. Upgrade your plan for more storage."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
 # ─── ENFORCEMENT CLEARED ───

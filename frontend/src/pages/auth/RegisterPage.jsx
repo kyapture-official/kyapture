@@ -20,6 +20,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
+import { validateEmail, validateUsername } from "../../utils/validator";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -63,22 +64,14 @@ export default function RegisterPage() {
       fieldErrors.displayName = "Business name must be at least 3 characters.";
     }
 
-    const trimmedUsername = form.username.trim();
-    // Enforces lowercase alphanumeric and single internal dashes only (Matching backend USERNAME_REGEX)
-    const usernameRegex = /^[a-z0-9](-?[a-z0-9])*$/;
-
-    if (!trimmedUsername) {
-      fieldErrors.username = "Username is required.";
-    } else if (trimmedUsername.length < 3) {
-      fieldErrors.username = "Username must be at least 3 characters.";
-    } else if (trimmedUsername.length > 30) {
-      fieldErrors.username = "Username must be 30 characters or fewer.";
-    } else if (!usernameRegex.test(trimmedUsername)) {
-      fieldErrors.username = "Username must contain only lowercase letters, numbers, and single internal dashes (-). No underscores (_) or spaces.";
+    const usernameCheck = validateUsername(form.username);
+    if (!usernameCheck.isValid) {
+      fieldErrors.username = usernameCheck.error;
     }
 
-    if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      fieldErrors.email = "Enter a valid email address.";
+    const emailCheck = validateEmail(form.email);
+    if (!emailCheck.isValid) {
+      fieldErrors.email = emailCheck.error;
     }
 
     if (!form.password || form.password.length < 8) {

@@ -686,6 +686,36 @@ kyapture/
 │   │   │   │   │   │   │   ├── 01a02955-2b55-7954-8bfb-208122835596_thumb.webp
 │   │   │   │   │   │   │   ├── 01a02955-3803-782a-bf03-731bdcd21611_thumb.webp
 │   │   │   │   │   │   │   ├── 01a02955-44a1-739b-8e22-4b9a3fa6c71e_thumb.webp
+│   │   │   │   │   │   ├── videos/
+│   │   │   │   │   │   │   ├── 01a02ab3-56aa-7e1e-80dc-db1aa9dfe8d0_original.mp4
+│   │   │   │   │   │   │   ├── 01a02ab3-56aa-7e1e-80dc-db1aa9dfe8d0_poster.webp
+│   │   │   │   │   │   │   ├── 01a02ab3-56aa-7e1e-80dc-db1aa9dfe8d0_preview.webm
+│   │   │   │   │   │   │   ├── 01a02ded-4179-7cf9-81f0-3083470a8ac8_original.mp4
+│   │   │   │   │   │   │   ├── 01a02ded-4179-7cf9-81f0-3083470a8ac8_poster.webp
+│   │   │   │   │   │   │   ├── 01a02ded-4179-7cf9-81f0-3083470a8ac8_preview.webm
+│   │   │   ├── 01a02e8a-4a89-7e95-9e6b-b91f763f05e9/
+│   │   │   │   ├── galleries/
+│   │   │   │   │   ├── 01a02e8b-87b4-780f-9578-3b5b88cc82a5/
+│   │   │   │   │   │   ├── photos/
+│   │   │   │   │   │   │   ├── 01a02e8c-0220-7608-9ca5-3baa24bffe5b_display.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-0220-7608-9ca5-3baa24bffe5b_original.jpg
+│   │   │   │   │   │   │   ├── 01a02e8c-0dcc-7516-b940-bb2c88b78888_display.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-0dcc-7516-b940-bb2c88b78888_original.jpg
+│   │   │   │   │   │   │   ├── 01a02e8c-17b7-7e5f-bcbd-c161accd09ce_display.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-17b7-7e5f-bcbd-c161accd09ce_original.jpg
+│   │   │   │   │   │   │   ├── 01a02e8c-214b-7967-931b-27c68981f949_display.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-214b-7967-931b-27c68981f949_original.jpg
+│   │   │   │   │   │   │   ├── 01a02e8c-2afe-7ae9-bb75-ba8b72d8174e_display.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-2afe-7ae9-bb75-ba8b72d8174e_original.jpg
+│   │   │   │   │   │   │   ├── 01a02e8c-3342-7d38-a15d-a780e081c216_display.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-3342-7d38-a15d-a780e081c216_original.jpg
+│   │   │   │   │   │   ├── thumbnails/
+│   │   │   │   │   │   │   ├── 01a02e8c-0220-7608-9ca5-3baa24bffe5b_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-0dcc-7516-b940-bb2c88b78888_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-17b7-7e5f-bcbd-c161accd09ce_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-214b-7967-931b-27c68981f949_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-2afe-7ae9-bb75-ba8b72d8174e_thumb.webp
+│   │   │   │   │   │   │   ├── 01a02e8c-3342-7d38-a15d-a780e081c216_thumb.webp
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile
@@ -767,6 +797,7 @@ kyapture/
 │   │   ├── styles/
 │   │   │   ├── index.css
 │   │   ├── utils/
+│   │   │   ├── blurhashDataUrl.js
 │   │   │   ├── colorhelper.js
 │   │   │   ├── constants.js
 │   │   │   ├── formatters.js

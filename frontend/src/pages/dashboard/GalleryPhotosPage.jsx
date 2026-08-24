@@ -1,13 +1,20 @@
 // frontend/src/pages/dashboard/GalleryPhotosPage.jsx
 
 import { galleriesApi } from "../../api/galleriesApi";
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { useOutletContext } from "react-router-dom";
 import { photosApi } from "../../api/photosApi";
 import { mockGalleries } from "../../utils/mockGalleries";
 import Spinner from "../../components/ui/Spinner";
 import DropZone from "../../components/ui/DropZone";
 import PhotoGrid from "../../components/shared/PhotoGrid";
+import { useSubscription } from "../../hooks/useSubscription";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
@@ -31,6 +38,8 @@ const MAX_POLL_ATTEMPTS = 100;
  */
 export default function GalleryPhotosPage() {
   const { gallery, setGallery, slug, isMountedRef } = useOutletContext();
+  const { limits } = useSubscription();
+  const allowVideo = limits.allow_video;
 
   const [photos, setPhotos] = useState([]);
   const [photosLoading, setPhotosLoading] = useState(true);
@@ -170,6 +179,19 @@ export default function GalleryPhotosPage() {
   const handleFilesSelected = async (files) => {
     if (!files?.length) return;
 
+    if (!allowVideo) {
+      const videoCount = files.filter(isVideoFile).length;
+      if (videoCount > 0) {
+        files = files.filter((f) => !isVideoFile(f));
+        setErrorMsg(
+          `Video uploads require an active plan. ${videoCount} video file${
+            videoCount > 1 ? "s were" : " was"
+          } skipped — upgrade to upload video.`,
+        );
+      }
+      if (!files.length) return;
+    }
+
     if (USE_MOCK_DATA) {
       const queueItems = files.map((file) => {
         const previewUrl = URL.createObjectURL(file);
@@ -194,9 +216,9 @@ export default function GalleryPhotosPage() {
                 ...prev,
                 {
                   id: item.id,
-                  media_type: item.isVideo ? "video" : "image", // <-- Naya
-                  thumbnail_url: item.isVideo ? null : item.previewUrl, // <-- Naya
-                  poster_url: item.isVideo ? null : undefined, // <-- Naya
+                  media_type: item.isVideo ? "video" : "image",
+                  thumbnail_url: item.isVideo ? null : item.previewUrl,
+                  poster_url: item.isVideo ? null : undefined,
                   original_name: item.file.name,
                 },
               ]);
@@ -227,8 +249,7 @@ export default function GalleryPhotosPage() {
 
     for (const item of queueItems) {
       const formData = new FormData();
-      // Route each file to the field the backend expects for its type
-      formData.append(item.isVideo ? "video" : "image", item.file); 
+      formData.append(item.isVideo ? "video" : "image", item.file);
 
       try {
         const uploaded = await photosApi.uploadBulk(slug, formData, (pct) => {
@@ -254,12 +275,23 @@ export default function GalleryPhotosPage() {
             prev.map((q) => (q.id === item.id ? { ...q, error: true } : q)),
           );
 
-          setErrorMsg(
-            err.response?.data?.image?.[0] ||
-              err.response?.data?.video?.[0] ||
-              err.response?.data?.error ||
-              `Failed to upload ${item.file.name}.`,
-          );
+          const code = err.response?.data?.code;
+          if (
+            code === "video_upload_requires_subscription" ||
+            code === "storage_limit_reached"
+          ) {
+            setErrorMsg(
+              err.response?.data?.message ||
+                "Upgrade your plan to continue uploading.",
+            );
+          } else {
+            setErrorMsg(
+              err.response?.data?.image?.[0] ||
+                err.response?.data?.video?.[0] ||
+                err.response?.data?.error ||
+                `Failed to upload ${item.file.name}.`,
+            );
+          }
         }
       }
     }
@@ -279,7 +311,7 @@ export default function GalleryPhotosPage() {
   };
 
   // ── DELETE ───────────────────────────────────────────────────────────────
-  const handleDeletePhoto = async (photoId) => {
+    const handleDeletePhoto = async (photoId) => {
     const originalPhotos = photos;
     const photo = originalPhotos.find((p) => p.id === photoId);
 
@@ -295,7 +327,15 @@ export default function GalleryPhotosPage() {
     if (USE_MOCK_DATA) return;
 
     try {
-      await photosApi.deletePhotos([photoId]);
+      const { failed } = await photosApi.deletePhotos(slug, [photoId]);
+      // The bulk endpoint returns 200 even when the id didn't match (wrong
+      // gallery/owner, already gone) — that's a logical failure wrapped in
+      // a successful response, not a thrown exception, so it must be
+      // checked explicitly rather than relying on catch alone.
+      if (failed.length > 0 && isMountedRef.current) {
+        setPhotos(originalPhotos);
+        setErrorMsg("Failed to delete photo. Please try again.");
+      }
     } catch {
       if (isMountedRef.current) {
         setPhotos(originalPhotos); // restore exact original order on failure
@@ -304,7 +344,44 @@ export default function GalleryPhotosPage() {
     }
   };
 
-// ── SET COVER (image or video poster) ──────────────────────────────────
+  // ── DOWNLOAD (image or video original) ──────────────────────────────────
+  // Fetches the original file as a blob and triggers a real "Save As" via a
+  // synthetic <a download>. Falls back to window.open when fetch fails —
+  // most commonly a CORS block on the S3 origin, since original files are
+  // served from S3 in production, not same-origin.
+  const handleDownload = async (photo) => {
+    const url = photo?.original_url;
+    if (!url) {
+      setErrorMsg("This file isn't available to download yet.");
+      return;
+    }
+
+    const filename =
+      photo.original_name || (photo.media_type === "video" ? "video" : "photo");
+
+    try {
+      const response = await fetch(url, { mode: "cors" });
+      if (!response.ok) throw new Error("Network response was not ok");
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      // Likely a CORS block on the storage origin — open it directly instead.
+      // The browser will still download or display it depending on the
+      // response headers, which is the best we can do without a proxy.
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  // ── SET COVER (image or video poster) ──────────────────────────────────
   const handleSetCover = async (photoId) => {
     try {
       const updated = await galleriesApi.updateGallery(slug, {
@@ -368,7 +445,11 @@ export default function GalleryPhotosPage() {
       <DropZone
         onFiles={handleFilesSelected}
         disabled={photosLoading}
-        accept="image/*,video/mp4,video/quicktime,video/x-m4v"
+        accept={
+          allowVideo
+            ? "image/*,video/mp4,video/quicktime,video/x-m4v"
+            : "image/*"
+        }
       >
         <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center border border-gray-300">
           <svg
@@ -391,7 +472,9 @@ export default function GalleryPhotosPage() {
             Drop photos or videos here
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            or click to browse — JPG, PNG, WEBP, MP4, MOV
+            {allowVideo
+              ? "or click to browse — JPG, PNG, WEBP, MP4, MOV"
+              : "or click to browse — JPG, PNG, WEBP (video requires a paid plan)"}
           </p>
         </div>
       </DropZone>
@@ -472,6 +555,7 @@ export default function GalleryPhotosPage() {
             onDelete={handleDeletePhoto}
             onSetCover={handleSetCover}
             onReorder={handleReorder}
+            onDownload={handleDownload}
             showActions
           />
         )}

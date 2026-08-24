@@ -1,4 +1,4 @@
-// C:/Users/LENOVO/Desktop/kyapture/frontend/src/utils/formatters.js
+// frontend/src/utils/formatters.js
 export const formatBytes = (bytes) => {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -20,4 +20,9 @@ export const formatDuration = (totalSeconds) => {
   const m = Math.floor(totalSeconds / 60)
   const s = Math.floor(totalSeconds % 60)
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+// NEW: Centralized URL builder for client public galleries
+export const buildClientGalleryUrl = (username, slug) => {
+  return `${window.location.protocol}//${window.location.host}/g/${username}/${slug}`
 }

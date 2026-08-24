@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { buildClientGalleryUrl } from '../../utils/formatters'
 
 /**
  * WHAT: Individual Gallery Card Component
@@ -59,8 +60,8 @@ export default function GalleryCard({ gallery, onPublishToggle, onDeleteClick })
   // clientGalleryURL is null until the auth store confirms a real username,
   // which disables the copy button and prevents silent broken-link copies
   const clientGalleryURL = username
-    ? `${window.location.protocol}//${window.location.host}/g/${username}/${slug}`
-    : null
+  ? buildClientGalleryUrl(username, slug)
+  : null
 
   // ── EVENT HANDLERS ──────────────────────────────────────────────────────────
 

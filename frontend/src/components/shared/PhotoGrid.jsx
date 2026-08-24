@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import PhotoLightbox from "./PhotoLightbox";
 import Spinner from "../ui/Spinner";
+import { getBlurhashDataUrl } from "../../utils/blurhashDataUrl";
 import { formatBytes, formatDuration } from "../../utils/formatters";
 
 // ── KEYFRAME INJECTION ────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export default function PhotoGrid({
   onDelete,
   onSetCover,
   onReorder,
+  onDownload,
   showActions = false,
 }) {
   const [lightbox, setLightbox] = useState(null);
@@ -172,6 +174,10 @@ export default function PhotoGrid({
             : photo.thumbnail_url || photo.display_url || photo.original_url;
           const showPlaceholder = !thumbSrc && !isBroken && !isFailed;
           const isDragOver = dragOverIndex === idx;
+          // Only meaningful for the "actual image" render branch below —
+          // broken/failed/still-processing states render their own opaque
+          // content over it, so it's harmless to compute unconditionally.
+          const blurDataUrl = getBlurhashDataUrl(photo.blurhash);
 
           return (
             <div
@@ -196,6 +202,11 @@ export default function PhotoGrid({
               style={{
                 animation: "photoGridFadeUp 0.3s ease-out both",
                 animationDelay: `${idx * 0.04}s`,
+                ...(blurDataUrl && {
+                  backgroundImage: `url(${blurDataUrl})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }),
               }}
             >
               {isBroken || isFailed ? (
@@ -244,35 +255,67 @@ export default function PhotoGrid({
 
               <div className="absolute inset-0 bg-ink/0 group-hover:bg-ink/30 transition-all duration-300 rounded-xl pointer-events-none" />
 
-              {showActions && onDelete && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(photo.id);
-                  }}
-                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/95 text-red-500
-                            opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                            hover:bg-red-50 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 shadow-sm cursor-pointer"
-                  aria-label={`Delete ${photo.title || photo.original_name || "photo"}`}
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
+                            {showActions && (onDownload || onDelete) && (
+                <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                  {onDownload && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDownload(photo);
+                      }}
+                      className="p-1.5 rounded-lg bg-white/95 text-ink
+                                opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                                hover:bg-cream-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink shadow-sm cursor-pointer"
+                      aria-label={`Download ${photo.title || photo.original_name || "photo"}`}
+                      title="Download"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(photo.id);
+                      }}
+                      className="p-1.5 rounded-lg bg-white/95 text-red-500
+                                opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                                hover:bg-red-50 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 shadow-sm cursor-pointer"
+                      aria-label={`Delete ${photo.title || photo.original_name || "photo"}`}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               )}
-
               {/* NEW: set-as-cover action, top-left so it doesn't collide with delete (top-right) */}
               {showActions && onSetCover && (
                 <button
@@ -328,6 +371,7 @@ export default function PhotoGrid({
           index={lightbox}
           onClose={() => setLightbox(null)}
           onChange={setLightbox}
+          onDownload={onDownload}
         />
       )}
     </>

@@ -22,26 +22,47 @@ from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
 
 
-def generate_unique_slug(model_class, title, **lookup_filters):
+def generate_unique_slug(model_class, title, reserved_words=None, exclude_pk=None, **lookup_filters):
     """
     Generates a URL-safe slug, dynamically scoped to multi-tenant filters
     to prevent cross-photographer namespace collisions [1.2.7].
-    
+
+    reserved_words: optional iterable of slug values that must never be
+    handed out directly, because they collide with a literal URL segment
+    registered ahead of a '<slug:...>' pattern for this model (e.g.
+    Gallery's 'search' collides with apps/galleries/urls.py's 'search/'
+    route). Treated exactly like an existing DB row: the numeric-suffix
+    loop below kicks in, so the title still gets a usable, similar slug
+    (e.g. 'search-1') instead of one that's silently unreachable.
+
+    exclude_pk: required when regenerating a slug for an EXISTING row
+    (e.g. GalleryUpdateSerializer on a title edit). Without it, the
+    row's own still-in-place slug counts as a "collision" against
+    itself, incorrectly bumping a numeric suffix onto a title edit
+    that didn't actually change the slugified form (whitespace,
+    casing, etc). Not used on create() — there's no existing row yet.
+
     Example Usage:
         slug = generate_unique_slug(Gallery, "My Wedding", photographer=user)
     """
     base_slug = slugify(title)
     if not base_slug:
         base_slug = "untitled"
-        
+
+    reserved = set(reserved_words or ())
+
     slug = base_slug
     counter = 1
-    
+
+    queryset = model_class.objects.all()
+    if exclude_pk is not None:
+        queryset = queryset.exclude(pk=exclude_pk)
+
     # Scopes the database existence check strictly to the provided tenant filter [1.2.7]
-    while model_class.objects.filter(slug=slug, **lookup_filters).exists():
+    while slug in reserved or queryset.filter(slug=slug, **lookup_filters).exists():
         slug = f"{base_slug}-{counter}"
         counter += 1
-        
+
     return slug
 
 
@@ -66,9 +87,10 @@ def get_user_subscription_metrics(user):
     # Fallback default limits if no active plan is found (SaaS safety net)
     default_limits = {
         "plan_name": "Free (Trial)",
-        "max_galleries": 3,
-        "max_photos_per_gallery": 50,
-        "storage_bytes_limit": 2 * 1024 * 1024 * 1024,  # 2 GB Fallback
+        "max_galleries": None,
+        "max_photos_per_gallery": None,
+        "storage_bytes_limit": 3 * 1024 * 1024 * 1024,  # 3 GB limit
+        "allow_video": False,
         "current_galleries_count": 0,
         "current_total_storage_bytes": 0,
     }
@@ -85,6 +107,7 @@ def get_user_subscription_metrics(user):
             "max_galleries": plan.max_galleries,
             "max_photos_per_gallery": plan.max_photos_per_gallery,
             "storage_bytes_limit": plan.storage_gb * 1024 * 1024 * 1024,
+            "allow_video": True,
         }
     except UserSubscription.DoesNotExist:
         # Fall back to free tier or force subscription via standard metadata
@@ -97,14 +120,14 @@ def get_user_subscription_metrics(user):
         is_active=True
     ).count()
 
-    # Calculate total database storage footprints across active collections
-    storage_aggregation = MediaAsset.objects.filter(
+    # Calculate total database storage footprints and photo count across active collections
+    asset_aggregation = MediaAsset.objects.filter(
         gallery__photographer=user,
         gallery__is_active=True
-    ).aggregate(total_bytes=Sum('file_size'))
+    ).aggregate(total_bytes=Sum('file_size'), total_count=Count('id'))
 
-    limits["current_total_storage_bytes"] = storage_aggregation['total_bytes'] or 0
-    
+    limits["current_total_storage_bytes"] = asset_aggregation['total_bytes'] or 0
+    limits["current_photos_count"] = asset_aggregation['total_count'] or 0
     return limits
 
 # Magic Byte Signatures for strict JPEG and PNG security verification
