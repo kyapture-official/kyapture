@@ -17,6 +17,10 @@ RESERVED_USERNAMES = {
 USERNAME_REGEX = re.compile(r'^[a-z0-9](-?[a-z0-9])*$')
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    """
+    Serializes complete User profile data.
+    Protects read-only fields from administrative or photographer manipulation.
+    """
     class Meta:
         model = User
         fields = [
@@ -26,48 +30,25 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'email', 'is_active_plan', 'created_at']
 
-    def validate_branding_color(self, value):
-        if value and not re.match(r'^#[0-9a-fA-F]{6}$', value):
-            raise serializers.ValidationError('Color must be a valid hex code (e.g., #FF5733).')
-        return value
-
-
-class UserProfileSerializer(serializers.ModelSerializer):
-    """
-    Serializes complete User profile data. 
-    Protects read-only fields from administrative or photographer manipulation.
-    """
-    class Meta:
-        model = User
-        fields = [
-            'id', 'email', 'username', 'display_name',
-            'bio', 'avatar', 'phone', 'website', 'is_active_plan', 'created_at'
-        ]
-        read_only_fields = ['id', 'email', 'is_active_plan', 'created_at']
-
     def validate_username(self, value):
-        """Ensures updates to usernames are strictly validated as URL-safe subdomains."""
         clean_username = value.strip().lower()
-        # 1. Enforce admin reserve-word protections
         if clean_username in RESERVED_USERNAMES:
             raise serializers.ValidationError("This username is reserved for system administration.")
-            
-        # 2. Enforce RFC-compliant URL patterns
         if not USERNAME_REGEX.match(clean_username):
             raise serializers.ValidationError(
                 "Username must be lowercase, alphanumeric, and can only contain single dashes."
             )
-        
-        # 3. Enforce Unique checks while excluding the current user's own ID [1.1.2]
-        user_instance = self.instance  # Resolves to the user being updated
         query_set = User.objects.filter(username=clean_username)
-        
-        if user_instance:
-            query_set = query_set.exclude(id=user_instance.id)
-            
+        if self.instance:
+            query_set = query_set.exclude(id=self.instance.id)
         if query_set.exists():
             raise serializers.ValidationError("This username is already taken.")
         return clean_username
+
+    def validate_branding_color(self, value):
+        if value and not re.match(r'^#[0-9a-fA-F]{6}$', value):
+            raise serializers.ValidationError('Color must be a valid hex code (e.g., #FF5733).')
+        return value
 
 
 class RegisterSerializer(serializers.ModelSerializer):

@@ -1,6 +1,6 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/CreateGalleryModal.jsx
-import { useState, useEffect, useLayoutEffect, useRef } from 'react'
-import { useAuthStore } from '../../store/authStore'
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useAuthStore } from "../../store/authStore";
 
 /**
  * WHAT: Create Gallery Modal Overlay
@@ -30,11 +30,11 @@ import { useAuthStore } from '../../store/authStore'
 // ── MODULE-LEVEL KEYFRAME INJECTION ──────────────────────────────────────────
 // Injected once when the module loads to prevent <head> tag accumulation across
 // repeated modal open/close cycles.
-if (typeof document !== 'undefined') {
-  const KEYFRAME_ID = 'modal-fade-up-keyframes'
+if (typeof document !== "undefined") {
+  const KEYFRAME_ID = "modal-fade-up-keyframes";
   if (!document.getElementById(KEYFRAME_ID)) {
-    const style = document.createElement('style')
-    style.id = KEYFRAME_ID
+    const style = document.createElement("style");
+    style.id = KEYFRAME_ID;
     style.textContent = `
       @media (prefers-reduced-motion: no-preference) {
         @keyframes modalFadeUp {
@@ -42,32 +42,40 @@ if (typeof document !== 'undefined') {
           to   { opacity: 1; transform: translateY(0)    scale(1);    }
         }
       }
-    `
-    document.head.appendChild(style)
+    `;
+    document.head.appendChild(style);
   }
 }
 
-export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) {
-  const defaultBrandingColor = useAuthStore((s) => s.user?.branding_color) ?? '#111827'
+export default function CreateGalleryModal({
+  isOpen,
+  onClose,
+  onCreateSubmit,
+}) {
+  const defaultBrandingColor =
+    useAuthStore((s) => s.user?.branding_color) ?? "#111827";
 
-  const [title,        setTitle]        = useState('')
-  const [color,        setColor]        = useState(defaultBrandingColor)
-  const [downloadable, setDownloadable] = useState(false)
-  const [submitting,   setSubmitting]   = useState(false)
-  const [errorMsg,     setErrorMsg]     = useState('')
-  const [titleInvalid, setTitleInvalid] = useState(false)
+  const [title, setTitle] = useState("");
+  const [color, setColor] = useState(defaultBrandingColor);
+  const [downloadable, setDownloadable] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [titleInvalid, setTitleInvalid] = useState(false);
+  const [eventDate, setEventDate] = useState("");
 
-  const modalRef      = useRef(null)
-  const titleInputRef = useRef(null)
+  const modalRef = useRef(null);
+  const titleInputRef = useRef(null);
 
   // Lifecycle mount tracker — guards against parent page navigation unmounting the
   // component while an API call is still in-flight (e.g. user clicks Logout mid-submit).
   // This is distinct from isOpen toggling, which keeps the component mounted.
-  const isMountedRef = useRef(false)
+  const isMountedRef = useRef(false);
   useEffect(() => {
-    isMountedRef.current = true
-    return () => { isMountedRef.current = false }
-  }, [])
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Ref mirror of submitting — lets the keydown listener read the current value
   // without needing to re-register the listener on every state change.
@@ -75,134 +83,138 @@ export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) 
   //      matching the timing the Escape-key handler depends on.
   // [F1] Dependency array [submitting] — only syncs on the renders that matter,
   //      not on every keystroke the user types in the title field.
-  const submittingRef = useRef(false)
+  const submittingRef = useRef(false);
   useLayoutEffect(() => {
-    submittingRef.current = submitting
-  }, [submitting])
+    submittingRef.current = submitting;
+  }, [submitting]);
 
   // Synchronously update the ref during render to eliminate the 1-render stale window.
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   // ── RESET STATE ON OPEN ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen) return
-    setTitle('')
-    setColor(defaultBrandingColor)
-    setDownloadable(false)
-    setErrorMsg('')
-    setTitleInvalid(false)
-}, [isOpen])
+    if (!isOpen) return;
+    setTitle("");
+    setColor(defaultBrandingColor);
+    setDownloadable(false);
+    setEventDate("");
+    setErrorMsg("");
+    setTitleInvalid(false);
+  }, [isOpen]);
 
   // ── AUTO-FOCUS ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen) return
-    const frame = requestAnimationFrame(() => titleInputRef.current?.focus())
-    return () => cancelAnimationFrame(frame)
-  }, [isOpen])
+    if (!isOpen) return;
+    const frame = requestAnimationFrame(() => titleInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen]);
 
   // ── BODY SCROLL LOCK ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [isOpen])
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
 
   // ── KEYBOARD INTERACTION & WCAG FOCUS TRAP ────────────────────────────────
   // Dependency array is [isOpen] only — submitting is read via submittingRef so the
   // listener never tears down and re-registers on submitting state transitions.
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) return;
 
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        if (!submittingRef.current) onCloseRef.current()
-        return
+      if (e.key === "Escape") {
+        if (!submittingRef.current) onCloseRef.current();
+        return;
       }
 
-      if (e.key === 'Tab' && modalRef.current) {
+      if (e.key === "Tab" && modalRef.current) {
         const focusable = Array.from(
           modalRef.current.querySelectorAll(
             [
-              'button:not([disabled])',
-              'input:not([disabled])',
-              'select:not([disabled])',
-              'textarea:not([disabled])',
+              "button:not([disabled])",
+              "input:not([disabled])",
+              "select:not([disabled])",
+              "textarea:not([disabled])",
               'a[href]:not([aria-disabled="true"])',
               '[tabindex]:not([tabindex="-1"]):not([disabled])',
-            ].join(', ')
-          )
-        )
-        if (!focusable.length) return
+            ].join(", "),
+          ),
+        );
+        if (!focusable.length) return;
 
-        const first = focusable[0]
-        const last  = focusable[focusable.length - 1]
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
 
         if (!modalRef.current.contains(document.activeElement)) {
-          e.preventDefault()
-          ;(e.shiftKey ? last : first).focus()
-          return
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+          return;
         }
 
         if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault()
-          last.focus()
+          e.preventDefault();
+          last.focus();
         } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault()
-          first.focus()
+          e.preventDefault();
+          first.focus();
         }
       }
-    }
+    };
 
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen])
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
 
   // ── SUBMIT HANDLER ────────────────────────────────────────────────────────
   // Defined above the early-return guard — it IS part of the render closure and
   // captures current state values (title, color, downloadable) from this render.
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!title.trim()) {
-      setErrorMsg('Collection title is required.')
-      setTitleInvalid(true)
-      return
+      setErrorMsg("Collection title is required.");
+      setTitleInvalid(true);
+      return;
     }
 
-    setSubmitting(true)
-    setErrorMsg('')
-    setTitleInvalid(false)
+    setSubmitting(true);
+    setErrorMsg("");
+    setTitleInvalid(false);
 
     try {
       await onCreateSubmit({
-        title:           title.trim(),
-        branding_color:  color,
+        title: title.trim(),
+        branding_color: color,
         is_downloadable: downloadable,
-      })
+        event_date: eventDate,
+      });
 
       // Happy path: no state writes follow onCloseRef.current(), so parent
       // unmounting here (e.g. navigating away on success) is safe.
-      onCloseRef.current()
+      onCloseRef.current();
     } catch (err) {
       // [F2] Guard is isMountedRef.current only — this is the correct single gate
       //      for the unmount scenario. submittingRef.current is always true here
       //      (it hasn't been re-synced yet) so ANDing it adds no protection and
       //      only obscures which ref is doing the actual guarding work.
       if (isMountedRef.current) {
-        setErrorMsg(err.message || 'Failed to initialize collection.')
+        setErrorMsg(err.message || "Failed to initialize collection.");
       }
     } finally {
       // Same single guard — isMountedRef covers both isOpen=false-while-mounted
       // AND actual parent unmount. That is its entire job.
       if (isMountedRef.current) {
-        setSubmitting(false)
+        setSubmitting(false);
       }
     }
-  }
+  };
 
   // Early return — safely after all hook definitions.
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div
@@ -223,7 +235,7 @@ export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) 
       <div
         ref={modalRef}
         className="relative bg-white w-full max-w-md rounded-2xl border border-gray-200 shadow-xl p-6 z-10 overflow-hidden"
-        style={{ animation: 'modalFadeUp 0.18s ease-out both' }}
+        style={{ animation: "modalFadeUp 0.18s ease-out both" }}
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-5">
@@ -242,7 +254,8 @@ export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) 
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="18" height="18"
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -251,8 +264,8 @@ export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) 
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              <line x1="18" y1="6"  x2="6"  y2="18" />
-              <line x1="6"  y1="6"  x2="18" y2="18" />
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
@@ -269,7 +282,6 @@ export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) 
         )}
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
-
           {/* Title Input */}
           <div className="flex flex-col gap-1">
             <label
@@ -289,12 +301,29 @@ export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) 
               aria-invalid={titleInvalid}
               aria-describedby="gallery-title-error"
               onChange={(e) => {
-                setTitle(e.target.value)
-                if (errorMsg)     setErrorMsg('')
-                if (titleInvalid) setTitleInvalid(false)
+                setTitle(e.target.value);
+                if (errorMsg) setErrorMsg("");
+                if (titleInvalid) setTitleInvalid(false);
               }}
               disabled={submitting}
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-100 focus:ring-offset-0 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label
+              className="text-xs font-semibold text-gray-700"
+              htmlFor="new-gallery-date"
+            >
+              Event Date
+            </label>
+            <input
+              id="new-gallery-date"
+              type="date"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+              disabled={submitting}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -362,11 +391,11 @@ export default function CreateGalleryModal({ isOpen, onClose, onCreateSubmit }) 
               disabled={submitting || !title.trim()}
               className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? 'Creating…' : 'Create Gallery'}
+              {submitting ? "Creating…" : "Create Gallery"}
             </button>
           </div>
         </form>
       </div>
     </div>
-  )
+  );
 }

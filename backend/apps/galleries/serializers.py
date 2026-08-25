@@ -227,10 +227,19 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Color must be a valid hex code (e.g., #FF5733).')
         return value
 
+
+    def validate_cover_photo(self, value):
+        request = self.context.get('request')
+        # Check if the photo belongs to the current user's gallery
+        if value is not None and request and value.gallery.photographer_id != request.user.id:
+            raise serializers.ValidationError(
+                "You can only set a photo from one of your own galleries as the cover."
+            )
+        return value
+
     def validate(self, data):
         is_protected = data.get('is_password_protected', self.instance.is_password_protected)
         password = data.get('password', '').strip()
-
         if is_protected and not password:
             if not self.instance.password_hash:
                 raise serializers.ValidationError({
@@ -238,45 +247,33 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
                 })
         return data
 
-        def update(self, instance, validated_data):
-        
-            """
-        Updates the gallery instance safely.
-        If a new password is submitted, hashes it using raw bcrypt.
-        If the title actually changed, regenerates the slug — scoped
-        per-photographer and checked against RESERVED_GALLERY_SLUGS, the
-        same way GalleryCreateSerializer.create() does. exclude_pk=instance.pk
-        is mandatory here (create() has no need for it): without it, the
-        gallery's own current slug row would count as a self-collision
-        and get bumped with a pointless numeric suffix.
+    def update(self, instance, validated_data):
         """
-        # Safely extract and strip the incoming raw password from validated data
+        Updates the gallery instance safely. If a new password is submitted,
+        hashes it using raw bcrypt. If the title actually changed, regenerates
+        the slug — scoped per-photographer and checked against
+        RESERVED_GALLERY_SLUGS, the same way GalleryCreateSerializer.create()
+        does. exclude_pk=instance.pk is mandatory here: without it, the
+        gallery's own current slug row counts as a self-collision.
+        """
         raw_password = validated_data.pop('password', '').strip()
 
         if raw_password:
-            # Hash utilizing raw bcrypt salting
             instance.password_hash = bcrypt.hashpw(
-                raw_password.encode('utf-8'), 
-                bcrypt.gensalt()
+                raw_password.encode('utf-8'), bcrypt.gensalt()
             ).decode('utf-8')
         elif not validated_data.get('is_password_protected', instance.is_password_protected):
             instance.password_hash = None
 
-        # Regenerate slug only when the title is actually part of this
-        # request AND differs from the current title. Guards PATCH calls
-        # that never touch 'title' at all, and no-op edits that resubmit
-        # the same value.
         new_title = validated_data.get('title')
         if new_title is not None and new_title != instance.title:
             instance.slug = generate_unique_slug(
-                Gallery,
-                new_title,
+                Gallery, new_title,
                 reserved_words=RESERVED_GALLERY_SLUGS,
                 exclude_pk=instance.pk,
                 photographer=instance.photographer,
             )
 
-        # Dynamically write remaining updated attributes to the model instance
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
@@ -284,6 +281,5 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
-        # Fallback counting evaluation for updates
         instance.photo_count = instance.assets.count()
         return GalleryDetailSerializer(instance, context=self.context).data

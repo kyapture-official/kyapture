@@ -4,7 +4,8 @@ import tempfile
 import zipfile
 from django.http import StreamingHttpResponse, HttpResponse, FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.db.models import Count
+from django.db.models import Count, Q
+from django.utils import timezone
 from django.core.files.storage import default_storage
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -48,11 +49,13 @@ class PublicGalleryView(APIView):
         This prevents MultipleObjectsReturned crashes on shared slug namespaces [1.1.2].
         """
         try:
+            now = timezone.now()
             return (
                 Gallery.objects
                 .select_related('photographer')
                 .prefetch_related('assets')
                 .get(
+                    Q(expires_at__isnull=True) | Q(expires_at__gt=now),
                     slug=slug,
                     photographer__username=username,  # Multi-tenant scoping [1.1.2]
                     is_published=True,                # Block draft galleries

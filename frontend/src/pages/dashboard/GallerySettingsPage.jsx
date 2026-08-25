@@ -23,6 +23,9 @@ export default function GallerySettingsPage() {
   const [brandingColor, setBrandingColor] = useState(gallery.branding_color);
   const [isDownloadable, setIsDownloadable] = useState(gallery.is_downloadable);
   const [password, setPassword] = useState("");
+  const [eventDate, setEventDate] = useState(
+    gallery.event_date ? gallery.event_date.split("T")[0] : "",
+  );
   const [hasPassword, setHasPassword] = useState(gallery.has_password);
   const [watermarkEnabled, setWatermarkEnabled] = useState(
     gallery.watermark_enabled ?? false,
@@ -44,6 +47,7 @@ export default function GallerySettingsPage() {
       branding_color: brandingColor,
       is_downloadable: isDownloadable,
       watermark_enabled: watermarkEnabled,
+      event_date: eventDate,
     };
 
     try {
@@ -58,9 +62,16 @@ export default function GallerySettingsPage() {
         updated = await galleriesApi.updateGallery(slug, payload);
       }
 
+      setGallery(updated);
+
+      const rawDate = updated.event_date || payload.event_date || "";
+      const formattedDate = rawDate ? rawDate.split("T")[0] : "";
+      const freshDate = updated.event_date || payload.event_date || "";
+
       // Push the fresh gallery object back up to the parent layout so the
       // sidebar (title, cover) and top bar stay in sync immediately.
       setGallery(updated);
+      setEventDate(freshDate ? freshDate.split("T")[0] : "");
       setTitle(updated.title);
       setBrandingColor(updated.branding_color);
       setIsDownloadable(updated.is_downloadable);
@@ -192,6 +203,23 @@ export default function GallerySettingsPage() {
             <div className="flex flex-col gap-1">
               <label
                 className="text-xs font-semibold text-ink/80"
+                htmlFor="gallery-event-date"
+              >
+                Event Date
+              </label>
+              <input
+                id="gallery-event-date"
+                type="date"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                disabled={updating}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-cream-300 focus:border-ink focus:outline-none focus:ring-2 focus:ring-cream-200 transition-all disabled:opacity-50"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label
+                className="text-xs font-semibold text-ink/80"
                 htmlFor="gallery-color"
               >
                 Photographer Brand Accent
@@ -254,7 +282,8 @@ export default function GallerySettingsPage() {
                   (title.trim() === gallery.title &&
                     brandingColor === gallery.branding_color &&
                     isDownloadable === gallery.is_downloadable &&
-                    watermarkEnabled === (gallery.watermark_enabled ?? false))
+                    watermarkEnabled === (gallery.watermark_enabled ?? false) &&
+                    eventDate === (gallery.event_date ? gallery.event_date.split("T")[0] : ""))
                 }
                 className="px-4 py-2 bg-ink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
