@@ -1,9 +1,7 @@
 // WHERE: frontend/src/utils/formatters.js
-// WHAT: Standardized string, byte, currency, and date parsing utilities.
 
 /**
  * Parses and formats raw byte integers into human-readable data bounds.
- * Prevents crash anomalies if negative storage thresholds are calculated.
  */
 export const formatBytes = (bytes) => {
   const numericBytes = Number(bytes)
@@ -16,7 +14,6 @@ export const formatBytes = (bytes) => {
 
 /**
  * Standardizes localized readable presentation dates.
- * Guarded against parsing empty values or malformed dates (e.g., 'Invalid Date').
  */
 export const formatDate = (dateStr) => {
   if (!dateStr) return ''
@@ -32,7 +29,6 @@ export const formatDate = (dateStr) => {
 
 /**
  * Localizes currency values to Nepali Rupee standard (en-NP format).
- * Renders correctly as 'NPR 1,50,000' (Nepali comma grouping) instead of Western '150,000'.
  */
 export const formatCurrency = (amount) => {
   const numericAmount = Number(amount)
@@ -42,10 +38,31 @@ export const formatCurrency = (amount) => {
 
 /**
  * Converts any date-ish string or ISO timestamp into a safe 'YYYY-MM-DD' input string.
- * Rejects invalid strings, null, or empty data, returning an empty string to keep inputs controlled.
  */
 export const toDateInputValue = (value) => {
   if (!value) return ''
   const datePart = String(value).split('T')[0]
   return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : ''
+}
+
+/**
+ * WHAT: Isomorphic Absolute URL Generator
+ * WHY:  Dynamic link generator that converts your gallery share links depending
+ *       on whether you are running locally (localhost paths) or in production (subdomains).
+ */
+export const buildClientGalleryUrl = (username, slug) => {
+  if (!username || !slug) return ''
+  
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+  const isLocalhost = currentHost.includes('localhost') || currentHost.includes('127.0.0.1')
+
+  if (isLocalhost) {
+    return `http://localhost:5173/g/${username}/${slug}`
+  }
+
+  // Production wildcard subdomain formatting
+  const rawDomain = import.meta.env.VITE_APP_DOMAIN || currentHost
+  const baseDomain = rawDomain.replace(/^(www\.|app\.)/, '')
+  
+  return `https://${username.toLowerCase()}.${baseDomain}/${slug}`
 }
