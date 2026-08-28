@@ -1,7 +1,8 @@
-// C:/Users/LENOVO/Desktop/kyapture/frontend/src/pages/dashboard/GallerySettingsPage.jsx
+// frontend/src/pages/dashboard/GallerySettingsPage.jsx
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
+import { toDateInputValue } from "../../utils/formatters";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
@@ -14,18 +15,18 @@ export default function GallerySettingsPage() {
   const { gallery, setGallery, slug, skipNextLoadRef, navigate, isMountedRef } =
     useOutletContext();
 
-  // Form state seeded from the gallery snapshot at mount time.
-  // NOTE: if `gallery` changes elsewhere (e.g. Published toggled in the
-  // top bar) while you're mid-edit here, these fields do NOT auto-refresh —
-  // same behavior as your original GalleryDetailPage.jsx had. Not a new bug,
-  // just flagging it so it doesn't surprise you later.
   const [title, setTitle] = useState(gallery.title);
   const [brandingColor, setBrandingColor] = useState(gallery.branding_color);
   const [isDownloadable, setIsDownloadable] = useState(gallery.is_downloadable);
   const [password, setPassword] = useState("");
-  const [eventDate, setEventDate] = useState(
-    gallery.event_date ? gallery.event_date.split("T")[0] : "",
-  );
+
+  // BUG FIX: was gallery.event_date ? gallery.event_date.split("T")[0] : "".
+  // toDateInputValue() handles the same "has a T" case but also validates
+  // the result, so null/''/any unexpected backend shape safely becomes ''
+  // instead of a value that LOOKS non-empty but still silently blanks the
+  // <input type="date">.
+  const [eventDate, setEventDate] = useState(toDateInputValue(gallery.event_date));
+
   const [hasPassword, setHasPassword] = useState(gallery.has_password);
   const [watermarkEnabled, setWatermarkEnabled] = useState(
     gallery.watermark_enabled ?? false,
@@ -62,24 +63,22 @@ export default function GallerySettingsPage() {
         updated = await galleriesApi.updateGallery(slug, payload);
       }
 
+      // BUG FIX: removed the duplicate setGallery(updated) call and the
+      // unused rawDate/formattedDate variables from the original — dead
+      // code left over from an earlier edit pass.
+      //
+      // BUG FIX: freshDate previously fell back to updated.event_date ||
+      // payload.event_date with a raw .split("T")[0] — same fragile
+      // pattern as the initial state. toDateInputValue() covers both
+      // sources the same validated way.
       setGallery(updated);
-
-      const rawDate = updated.event_date || payload.event_date || "";
-      const formattedDate = rawDate ? rawDate.split("T")[0] : "";
-      const freshDate = updated.event_date || payload.event_date || "";
-
-      // Push the fresh gallery object back up to the parent layout so the
-      // sidebar (title, cover) and top bar stay in sync immediately.
-      setGallery(updated);
-      setEventDate(freshDate ? freshDate.split("T")[0] : "");
+      setEventDate(toDateInputValue(updated.event_date ?? payload.event_date));
       setTitle(updated.title);
       setBrandingColor(updated.branding_color);
       setIsDownloadable(updated.is_downloadable);
       setHasPassword(updated.has_password);
       setWatermarkEnabled(updated.watermark_enabled);
 
-      // If the title change caused the slug to change, the URL is now stale —
-      // redirect to the new slug's Settings URL without triggering a reload.
       if (updated.slug !== slug) {
         skipNextLoadRef.current = true;
         navigate(`/dashboard/galleries/${updated.slug}/settings`, {
@@ -283,7 +282,13 @@ export default function GallerySettingsPage() {
                     brandingColor === gallery.branding_color &&
                     isDownloadable === gallery.is_downloadable &&
                     watermarkEnabled === (gallery.watermark_enabled ?? false) &&
-                    eventDate === (gallery.event_date ? gallery.event_date.split("T")[0] : ""))
+                    // BUG FIX: both sides now go through the SAME
+                    // toDateInputValue() helper instead of eventDate (raw
+                    // input value) being compared against an independently
+                    // inline-trimmed gallery.event_date. Two different
+                    // conversions of the same value can silently drift —
+                    // one shared helper can't.
+                    eventDate === toDateInputValue(gallery.event_date))
                 }
                 className="px-4 py-2 bg-ink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
