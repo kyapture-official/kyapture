@@ -66,3 +66,25 @@ export const buildClientGalleryUrl = (username, slug) => {
   
   return `https://${username.toLowerCase()}.${baseDomain}/${slug}`
 }
+
+/**
+ * WHAT: Media Playback Duration Formatter
+ * WHY:  Parses raw duration integers/floats (seconds) into standard MM:SS or H:MM:SS format
+ *       defensively, preventing NaN outputs on empty, negative, or invalid data.
+ */
+export const formatDuration = (seconds) => {
+  const num = Number(seconds)
+  if (isNaN(num) || num < 0) return '00:00'
+  
+  const hrs = Math.floor(num / 3600)
+  const mins = Math.floor((num % 3600) / 60)
+  const secs = Math.floor(num % 60)
+
+  const formattedMins = hrs > 0 ? String(mins).padStart(2, '0') : String(mins)
+  const formattedSecs = String(secs).padStart(2, '0')
+
+  if (hrs > 0) {
+    return `${hrs}:${formattedMins}:${formattedSecs}`
+  }
+  return `${formattedMins}:${formattedSecs}`
+}
