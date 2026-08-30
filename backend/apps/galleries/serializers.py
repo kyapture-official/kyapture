@@ -39,7 +39,7 @@ class GalleryListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'branding_color', 
             'cover_url', 'photo_count', 'is_downloadable', 
-            'is_active', 'is_published', 'has_password', 
+            'is_active', 'event_date', 'expires_at', 'is_published', 'has_password', 
             'owner_username', 'photographer_username',
             'created_at', 'updated_at'
         ]
@@ -87,7 +87,7 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'description', 'branding_color', 
             'cover_url', 'photo_count', 'is_downloadable', 
-            'is_active', 'is_published', 'has_password', 
+            'is_active', 'event_date', 'expires_at', 'is_published', 'has_password', 
             'owner_username', 'photographer_username',
             'watermark_enabled',
             'password_hash', 'created_at', 'updated_at'
@@ -209,7 +209,7 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         model = Gallery
         fields = [
             'title', 'description', 'cover_photo',
-            'branding_color', 'is_password_protected', 'password',
+            'branding_color','event_date', 'is_password_protected', 'password',
             'is_downloadable', 'watermark_enabled', 'is_published', 'expires_at',
         ]
 

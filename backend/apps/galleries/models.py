@@ -29,6 +29,8 @@ class Gallery(BaseModel):
     slug = models.SlugField(max_length=225)
     description = models.TextField(blank=True, default='')
     
+    event_date = models.DateField(null=True, blank=True)
+    
     cover_photo = models.ForeignKey(
         'photos.MediaAsset',
         null=True,

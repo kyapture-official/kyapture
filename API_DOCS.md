@@ -242,9 +242,11 @@ Create Gallery
 
 POST /api/v1/galleries/
 
-Creates a new gallery collection. Gated by active plan limits.
+Creates a new gallery collection. Limits are enforced dynamically from the photographer's current subscription metrics.
 
-Authentication: Required (IsAuthenticated & IsSubscribed)
+Authentication: Required (IsAuthenticated / IsPhotographer)
+
+Note: This endpoint does not enforce a separate IsSubscribed permission class. Standard authenticated photographer access is required, and the backend checks the current plan limits (such as gallery count) at request time before allowing creation.
 
 Request Body — JSON
 
@@ -406,9 +408,11 @@ Upload Media
 
 POST /api/v1/photos/{gallery_slug}/upload/
 
-Processes single or bulk uploads. Gated by storage quota and image thresholds.
+Processes single or bulk uploads. Storage, video, and per-gallery limits are enforced by backend subscription metrics at upload time.
 
-Authentication: Required (IsAuthenticated & IsSubscribed)
+Authentication: Required (IsAuthenticated / IsPhotographer)
+
+Note: There is no strict IsSubscribed permission gate for this endpoint. Authenticated photographers are allowed through, and their current plan limits are evaluated dynamically before the upload is accepted.
 
 Request Body — multipart/form-data
 
@@ -783,7 +787,7 @@ POST
 
 /api/v1/galleries/
 
-Subscribed
+Required
 
 Create gallery
 
@@ -831,7 +835,7 @@ POST
 
 /api/v1/photos/{gallery_slug}/upload/
 
-Subscribed
+Required
 
 Upload media
 

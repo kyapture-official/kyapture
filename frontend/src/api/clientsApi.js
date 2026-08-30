@@ -209,7 +209,7 @@ export const clientsApi = {
    * @param {AbortSignal} [options.signal]
    * @returns {Promise<Blob>}
    */
-  requestDownload: async (username, slug, email, token = null, options = {}) => {
+  requestDownload: async (username, slug, email, token = null, assetIds = [], options = {}) => {
     const path = `${buildGalleryPath(username, slug)}download/`
     assertNonEmptyString(email, 'email')
     const { signal } = options || {}
@@ -219,7 +219,7 @@ export const clientsApi = {
       // binary ZIP streaming chunks safely without corrupting them into strings.
       const res = await api.post(
         path,
-        { email, token },
+        { email, token, asset_ids: assetIds },
         { signal, responseType: 'blob' }
       )
       return res.data

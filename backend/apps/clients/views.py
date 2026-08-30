@@ -21,6 +21,11 @@ from .serializers import (
     GalleryUnlockSerializer,
 )
 
+import logging
+import zipfile
+
+
+logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────
 # CUSTOM SECURITY THROTTLE (Password brute-force protection)
 # ─────────────────────────────────────────────────────────────
@@ -64,7 +69,6 @@ class PublicGalleryView(APIView):
             )
         except Gallery.DoesNotExist:
             return None
-# backend/apps/clients/views.py — inside PublicGalleryView
 
     def get_session_token(self, request):
         """
@@ -149,11 +153,13 @@ class GalleryUnlockView(APIView):
     def get_gallery(self, username, slug):
         """Retrieves targeted active gallery for validation."""
         try:
+            now = timezone.now()
             return Gallery.objects.get(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
                 slug=slug,
                 photographer__username=username,
                 is_published=True,
-                is_active=True
+                is_active=True,
             )
         except Gallery.DoesNotExist:
             return None
@@ -207,7 +213,9 @@ class PublicGalleryDownloadView(APIView):
     def get_gallery(self, username, slug):
         """Retrieves targeted active gallery for validation."""
         try:
+            now = timezone.now()
             return Gallery.objects.select_related('photographer').get(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
                 slug=slug,
                 photographer__username=username,
                 is_published=True,
@@ -259,11 +267,19 @@ class PublicGalleryDownloadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 5. Fetch all media assets inside the gallery
-        assets = MediaAsset.objects.filter(gallery=gallery)
+        # 5. Fetch media assets (Support Selective Download)
+        asset_ids = request.data.get('asset_ids', [])
+        
+        if asset_ids and isinstance(asset_ids, list) and len(asset_ids) > 0:
+            # Download specific assets
+            assets = MediaAsset.objects.filter(gallery=gallery, id__in=asset_ids)
+        else:
+            # Download all gallery assets (fallback/default)
+            assets = MediaAsset.objects.filter(gallery=gallery)
+
         if not assets.exists():
             return Response(
-                {'error': 'Cannot compile download: Gallery is empty.'}, 
+                {'error': 'Cannot compile download: No valid assets found.'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -284,19 +300,21 @@ class PublicGalleryDownloadView(APIView):
             # Open the zip archive writer
             with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 for asset in assets:
-                    if asset.original_file:
-                        try:
-                            # Django's storage layer dynamically streams bytes from either Local disk or AWS S3
-                            asset.original_file.open('rb')
-                            file_data = asset.original_file.read()
-                            
-                            # Write file to ZIP archive using its authentic photographer filename
-                            zip_file.writestr(asset.original_name, file_data)
-                        except Exception as e:
-                            # Log the single file capture warning but continue packing other assets
-                            pass
-                        finally:
-                            asset.original_file.close()
+                    if not asset.original_file:
+                        continue
+                    try:
+                        asset.original_file.open('rb')
+                        with zip_file.open(asset.original_name, 'w') as dest:
+                            # Stream the file in 1MB chunks instead of loading entirely into RAM
+                            for chunk in asset.original_file.chunks(chunk_size=1024 * 1024):
+                                dest.write(chunk)
+                    except Exception:
+                        # Log the failure so you know exactly which file dropped and why
+                        logger.exception(
+                            "Failed to add asset %s to ZIP for gallery %s", asset.id, gallery.id
+                        )
+                    finally:
+                        asset.original_file.close()
 
             # 8. Dynamic Chunked Stream Generator
             def file_iterator(file_path, chunk_size=65536):
@@ -370,7 +388,9 @@ class PublicVideoStreamView(APIView):
 
     def get_gallery(self, username, slug):
         try:
+            now = timezone.now()
             return Gallery.objects.select_related('photographer').get(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
                 slug=slug,
                 photographer__username=username,
                 is_published=True,
@@ -447,7 +467,9 @@ class PublicPhotoDownloadView(APIView):
 
     def get_gallery(self, username, slug):
         try:
+            now = timezone.now()
             return Gallery.objects.select_related('photographer').get(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
                 slug=slug,
                 photographer__username=username,
                 is_published=True,
@@ -524,9 +546,15 @@ class PublicPhotographerPortfolioView(APIView):
 
         # 2. Fetch all published, active galleries belonging to this photographer
         # select_related cover_photo and Count annotations are applied to eliminate N+1 SQL queries
+        now = timezone.now()
         galleries = (
             Gallery.objects
-            .filter(photographer=photographer, is_published=True, is_active=True)
+            .filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+                photographer=photographer, 
+                is_published=True, 
+                is_active=True
+            )
             .select_related('cover_photo')
             .annotate(photo_count=Count('assets'))
             .order_by('-created_at')

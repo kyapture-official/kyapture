@@ -26,6 +26,7 @@ export default function GallerySettingsPage() {
   // instead of a value that LOOKS non-empty but still silently blanks the
   // <input type="date">.
   const [eventDate, setEventDate] = useState(toDateInputValue(gallery.event_date));
+  const [expiresAt, setExpiresAt] = useState(toDateInputValue(gallery.expires_at));
 
   const [hasPassword, setHasPassword] = useState(gallery.has_password);
   const [watermarkEnabled, setWatermarkEnabled] = useState(
@@ -49,6 +50,7 @@ export default function GallerySettingsPage() {
       is_downloadable: isDownloadable,
       watermark_enabled: watermarkEnabled,
       event_date: eventDate,
+      expires_at: expiresAt || null,
     };
 
     try {
@@ -73,6 +75,7 @@ export default function GallerySettingsPage() {
       // sources the same validated way.
       setGallery(updated);
       setEventDate(toDateInputValue(updated.event_date ?? payload.event_date));
+      setExpiresAt(toDateInputValue(updated.expires_at ?? payload.expires_at));
       setTitle(updated.title);
       setBrandingColor(updated.branding_color);
       setIsDownloadable(updated.is_downloadable);
@@ -219,6 +222,26 @@ export default function GallerySettingsPage() {
             <div className="flex flex-col gap-1">
               <label
                 className="text-xs font-semibold text-ink/80"
+                htmlFor="gallery-expires-at"
+              >
+                Gallery Expiration Date (Optional)
+              </label>
+              <input
+                id="gallery-expires-at"
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                disabled={updating}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-cream-300 focus:border-ink focus:outline-none focus:ring-2 focus:ring-cream-200 transition-all disabled:opacity-50"
+              />
+              <span className="text-[11px] text-muted">
+                After this date, clients will lose access to view and download photos. Leave blank for no expiration.
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label
+                className="text-xs font-semibold text-ink/80"
                 htmlFor="gallery-color"
               >
                 Photographer Brand Accent
@@ -288,7 +311,8 @@ export default function GallerySettingsPage() {
                     // inline-trimmed gallery.event_date. Two different
                     // conversions of the same value can silently drift —
                     // one shared helper can't.
-                    eventDate === toDateInputValue(gallery.event_date))
+                    eventDate === toDateInputValue(gallery.event_date) &&
+                  expiresAt === toDateInputValue(gallery.expires_at))
                 }
                 className="px-4 py-2 bg-ink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >

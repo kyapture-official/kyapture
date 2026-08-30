@@ -1,5 +1,6 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/core/utils.py
 import io
+import logging
 import piexif
 import os
 import secrets
@@ -20,6 +21,8 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from apps.subscriptions.models import UserSubscription, SubscriptionPlan
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
+
+logger = logging.getLogger(__name__)
 
 
 def generate_unique_slug(model_class, title, reserved_words=None, exclude_pk=None, **lookup_filters):
@@ -215,7 +218,8 @@ def strip_exif_gps(file_obj):
             charset=None
         )
     except Exception:
-        # Fallback security: If stripping fails, do not block the request
+        # 3. Log warning so failure rate is monitorable instead of silent
+        logger.warning("strip_exif_gps failed for %s — uploading with EXIF intact", file_obj.name)
         file_obj.seek(0)
         return file_obj
 

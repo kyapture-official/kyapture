@@ -96,9 +96,11 @@ class MediaAssetSerializer(serializers.ModelSerializer):
 
 class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
     """
-    Handles secure multipart/form-data image uploads.
-    Extracts DSLR orientation parameters, generates display WebPs, thumbnail WebPs,
-    and BlurHash data entirely in memory.
+    Validates secure multipart/form-data image uploads.
+
+    NOTE: Intentionally has no create() method. PhotoListUploadView validates 
+    via .is_valid() and then constructs the MediaAsset row directly to ensure 
+    consistent handling of pipeline processing, watermarking, and status flags.
     """
     # Exposing the input key as 'image' to keep David's frontend calling code identical
     image = serializers.ImageField(required=True, write_only=True)
@@ -134,62 +136,6 @@ class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("The image file appears to be corrupted or unreadable.")
 
         return file
-
-    def create(self, validated_data):
-        """
-        Builds the model instance, automatically calling the in-memory WebP 
-        and BlurHash generators before saving under the 'image' discriminator type.
-        """
-        gallery = validated_data.pop('gallery')
-        image_file = validated_data['image']
-        photographer = gallery.photographer
-
-
-        # Enforce strict EXIF GPS coordinate stripping (Privacy Protection)
-        image_file = strip_exif_gps(image_file)
-        
-        # 1. Lazily extract pixel dimensions with EXIF rotation compensation
-        image_file.seek(0)
-        with PILImage.open(image_file) as img:
-            img = exif_transpose(img)
-            width, height = img.size
-        image_file.seek(0)
-
-        # 2. Extract immutable system and original metadata
-        file_size = image_file.size
-        original_name = os.path.basename(image_file.name)
-        
-        title = validated_data.get('title', '').strip()
-        if not title:
-            title = os.path.splitext(original_name)[0]
-        
-        # Determine if a translucent copyright watermark should be applied
-        watermark_text = None
-        if gallery.watermark_enabled:
-            # Formats the photographer's exact business name (e.g. "© Kroman Studios")
-            watermark_text = f"© {photographer.display_name or photographer.username}"
-
-        # 3. Generate optimized display, thumbnail, and BlurHash variants in a single-pass in-memory pipeline
-        display_file, thumbnail_file, blurhash_str = process_image_pipeline(image_file, 
-            watermark_text=watermark_text
-            )
-
-        # 4. Instantiate and write the final record to PostgreSQL
-        asset = MediaAsset(
-            gallery=gallery,
-            media_type=MediaAsset.MediaType.IMAGE,
-            original_file=image_file,
-            display_file=display_file,
-            thumbnail_file=thumbnail_file,
-            blurhash=blurhash_str,
-            width=width,
-            height=height,
-            file_size=file_size,
-            original_name=original_name,
-            title=title
-        )
-        asset.save()
-        return asset
 
     def to_representation(self, instance):
         return MediaAssetSerializer(

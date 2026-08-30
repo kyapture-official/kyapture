@@ -258,15 +258,33 @@ class ChangePasswordView(APIView):
     
 
 class TotalUsersView(APIView):
-    """GET /api/total-users - Public count metrics"""
+    """GET /api/total-users - Public count metrics and recent user avatars"""
     permission_classes = [AllowAny]
     authentication_classes = [] 
 
     def get(self, request):
-        count = User.objects.filter(is_superuser=False, is_staff=False).count()
+        queryset = User.objects.filter(is_superuser=False, is_staff=False)
+        count = queryset.count()
+        
+        # Fetch the latest 5 registered photographers for the landing page avatar row
+        latest = queryset.order_by('-date_joined')[:5]
+        
+        # Muted aesthetic color palette matching frontend expectations
+        color_palette = ['#8c6d4f', '#4a7c6f', '#5c6b73', '#7b5c8c', '#8c5c5c']
+        
+        latest_users = []
+        for index, user in enumerate(latest):
+            name = user.display_name or user.username or 'U'
+            initial = name[0].upper()
+            color = color_palette[index % len(color_palette)]
+            latest_users.append({
+                "initial": initial,
+                "color": color
+            })
+
         return Response({
             "total_count": count,
-            "latest_users": []
+            "latest_users": latest_users
         }, status=status.HTTP_200_OK)
 
 # ─────────────────────────────────────────────────────────────
