@@ -30,6 +30,7 @@ const STATUS_BADGE_VARIANT = {
 export default function HomePage() {
   const { user } = useAuthStore();
   const [galleries, setGalleries] = useState([]);
+  const [dashboardStats, setDashboardStats] = useState(null);
   const [sub, setSub] = useState(null);
   const [loading, setLoading] = useState(true);
   const [galleriesError, setGalleriesError] = useState(false);
@@ -40,6 +41,17 @@ export default function HomePage() {
     setLoading(true);
     setGalleriesError(false);
     setSubError(false);
+
+    const statsPromise = galleriesApi
+      .getDashboardStats()
+      .then((data) => {
+        if (!mountedRef.current) return;
+        setDashboardStats(data);
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        setDashboardStats(null);
+      });
 
     // UNVERIFIED FROM THIS FILE ALONE: assumes getGalleries() resolves with the
     // unwrapped payload ({ results: [...] }), not a raw axios response. Confirm
@@ -72,9 +84,11 @@ export default function HomePage() {
         if (err?.response?.status !== 404) setSubError(true);
       });
 
-    return Promise.all([galleriesPromise, subPromise]).finally(() => {
-      if (mountedRef.current) setLoading(false);
-    });
+    return Promise.all([statsPromise, galleriesPromise, subPromise]).finally(
+      () => {
+        if (mountedRef.current) setLoading(false);
+      },
+    );
   }, []);
 
   useEffect(() => {
@@ -89,18 +103,25 @@ export default function HomePage() {
 
   const stats = useMemo(
     () => [
-      { label: "Total Galleries", value: galleries.length },
+      {
+        label: "Total Galleries",
+        value: dashboardStats?.galleries_used ?? galleries.length,
+      },
       {
         label: "Published",
-        value: galleries.filter((g) => g.is_published).length,
+        value:
+          dashboardStats?.published_galleries ??
+          galleries.filter((g) => g.is_published).length,
       },
       {
         label: "Protected",
-        value: galleries.filter((g) => g.has_password).length,
+        value:
+          dashboardStats?.protected_galleries ??
+          galleries.filter((g) => g.has_password).length,
       },
       { label: "Plan", value: planName },
     ],
-    [galleries, planName],
+    [dashboardStats, galleries, planName],
   );
 
   return (

@@ -1,7 +1,7 @@
 // File Location: frontend/src/pages/client/ClientGalleryPage.jsx
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useClientStore } from "../../store/clientStore";
 import { clientsApi } from "../../api/clientsApi";
 import ClientLayout from "../../components/layout/ClientLayout";
@@ -41,11 +41,22 @@ function getAlphaBrandingColor(hexColor, alphaHex = "14") {
 
 export default function ClientGalleryPage() {
   const { username, slug } = useParams();
+  const navigate = useNavigate();
 
   // Key scoped to username:slug ensures tenant isolation in shared client environments
   const sessionKey = `${username}:${slug}`;
   const { sessions, setSession, hasHydrated } = useClientStore();
   const token = sessions[sessionKey] ?? null;
+
+  // Selective Download tracking
+  const [selectedAssetIds, setSelectedAssetIds] = useState(new Set());
+
+  // Navigates to the Download Page with selected asset IDs passed in router state
+  const handleDownloadSelected = () => {
+    navigate(`/g/${username}/${slug}/download`, {
+      state: { selectedIds: Array.from(selectedAssetIds) },
+    });
+  };
 
   // Gallery structural metadata
   const [galleryTitle, setGalleryTitle] = useState("");
@@ -65,11 +76,7 @@ export default function ClientGalleryPage() {
   // Lightbox tracking (null represents closed state)
   const [lightboxIndex, setLightboxIndex] = useState(null);
 
-  // Selective Download tracking
-  const [selectedAssetIds, setSelectedAssetIds] = useState(new Set());
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadEmail, setDownloadEmail] = useState("");
-  const [showDownloadPrompt, setShowDownloadPrompt] = useState(false);
+  
 
   const toggleSelection = useCallback((id) => {
     setSelectedAssetIds((prev) => {
@@ -79,39 +86,6 @@ export default function ClientGalleryPage() {
       return next;
     });
   }, []);
-
-  const handleDownload = async (e) => {
-    e.preventDefault();
-    if (!downloadEmail.trim()) return;
-
-    setIsDownloading(true);
-    try {
-      const blob = await clientsApi.requestDownload(
-        username,
-        slug,
-        downloadEmail,
-        token,
-        Array.from(selectedAssetIds),
-      );
-
-      // Mount blob to a temporary link for browser downloading
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `${slug}-collection.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setShowDownloadPrompt(false);
-      setSelectedAssetIds(new Set()); // Clear selection on success
-    } catch (err) {
-      alert("Failed to initiate download. Please try again.");
-    } finally {
-      setIsDownloading(false);
-    }
-  };
 
   // System ref tracking to block async state-commit race conditions for gallery fetches
   const activeFetchId = useRef(0);
@@ -407,7 +381,7 @@ export default function ClientGalleryPage() {
         {photos.length > 0 && (
           <div className="flex justify-center mb-8">
             <button
-              onClick={() => setShowDownloadPrompt(true)}
+              onClick={handleDownloadSelected}
               className="text-xs uppercase tracking-widest text-ink border border-ink/30 px-6 py-2 rounded-full hover:bg-ink/5 transition"
             >
               {selectedAssetIds.size > 0
@@ -432,52 +406,6 @@ export default function ClientGalleryPage() {
             selectedAssetIds={selectedAssetIds}
             onToggleSelection={toggleSelection}
           />
-        )}
-
-        {/* Download Email Verification Modal */}
-        {showDownloadPrompt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm px-4">
-            <div className="bg-cream-50 p-6 rounded-xl shadow-xl max-w-sm w-full">
-              <h3 className="font-serif text-xl text-ink mb-2">
-                Download Photos
-              </h3>
-              <p className="text-sm text-muted mb-4">
-                {selectedAssetIds.size > 0
-                  ? `You are about to download ${selectedAssetIds.size} selected photo(s).`
-                  : "You are about to download the entire gallery."}
-                <br />
-                Enter your email to proceed.
-              </p>
-              <form onSubmit={handleDownload}>
-                <input
-                  type="email"
-                  required
-                  placeholder="hello@example.com"
-                  className="w-full mb-4 px-3 py-2 border border-cream-200 rounded-md bg-white focus:outline-none focus:border-ink text-sm"
-                  value={downloadEmail}
-                  onChange={(e) => setDownloadEmail(e.target.value)}
-                  disabled={isDownloading}
-                />
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowDownloadPrompt(false)}
-                    className="text-xs uppercase tracking-widest text-muted hover:text-ink transition px-2"
-                    disabled={isDownloading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isDownloading}
-                    className="text-xs uppercase tracking-widest text-white bg-ink px-4 py-2 rounded-md hover:bg-ink/80 transition disabled:opacity-50"
-                  >
-                    {isDownloading ? "Processing..." : "Download ZIP"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
         )}
 
         {lightboxIndex !== null && (

@@ -8,7 +8,7 @@ import { galleriesApi } from "../../api/galleriesApi";
 import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/ui/Toast";
 import { getAlphaBrandingColor } from "../../utils/colorHelper";
-import Modal from "../../components/ui/Modal";
+import CreateGalleryModal from "../../components/shared/CreateGalleryModal";
 import Spinner from "../../components/ui/Spinner";
 
 export default function GalleriesPage() {
@@ -28,11 +28,13 @@ export default function GalleriesPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const defaultBrandingColor = useAuthStore((s) => s.user?.branding_color) ?? "#111827";
+  const defaultBrandingColor =
+    useAuthStore((s) => s.user?.branding_color) ?? "#111827";
 
   const [formData, setFormData] = useState({
-      title: "",
-      branding_color: defaultBrandingColor,
+    title: "",
+    branding_color: defaultBrandingColor,
+    event_date: "",
   });
 
   // Single-flight guard: cancels a stale in-flight list/search request when a
@@ -112,35 +114,21 @@ export default function GalleriesPage() {
   }, [searchQuery, fetchGalleries]);
 
   // ── 2. Create collection ───────────────────────────────────────────────────
-  const handleCreateSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!formData.title.trim()) {
-      toast("Please enter a collection title.", "warning");
-      return;
-    }
-
-    setSubmitting(true);
+  const handleCreateSubmit = async (payload) => {
     const loaderId = toast("Creating your new collection…", "loading");
 
     try {
-      const newGallery = await galleriesApi.createGallery({
-        title: formData.title.trim(),
-        branding_color: formData.branding_color,
-      });
+      const newGallery = await galleriesApi.createGallery(payload);
 
       toast.dismiss(loaderId);
       toast("Collection created!", "success");
 
       setGalleries((prev) => [newGallery, ...prev]);
       setOpenCreate(false);
-      setFormData({ title: "", branding_color: defaultBrandingColor });
     } catch (err) {
       toast.dismiss(loaderId);
 
       // ── SUBSCRIPTION PLAN GATING (403 FORBIDDEN INTERCEPTOR) ────────────────
-      // Resolves AI Studio bug by prioritizing custom limit error payloads
-      // (such as "You have used 3 of 3 galleries on the Free plan") over static strings.
       if (err.response?.status === 403) {
         const data = err.response?.data;
         const message =
@@ -158,12 +146,10 @@ export default function GalleriesPage() {
           err.response?.data?.detail ||
           "Failed to create collection.";
         toast(errorMsg, "error");
+        throw new Error(errorMsg); // Re-throw so CreateGalleryModal receives the failure notice
       }
-    } finally {
-      setSubmitting(false);
     }
   };
-
   // ── 3. Copy public gallery link ────────────────────────────────────────────
   // Compiles standard, path-based fallback links to match routing configurations.
   const handleCopyLink = async (gallery) => {
@@ -391,77 +377,11 @@ export default function GalleriesPage() {
       )}
 
       {/* Create Gallery Modal Overlay */}
-      <Modal
-        open={openCreate}
+      <CreateGalleryModal
+        isOpen={openCreate}
         onClose={() => setOpenCreate(false)}
-        title="Create Collection"
-        size="sm"
-      >
-        <form onSubmit={handleCreateSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="gallery-title"
-              className="block text-[10px] uppercase font-bold text-ink tracking-wider mb-2"
-            >
-              Collection Title
-            </label>
-            <input
-              id="gallery-title"
-              type="text"
-              value={formData.title}
-              onChange={(e) =>
-                setFormData((f) => ({ ...f, title: e.target.value }))
-              }
-              placeholder="e.g. Wedding of Sonal & Lalit"
-              disabled={submitting}
-              maxLength={60}
-              className="w-full border border-cream-300 p-3 rounded-lg text-xs text-ink focus:border-ink focus:ring-0 outline-none bg-white"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="gallery-color"
-              className="block text-[10px] uppercase font-bold text-ink tracking-wider mb-2"
-            >
-              Primary Accent Color
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                id="gallery-color"
-                type="color"
-                value={formData.branding_color}
-                onChange={(e) =>
-                  setFormData((f) => ({ ...f, branding_color: e.target.value }))
-                }
-                disabled={submitting}
-                className="w-10 h-10 border-0 rounded cursor-pointer"
-              />
-              <span className="text-xs font-mono text-muted uppercase">
-                {formData.branding_color}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4 border-t border-cream-100">
-            <button
-              type="button"
-              onClick={() => setOpenCreate(false)}
-              disabled={submitting}
-              className="w-1/2 py-3 border border-cream-300 hover:bg-cream-50 text-ink text-xs uppercase tracking-widest rounded-lg font-medium cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-1/2 py-3 bg-ink hover:opacity-90 text-white text-xs uppercase tracking-widest rounded-lg font-medium cursor-pointer disabled:opacity-50"
-            >
-              {submitting ? "Creating…" : "Create"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        onCreateSubmit={handleCreateSubmit}
+      />
     </div>
   );
 }

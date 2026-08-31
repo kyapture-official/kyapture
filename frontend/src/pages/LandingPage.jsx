@@ -1,75 +1,123 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/pages/LandingPage.jsx
-import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 
 const FEATURES = [
-  { icon: '🖼️', title: 'Beautiful galleries', desc: 'Masonry layout, lightbox view, lazy loading — your photos always shine.' },
-  { icon: '🔒', title: 'Password protection', desc: 'Lock any gallery so only your clients can access their photos.' },
-  { icon: '⬇️', title: 'Smart downloads', desc: 'Clients download full-resolution ZIPs. Capture their email automatically.' },
-  { icon: '🎨', title: 'Your brand', desc: 'Custom logo, accent color, watermark. Every gallery screams you.' },
-  { icon: '🔗', title: 'Shareable links', desc: 'username.kyapture.com/your-slug — send it and forget.' },
-  { icon: '📊', title: 'Analytics', desc: 'Track views, downloads, and client activity in real time.' },
-]
+  {
+    icon: "🖼️",
+    title: "Beautiful galleries",
+    desc: "Masonry layout, lightbox view, lazy loading — your photos always shine.",
+  },
+  {
+    icon: "🔒",
+    title: "Password protection",
+    desc: "Lock any gallery so only your clients can access their photos.",
+  },
+  {
+    icon: "⬇️",
+    title: "Smart downloads",
+    desc: "Clients download full-resolution ZIPs. Capture their email automatically.",
+  },
+  {
+    icon: "🎨",
+    title: "Your brand",
+    desc: "Custom logo, accent color, watermark. Every gallery screams you.",
+  },
+  {
+    icon: "🔗",
+    title: "Shareable links",
+    desc: "username.kyapture.com/your-slug — send it and forget.",
+  },
+  {
+    icon: "📊",
+    title: "Analytics",
+    desc: "Track views, downloads, and client activity in real time.",
+  },
+];
 
 export default function LandingPage() {
-  const [scrolled, setScrolled] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [displayCount, setDisplayCount] = useState(0)
-  const [recentUsers, setRecentUsers] = useState([])
+  const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [displayCount, setDisplayCount] = useState(0);
+  const [recentUsers, setRecentUsers] = useState([]);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', onScroll)
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await fetch('/api/total-users')
+        const response = await fetch("/api/total-users");
         if (response.ok) {
-          const data = await response.json()
-          setDisplayCount(data.total_count)
-          setRecentUsers(data.latest_users)
+          const data = await response.json();
+          setDisplayCount(data.total_count);
+          setRecentUsers(data.latest_users);
         }
       } catch {
-        setDisplayCount(0)
+        setDisplayCount(0);
         setRecentUsers([
-          { initial: 'A', color: '#8c6d4f' },
-          { initial: 'S', color: '#4a7c6f' },
-        ])
+          { initial: "A", color: "#8c6d4f" },
+          { initial: "S", color: "#4a7c6f" },
+        ]);
       }
-    }
-    fetchUsers()
-  }, [])
+    };
+    fetchUsers();
+  }, []);
 
   return (
     <div className="landing">
       {/* ===== NAVBAR ===== */}
-      <nav className={`navbar ${scrolled ? 'navbar--scrolled' : ''}`}>
+      <nav className={`navbar ${scrolled ? "navbar--scrolled" : ""}`}>
         <Link to="/" className="navbar__logo">
           <div className="navbar__logo-icon">📸</div>
           <span>Kyapture</span>
         </Link>
 
         <div className="navbar__links">
-          <a href="#features" className="navbar__link">Features</a>
-          <a href="#pricing" className="navbar__link">Pricing</a>
-          <a href="#about" className="navbar__link">About</a>
-          <Link to="/login" className="navbar__link">Sign in</Link>
-          <Link to="/register" className="navbar__cta">Get started free →</Link>
+          <a href="#features" className="navbar__link">
+            Features
+          </a>
+          <Link to="/pricing" className="navbar__link">
+            Pricing
+          </Link>
+          <a href="#about" className="navbar__link">
+            About
+          </a>
+          <Link to="/login" className="navbar__link">
+            Sign in
+          </Link>
+          <Link to="/register" className="navbar__cta">
+            Get started free →
+          </Link>
         </div>
 
-        <button className="navbar__burger" onClick={() => setMenuOpen(o => !o)}>
-          {menuOpen ? '✕' : '☰'}
+        <button
+          className="navbar__burger"
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          {menuOpen ? "✕" : "☰"}
         </button>
 
         {menuOpen && (
           <div className="navbar__mobile">
-            <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
-            <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
-            <Link to="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
-            <Link to="/register" onClick={() => setMenuOpen(false)}>Create account</Link>
+            <a href="#features" onClick={() => setMenuOpen(false)}>
+              Features
+            </a>
+            <Link to="/pricing" onClick={() => setMenuOpen(false)}>
+              Pricing
+            </Link>
+            <a href="#about" onClick={() => setMenuOpen(false)}>
+              About
+            </a>
+            <Link to="/login" onClick={() => setMenuOpen(false)}>
+              Sign in
+            </Link>
+            <Link to="/register" onClick={() => setMenuOpen(false)}>
+              Create account
+            </Link>
           </div>
         )}
       </nav>
@@ -83,11 +131,14 @@ export default function LandingPage() {
           <div className="hero__eyebrow">✦ Built for photographers</div>
 
           <h1 className="hero__title">
-            Share your work<br />with <em>elegance</em>
+            Share your work
+            <br />
+            with <em>elegance</em>
           </h1>
 
           <p className="hero__sub">
-            Beautiful client galleries, password‑protected delivery, and seamless downloads — all from one clean dashboard.
+            Beautiful client galleries, password‑protected delivery, and
+            seamless downloads — all from one clean dashboard.
           </p>
 
           <div className="hero__actions">
@@ -103,7 +154,11 @@ export default function LandingPage() {
             {displayCount > 0 && (
               <div className="hero__avatars">
                 {recentUsers.map((user, i) => (
-                  <div key={i} className="hero__avatar" style={{ background: user.color || '#8c6d4f' }}>
+                  <div
+                    key={i}
+                    className="hero__avatar"
+                    style={{ background: user.color || "#8c6d4f" }}
+                  >
                     {user.initial}
                   </div>
                 ))}
@@ -111,16 +166,15 @@ export default function LandingPage() {
             )}
             <span>
               {displayCount === 0
-                ? 'Be the first photographer to join Kyapture!'
-                : `Trusted by ${displayCount} ${displayCount === 1 ? 'photographer' : 'photographers'} in Nepal & beyond`
-              }
+                ? "Be the first photographer to join Kyapture!"
+                : `Trusted by ${displayCount} ${displayCount === 1 ? "photographer" : "photographers"} in Nepal & beyond`}
             </span>
           </div>
         </div>
 
         {/* decorative photo tiles */}
         <div className="hero__visual">
-          {['🌄', '💒', '🎭', '🏔️'].map((emoji, i) => (
+          {["🌄", "💒", "🎭", "🏔️"].map((emoji, i) => (
             <div key={i} className="photo-tile">
               <div className="photo-tile__inner">{emoji}</div>
             </div>
@@ -129,7 +183,11 @@ export default function LandingPage() {
 
         <div
           className="hero__scroll"
-          onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+          onClick={() =>
+            document
+              .getElementById("features")
+              ?.scrollIntoView({ behavior: "smooth" })
+          }
         >
           <span>Scroll</span>
           <span>↓</span>
@@ -141,7 +199,7 @@ export default function LandingPage() {
         <div className="section__label">Everything you need</div>
         <h2 className="section__title">One platform. Infinite galleries.</h2>
         <div className="features-grid">
-          {FEATURES.map(f => (
+          {FEATURES.map((f) => (
             <div className="feature-card" key={f.title}>
               <div className="feature-card__icon">{f.icon}</div>
               <div className="feature-card__title">{f.title}</div>
@@ -151,6 +209,29 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ===== ABOUT ===== */}
+      <section className="section" id="about">
+        <div className="section__label">About Kyapture</div>
+        <h2 className="section__title">
+          Built by photographers, for photographers
+        </h2>
+        <p
+          style={{
+            maxWidth: 640,
+            margin: "0 auto",
+            textAlign: "center",
+            color: "var(--muted)",
+            fontSize: 15,
+            lineHeight: 1.7,
+          }}
+        >
+          Kyapture started in Nepal with a simple idea: delivering finished
+          photos to clients shouldn't mean wrestling with clunky file-sharing
+          tools. We built a clean, branded gallery experience so you can focus
+          on your craft — we'll handle the delivery.
+        </p>
+      </section>
+
       {/* ===== CTA BAND ===== */}
       <section className="cta-band">
         <div className="cta-band__glow" />
@@ -158,8 +239,14 @@ export default function LandingPage() {
           <h2 className="cta-band__title">
             Ready to deliver <em>beautifully?</em>
           </h2>
-          <p className="cta-band__sub">Join photographers who trust Kyapture for every delivery.</p>
-          <Link to="/register" className="btn btn-accent" style={{ fontSize: 15, padding: '13px 30px' }}>
+          <p className="cta-band__sub">
+            Join photographers who trust Kyapture for every delivery.
+          </p>
+          <Link
+            to="/register"
+            className="btn btn-accent"
+            style={{ fontSize: 15, padding: "13px 30px" }}
+          >
             Create your free account →
           </Link>
         </div>
@@ -171,12 +258,15 @@ export default function LandingPage() {
         <div className="footer__links">
           <a href="#features">Features</a>
           <Link to="/pricing">Pricing</Link>
+          <a href="#about">About</a>
           <a href="#">Privacy</a>
           <a href="#">Terms</a>
           <a href="#">Contact</a>
         </div>
-        <div className="footer__copy">© {new Date().getFullYear()} Kyapture. Made with ♥ in Nepal</div>
+        <div className="footer__copy">
+          © {new Date().getFullYear()} Kyapture. Made with ♥ in Nepal
+        </div>
       </footer>
     </div>
-  )
+  );
 }

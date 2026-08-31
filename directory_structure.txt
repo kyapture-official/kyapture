@@ -4,7 +4,6 @@ kyapture/
 ├── README.md
 ├── directory_structure.txt
 ├── docker-compose.yml
-├── temp_black_format.py
 ├── temp_tree.py
 ├── backend/
 │   ├── Dockerfile
@@ -52,6 +51,7 @@ kyapture/
 │   │   │   │   ├── 0001_initial.py
 │   │   │   │   ├── 0002_initial.py
 │   │   │   │   ├── 0003_initial.py
+│   │   │   │   ├── 0004_gallery_event_date.py
 │   │   │   │   ├── __init__.py
 │   │   │   ├── tests/
 │   │   │   │   ├── __init__.py
@@ -136,6 +136,8 @@ kyapture/
 │   ├── media/
 │   │   ├── test
 │   │   ├── payment_proofs/
+│   │   ├── photographer_logos/
+│   │   │   ├── 2013-10-14_10.35.36.jpg
 │   │   ├── photographers/
 │   │   │   ├── test
 │   │   │   ├── 019e6d88-6966-7c77-8fdb-3e9da4c6746e/
@@ -154,6 +156,9 @@ kyapture/
 │   ├── postcss.config.js
 │   ├── tailwind.config.js
 │   ├── vite.config.js
+│   ├── cypress/
+│   │   ├── e2e/
+│   │   │   ├── smoke_spec.cy.js
 │   ├── public/
 │   │   ├── favicon.ico
 │   │   ├── robots.txt
@@ -174,11 +179,8 @@ kyapture/
 │   │   │   │   ├── DashboardLayout.jsx
 │   │   │   ├── shared/
 │   │   │   │   ├── CreateGalleryModal.jsx
-│   │   │   │   ├── DashboardHeader.jsx
-│   │   │   │   ├── EmptyState.jsx
 │   │   │   │   ├── ErrorBoundary.jsx
 │   │   │   │   ├── GalleryCard.jsx
-│   │   │   │   ├── LoadingSkeleton.jsx
 │   │   │   │   ├── PasswordModal.jsx
 │   │   │   │   ├── PhotoGrid.jsx
 │   │   │   │   ├── PhotoLightbox.jsx
@@ -196,7 +198,6 @@ kyapture/
 │   │   ├── hooks/
 │   │   │   ├── useAuth.js
 │   │   │   ├── useGalleries.js
-│   │   │   ├── useSubdomain.js
 │   │   │   ├── useSubscription.js
 │   │   ├── pages/
 │   │   │   ├── LandingPage.jsx
@@ -210,13 +211,11 @@ kyapture/
 │   │   │   │   ├── DownloadPage.jsx
 │   │   │   ├── dashboard/
 │   │   │   │   ├── GalleriesPage.jsx
-│   │   │   │   ├── GalleryDetailPage.jsx
 │   │   │   │   ├── GalleryPhotosPage.jsx
 │   │   │   │   ├── GallerySettingsPage.jsx
 │   │   │   │   ├── GalleryWorkspaceLayout.jsx
 │   │   │   │   ├── HomePage.jsx
 │   │   │   │   ├── SettingsPage.jsx
-│   │   │   │   ├── UploadPage.jsx
 │   │   │   ├── subscription/
 │   │   │   │   ├── BillingPage.jsx
 │   │   │   │   ├── PricingPage.jsx
@@ -231,5 +230,4 @@ kyapture/
 │   │   │   ├── constants.js
 │   │   │   ├── formatters.js
 │   │   │   ├── mockGalleries.js
-│   │   │   ├── subdomainHelper.js
 │   │   │   ├── validator.js

@@ -3888,3 +3888,175 @@ WARNING 2026-08-30 16:18:48,457 log 22904 22952 "GET /api/v1/auth/me/ HTTP/1.1" 
 WARNING 2026-08-30 17:05:28,274 log 13600 13848 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
 WARNING 2026-08-30 17:05:28,289 log 13600 2732 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
 WARNING 2026-08-30 17:29:40,880 log 13600 6564 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-30 23:45:43,393 log 10436 22284 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-30 23:45:43,409 log 10436 6756 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-30 23:45:43,491 log 10436 18032 "POST /api/v1/auth/token/refresh/ HTTP/1.1" 401 39
+WARNING 2026-08-31 13:09:38,153 log 12176 5072 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 13:09:38,176 log 12176 27292 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 13:29:29,497 log 12176 21844 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 13:29:29,510 log 12176 14128 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 13:48:57,387 log 12176 25904 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-31 13:48:57,387 log 12176 27320 "GET /api/v1/subscriptions/my-subscription/ HTTP/1.1" 401 70
+WARNING 2026-08-31 13:48:57,411 log 12176 23704 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-31 13:48:57,411 log 12176 9912 "GET /api/v1/subscriptions/my-subscription/ HTTP/1.1" 401 70
+WARNING 2026-08-31 14:13:12,892 log 12176 25256 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 14:13:12,902 log 12176 25688 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 14:49:14,159 log 12176 9576 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 14:49:14,176 log 12176 18956 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 20:14:17,846 log 17540 28304 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 20:14:18,581 log 17540 25592 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 20:15:16,260 log 17540 25364 "PATCH /api/v1/galleries/degi-and-priya/ HTTP/1.1" 400 87
+WARNING 2026-08-31 20:15:25,560 log 17540 28020 "PATCH /api/v1/galleries/degi-and-priya/ HTTP/1.1" 400 87
+WARNING 2026-08-31 20:26:07,645 log 17540 30212 "PATCH /api/v1/galleries/degi-and-priya/ HTTP/1.1" 400 87
+WARNING 2026-08-31 20:30:01,712 log 17540 20848 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-08-31 20:49:54,486 log 12176 12052 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 20:49:54,499 log 12176 24192 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+ERROR 2026-08-31 20:50:01,138 log 12176 19156 Internal Server Error: /api/v1/galleries/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 113, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'event_date' was declared on serializer GalleryCreateSerializer, but has not been included in the 'fields' option.
+ERROR 2026-08-31 20:50:01,149 log 12176 19156 "POST /api/v1/galleries/ HTTP/1.1" 500 29237
+ERROR 2026-08-31 20:51:24,362 log 12176 2680 Internal Server Error: /api/v1/galleries/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 113, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'event_date' was declared on serializer GalleryCreateSerializer, but has not been included in the 'fields' option.
+ERROR 2026-08-31 20:51:24,370 log 12176 2680 "POST /api/v1/galleries/ HTTP/1.1" 500 29237
+ERROR 2026-08-31 20:54:12,468 log 12176 23984 Internal Server Error: /api/v1/galleries/
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\views\generic\base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py", line 113, in post
+    if serializer.is_valid():
+       ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 456, in run_validation
+    value = self.to_internal_value(data)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 509, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 392, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 386, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1101, in get_fields
+    field_names = self.get_field_names(declared_fields, info)
+  File "C:\Users\LENOVO\Desktop\kyapture\.venv\Lib\site-packages\rest_framework\serializers.py", line 1204, in get_field_names
+    assert field_name in fields, (
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: The field 'event_date' was declared on serializer GalleryCreateSerializer, but has not been included in the 'fields' option.
+ERROR 2026-08-31 20:54:12,478 log 12176 23984 "POST /api/v1/galleries/ HTTP/1.1" 500 29237
+WARNING 2026-08-31 21:21:51,555 log 25616 9516 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-08-31 21:21:51,565 log 25616 28936 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-09-01 00:02:46,374 log 25616 27560 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-09-01 00:02:46,563 log 25616 3288 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-09-01 00:17:56,741 log 32024 24516 "POST /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-09-01 00:34:43,486 log 32024 408 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-09-01 00:34:43,486 log 32024 1152 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-09-01 00:34:43,492 log 32024 11540 "GET /api/v1/auth/me/ HTTP/1.1" 401 70

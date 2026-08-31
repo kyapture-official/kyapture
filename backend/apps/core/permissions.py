@@ -15,4 +15,3 @@ class IsPhotographer(BasePermission):
             and request.user.is_authenticated 
             and request.user.is_active
         )
-

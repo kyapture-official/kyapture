@@ -124,6 +124,13 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
         default=''
     )
     is_downloadable = serializers.BooleanField(source='allow_download', required=False, default=False)
+    
+    event_date = serializers.DateField(required=False, allow_null=True)
+    expires_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+        input_formats=['iso-8601', '%Y-%m-%d'],
+    )
 
     class Meta:
         model = Gallery
@@ -131,7 +138,7 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
             'title', 'description', 'branding_color',
             'is_password_protected', 'password',
             'is_downloadable', 'watermark_enabled',
-            'is_published', 'expires_at',
+            'is_published', 'expires_at', 'event_date',
         ]
 
     def validate_title(self, value):
@@ -203,6 +210,20 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         queryset=MediaAsset.objects.all(),
         required=False,
         allow_null=True
+    )
+    
+    # Explicit rather than left to ModelSerializer's auto-generation — the
+    # null/optional contract for these two should be visible here, not
+    # inferred from the model's null=True/blank=True by a future reader.
+    event_date = serializers.DateField(required=False, allow_null=True)
+    expires_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+        # A bare "YYYY-MM-DD" (what <input type="date"> sends) fails DRF's
+        # default iso-8601-only DateTimeField parsing — parse_datetime()
+        # requires a time component. Accepting '%Y-%m-%d' too resolves a
+        # bare date to midnight of that day, matching what the picker sends.
+        input_formats=['iso-8601', '%Y-%m-%d'],
     )
 
     class Meta:

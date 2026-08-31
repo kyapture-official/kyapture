@@ -49,7 +49,7 @@ export default function GallerySettingsPage() {
       branding_color: brandingColor,
       is_downloadable: isDownloadable,
       watermark_enabled: watermarkEnabled,
-      event_date: eventDate,
+      event_date: eventDate || null,
       expires_at: expiresAt || null,
     };
 

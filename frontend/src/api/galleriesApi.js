@@ -29,6 +29,15 @@ import api from './axiosInstance'
 export const galleriesApi = {
 
   /**
+   * WHAT: Fetch dashboard statistics (galleries used, limits, etc.) from a single query.
+   * URI:  GET /api/v1/galleries/dashboard/stats/
+   */
+  getDashboardStats: async () => {
+    const { data } = await api.get('/galleries/dashboard/stats/')
+    return data
+  },
+
+  /**
    * WHAT: Fetch the authenticated photographer's gallery list.
    * URI:  GET /api/v1/galleries/
    *

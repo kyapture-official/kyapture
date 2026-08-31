@@ -12,7 +12,6 @@ import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 // Dashboard
 import HomePage from "./pages/dashboard/HomePage";
 import GalleriesPage from "./pages/dashboard/GalleriesPage";
-import UploadPage from "./pages/dashboard/UploadPage";
 import SettingsPage from "./pages/dashboard/SettingsPage";
 import BillingPage from "./pages/subscription/BillingPage";
 // Gallery workspace (own shell — no DashboardLayout)
@@ -56,7 +55,6 @@ export default function App() {
             <Route element={<DashboardLayout />}>
               <Route index element={<HomePage />} />
               <Route path="galleries" element={<GalleriesPage />} />
-              <Route path="upload" element={<UploadPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="billing" element={<BillingPage />} />
             </Route>

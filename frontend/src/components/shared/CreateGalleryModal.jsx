@@ -190,7 +190,7 @@ export default function CreateGalleryModal({
         title: title.trim(),
         branding_color: color,
         is_downloadable: downloadable,
-        event_date: eventDate,
+        event_date: eventDate || null,
       });
 
       // Happy path: no state writes follow onCloseRef.current(), so parent
@@ -294,7 +294,7 @@ export default function CreateGalleryModal({
               ref={titleInputRef}
               id="new-gallery-title"
               type="text"
-              placeholder="e.g. Elena Portrait Session"
+              placeholder="e.g. Garima and Ankit"
               value={title}
               maxLength={100}
               aria-required="true"
@@ -315,7 +315,7 @@ export default function CreateGalleryModal({
               className="text-xs font-semibold text-gray-700"
               htmlFor="new-gallery-date"
             >
-              Event Date
+              Event Date (optional)
             </label>
             <input
               id="new-gallery-date"
@@ -384,7 +384,7 @@ export default function CreateGalleryModal({
               Cancel
             </button>
             {/* [F3] aria-busy removed from button — the dialog container already carries
-                 aria-busy={submitting}, which broadcasts to the entire region. Keeping it
+                aria-busy={submitting}, which broadcasts to the entire region. Keeping it
                  here too causes NVDA/VoiceOver to announce "busy" twice. */}
             <button
               type="submit"
