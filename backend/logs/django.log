@@ -4060,3 +4060,9 @@ WARNING 2026-09-01 00:17:56,741 log 32024 24516 "POST /api/v1/galleries/ HTTP/1.
 WARNING 2026-09-01 00:34:43,486 log 32024 408 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
 WARNING 2026-09-01 00:34:43,486 log 32024 1152 "GET /api/v1/galleries/ HTTP/1.1" 401 70
 WARNING 2026-09-01 00:34:43,492 log 32024 11540 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-09-08 20:44:38,837 log 4180 17984 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-09-08 20:44:38,838 log 4180 21400 "GET /api/v1/subscriptions/my-subscription/ HTTP/1.1" 401 70
+WARNING 2026-09-08 20:44:38,838 log 4180 20332 "GET /api/v1/galleries/dashboard/stats/ HTTP/1.1" 401 70
+WARNING 2026-09-08 20:44:38,852 log 4180 20544 "GET /api/v1/galleries/ HTTP/1.1" 401 70
+WARNING 2026-09-08 20:44:38,856 log 4180 16100 "GET /api/v1/subscriptions/my-subscription/ HTTP/1.1" 401 70
+WARNING 2026-09-08 20:44:38,868 log 4180 24344 "GET /api/v1/galleries/dashboard/stats/ HTTP/1.1" 401 70

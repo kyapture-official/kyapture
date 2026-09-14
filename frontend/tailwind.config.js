@@ -5,23 +5,37 @@ export default {
     extend: {
       fontFamily: {
         serif: ['Cormorant Garamond', 'Georgia', 'serif'],
-        sans:  ['Outfit', 'system-ui', 'sans-serif'],
+        sans: ['Outfit', 'system-ui', 'sans-serif'],
+        landing: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
       },
       colors: {
         cream: {
-          50:  '#faf7f2',
+          50: '#faf7f2',
           100: '#f3ede3',
           200: '#e8ddd0',
           300: '#d4c4b0',
           400: '#c4a882',
           500: '#c17f3e',
         },
-        ink:    '#1e1a16',
-        muted:  '#9a8b7c',
+        ink: '#1e1a16',
+        muted: '#9a8b7c',
         accent: '#c17f3e',
-        green:  '#4a7c6f',
-      },
+        green: '#4a7c6f',
+
+        primary: {
+          DEFAULT: '#0D9488',
+          light: '#14B8A6',
+          dark: '#0F766E',
+        },
+        charcoal: {
+          DEFAULT: '#0F172A',
+          light: '#1E293B',
+        },
+        offwhite: '#FAFAFA',
+      
     },
+
   },
-  plugins: [],
+},
+plugins: [],
 }
