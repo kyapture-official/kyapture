@@ -73,7 +73,7 @@ const features = [
 export default function Features() {
   const [activeFeature, setActiveFeature] = useState(features[0].id);
 
-  const current = features.find((f) => f.id === activeFeature)!;
+  const current = features.find((f) => f.id === activeFeature);
 
   return (
     <section id="features" className="py-24 bg-offwhite">

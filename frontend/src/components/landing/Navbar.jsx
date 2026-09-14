@@ -160,18 +160,20 @@ export default function Navbar() {
                 </div>
               ))}
               <div className="pt-4 border-t border-white/5 space-y-2">
-                <a
-                  href="#"
+                <Link
+                  to="/login"
                   className="block text-center rounded-lg px-4 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white"
+                  onClick={() => setMobileOpen(false)}
                 >
                   Log In
-                </a>
-                <a
-                  href="#"
+                </Link>
+                <Link
+                  to="/register"
                   className="block text-center rounded-full bg-teal-500 px-5 py-2.5 text-sm font-semibold text-[#0A0E1A]"
+                  onClick={() => setMobileOpen(false)}
                 >
                   Get Started
-                </a>
+                </Link>
               </div>
             </div>
           </motion.div>

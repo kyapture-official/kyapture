@@ -4066,3 +4066,5 @@ WARNING 2026-09-08 20:44:38,838 log 4180 20332 "GET /api/v1/galleries/dashboard/
 WARNING 2026-09-08 20:44:38,852 log 4180 20544 "GET /api/v1/galleries/ HTTP/1.1" 401 70
 WARNING 2026-09-08 20:44:38,856 log 4180 16100 "GET /api/v1/subscriptions/my-subscription/ HTTP/1.1" 401 70
 WARNING 2026-09-08 20:44:38,868 log 4180 24344 "GET /api/v1/galleries/dashboard/stats/ HTTP/1.1" 401 70
+WARNING 2026-09-14 08:30:31,673 log 13140 7960 "GET /api/v1/auth/me/ HTTP/1.1" 401 70
+WARNING 2026-09-14 08:30:31,702 log 13140 18552 "GET /api/v1/auth/me/ HTTP/1.1" 401 70

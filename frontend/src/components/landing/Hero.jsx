@@ -1,12 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-  type MotionValue,
-} from 'framer-motion';
-import { ArrowRight, Camera, CheckCircle2, Lock } from 'lucide-react';
+import { useEffect, useRef, useState } from "react";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { ArrowRight, Camera, CheckCircle2, Lock } from "lucide-react";
+import { Link } from "react-router-dom";
+
+const MotionLink = motion(Link);
 
 const stagger = {
   hidden: {},
@@ -22,62 +19,55 @@ const fadeUp = {
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] as const },
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] },
   },
 };
 
-type GridImage = {
-  src: string;
-  label: string;
-  exif: string;
-  colors: string[];
-};
-
-const gridImages: GridImage[] = [
+const gridImages = [
   {
-    src: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=500&h=600&fit=crop',
-    label: 'Wedding',
-    exif: '50mm  f/1.8  1/200s',
-    colors: ['bg-amber-700', 'bg-stone-800', 'bg-orange-200', 'bg-teal-900'],
+    src: "https://images.unsplash.com/photo-1519741497674-611481863552?w=500&h=600&fit=crop",
+    label: "Wedding",
+    exif: "50mm  f/1.8  1/200s",
+    colors: ["bg-amber-700", "bg-stone-800", "bg-orange-200", "bg-teal-900"],
   },
   {
-    src: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=500&h=600&fit=crop',
-    label: 'Portrait',
-    exif: '85mm  f/2.0  1/320s',
-    colors: ['bg-stone-700', 'bg-amber-600', 'bg-orange-900', 'bg-neutral-500'],
+    src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=500&h=600&fit=crop",
+    label: "Portrait",
+    exif: "85mm  f/2.0  1/320s",
+    colors: ["bg-stone-700", "bg-amber-600", "bg-orange-900", "bg-neutral-500"],
   },
   {
-    src: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=600&fit=crop',
-    label: 'Landscape',
-    exif: '24mm  f/8.0  1/125s',
-    colors: ['bg-cyan-900', 'bg-slate-800', 'bg-blue-800', 'bg-emerald-700'],
+    src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=600&fit=crop",
+    label: "Landscape",
+    exif: "24mm  f/8.0  1/125s",
+    colors: ["bg-cyan-900", "bg-slate-800", "bg-blue-800", "bg-emerald-700"],
   },
   {
-    src: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=500&h=600&fit=crop',
-    label: 'Adventure',
-    exif: '35mm  f/4.0  1/500s',
-    colors: ['bg-orange-500', 'bg-amber-800', 'bg-yellow-900', 'bg-stone-700'],
+    src: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=500&h=600&fit=crop",
+    label: "Adventure",
+    exif: "35mm  f/4.0  1/500s",
+    colors: ["bg-orange-500", "bg-amber-800", "bg-yellow-900", "bg-stone-700"],
   },
   {
-    src: 'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=500&h=600&fit=crop',
-    label: 'Editorial',
-    exif: '105mm  f/2.8  1/250s',
-    colors: ['bg-rose-900', 'bg-stone-900', 'bg-pink-700', 'bg-neutral-800'],
+    src: "https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=500&h=600&fit=crop",
+    label: "Editorial",
+    exif: "105mm  f/2.8  1/250s",
+    colors: ["bg-rose-900", "bg-stone-900", "bg-pink-700", "bg-neutral-800"],
   },
   {
-    src: 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=500&h=600&fit=crop',
-    label: 'Commercial',
-    exif: '70mm  f/5.6  1/160s',
-    colors: ['bg-teal-800', 'bg-cyan-700', 'bg-slate-700', 'bg-emerald-900'],
+    src: "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=500&h=600&fit=crop",
+    label: "Commercial",
+    exif: "70mm  f/5.6  1/160s",
+    colors: ["bg-teal-800", "bg-cyan-700", "bg-slate-700", "bg-emerald-900"],
   },
 ];
 
-const CornerBracket = ({ position }: { position: 'tl' | 'tr' | 'bl' | 'br' }) => {
-  const map: Record<typeof position, string> = {
-    tl: 'top-3 left-3 border-t-2 border-l-2',
-    tr: 'top-3 right-3 border-t-2 border-r-2',
-    bl: 'bottom-3 left-3 border-b-2 border-l-2',
-    br: 'bottom-3 right-3 border-b-2 border-r-2',
+const CornerBracket = ({ position }) => {
+  const map = {
+    tl: "top-3 left-3 border-t-2 border-l-2",
+    tr: "top-3 right-3 border-t-2 border-r-2",
+    bl: "bottom-3 left-3 border-b-2 border-l-2",
+    br: "bottom-3 right-3 border-b-2 border-r-2",
   };
   return (
     <div className={`absolute h-5 w-5 ${map[position]} border-slate-500/50`} />
@@ -85,24 +75,24 @@ const CornerBracket = ({ position }: { position: 'tl' | 'tr' | 'bl' | 'br' }) =>
 };
 
 export default function Hero() {
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef(null);
   const [isCoarse, setIsCoarse] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mql = window.matchMedia('(hover: none), (pointer: coarse)');
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(hover: none), (pointer: coarse)");
     const handle = () => setIsCoarse(mql.matches || window.innerWidth < 1024);
     handle();
-    mql.addEventListener?.('change', handle);
-    window.addEventListener('resize', handle);
+    mql.addEventListener?.("change", handle);
+    window.addEventListener("resize", handle);
     return () => {
-      mql.removeEventListener?.('change', handle);
-      window.removeEventListener('resize', handle);
+      mql.removeEventListener?.("change", handle);
+      window.removeEventListener("resize", handle);
     };
   }, []);
 
-  const mouseX: MotionValue<number> = useMotionValue(0);
-  const mouseY: MotionValue<number> = useMotionValue(0);
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
 
   const springX = useSpring(mouseX, { stiffness: 350, damping: 30, mass: 0.4 });
   const springY = useSpring(mouseY, { stiffness: 350, damping: 30, mass: 0.4 });
@@ -110,7 +100,7 @@ export default function Hero() {
   const rotateY = useTransform(springX, [-1, 1], isCoarse ? [0, 0] : [-7, 7]);
   const rotateX = useTransform(springY, [-1, 1], isCoarse ? [0, 0] : [5, -5]);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (e) => {
     if (isCoarse || !stageRef.current) return;
     const rect = stageRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -132,21 +122,31 @@ export default function Hero() {
         <motion.div
           aria-hidden
           animate={{ scale: [1, 1.2, 1], x: [0, 30, 0], y: [0, -20, 0] }}
-          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
           className="absolute -left-32 -top-32 h-[500px] w-[500px] rounded-full bg-[#14b8a6] opacity-30 blur-[120px]"
         />
         {/* Emerald orb */}
         <motion.div
           aria-hidden
           animate={{ scale: [1, 1.15, 1], x: [0, -25, 0], y: [0, 25, 0] }}
-          transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+          transition={{
+            duration: 14,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 2,
+          }}
           className="absolute -right-20 top-1/4 h-[450px] w-[450px] rounded-full bg-[#10b981] opacity-30 blur-[120px]"
         />
         {/* Indigo orb */}
         <motion.div
           aria-hidden
           animate={{ scale: [1, 1.18, 1], x: [0, 20, 0], y: [0, -15, 0] }}
-          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut', delay: 4 }}
+          transition={{
+            duration: 16,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 4,
+          }}
           className="absolute -bottom-20 left-1/3 h-[400px] w-[400px] rounded-full bg-[#6366f1] opacity-30 blur-[120px]"
         />
         {/* Grid overlay */}
@@ -179,7 +179,9 @@ export default function Hero() {
               variants={fadeUp}
               className="text-5xl font-extrabold leading-[1.05] tracking-tight text-white md:text-6xl"
             >
-              <span className="block text-white">Designed for Photographers.</span>
+              <span className="block text-white">
+                Designed for Photographers.
+              </span>
               <span className="mt-2 block bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-300 bg-clip-text text-transparent">
                 Built to Elevate Your Craft.
               </span>
@@ -189,24 +191,24 @@ export default function Hero() {
               variants={fadeUp}
               className="mt-6 text-lg leading-relaxed text-slate-400"
             >
-              From proofing and client galleries to asset delivery, studio management,
-              and AI-powered culling — Kyapture is the end-to-end platform that
-              handles your entire photography workflow.
+              From proofing and client galleries to asset delivery, studio
+              management, and AI-powered culling — Kyapture is the end-to-end
+              platform that handles your entire photography workflow.
             </motion.p>
 
             <motion.div
               variants={fadeUp}
               className="mt-8 flex flex-wrap items-center gap-4"
             >
-              <motion.a
-                href="#"
+              <MotionLink
+                to="/register"
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.98 }}
                 className="group inline-flex items-center gap-2 rounded-full bg-teal-500 px-7 py-3.5 text-sm font-semibold text-slate-950 shadow-[0_0_25px_rgba(13,148,136,0.4)] transition-colors duration-300 hover:bg-teal-400 hover:shadow-[0_0_35px_rgba(13,148,136,0.6)]"
               >
                 Get Started Free
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
-              </motion.a>
+              </MotionLink>
               <a
                 href="#features"
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-300 transition-colors duration-200 hover:text-white"
@@ -244,7 +246,7 @@ export default function Hero() {
             className="relative hidden h-[560px] w-full lg:block"
           >
             <motion.div
-              style={{ rotateX, rotateY, transformStyle: 'preserve-3d' }}
+              style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
               className="relative h-full w-full"
             >
               {/* Floating pill · top-left (behind) — Wedding collection */}
@@ -252,12 +254,20 @@ export default function Hero() {
                 style={{ translateZ: -40 }}
                 initial={{ opacity: 0, x: -20, y: -10 }}
                 animate={{ opacity: 1, x: 0, y: 0 }}
-                transition={{ duration: 0.7, delay: 1.0, ease: [0.16, 1, 0.3, 1] }}
+                transition={{
+                  duration: 0.7,
+                  delay: 1.0,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
                 className="absolute -left-2 top-10 z-0"
               >
                 <motion.div
                   animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+                  transition={{
+                    duration: 4.5,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
                   className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 shadow-2xl backdrop-blur-xl"
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
@@ -275,12 +285,21 @@ export default function Hero() {
                 style={{ translateZ: -20 }}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.7, delay: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                transition={{
+                  duration: 0.7,
+                  delay: 1.2,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
                 className="absolute -right-2 top-2 z-0"
               >
                 <motion.div
                   animate={{ y: [0, -8, 0] }}
-                  transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1.5 }}
+                  transition={{
+                    duration: 5,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 1.5,
+                  }}
                   className="flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-1.5 shadow-[0_0_20px_rgba(16,185,129,0.25)] backdrop-blur-xl"
                 >
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -295,12 +314,21 @@ export default function Hero() {
                 style={{ translateZ: 30 }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 1.4, ease: [0.16, 1, 0.3, 1] }}
+                transition={{
+                  duration: 0.7,
+                  delay: 1.4,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
                 className="absolute -bottom-2 -right-2 z-30"
               >
                 <motion.div
                   animate={{ y: [0, -12, 0] }}
-                  transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                  transition={{
+                    duration: 6,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 0.5,
+                  }}
                   className="flex items-center gap-2.5 rounded-2xl border border-amber-400/30 bg-slate-900/80 px-4 py-2.5 shadow-2xl backdrop-blur-xl"
                 >
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/20">
@@ -325,7 +353,7 @@ export default function Hero() {
                 transition={{
                   duration: 0.9,
                   delay: 0.4,
-                  type: 'spring',
+                  type: "spring",
                   stiffness: 140,
                   damping: 16,
                   mass: 0.9,
