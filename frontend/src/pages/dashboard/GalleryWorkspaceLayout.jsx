@@ -10,7 +10,7 @@ import { buildClientGalleryUrl } from "../../utils/formatters";
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
 export default function GalleryWorkspaceLayout() {
-  const { id } = useParams(); // holds the gallery SLUG
+  const { id } = useParams();
   const navigate = useNavigate();
 
   const [gallery, setGallery] = useState(null);
@@ -117,7 +117,7 @@ export default function GalleryWorkspaceLayout() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-cream-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Spinner size="lg" />
       </div>
     );
@@ -125,48 +125,58 @@ export default function GalleryWorkspaceLayout() {
 
   if (errorMsg && !gallery) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-cream-50 px-6 text-center gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-6 text-center gap-4">
+        <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+          <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+        </div>
         <p className="text-sm text-red-600">{errorMsg}</p>
         <button
           onClick={() => navigate("/dashboard/galleries")}
           className="text-sm font-semibold text-ink hover:underline"
         >
-          ← Back to Collections
+          &larr; Back to Collections
         </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-cream-50">
-      {/* LEFT — replaces the global dashboard nav entirely for this page */}
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
+      {/* LEFT — Gallery workspace sidebar */}
       <CollectionSidebar gallery={gallery} />
 
-      {/* RIGHT — top bar + routed Photos/Settings content */}
+      {/* RIGHT — top bar + routed content */}
       <div className="flex-1 min-w-0">
-        <div className="sticky top-0 z-20 bg-cream-50/90 backdrop-blur-sm border-b border-cream-200">
-          <div className="max-w-5xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+        {/* Sticky Breadcrumb Top Bar */}
+        <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200">
+          <div className="max-w-5xl mx-auto px-4 md:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+            {/* Breadcrumbs */}
             <div className="flex items-center gap-2 text-xs text-muted">
               <button
                 onClick={() => navigate("/dashboard/galleries")}
-                className="hover:text-ink hover:underline"
+                className="hover:text-ink hover:underline transition-colors cursor-pointer"
               >
                 Collections
               </button>
-              <span className="text-cream-300">/</span>
-              <span className="font-semibold text-ink">{gallery.title}</span>
+              <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+              <span className="font-semibold text-ink truncate max-w-[200px]">{gallery.title}</span>
             </div>
 
+            {/* Action Buttons */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="px-3.5 py-2 border border-cream-300 text-ink/80 hover:text-ink bg-white hover:bg-cream-50 text-sm font-medium rounded-lg transition-colors cursor-pointer shadow-sm"
+                className="px-3.5 py-2 border border-slate-200 text-ink/80 hover:text-ink bg-white hover:bg-slate-50 text-xs font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow"
               >
                 {copied
-                  ? "Copied! ✓"
+                  ? "Copied!"
                   : copyFailed
-                    ? "Copy failed ✗"
+                    ? "Copy failed"
                     : "Share Link"}
               </button>
 
@@ -174,10 +184,10 @@ export default function GalleryWorkspaceLayout() {
                 type="button"
                 onClick={handleTogglePublish}
                 disabled={publishUpdating}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer shadow-sm ${
+                className={`px-4 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer shadow-sm ${
                   gallery.is_published
-                    ? "bg-green-50 text-green-700 border border-green-200 hover:bg-green-100"
-                    : "bg-ink text-white hover:opacity-90"
+                    ? "bg-teal-500/10 text-teal-600 border border-teal-500/20 hover:bg-teal-500/15"
+                    : "bg-ink text-white hover:bg-ink/90"
                 }`}
               >
                 {gallery.is_published ? "Published" : "Publish Collection"}
@@ -186,18 +196,23 @@ export default function GalleryWorkspaceLayout() {
           </div>
         </div>
 
+        {/* Error Banner */}
         {errorMsg && (
-          <div className="max-w-5xl mx-auto px-6 pt-4">
+          <div className="max-w-5xl mx-auto px-4 md:px-6 pt-4">
             <div
               role="alert"
-              className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700"
+              className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2.5"
             >
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
               {errorMsg}
             </div>
           </div>
         )}
 
-        <div className="max-w-5xl mx-auto px-6 py-8">
+        {/* Routed Content */}
+        <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8">
           <Outlet
             context={{
               gallery,

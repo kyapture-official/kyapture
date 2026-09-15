@@ -7,12 +7,12 @@
  * WHY:  Enforces defensive color formatting, falling back to brand accent 
  *       on invalid strings, and provides translucent layout highlights.
  *
- * @param {string} hexColor - 6-digit hex color string (e.g., '#4a7c6f')
+ * @param {string} hexColor - 6-digit hex color string (e.g., '#0D9488')
  * @param {string} alphaHex - 2-digit hex alpha channel byte (e.g., '14' for ~8% opacity)
- * @returns {string} 8-digit RGBA hex color string (e.g., '#4a7c6f14')
+ * @returns {string} 8-digit RGBA hex color string (e.g., '#0D948814')
  */
 export function getAlphaBrandingColor(hexColor, alphaHex = 'ff') {
-  const FALLBACK = '#c17f3e' // Kyapture accent matching index.css --accent
+  const FALLBACK = '#0D9488' // Kyapture accent matching index.css --accent
   
   const isValidHex = typeof hexColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(hexColor)
   const base = isValidHex ? hexColor : FALLBACK

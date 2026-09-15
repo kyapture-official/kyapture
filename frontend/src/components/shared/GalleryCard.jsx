@@ -106,10 +106,10 @@ export default function GalleryCard({ gallery, onPublishToggle, onDeleteClick })
       : 'Copy public gallery link'
 
   return (
-    <div className="group border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col h-full hover:shadow-md hover:border-gray-300 transition-all duration-200">
+    <div className="group border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col h-full hover:shadow-md hover:border-slate-300 transition-all duration-200">
 
       {/* ── CARD COVER HEADER ────────────────────────────────────────────────── */}
-      <div className="relative aspect-[3/2] w-full bg-gray-100 overflow-hidden border-b border-gray-100">
+      <div className="relative aspect-[3/2] w-full bg-slate-100 overflow-hidden border-b border-slate-100">
         {!showPlaceholder ? (
           <img
             src={coverUrl}
@@ -135,14 +135,14 @@ export default function GalleryCard({ gallery, onPublishToggle, onDeleteClick })
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border shadow-sm ${
             is_published
-              ? 'bg-green-50 text-green-700 border-green-200'
-              : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-amber-50 text-amber-700 border-amber-200'
           }`}>
             {is_published ? 'Published' : 'Draft'}
           </span>
 
           {has_password && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-900/90 text-white border border-gray-800 shadow-sm backdrop-blur-sm">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-900/90 text-white border border-slate-800 shadow-sm backdrop-blur-sm">
               <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -156,16 +156,16 @@ export default function GalleryCard({ gallery, onPublishToggle, onDeleteClick })
       {/* ── CARD BODY METADATA ───────────────────────────────────────────────── */}
       <div className="p-5 flex-1 flex flex-col justify-between">
         <div>
-          <h3 className="text-base font-semibold text-gray-900 tracking-tight leading-snug line-clamp-1">
+          <h3 className="text-base font-semibold text-slate-900 tracking-tight leading-snug line-clamp-1">
             {title}
           </h3>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             {count} {count === 1 ? 'photo' : 'photos'}
           </p>
         </div>
 
         {/* ── INTERACTIVE ACTION ROW ───────────────────────────────────────────── */}
-        <div className="flex items-center justify-between pt-4 mt-5 border-t border-gray-100 gap-4">
+        <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 gap-4">
           <div className="flex items-center gap-2">
 
             {/* Action 1: Copy Link */}
@@ -176,9 +176,9 @@ export default function GalleryCard({ gallery, onPublishToggle, onDeleteClick })
               aria-label={copyAriaLabel}
               title={clientGalleryURL ? 'Copy public link to clipboard' : 'Sign-in required to copy link'}
               className="p-1.5 rounded-lg border border-transparent transition-all cursor-pointer
-                text-gray-400 hover:text-gray-600 hover:bg-gray-50 hover:border-gray-200
+                text-slate-400 hover:text-slate-600 hover:bg-slate-50 hover:border-slate-200
                 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent
-                disabled:hover:border-transparent disabled:hover:text-gray-400"
+                disabled:hover:border-transparent disabled:hover:text-slate-400"
             >
               {copied ? (
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -200,8 +200,8 @@ export default function GalleryCard({ gallery, onPublishToggle, onDeleteClick })
               title={is_published ? 'Unpublish (set to draft)' : 'Publish collection'}
               className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
                 is_published
-                  ? 'text-green-600 hover:text-green-700 bg-green-50 border-green-200'
-                  : 'text-gray-400 hover:text-gray-600 bg-white border-gray-200 hover:bg-gray-50'
+                  ? 'text-emerald-600 hover:text-emerald-700 bg-emerald-50 border-emerald-200'
+                  : 'text-slate-400 hover:text-slate-600 bg-white border-slate-200 hover:bg-slate-50'
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -216,7 +216,7 @@ export default function GalleryCard({ gallery, onPublishToggle, onDeleteClick })
               onClick={handleDeleteClick}
               aria-label="Delete gallery"
               title="Delete collection"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="3 6 5 6 21 6"/>
@@ -230,7 +230,7 @@ export default function GalleryCard({ gallery, onPublishToggle, onDeleteClick })
           {/* Manage route link */}
           <Link
             to={`/dashboard/galleries/${slug}`}
-            className="text-xs font-semibold text-gray-900 hover:text-gray-700 tracking-tight inline-flex items-center gap-1 hover:underline"
+            className="text-xs font-semibold text-slate-900 hover:text-slate-700 tracking-tight inline-flex items-center gap-1 hover:underline"
           >
             Manage
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

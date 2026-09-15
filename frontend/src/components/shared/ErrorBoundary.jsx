@@ -70,7 +70,7 @@ export default class ErrorBoundary extends Component {
         aria-live="assertive"
         className="min-h-screen flex flex-col items-center justify-center bg-[#fdfbf7] px-6 text-center select-none"
       >
-        <div className="w-full max-w-md bg-white border border-cream-200 p-8 rounded-2xl shadow-sm space-y-6 animate-fadeUp">
+        <div className="w-full max-w-md bg-white border border-slate-200 p-8 rounded-2xl shadow-sm space-y-6 animate-fadeUp">
 
           {/* System Warning Icon */}
           <div
@@ -103,7 +103,7 @@ export default class ErrorBoundary extends Component {
             <button
               type="button"
               onClick={this.handleClearCache}
-              className="w-full py-2.5 bg-transparent text-xs text-muted hover:text-ink uppercase tracking-widest border border-cream-300 hover:border-cream-400 transition-colors rounded-lg cursor-pointer font-sans"
+              className="w-full py-2.5 bg-transparent text-xs text-muted hover:text-ink uppercase tracking-widest border border-slate-300 hover:border-slate-400 transition-colors rounded-lg cursor-pointer font-sans"
             >
               Reset Session Cache
             </button>
@@ -111,7 +111,7 @@ export default class ErrorBoundary extends Component {
 
           {/* Dev-Only Diagnostic Accordion */}
           {isDev && error && (
-            <div className="pt-4 border-t border-cream-100 text-left space-y-2 select-text font-sans">
+            <div className="pt-4 border-t border-slate-100 text-left space-y-2 select-text font-sans">
               <button
                 type="button"
                 onClick={() => this.setState((s) => ({ showDetails: !s.showDetails }))}

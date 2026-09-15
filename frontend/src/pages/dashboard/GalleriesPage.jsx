@@ -1,6 +1,5 @@
 // File Location: frontend/src/pages/dashboard/GalleriesPage.jsx
-// VERSION: Production-Grade Galleries View — Week 10
-// Corrects API naming mismatches, resolves slug parameters, and handles 403 gating messages.
+// VERSION: Production-Grade Galleries View — Redesigned UI
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,18 +14,17 @@ export default function GalleriesPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  // BUG RESOLUTION: Retrieve photographer username from session store, not useSubdomain()
   const username = useAuthStore((s) => s.user?.username);
 
-  // Layout and UI state
   const [galleries, setGalleries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false); // true only during a search re-fetch, not initial load
+  const [searching, setSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTruncated, setSearchTruncated] = useState(false);
   const [searchTotal, setSearchTotal] = useState(0);
   const [openCreate, setOpenCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const defaultBrandingColor =
     useAuthStore((s) => s.user?.branding_color) ?? "#111827";
@@ -37,17 +35,10 @@ export default function GalleriesPage() {
     event_date: "",
   });
 
-  // Single-flight guard: cancels a stale in-flight list/search request when a
-  // newer one (search keystroke) starts — same pattern as ClientGalleryPage.jsx.
   const abortControllerRef = useRef(null);
   const debounceRef = useRef(null);
   const isFirstRunRef = useRef(true);
 
-  // Branches to the dedicated /galleries/search/ endpoint when there's a
-  // query, or the normal paginated /galleries/ list when the box is empty.
-  // Search always covers the photographer's FULL gallery set — it is not
-  // tied to the list endpoint's page size, so nothing gets silently missed
-  // as a photographer's gallery count grows.
   const fetchGalleries = useCallback(
     (query, isInitialLoad = false) => {
       if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -92,14 +83,12 @@ export default function GalleriesPage() {
     [toast],
   );
 
-  // ── 1. Fetch galleries on mount ────────────────────────────────────────────
   useEffect(() => {
     fetchGalleries("", true);
     return () => abortControllerRef.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 1b. Debounced re-fetch whenever the search box changes ─────────────────
   useEffect(() => {
     if (isFirstRunRef.current) {
       isFirstRunRef.current = false;
@@ -113,32 +102,26 @@ export default function GalleriesPage() {
     return () => clearTimeout(debounceRef.current);
   }, [searchQuery, fetchGalleries]);
 
-  // ── 2. Create collection ───────────────────────────────────────────────────
   const handleCreateSubmit = async (payload) => {
-    const loaderId = toast("Creating your new collection…", "loading");
+    const loaderId = toast("Creating your new collection...", "loading");
 
     try {
       const newGallery = await galleriesApi.createGallery(payload);
-
       toast.dismiss(loaderId);
       toast("Collection created!", "success");
-
       setGalleries((prev) => [newGallery, ...prev]);
       setOpenCreate(false);
     } catch (err) {
       toast.dismiss(loaderId);
 
-      // ── SUBSCRIPTION PLAN GATING (403 FORBIDDEN INTERCEPTOR) ────────────────
       if (err.response?.status === 403) {
         const data = err.response?.data;
         const message =
           data?.message ||
           data?.detail ||
           "Upgrade your plan to create more galleries.";
-
         toast(message, "warning");
         setOpenCreate(false);
-
         setTimeout(() => navigate("/dashboard/billing"), 2200);
       } else {
         const errorMsg =
@@ -146,12 +129,11 @@ export default function GalleriesPage() {
           err.response?.data?.detail ||
           "Failed to create collection.";
         toast(errorMsg, "error");
-        throw new Error(errorMsg); // Re-throw so CreateGalleryModal receives the failure notice
+        throw new Error(errorMsg);
       }
     }
   };
-  // ── 3. Copy public gallery link ────────────────────────────────────────────
-  // Compiles standard, path-based fallback links to match routing configurations.
+
   const handleCopyLink = async (gallery) => {
     if (!username) {
       toast("Unable to build link — profile not loaded yet.", "error");
@@ -174,104 +156,116 @@ export default function GalleriesPage() {
   if (loading) {
     return (
       <div className="flex h-[60vh] w-full items-center justify-center">
-        <Spinner size="lg" className="text-ink" />
+        <Spinner size="lg" className="text-slate-400" />
       </div>
     );
   }
 
   return (
-    <div
-      className="max-w-6xl mx-auto px-4 py-8 space-y-8"
-      style={{ animation: "fadeUp 0.5s ease both" }}
-    >
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="font-serif text-4xl text-ink">My Collections</h1>
-          <p className="text-xs text-muted">
-            Create, manage, and deliver photo collections to your clients
-            [weekly tasks.txt].
+    <div className="max-w-6xl mx-auto space-y-6 animate-fade-up">
+      {/* ── HEADER ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-3xl md:text-4xl text-ink">My Collections</h1>
+          <p className="text-sm text-muted mt-1">
+            Create, manage, and deliver photo collections to your clients.
           </p>
         </div>
         <button
           type="button"
           onClick={() => setOpenCreate(true)}
-          className="sm:self-start px-5 py-3 bg-ink hover:opacity-90 active:scale-[0.98] transition-all text-white text-xs uppercase tracking-widest rounded-lg font-medium cursor-pointer"
+          className="sm:self-start inline-flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 active:scale-[0.98] text-white text-sm font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow-md"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
           Create Gallery
         </button>
-      </header>
-
-      {/* Search bar */}
-      <div className="relative max-w-sm">
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"
-          />
-        </svg>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search collections..."
-          aria-label="Search collections"
-          className="w-full pl-9 pr-9 py-2.5 text-sm bg-white border border-cream-300 rounded-lg text-ink placeholder:text-muted focus:outline-none focus:border-ink focus:ring-2 focus:ring-cream-200 transition-all"
-        />
-        {searching && (
-          <Spinner className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" />
-        )}
-        {!searching && searchQuery && (
-          <button
-            type="button"
-            onClick={() => setSearchQuery("")}
-            aria-label="Clear search"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink cursor-pointer text-xs"
-          >
-            ✕
-          </button>
-        )}
       </div>
 
-      {searchTruncated && (
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 max-w-sm">
-          Showing the first 100 of {searchTotal} matches — refine your search to
-          narrow results.
-        </p>
-      )}
-
-      {/* Empty state */}
-      {galleries.length === 0 ? (
-        <div className="text-center py-24 border-2 border-dashed border-cream-300 rounded-2xl bg-cream-50/50 space-y-4">
+      {/* ── SEARCH BAR ── */}
+      <div className="relative max-w-md">
+        <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border transition-all duration-200 ${
+          searchFocused
+            ? 'border-teal-400/40 bg-white shadow-glow-teal ring-2 ring-teal-500/10'
+            : 'border-slate-200 bg-white hover:border-slate-300'
+        }`}>
           <svg
-            className="w-10 h-10 text-muted mx-auto"
+            className="w-4 h-4 text-slate-400 flex-shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
-            strokeWidth={1.5}
+            strokeWidth={2}
             aria-hidden="true"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
           </svg>
-          <p className="text-sm text-muted font-light">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder="Search collections..."
+            aria-label="Search collections"
+            className="flex-1 bg-transparent border-none outline-none text-sm text-ink placeholder:text-slate-400 font-sans"
+          />
+          {searching && (
+            <Spinner className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          )}
+          {!searching && searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+              className="text-slate-400 hover:text-ink cursor-pointer text-xs p-0.5 rounded-md hover:bg-slate-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── TRUNCATION WARNING ── */}
+      {searchTruncated && (
+        <div className="flex items-center gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 max-w-md">
+          <svg className="w-4 h-4 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Showing the first 100 of {searchTotal} matches — refine your search to narrow results.
+        </div>
+      )}
+
+      {/* ── EMPTY STATE ── */}
+      {galleries.length === 0 ? (
+        <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+          <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+          </div>
+          <p className="text-sm text-slate-500 font-light mb-4">
             {searchQuery
               ? `No collections match "${searchQuery}".`
               : "No collections yet. Create your first gallery to begin."}
           </p>
+          {!searchQuery && (
+            <button
+              onClick={() => setOpenCreate(true)}
+              className="inline-flex items-center gap-2 bg-teal-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Create Gallery
+            </button>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        /* ── GALLERY GRID ── */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {galleries.map((gallery) => {
             const highlightBg = getAlphaBrandingColor(
               gallery.branding_color,
@@ -281,10 +275,10 @@ export default function GalleriesPage() {
             return (
               <div
                 key={gallery.id}
-                className="group bg-white border border-cream-200 rounded-2xl overflow-hidden hover:shadow-md hover:border-cream-300 transition-all duration-300 flex flex-col h-full"
+                className="group bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-card-hover hover:border-slate-300 transition-all duration-300 flex flex-col h-full"
               >
                 {/* Cover area */}
-                <div className="h-44 bg-cream-100 overflow-hidden relative flex-shrink-0">
+                <div className="h-44 bg-slate-100 overflow-hidden relative flex-shrink-0">
                   {gallery.cover_url ? (
                     <img
                       src={gallery.cover_url}
@@ -298,15 +292,17 @@ export default function GalleriesPage() {
                     />
                   )}
 
+                  {/* Branding color bar */}
                   <div
                     className="absolute bottom-0 left-0 right-0 h-1"
                     style={{ backgroundColor: gallery.branding_color }}
                   />
 
+                  {/* Password badge */}
                   {gallery.has_password && (
-                    <div className="absolute top-3 right-3 bg-white/90 rounded-lg p-1.5 shadow-sm">
+                    <div className="absolute top-3 right-3 bg-white/90 rounded-lg p-1.5 shadow-sm backdrop-blur-sm">
                       <svg
-                        className="w-4 h-4 text-ink"
+                        className="w-4 h-4 text-slate-700"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -326,23 +322,22 @@ export default function GalleriesPage() {
                 {/* Card body */}
                 <div className="p-5 flex flex-col flex-1 justify-between gap-4">
                   <div className="space-y-1">
-                    <h3 className="font-serif text-lg font-bold text-ink group-hover:text-stone-700 transition-colors line-clamp-1">
+                    <h3 className="font-serif text-lg font-bold text-ink group-hover:text-slate-700 transition-colors line-clamp-1">
                       {gallery.title}
                     </h3>
-                    <p className="text-[10px] text-muted uppercase tracking-wider">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
                       {gallery.photo_count || 0} image
                       {gallery.photo_count !== 1 ? "s" : ""}
                     </p>
                   </div>
 
                   <div className="flex gap-2">
-                    {/* BUG RESOLUTION: Navigate via gallery.slug instead of UUID id */}
                     <button
                       type="button"
                       onClick={() =>
                         navigate(`/dashboard/galleries/${gallery.slug}`)
                       }
-                      className="flex-1 py-2.5 border border-cream-300 hover:border-cream-400 text-ink text-xs uppercase tracking-widest rounded-lg font-medium transition-colors cursor-pointer bg-white"
+                      className="flex-1 py-2.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-ink text-xs font-medium rounded-xl transition-all cursor-pointer bg-white"
                     >
                       Manage
                     </button>
@@ -351,7 +346,7 @@ export default function GalleriesPage() {
                       onClick={() => handleCopyLink(gallery)}
                       title="Copy public gallery link"
                       aria-label="Copy public gallery link"
-                      className="px-3 py-2.5 border border-cream-300 hover:border-cream-400 text-muted hover:text-ink rounded-lg transition-colors cursor-pointer bg-white"
+                      className="px-3 py-2.5 border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-ink hover:bg-slate-50 rounded-xl transition-all cursor-pointer bg-white"
                     >
                       <svg
                         className="w-3.5 h-3.5"
@@ -376,7 +371,7 @@ export default function GalleriesPage() {
         </div>
       )}
 
-      {/* Create Gallery Modal Overlay */}
+      {/* ── CREATE GALLERY MODAL ── */}
       <CreateGalleryModal
         isOpen={openCreate}
         onClose={() => setOpenCreate(false)}

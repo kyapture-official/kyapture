@@ -263,7 +263,7 @@ export default function ClientGalleryPage() {
   // ── Render Path: Loading State ─────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-cream-50">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
         <Spinner className="w-8 h-8 text-ink" />
         <p className="mt-4 text-xs tracking-widest text-muted uppercase font-light">
           Loading collection…
@@ -275,7 +275,7 @@ export default function ClientGalleryPage() {
   // ── Render Path: 404 Not Found State ───────────────────────────────────────
   if (notFound) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-cream-50 px-6 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 px-6 text-center">
         <h1 className="font-serif text-2xl text-ink mb-2">Gallery not found</h1>
         <p className="text-sm text-muted max-w-xs">
           This gallery doesn't exist or is no longer available.
@@ -287,7 +287,7 @@ export default function ClientGalleryPage() {
   // ── Render Path: Generic Error State ───────────────────────────────────────
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-cream-50 px-6 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 px-6 text-center">
         <h1 className="font-serif text-2xl text-ink mb-2">
           Something went wrong
         </h1>
@@ -393,7 +393,7 @@ export default function ClientGalleryPage() {
 
         {/* Dynamic Visual Masonry vs Empty State Fallback */}
         {photos.length === 0 ? (
-          <div className="text-center py-24 border border-dashed border-cream-200 rounded-xl bg-cream-50">
+          <div className="text-center py-24 border border-dashed border-slate-200 rounded-xl bg-slate-50">
             <p className="text-sm text-muted font-light">
               No images in this collection yet.
             </p>

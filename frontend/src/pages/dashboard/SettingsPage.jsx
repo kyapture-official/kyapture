@@ -1,5 +1,5 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/pages/dashboard/SettingsPage.jsx
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { authApi } from '../../api/authApi'
 import Button from '../../components/ui/Button'
@@ -21,16 +21,13 @@ export default function SettingsPage() {
   const [logoURL, setLogoURL] = useState(user?.logo || null)
   const [pw, setPw] = useState({ old_password: '', new_password: '', new_password2: '' })
 
-  // UI state-machine indicators
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPw, setSavingPw] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
   const [pwErrors, setPwErrors] = useState({})
 
-  // Flag to detect if user has modified their subdomain (username), triggering the warning banner
   const hasSubdomainChanged = profile.username.trim() !== (user?.username || '')
 
-  // Form input change handlers optimized to prevent redundant garbage-collection sweeps
   const handleProfileChange = useCallback((e) => {
     const { name, value } = e.target
     setProfile((prev) => ({ ...prev, [name]: value }))
@@ -47,7 +44,6 @@ export default function SettingsPage() {
 
     setSavingProfile(true)
     try {
-      // Subdomain normalization: enforce lowercase URL-safe characters
       const normalizedSubdomain = profile.username.trim().toLowerCase()
       const payload = {
         display_name: profile.display_name.trim(),
@@ -56,7 +52,6 @@ export default function SettingsPage() {
         branding_color: profile.branding_color,
       }
 
-      // Fixed: Removed destructured { data } since authApi returns the raw object directly
       const updatedUser = await authApi.updateMe(payload)
       updateUser(updatedUser)
       setProfile({
@@ -77,7 +72,6 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Secure 2MB logo size validation gate
     const MAX_SIZE = 2 * 1024 * 1024
     if (file.size > MAX_SIZE) {
       toast('Logo file exceeds the 2MB size limit.', 'error')
@@ -86,12 +80,10 @@ export default function SettingsPage() {
 
     setLogoUploading(true)
     
-    // Build the multipart FormData payload
     const formData = new FormData()
     formData.append('logo', file)
 
     try {
-      // Fixed: Removed destructured { data } since authApi returns the raw object directly
       const updatedUser = await authApi.updateMe(formData)
       updateUser(updatedUser)
       setLogoURL(updatedUser.logo)
@@ -108,7 +100,6 @@ export default function SettingsPage() {
     setLogoUploading(true)
 
     try {
-      // Fixed: Removed destructured { data } since authApi returns the raw object directly
       const updatedUser = await authApi.updateMe({ logo: null })
       updateUser(updatedUser)
       setLogoURL(null)
@@ -136,21 +127,28 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-up">
+    <div className="max-w-5xl mx-auto animate-fade-up">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="font-serif text-4xl text-ink mb-1">Branding & Profile Settings</h1>
+        <h1 className="font-serif text-3xl md:text-4xl text-ink mb-1">Branding & Profile Settings</h1>
         <p className="text-sm text-muted">Manage your photographer profile, color identity, and logo.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Left Side: General Profile, Color, and Security forms */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-6">
           
           {/* Profile Card */}
-          <div className="bg-white rounded-2xl border border-cream-200 p-6 shadow-sm">
-            <h2 className="font-serif text-xl text-ink mb-5">Profile</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center">
+                <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              </div>
+              <h2 className="font-serif text-xl text-ink">Profile</h2>
+            </div>
             <form onSubmit={saveProfile} className="space-y-5">
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -172,24 +170,23 @@ export default function SettingsPage() {
                 />
               </div>
 
-              {/* Critical Subdomain Mutation Warning Banner */}
+              {/* Subdomain Warning */}
               {hasSubdomainChanged && (
-                <div role="alert" className="p-4 bg-amber-50 border border-warm rounded-xl text-xs text-amber-800 space-y-1.5 leading-relaxed animate-fade-up">
+                <div role="alert" className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1.5 leading-relaxed animate-fade-up">
                   <div className="flex items-center gap-1.5 font-semibold text-amber-900">
                     <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
-                    Warning: Changing your Subdomain will rot existing links!
+                    Warning: Changing your Subdomain will break existing links!
                   </div>
                   <p>
                     Updating your subdomain from <strong>"{user?.username}"</strong> to <strong>"{profile.username.trim().toLowerCase()}"</strong> 
-                    will instantly break all shared links currently in use by your clients. They will no longer be able to access their galleries 
-                    unless you share the newly compiled URL.
+                    will instantly break all shared links currently in use by your clients.
                   </p>
                 </div>
               )}
 
-              {/* Biography Textbox */}
+              {/* Biography */}
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="bio-input" className="text-sm font-medium text-ink/80 block select-none">Biography</label>
                 <textarea
@@ -197,13 +194,13 @@ export default function SettingsPage() {
                   name="bio"
                   value={profile.bio}
                   onChange={handleProfileChange}
-                  className="w-full px-4 py-2.5 bg-cream-50/20 border border-cream-300 rounded-lg text-sm text-ink placeholder:text-muted focus:outline-none focus:border-cream-500 focus:ring-2 focus:ring-cream-200 resize-none transition-all duration-200"
+                  className="w-full px-4 py-2.5 bg-slate-50/20 border border-slate-200 rounded-xl text-sm text-ink placeholder:text-slate-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 resize-none transition-all duration-200"
                   rows={4}
                   placeholder="Tell your clients about yourself..."
                 />
               </div>
 
-              {/* Dynamic Branding Color Selector */}
+              {/* Brand Color */}
               <div className="flex flex-col gap-1.5 max-w-xs">
                 <label htmlFor="brand-color" className="text-sm font-medium text-ink/80 block select-none">
                   Portfolio Brand Color
@@ -216,7 +213,7 @@ export default function SettingsPage() {
                     value={profile.branding_color}
                     onChange={handleProfileChange}
                     disabled={savingProfile}
-                    className="w-10 h-10 border border-cream-300 rounded-lg cursor-pointer bg-transparent"
+                    className="w-10 h-10 border border-slate-200 rounded-xl cursor-pointer bg-transparent"
                   />
                   <input
                     type="text"
@@ -224,7 +221,7 @@ export default function SettingsPage() {
                     value={profile.branding_color}
                     onChange={handleProfileChange}
                     disabled={savingProfile}
-                    className="w-24 px-3 py-1.5 text-sm uppercase rounded-lg border border-cream-300 bg-white font-mono focus:outline-none focus:border-cream-500"
+                    className="w-24 px-3 py-1.5 text-sm uppercase rounded-xl border border-slate-200 bg-white font-mono focus:outline-none focus:border-teal-500"
                   />
                 </div>
                 <p className="text-[10px] text-muted font-light mt-1 leading-relaxed">
@@ -232,13 +229,13 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Symmetrical Locked Email View */}
+              {/* Email */}
               <div className="pt-2">
-                <p className="text-xs text-muted mb-1 select-none">Account Email (cannot be changed)</p>
-                <p className="text-sm text-ink bg-cream-50 px-4 py-3 rounded-lg border border-cream-200/50 font-mono w-fit">{user?.email}</p>
+                <p className="text-xs text-slate-500 mb-1 select-none">Account Email (cannot be changed)</p>
+                <p className="text-sm text-ink bg-slate-50 px-4 py-3 rounded-xl border border-slate-200/50 font-mono w-fit">{user?.email}</p>
               </div>
 
-              <div className="pt-4 border-t border-cream-100 flex justify-end">
+              <div className="pt-4 border-t border-slate-100 flex justify-end">
                 <Button type="submit" loading={savingProfile}>
                   Save Profile Settings
                 </Button>
@@ -247,8 +244,15 @@ export default function SettingsPage() {
           </div>
 
           {/* Password Card */}
-          <div className="bg-white rounded-2xl border border-cream-200 p-6 shadow-sm">
-            <h2 className="font-serif text-xl text-ink mb-5">Change Password</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              </div>
+              <h2 className="font-serif text-xl text-ink">Change Password</h2>
+            </div>
             <form onSubmit={savePassword} className="flex flex-col gap-4">
               <Input
                 label="Current password"
@@ -277,7 +281,7 @@ export default function SettingsPage() {
                 error={pwErrors.new_password2?.[0]}
                 required
               />
-              <div className="pt-4 border-t border-cream-100 flex justify-end">
+              <div className="pt-4 border-t border-slate-100 flex justify-end">
                 <Button type="submit" loading={savingPw}>
                   Change Password
                 </Button>
@@ -287,17 +291,24 @@ export default function SettingsPage() {
 
         </div>
 
-        {/* Right Side: Professional Logo Upload Center */}
+        {/* Right Side: Logo Upload */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl border border-cream-200 p-6 shadow-sm flex flex-col items-center text-center space-y-6">
-            <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase">Business Logo</h3>
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card flex flex-col items-center text-center space-y-6">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
+                <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-semibold text-ink tracking-wider uppercase">Business Logo</h3>
+            </div>
 
-            {/* Logo Viewer Frame with Async Spinner */}
-            <div className="relative w-32 h-32 rounded-2xl border border-cream-200 bg-cream-50/20 flex items-center justify-center overflow-hidden">
+            {/* Logo Viewer */}
+            <div className="relative w-32 h-32 rounded-2xl border border-slate-200 bg-slate-50/20 flex items-center justify-center overflow-hidden">
               {logoURL ? (
                 <img src={logoURL} alt={profile.display_name} className="w-full h-full object-contain p-3 select-none pointer-events-none" />
               ) : (
-                <svg className="w-10 h-10 text-cream-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-10 h-10 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               )}
@@ -310,7 +321,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-3 w-full">
-              <label className="block w-full text-center px-4 py-2.5 border border-cream-300 hover:border-cream-400 bg-white text-ink text-xs font-medium tracking-wide uppercase rounded-lg cursor-pointer transition-colors focus-within:ring-2 focus-visible:ring-ink">
+              <label className="block w-full text-center px-4 py-2.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 bg-white text-ink text-xs font-medium tracking-wide uppercase rounded-xl cursor-pointer transition-all">
                 Upload New Logo
                 <input
                   type="file"
@@ -326,7 +337,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={handleLogoDelete}
                   disabled={logoUploading}
-                  className="w-full text-center py-2 text-xs font-semibold text-red-600 hover:text-red-700 bg-transparent hover:bg-red-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-100"
+                  className="w-full text-center py-2 text-xs font-semibold text-red-600 hover:text-red-700 bg-transparent hover:bg-red-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-red-100"
                 >
                   Remove Logo
                 </button>
@@ -334,7 +345,7 @@ export default function SettingsPage() {
             </div>
 
             <p className="text-[10px] text-muted leading-relaxed font-light select-none">
-              Supports PNG, JPG, and WEBP. Maximum file size: 2MB. Logo appears dynamically at the top of your public gallery views.
+              Supports PNG, JPG, and WEBP. Maximum file size: 2MB. Logo appears at the top of your public gallery views.
             </p>
           </div>
         </div>

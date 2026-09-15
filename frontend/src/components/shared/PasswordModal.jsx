@@ -302,7 +302,7 @@ export default function PasswordModal({
       aria-labelledby={ids.title}
       aria-busy={loading}             // Tells screen readers the dialog subtree is updating
       tabIndex={-1}                   // Allows programmatic focus; excluded from Tab order
-      className="w-full max-w-sm mx-auto p-6 bg-white border border-cream-200 rounded-xl shadow-md focus:outline-none"
+      className="w-full max-w-sm mx-auto p-6 bg-white border border-slate-200 rounded-xl shadow-md focus:outline-none"
       style={{ animation: 'fadeUp 0.4s ease both' }}
     >
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -331,7 +331,7 @@ export default function PasswordModal({
               spellCheck={false}            // Disables spell-check when type="text"
               aria-invalid={!!error}
               aria-describedby={error ? ids.error : undefined}
-              className="block w-full rounded-lg border border-cream-300 bg-cream-50/30 px-4 py-3 pr-10 text-sm text-ink placeholder-cream-400 focus:border-ink focus:bg-white focus:outline-none focus:ring-1 focus:ring-ink disabled:bg-cream-100 disabled:text-cream-400 transition-all duration-200"
+              className="block w-full rounded-lg border border-slate-200 bg-slate-50/30 px-4 py-3 pr-10 text-sm text-ink placeholder-slate-400 focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-slate-100 disabled:text-slate-400 transition-all duration-200"
               placeholder="••••••••"
             />
 
@@ -341,7 +341,7 @@ export default function PasswordModal({
               disabled={loading}
               aria-pressed={showPassword}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-cream-400 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1 rounded-r-lg disabled:pointer-events-none transition-colors duration-200"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 rounded-r-lg disabled:pointer-events-none transition-colors duration-200"
             >
               {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
             </button>
@@ -367,7 +367,7 @@ export default function PasswordModal({
         <button
           type="submit"
           disabled={!password.trim() || loading}
-          className="w-full relative flex items-center justify-center rounded-lg bg-ink px-4 py-3 text-sm font-medium tracking-wide text-white hover:bg-ink/90 active:scale-[0.98] disabled:bg-cream-200 disabled:text-cream-400 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 transition-all duration-200"
+          className="w-full relative flex items-center justify-center rounded-lg bg-teal-600 px-4 py-3 text-sm font-medium tracking-wide text-white hover:bg-teal-700 active:scale-[0.98] disabled:bg-slate-200 disabled:text-slate-400 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-all duration-200"
         >
           {/* Preserves element width during loading, preventing layout shifts */}
           <span className={loading ? 'invisible' : undefined}>
@@ -380,7 +380,7 @@ export default function PasswordModal({
                 className="absolute inset-0 flex items-center justify-center"
                 aria-hidden="true"
               >
-                <Spinner className="w-5 h-5 text-cream-400" />
+                <Spinner className="w-5 h-5 text-slate-400" />
               </span>
               <span className="sr-only">Verifying password…</span>
             </>

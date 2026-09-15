@@ -51,15 +51,13 @@ const Input = forwardRef(function Input(
         aria-describedby={describedBy}
         className={[
           'w-full px-4 py-2.5 bg-white border rounded-lg text-sm text-ink',
-          'placeholder:text-muted focus:outline-none transition-colors duration-150',
+          'placeholder:text-slate-400 focus:outline-none transition-colors duration-150',
           // focus-visible restricts outline rings strictly to keyboard users.
           // ring-offset-1 creates an elegant, visible separation from the input border.
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
           error
             ? 'border-red-400 focus-visible:border-red-400 focus-visible:ring-red-400'
-            // Brand Alignment: We use "ring-ink" instead of "ring-blue-500" to maintain Kyapture's
-            // minimal luxury palette, while still easily satisfying the WCAG 3:1 contrast minimum.
-            : 'border-cream-300 focus-visible:border-ink focus-visible:ring-ink',
+            : 'border-slate-200 focus-visible:border-teal-500 focus-visible:ring-teal-500',
           className,
         ].filter(Boolean).join(' ')}
       />

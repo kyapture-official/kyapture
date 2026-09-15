@@ -423,11 +423,16 @@ export default function GalleryPhotosPage() {
 
   // ── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
-      <h2 className="text-base font-semibold text-ink mb-2 border-b border-cream-100 pb-3">
-        Photo & Video Management
-      </h2>
-      <p className="text-xs text-muted mb-6">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center">
+          <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z" />
+          </svg>
+        </div>
+        <h2 className="font-serif text-lg text-ink">Photo & Video Management</h2>
+      </div>
+      <p className="text-xs text-muted mb-6 border-b border-slate-100 pb-4">
         Upload photos and videos to populate this collection. Once uploaded,
         clients can browse, view in lightbox, and download.
       </p>
@@ -451,9 +456,9 @@ export default function GalleryPhotosPage() {
             : "image/*"
         }
       >
-        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center border border-gray-300">
+        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
           <svg
-            className="w-6 h-6 text-gray-500"
+            className="w-6 h-6 text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -468,10 +473,10 @@ export default function GalleryPhotosPage() {
           </svg>
         </div>
         <div className="text-center">
-          <p className="text-sm font-medium text-gray-900">
+          <p className="text-sm font-medium text-ink">
             Drop photos or videos here
           </p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             {allowVideo
               ? "or click to browse — JPG, PNG, WEBP, MP4, MOV"
               : "or click to browse — JPG, PNG, WEBP (video requires a paid plan)"}
@@ -484,9 +489,9 @@ export default function GalleryPhotosPage() {
           {uploadQueue.map((item) => (
             <div
               key={item.id}
-              className="flex items-center gap-3 p-2 rounded-lg bg-cream-50"
+              className="flex items-center gap-3 p-2 rounded-lg bg-slate-50"
             >
-              <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 bg-cream-200 flex items-center justify-center">
+              <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 bg-slate-200 flex items-center justify-center">
                 {item.isVideo ? (
                   <svg
                     className="w-4 h-4 text-ink/50"
@@ -519,7 +524,7 @@ export default function GalleryPhotosPage() {
                     </span>
                   )}
                 </div>
-                <div className="h-1.5 bg-cream-200 rounded-full overflow-hidden mt-1">
+                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1">
                   <div
                     className={`h-full rounded-full transition-all ${item.error ? "bg-red-400" : "bg-ink"}`}
                     style={{ width: `${item.error ? 100 : item.progress}%` }}

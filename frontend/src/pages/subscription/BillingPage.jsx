@@ -1,59 +1,49 @@
 // File Location: frontend/src/pages/subscription/BillingPage.jsx
-// VERSION: Gold-Standard Production — Week 11
-// Eliminates search-param render loops, fixes flat backend dictionary keys, and terminates memory leaks.
+// VERSION: Gold-Standard Production — Redesigned UI polish
 
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { subscriptionsApi } from '../../api/subscriptionsApi'
 import { useSubscription } from '../../hooks/useSubscription'
 import { useToast } from '../../components/ui/Toast'
 import { formatCurrency } from '../../utils/formatters'
 import Spinner from '../../components/ui/Spinner'
 
-// Mapped against SubscriptionStatus.TextChoices (backend models.py) [weekly tasks.txt]
 const STATUS_BADGE_STYLES = {
   active:    'bg-emerald-50 text-emerald-800 border-emerald-200',
   pending:   'bg-amber-50 text-amber-800 border-amber-200',
   expired:   'bg-red-50 text-red-800 border-red-200',
-  cancelled: 'bg-cream-100 text-[#8C847A] border-cream-300',
+  cancelled: 'bg-slate-100 text-muted border-slate-200',
 }
 
 export default function BillingPage() {
   const toast = useToast()
-  const [searchParams] = useSearchParams()
   const isMountedRef = useRef(false)
   const abortControllerRef = useRef(null)
-  const receiptPreviewRef = useRef(null) // Tracks preview blob URLs to prevent memory leaks
+  const receiptPreviewRef = useRef(null)
 
   const { subscription, plan: activePlan, refetch: refetchSubscription } = useSubscription()
 
-  // Grid list states
   const [plans, setPlans] = useState([])
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Form Submission States
   const [selectedPlan, setSelectedPlan] = useState(null)
   const [receipt, setReceipt] = useState(null)
   const [receiptPreview, setReceiptPreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [notes, setNotes] = useState('')
 
-  // ── 1. Page Lifecycle Tracking ─────────────────────────────────────────────
   useEffect(() => {
     isMountedRef.current = true
     return () => {
       isMountedRef.current = false
       abortControllerRef.current?.abort()
-      
-      // BUG RESOLUTION: Deallocate active preview blob URLs on unmount to prevent browser memory leaks
       if (receiptPreviewRef.current) {
         URL.revokeObjectURL(receiptPreviewRef.current)
       }
     }
   }, [])
 
-  // ── 2. INITIAL METADATA LOADING ───────────────────────────────────────────
   useEffect(() => {
     async function loadBillingMetadata() {
       abortControllerRef.current?.abort()
@@ -72,9 +62,6 @@ export default function BillingPage() {
           setPlans(plansList)
           setPayments(paymentsData.results || paymentsData || [])
 
-          // BUG RESOLUTION: Read parameter handshake once inside mounting effect.
-          // By extracting query params here, we completely decouple this effect from
-          // the reactive searchParams hook, eliminating parallel render-loop network storms.
           const queryParams = new URLSearchParams(window.location.search)
           const targetPlanId = queryParams.get('plan_id')
           if (targetPlanId) {
@@ -93,9 +80,8 @@ export default function BillingPage() {
     }
 
     loadBillingMetadata()
-  }, [toast]) // Safely removed searchParams to prevent rendering fetch-loops!
+  }, [toast])
 
-  // ── 3. STATE AND FILE RESETS ───────────────────────────────────────────────
   const clearReceipt = () => {
     if (receiptPreviewRef.current) {
       URL.revokeObjectURL(receiptPreviewRef.current)
@@ -105,8 +91,6 @@ export default function BillingPage() {
     setReceiptPreview(null)
   }
 
-  // BUG RESOLUTION: Explicitly clear the receipt when switching plans.
-  // This prevents photographers from accidentally submitting receipts for incorrect pricing tiers.
   const handleSelectPlan = (p) => {
     setSelectedPlan(p)
     clearReceipt()
@@ -116,13 +100,11 @@ export default function BillingPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Limit files to 5MB to match server payload capacity controls
     if (file.size > 5 * 1024 * 1024) {
       toast('Screenshot attachment must be under 5MB.', 'warning')
       return
     }
 
-    // Revoke any previous preview before creating a new one to prevent memory leaks
     if (receiptPreviewRef.current) {
       URL.revokeObjectURL(receiptPreviewRef.current)
     }
@@ -133,7 +115,6 @@ export default function BillingPage() {
     setReceiptPreview(previewUrl)
   }
 
-  // ── 4. MANUAL PAYMENT SUBMISSION ───────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -162,7 +143,6 @@ export default function BillingPage() {
       clearReceipt()
       setNotes('')
 
-      // Refresh local transfer history
       const freshHistory = await subscriptionsApi.paymentHistory()
       if (isMountedRef.current) {
         setPayments(freshHistory.results || freshHistory || [])
@@ -180,7 +160,7 @@ export default function BillingPage() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
-        <Spinner size="lg" className="text-[#2C2825]" />
+        <Spinner size="lg" className="text-slate-400" />
       </div>
     )
   }
@@ -188,15 +168,23 @@ export default function BillingPage() {
   const subStatus = subscription?.status || 'pending'
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8 space-y-8 text-[#2C2825] font-sans animate-fadeUp">
+    <div className="max-w-5xl mx-auto space-y-8 animate-fade-up">
+      {/* Header */}
       <header className="space-y-1">
-        <h1 className="font-serif text-3xl sm:text-4xl text-ink">Account Billing</h1>
-        <p className="text-xs text-muted">Manage your subscription tier and upload payment receipt screenshots [weekly tasks.txt].</p>
+        <h1 className="font-serif text-3xl md:text-4xl text-ink">Account Billing</h1>
+        <p className="text-sm text-muted">Manage your subscription tier and upload payment receipt screenshots.</p>
       </header>
 
-      {/* Subscription Status Details card */}
-      <section className="bg-white border border-[#F4E8CC] rounded-3xl p-6 space-y-4">
-        <h2 className="font-serif text-xl text-ink">Subscription Status</h2>
+      {/* Subscription Status */}
+      <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-card space-y-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+            <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+            </svg>
+          </div>
+          <h2 className="font-serif text-xl text-ink">Subscription Status</h2>
+        </div>
 
         {activePlan ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-light">
@@ -212,8 +200,7 @@ export default function BillingPage() {
             </div>
             <div>
               <span className="text-muted block text-[10px] uppercase font-bold tracking-wider mb-1">Verification Status</span>
-              {/* BUG RESOLUTION: Dynamically evaluate colors using STATUS_BADGE_STYLES mapping */}
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase mt-0.5 ${
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase mt-0.5 ${
                 STATUS_BADGE_STYLES[subStatus] || STATUS_BADGE_STYLES.pending
               }`}>
                 {subStatus}
@@ -227,7 +214,7 @@ export default function BillingPage() {
         )}
       </section>
 
-      {/* Pricing selector card */}
+      {/* Pricing Selector */}
       <section className="space-y-6">
         <h2 className="font-serif text-2xl text-ink">1. Choose Upgrade Tier</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -247,18 +234,18 @@ export default function BillingPage() {
                     handleSelectPlan(p)
                   }
                 }}
-                className={`p-6 rounded-2xl border transition-all duration-300 ${
+                className={`p-6 rounded-2xl border transition-all duration-300 cursor-pointer ${
                   isActive
-                    ? 'border-[#E8DECE] bg-[#FDFAF5]/40 opacity-70 cursor-not-allowed select-none'
+                    ? 'border-slate-200 bg-slate-50/40 opacity-70 cursor-not-allowed select-none'
                     : isSelected
-                    ? 'border-[#2C2825] bg-white shadow-lg scale-[1.02] cursor-pointer'
-                    : 'border-[#F4E8CC] bg-white hover:border-[#E8DECE] cursor-pointer'
+                    ? 'border-teal-500 bg-white shadow-card-hover scale-[1.02]'
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-card'
                 }`}
               >
                 <h3 className="font-serif text-lg text-ink font-medium">{p.name}</h3>
                 <p className="text-2xl font-bold text-ink mt-1">{formatCurrency(p.price)}</p>
                 {isActive && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 uppercase tracking-widest mt-3">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 text-emerald-600 uppercase tracking-widest mt-3">
                     Active Plan
                   </span>
                 )}
@@ -268,9 +255,9 @@ export default function BillingPage() {
         </div>
 
         {selectedPlan && (
-          <form onSubmit={handleSubmit} className="space-y-6 p-6 border border-[#F4E8CC] rounded-3xl bg-white animate-fadeUp">
+          <form onSubmit={handleSubmit} className="space-y-6 p-6 border border-slate-200 rounded-2xl bg-white shadow-card animate-fade-up">
             <h3 className="font-serif text-xl text-ink">2. Upload Proof of Transfer</h3>
-            <p className="text-xs text-muted leading-relaxed max-w-2xl font-light">
+            <p className="text-xs text-slate-500 leading-relaxed max-w-2xl font-light">
               Transfer <span className="font-bold text-ink">{formatCurrency(selectedPlan.price)}</span> to our standard eSewa account or bank portal. Take a screenshot confirmation and attach it below.
             </p>
 
@@ -288,7 +275,7 @@ export default function BillingPage() {
                   />
                   <label
                     htmlFor="manual-receipt-input"
-                    className="px-4 py-2 border border-cream-300 text-ink bg-white text-xs hover:bg-cream-50 transition-colors rounded-lg cursor-pointer font-medium"
+                    className="px-4 py-2 border border-slate-200 text-ink bg-white text-xs hover:bg-slate-50 transition-colors rounded-xl cursor-pointer font-medium"
                   >
                     Choose Image File
                   </label>
@@ -297,7 +284,7 @@ export default function BillingPage() {
               </div>
 
               {receiptPreview && (
-                <div className="relative border border-[#F4E8CC] rounded-xl max-w-[200px] h-32 overflow-hidden bg-cream-50">
+                <div className="relative border border-slate-200 rounded-xl max-w-[200px] h-32 overflow-hidden bg-slate-50">
                   <img src={receiptPreview} alt="Receipt preview" className="w-full h-full object-cover" />
                 </div>
               )}
@@ -309,7 +296,7 @@ export default function BillingPage() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Enter transaction reference numbers or billing notes..."
-                  className="w-full border border-cream-300 bg-white p-3 rounded-lg text-xs font-light text-ink focus:border-ink focus:ring-0 outline-none"
+                  className="w-full border border-slate-200 bg-white p-3 rounded-xl text-xs font-light text-ink focus:border-teal-500 focus:ring-0 outline-none transition-all"
                   disabled={submitting}
                 />
               </div>
@@ -318,7 +305,7 @@ export default function BillingPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3 bg-ink hover:opacity-95 text-[#FDFAF5] text-xs uppercase tracking-widest rounded-lg font-bold transition-opacity cursor-pointer disabled:opacity-50"
+              className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white text-xs uppercase tracking-widest rounded-xl font-bold transition-all cursor-pointer disabled:opacity-50 shadow-sm hover:shadow-md"
             >
               {submitting ? 'Uploading Receipt...' : 'Submit Transaction Review'}
             </button>
@@ -326,17 +313,17 @@ export default function BillingPage() {
         )}
       </section>
 
-      {/* Payment history list */}
+      {/* Payment History */}
       <section className="space-y-4">
         <h2 className="font-serif text-2xl text-ink">Manual Transfer History</h2>
         {payments.length === 0 ? (
           <p className="text-xs text-muted font-light leading-relaxed py-4">No manual transfers submitted yet.</p>
         ) : (
-          <div className="border border-[#F4E8CC] rounded-3xl overflow-hidden bg-white">
+          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-card">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-light border-collapse">
                 <thead>
-                  <tr className="border-b border-[#F4E8CC] bg-[#FDFAF5]/40 text-[#8C847A] font-medium uppercase text-[10px] tracking-wider">
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-medium uppercase text-[10px] tracking-wider">
                     <th className="p-4">Submission Date</th>
                     <th className="p-4">Upgrade Tier</th>
                     <th className="p-4">Amount</th>
@@ -345,14 +332,13 @@ export default function BillingPage() {
                     <th className="p-4">Receipt</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-cream-100">
+                <tbody className="divide-y divide-slate-100">
                   {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-[#FDFAF5]/10 text-ink">
+                    <tr key={p.id} className="hover:bg-slate-50/50 text-ink transition-colors">
                       <td className="p-4">{new Date(p.created_at).toLocaleDateString()}</td>
-                      {/* BUG RESOLUTION: Render p.plan_name flat key directly to bypass dict lookup crash */}
                       <td className="p-4 font-bold">{p.plan_name || 'Standard Tier'}</td>
                       <td className="p-4 font-semibold">{formatCurrency(p.amount)}</td>
-                      <td className="p-4 text-[#8C847A] italic max-w-xs truncate">{p.notes || '—'}</td>
+                      <td className="p-4 text-slate-500 italic max-w-xs truncate">{p.notes || '---'}</td>
                       <td className="p-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase ${
                           p.status === 'approved'
@@ -364,19 +350,18 @@ export default function BillingPage() {
                           {p.status}
                         </span>
                       </td>
-                      {/* BUG RESOLUTION: Restored p.payment_proof anchor tag viewing options */}
                       <td className="p-4">
                         {p.payment_proof ? (
                           <a
                             href={p.payment_proof}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-ink underline underline-offset-2 hover:text-[#8C6B35]"
+                            className="text-teal-600 underline underline-offset-2 hover:text-teal-700 transition-colors"
                           >
                             View
                           </a>
                         ) : (
-                          <span className="text-muted">—</span>
+                          <span className="text-muted">---</span>
                         )}
                       </td>
                     </tr>

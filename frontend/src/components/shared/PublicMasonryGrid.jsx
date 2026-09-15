@@ -122,7 +122,7 @@ function LazyPhoto({
     <div
       ref={ref}
       onClick={() => !stillProcessing && onPhotoClick?.(index)}
-      className={`group relative w-full overflow-hidden rounded-lg bg-cream-100 mb-3 break-inside-avoid shadow-sm hover:shadow-md transition-shadow duration-300 select-none ${
+      className={`group relative w-full overflow-hidden rounded-lg bg-slate-100 mb-3 break-inside-avoid shadow-sm hover:shadow-md transition-shadow duration-300 select-none ${
         stillProcessing ? "" : "cursor-pointer"
       }`}
       style={{
@@ -139,15 +139,15 @@ function LazyPhoto({
       {inView ? (
         <>
           {stillProcessing ? (
-            <div className="absolute inset-0 bg-cream-100 animate-pulse flex items-center justify-center">
-              <span className="text-cream-400 text-[10px] font-light select-none">
+            <div className="absolute inset-0 bg-slate-100 animate-pulse flex items-center justify-center">
+              <span className="text-slate-400 text-[10px] font-light select-none">
                 Processing…
               </span>
             </div>
           ) : hasError ? (
-            <div className="absolute inset-0 bg-cream-200 flex flex-col items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-200 flex flex-col items-center justify-center p-4">
               <svg
-                className="w-5 h-5 text-cream-400 mb-1"
+                className="w-5 h-5 text-slate-400 mb-1"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -160,7 +160,7 @@ function LazyPhoto({
                   d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
                 />
               </svg>
-              <span className="text-cream-400 text-xs font-light select-none pointer-events-none">
+              <span className="text-slate-400 text-xs font-light select-none pointer-events-none">
                 Unavailable
               </span>
             </div>
@@ -250,7 +250,7 @@ function LazyPhoto({
           )}
         </>
       ) : (
-        <div className="w-full h-full bg-cream-100 animate-pulse" />
+        <div className="w-full h-full bg-slate-100 animate-pulse" />
       )}
     </div>
   );

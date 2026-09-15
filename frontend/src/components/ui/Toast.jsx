@@ -42,12 +42,12 @@ const TYPE_STYLES = {
   success: 'bg-emerald-50  border-emerald-200 text-emerald-900',
   error:   'bg-red-50      border-red-200     text-red-900',
   warning: 'bg-amber-50    border-amber-200   text-amber-900',
-  info:    'bg-cream-100   border-cream-300   text-ink',
-  loading: 'bg-[#fdfbf7]   border-cream-300   text-ink',
+  info:    'bg-slate-50 border-slate-200 text-ink',
+  loading: 'bg-white border-slate-200 text-ink',
 }
 
 const TYPE_ICON_COLOR = {
-  success: 'text-green', // Custom brand green (#4a7c6f) from tailwind.config
+  success: 'text-emerald-500',
   error:   'text-red-600',
   warning: 'text-amber-600',
   info:    'text-ink',

@@ -194,7 +194,7 @@ export default function PhotoGrid({
               onDragLeave={() => handleDragLeave(idx)}
               onDrop={(e) => handleDrop(e, idx)}
               onDragEnd={handleDragEnd}
-              className={`group relative overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 transition-all bg-cream-100 ${
+              className={`group relative overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-all bg-slate-100 ${
                 canReorder
                   ? "cursor-grab active:cursor-grabbing"
                   : "cursor-pointer"
@@ -216,14 +216,14 @@ export default function PhotoGrid({
                 // see an unrelated stock photo standing in for their real
                 // one and have no way to know it never loaded. This now
                 // shows an honest "failed to load" state instead.
-                <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
+                <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-slate-500 bg-slate-100">
                   {BROKEN_IMAGE_ICON}
                   <span className="text-[10px] font-medium">
                     {isFailed ? "Processing failed" : "Failed to load"}
                   </span>
                 </div>
               ) : showPlaceholder ? (
-                <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
+                <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-slate-500 bg-slate-100">
                   <Spinner className="w-5 h-5" />
                   <span className="text-[10px] font-medium">Processing…</span>
                 </div>
@@ -266,7 +266,7 @@ export default function PhotoGrid({
                       }}
                       className="p-1.5 rounded-lg bg-white/95 text-ink
                                 opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                                hover:bg-cream-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink shadow-sm cursor-pointer"
+                                hover:bg-slate-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 shadow-sm cursor-pointer"
                       aria-label={`Download ${photo.title || photo.original_name || "photo"}`}
                       title="Download"
                     >
@@ -326,7 +326,7 @@ export default function PhotoGrid({
                   }}
                   className="absolute top-2 left-2 p-1.5 rounded-lg bg-white/95 text-ink
                             opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                            hover:bg-cream-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink shadow-sm cursor-pointer"
+                            hover:bg-slate-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 shadow-sm cursor-pointer"
                   aria-label={`Set ${photo.title || photo.original_name || "photo"} as gallery cover`}
                   title="Set as cover"
                 >

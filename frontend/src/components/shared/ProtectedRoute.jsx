@@ -14,7 +14,7 @@ export default function ProtectedRoute({ children }) {
   if (loading) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center bg-cream-50"
+        className="min-h-screen flex items-center justify-center bg-slate-50"
         role="status"
         aria-live="polite"
         aria-busy="true"

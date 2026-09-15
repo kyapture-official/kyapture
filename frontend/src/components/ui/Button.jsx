@@ -5,11 +5,11 @@ import { forwardRef } from 'react'
 // hover/active states on primary/outline use Tailwind's opacity modifier (bg-ink/80) so they
 // always stay in the ink token's colour family regardless of what ink maps to.
 const variants = {
-  primary:   'bg-ink text-cream-50 hover:bg-ink/80 active:bg-ink/90',
-  secondary: 'bg-cream-200 text-ink hover:bg-cream-300 border border-cream-300',
-  ghost:     'text-ink hover:bg-cream-100',
+  primary:   'bg-teal-600 text-white hover:bg-teal-700 active:bg-teal-800',
+  secondary: 'bg-slate-100 text-ink hover:bg-slate-200 border border-slate-200',
+  ghost:     'text-ink hover:bg-slate-100',
   danger:    'bg-red-600 text-white hover:bg-red-700 active:bg-red-800',
-  outline:   'border border-ink text-ink hover:bg-ink hover:text-cream-50',
+  outline:   'border border-slate-300 text-ink hover:bg-ink hover:text-white',
 }
 
 const sizes = {
@@ -57,7 +57,7 @@ const Button = forwardRef(function Button(
           'disabled:opacity-50 disabled:cursor-not-allowed',
           // focus-visible restricts the ring to keyboard navigation only — not mouse clicks
           'focus-visible:outline-none',
-          'focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1',
+          'focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1',
           variants[variant] || variants.primary,  // Fallback guards invalid variant keys
           sizes[size]       || sizes.md,           // Fallback guards invalid size keys
           className,

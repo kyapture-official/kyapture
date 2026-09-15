@@ -162,10 +162,16 @@ export default function GallerySettingsPage() {
         )}
 
         {/* Card 1: Configuration */}
-        <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-ink mb-6 border-b border-cream-100 pb-3">
-            Collection Configurations
-          </h2>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center">
+              <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.43l-1.003.828c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.297 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.552 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.43l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <h2 className="font-serif text-lg text-ink">Collection Configurations</h2>
+          </div>
           <form onSubmit={handleSaveSettings} noValidate className="space-y-6">
             <div className="flex flex-col gap-1">
               <label
@@ -181,12 +187,12 @@ export default function GallerySettingsPage() {
                 maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={updating}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-cream-300 focus:border-ink focus:outline-none focus:ring-2 focus:ring-cream-200 transition-all disabled:opacity-50"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
                 required
               />
             </div>
 
-            <div className="p-4 bg-cream-50 rounded-xl border border-cream-100 text-xs">
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
               <span className="font-semibold text-muted uppercase tracking-wider block text-[10px]">
                 Live Slug Link
               </span>
@@ -215,7 +221,7 @@ export default function GallerySettingsPage() {
                 value={eventDate}
                 onChange={(e) => setEventDate(e.target.value)}
                 disabled={updating}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-cream-300 focus:border-ink focus:outline-none focus:ring-2 focus:ring-cream-200 transition-all disabled:opacity-50"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
               />
             </div>
 
@@ -232,7 +238,7 @@ export default function GallerySettingsPage() {
                 value={expiresAt}
                 onChange={(e) => setExpiresAt(e.target.value)}
                 disabled={updating}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-cream-300 focus:border-ink focus:outline-none focus:ring-2 focus:ring-cream-200 transition-all disabled:opacity-50"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
               />
               <span className="text-[11px] text-muted">
                 After this date, clients will lose access to view and download photos. Leave blank for no expiration.
@@ -253,7 +259,7 @@ export default function GallerySettingsPage() {
                   value={brandingColor}
                   onChange={(e) => setBrandingColor(e.target.value)}
                   disabled={updating}
-                  className="w-10 h-10 rounded-lg border border-cream-300 cursor-pointer overflow-hidden p-0 bg-transparent disabled:cursor-not-allowed"
+                  className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer overflow-hidden p-0 bg-transparent disabled:cursor-not-allowed"
                 />
                 <span className="text-xs text-muted font-medium font-mono uppercase">
                   {brandingColor}
@@ -261,14 +267,14 @@ export default function GallerySettingsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-cream-100">
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
               <input
                 id="gallery-download"
                 type="checkbox"
                 checked={isDownloadable}
                 onChange={(e) => setIsDownloadable(e.target.checked)}
                 disabled={updating}
-                className="w-4 h-4 rounded border-cream-300 text-ink focus:ring-ink cursor-pointer disabled:cursor-not-allowed"
+                className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer disabled:cursor-not-allowed"
               />
               <label
                 className="text-xs font-semibold text-ink/80 cursor-pointer select-none"
@@ -278,14 +284,14 @@ export default function GallerySettingsPage() {
               </label>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-cream-100">
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
               <input
                 id="gallery-watermark"
                 type="checkbox"
                 checked={watermarkEnabled}
                 onChange={(e) => setWatermarkEnabled(e.target.checked)}
                 disabled={updating}
-                className="w-4 h-4 rounded border-cream-300 text-ink focus:ring-ink cursor-pointer disabled:cursor-not-allowed"
+                className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer disabled:cursor-not-allowed"
               />
               <label
                 className="text-xs font-semibold text-ink/80 cursor-pointer select-none"
@@ -295,7 +301,7 @@ export default function GallerySettingsPage() {
               </label>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-cream-100">
+            <div className="flex justify-end pt-4 border-t border-slate-100">
               <button
                 type="submit"
                 disabled={
@@ -314,7 +320,7 @@ export default function GallerySettingsPage() {
                     eventDate === toDateInputValue(gallery.event_date) &&
                   expiresAt === toDateInputValue(gallery.expires_at))
                 }
-                className="px-4 py-2 bg-ink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {updating ? "Saving..." : "Save Settings"}
               </button>
@@ -323,10 +329,15 @@ export default function GallerySettingsPage() {
         </div>
 
         {/* Card 2: Password Protection */}
-        <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-ink mb-2 border-b border-cream-100 pb-3">
-            Password Protection
-          </h2>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+            </div>
+            <h2 className="font-serif text-lg text-ink">Password Protection</h2>
+          </div>
           <p className="text-xs text-muted mb-6">
             When password protection is enabled, clients must authenticate
             before entering the public photo grid.
@@ -352,12 +363,12 @@ export default function GallerySettingsPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={updating}
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-300 focus:border-ink focus:outline-none focus:ring-2 focus:ring-cream-200 transition-all disabled:opacity-50"
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
                 />
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 border border-cream-300 text-ink/80 hover:text-ink hover:bg-cream-50 text-sm font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 border border-slate-200 text-slate-700 hover:text-ink hover:bg-slate-50 text-sm font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {password
                     ? "Save"
@@ -373,12 +384,12 @@ export default function GallerySettingsPage() {
 
       {/* Right column — existing preview card, unchanged */}
       <div className="space-y-8">
-        <div className="bg-white rounded-2xl border border-cream-200 shadow-sm overflow-hidden p-6 flex flex-col items-center justify-center text-center py-10 min-h-[300px]">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden p-6 flex flex-col items-center justify-center text-center py-10 min-h-[300px]">
           {gallery.cover_url ? (
             <img
               src={gallery.cover_url}
               alt={`${gallery.title} cover`}
-              className="w-24 h-24 rounded-full object-cover border border-cream-100 mb-4 shadow-sm"
+              className="w-24 h-24 rounded-full object-cover border border-slate-100 mb-4 shadow-sm"
             />
           ) : (
             <div
@@ -403,8 +414,8 @@ export default function GallerySettingsPage() {
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border mt-2 ${
               gallery.is_published
-                ? "bg-green-50 text-green-700 border-green-200"
-                : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-amber-50 text-amber-700 border-amber-200"
             }`}
           >
             {gallery.is_published ? "Published" : "Draft"}

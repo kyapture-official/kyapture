@@ -144,7 +144,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
 
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         onClick={() => onCloseRef.current?.()}
         aria-hidden="true"
       />
@@ -157,18 +157,18 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? 'modal-title' : undefined}
-        className={`relative bg-cream-50 rounded-2xl shadow-2xl w-full border border-cream-200 overflow-hidden ${widths[size]}`}
+        className={`relative bg-white rounded-2xl shadow-2xl w-full border border-slate-200 overflow-hidden ${widths[size]}`}
         style={{ animation: 'modalFadeUp 0.18s ease-out both' }}
       >
         {title && (
-          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-cream-200">
+          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
             <h3 id="modal-title" className="font-serif text-xl text-ink">
               {title}
             </h3>
             <button
               type="button"
               onClick={() => onCloseRef.current?.()}
-              className="p-1.5 rounded-lg hover:bg-cream-200 text-muted transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1"
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
               aria-label="Close modal"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor"
