@@ -30,6 +30,7 @@ db.sqlite3-journal
 backend/media/
 backend/staticfiles/
 backend/static/
+backend/logs/*.log
 
 # Frontend Development Packages & Compiled Builds
 node_modules/
