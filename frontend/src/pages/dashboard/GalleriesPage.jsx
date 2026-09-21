@@ -114,7 +114,10 @@ export default function GalleriesPage() {
     } catch (err) {
       toast.dismiss(loaderId);
 
-      if (err.response?.status === 403) {
+      if (err.code === 'ERR_NETWORK' && !err.response) {
+        toast("Cannot reach the server. Make sure the backend is running on port 8000.", "error");
+        throw new Error("Backend unreachable");
+      } else if (err.response?.status === 403) {
         const data = err.response?.data;
         const message =
           data?.message ||
@@ -321,14 +324,25 @@ export default function GalleriesPage() {
 
                 {/* Card body */}
                 <div className="p-5 flex flex-col flex-1 justify-between gap-4">
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <h3 className="font-serif text-lg font-bold text-ink group-hover:text-slate-700 transition-colors line-clamp-1">
                       {gallery.title}
                     </h3>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                      {gallery.photo_count || 0} image
-                      {gallery.photo_count !== 1 ? "s" : ""}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          gallery.is_published
+                            ? "bg-emerald-500"
+                            : gallery.photo_count > 0
+                              ? "bg-slate-400"
+                              : "bg-slate-300"
+                        }`}
+                      />
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                        {gallery.photo_count || 0} image
+                        {gallery.photo_count !== 1 ? "s" : ""}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex gap-2">

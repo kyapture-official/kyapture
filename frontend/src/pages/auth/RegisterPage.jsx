@@ -1,22 +1,4 @@
 // frontend/src/pages/auth/RegisterPage.jsx
-// ─────────────────────────────────────────────────────────────────────────────
-// WHAT: Registration page for new photographers.
-// WHY:  Captures business name, email, credentials, and the username that
-//       becomes their public subdomain (username.kyapture.com).
-//       On success, navigates to /dashboard immediately.
-//
-// ERROR RESPONSE CONTRACT — from core/exceptions.py:
-//   {
-//     "error":   "General message string",
-//     "details": { "field_name": ["Error message"] }
-//   }
-//   All error parsing in this file must match this exact shape.
-//
-// STORE BINDING NOTE:
-//   This file reads `isAuthenticated` and `register` from authStore.
-//   Confirm these fields exist in your actual authStore.js before shipping.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
@@ -40,9 +22,6 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // Redirects already-authenticated users who land on /register.
-  // Does NOT handle post-registration redirect — that happens directly
-  // in the try block to prevent setLoading firing on an unmounted component.
   useEffect(() => {
     if (isAuthenticated) {
       navigate("/dashboard", { replace: true });
@@ -102,43 +81,24 @@ export default function RegisterPage() {
       username: form.username.toLowerCase().trim(),
       email: form.email.trim(),
       password: form.password,
-      // WHY password2 is included: backend developer confirmed the
-      // RegisterSerializer requires this field for server-side confirmation.
-      // TODO: verify this against the actual serializer code.
       password2: form.confirmPassword,
       display_name: form.displayName.trim(),
     };
 
     try {
       await register(payload);
-      // Navigate directly — do not rely on useEffect.
-      // If useEffect handled this, setLoading(false) would fire on an
-      // unmounted component. Direct navigation prevents that.
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      // ── Error response contract (core/exceptions.py) ──────────────────
-      // {
-      //   "error":   "General message string",
-      //   "details": { "field_name": ["Error message array"] }
-      // }
       const responseData = err.response?.data || {};
       const validationDetails = responseData.details || {};
       const parsedErrors = {};
 
-      // ── Step 1: Map field-level errors first ──────────────────────────
-      // WHY field errors first:
-      //   We must know what actionable feedback the user already has
-      //   BEFORE deciding whether the general banner adds anything.
-      //   Mapping first then checking parsedErrors gives the true picture.
       const keyMap = {
         display_name: "displayName",
         username: "username",
         email: "email",
         password: "password",
         password2: "confirmPassword",
-        // non_field_errors can appear inside details for cross-field
-        // validation (e.g., passwords match check performed server-side).
-        // Mapped to general so it appears as a banner, not a field error.
         non_field_errors: "general",
       };
 
@@ -148,46 +108,23 @@ export default function RegisterPage() {
         if (formKey) {
           parsedErrors[formKey] = errorMessage;
         } else {
-          // Unknown backend field — surface as general rather than dropping.
-          // Append rather than overwrite in case multiple unknowns arrive.
           parsedErrors.general = parsedErrors.general
             ? `${parsedErrors.general} ${errorMessage}`
             : errorMessage;
         }
       });
 
-      // ── Step 2: Decide whether to show the general error banner ───────
-      // WHY check parsedErrors here, not validationDetails:
-      //   We want to know whether the USER already has actionable feedback,
-      //   not whether the backend sent any detail keys.
-      //   An unrecognized backend key already falls to parsedErrors.general,
-      //   so checking parsedErrors gives us the real picture.
-      //
-      // WHY NOT hardcode 'An error occurred.' as a string comparison:
-      //   That string lives in core/exceptions.py. If the backend developer
-      //   changes it, this filter breaks silently with no warning.
-      //   Checking parsedErrors length is string-agnostic and future-proof.
       const hasActionableFeedback = Object.keys(parsedErrors).length > 0;
 
       if (responseData.error && !hasActionableFeedback) {
-        // General error banner adds value ONLY when the user has no
-        // field-level feedback yet. Examples: "Account suspended.",
-        // "Rate limit exceeded.", "Server error."
         parsedErrors.general = responseData.error;
       }
 
-      // ── Step 3: Final fallback if nothing was parsed at all ───────────
-      // Covers network failure, timeout, or CORS error where
-      // err.response is undefined — responseData and details both {}.
       if (Object.keys(parsedErrors).length === 0) {
         parsedErrors.general = "Failed to create account. Please try again.";
       }
 
       setErrors(parsedErrors);
-      // WHY here and not in finally:
-      //   On success, navigate() unmounts the component before finally runs.
-      //   setLoading on an unmounted component produces a React warning.
-      //   On failure, we stay mounted — this is safe.
       setLoading(false);
     }
   };
@@ -195,338 +132,187 @@ export default function RegisterPage() {
   const previewUsername = form.username.toLowerCase().trim() || "yourname";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <p className="text-2xl font-semibold tracking-tight text-gray-900">
-            Kyapture
-          </p>
-          <p className="mt-1 text-sm text-gray-500">
-            Start delivering beautiful galleries today
-          </p>
+    <div className="auth-page">
+      <div className="auth-page__bg" />
+      <div className="auth-page__grid" />
+
+      <Link to="/" className="auth-page__back">&larr; Back to home</Link>
+
+      <div className="auth-card animate-fadeUp">
+        {/* Logo */}
+        <div className="auth-card__logo">
+          <div className="auth-card__logo-icon">📸</div>
+          <div className="auth-card__brand">Kyapture</div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
-          <div className="flex border border-gray-200 rounded-xl p-1 mb-6 gap-1">
-            <Link
-              to="/login"
-              className="flex-1 text-center text-sm py-2 rounded-lg text-gray-500
-                        hover:text-gray-800 transition-colors"
-            >
-              Sign in
-            </Link>
-            <button
-              type="button"
-              className="flex-1 text-center text-sm py-2 rounded-lg bg-gray-900
-                        text-white font-medium cursor-default"
-            >
-              Create account
-            </button>
-          </div>
+        <h1 className="auth-card__title">Create your account</h1>
+        <p className="auth-card__sub">Start delivering beautiful galleries today</p>
 
+        {/* Tabs */}
+        <div className="auth-tabs">
+          <Link to="/login" className="auth-tab" style={{ textDecoration: "none", textAlign: "center" }}>
+            Sign in
+          </Link>
+          <button className="auth-tab auth-tab--active" type="button">
+            Create account
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} noValidate>
+          {/* General error banner */}
           {errors.general && (
             <div
               role="alert"
-              className="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200
-                        text-sm text-red-700"
+              style={{
+                marginBottom: 16, padding: "10px 14px",
+                background: "rgba(192,72,58,0.08)", border: "1px solid rgba(192,72,58,0.2)",
+                borderRadius: 9, fontSize: 13, color: "var(--red)",
+              }}
             >
               {errors.general}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} noValidate>
-            <div className="grid grid-cols-2 gap-3 mb-1">
-              <div>
-                <label
-                  htmlFor="reg-display-name"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Business name
-                </label>
-                <input
-                  id="reg-display-name"
-                  name="displayName"
-                  type="text"
-                  autoComplete="organization"
-                  placeholder="Doe Photography"
-                  value={form.displayName}
-                  onChange={handleChange}
-                  disabled={loading}
-                  aria-invalid={!!errors.displayName}
-                  aria-describedby={
-                    errors.displayName ? "err-display-name" : undefined
-                  }
-                  className={`w-full px-3 py-2 text-sm rounded-lg border
-                    focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    ${
-                      errors.displayName
-                        ? "border-red-400 bg-red-50 focus:ring-red-200"
-                        : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
-                    }`}
-                />
-                {errors.displayName && (
-                  <p
-                    id="err-display-name"
-                    className="mt-1 text-xs text-red-600"
-                  >
-                    {errors.displayName}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="reg-username"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Username
-                </label>
-                <input
-                  id="reg-username"
-                  name="username"
-                  type="text"
-                  autoComplete="username"
-                  placeholder="yourname"
-                  value={form.username}
-                  onChange={handleChange}
-                  disabled={loading}
-                  aria-invalid={!!errors.username}
-                  aria-describedby={
-                    errors.username ? "err-username" : "username-preview"
-                  }
-                  className={`w-full px-3 py-2 text-sm rounded-lg border
-                    focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    ${
-                      errors.username
-                        ? "border-red-400 bg-red-50 focus:ring-red-200"
-                        : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
-                    }`}
-                />
-                {errors.username && (
-                  <p id="err-username" className="mt-1 text-xs text-red-600">
-                    {errors.username}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <p
-              id="username-preview"
-              aria-live="polite"
-              className="mb-5 text-xs text-gray-400"
-            >
-              Your gallery link:{" "}
-              <span className="font-medium text-gray-600">
-                {previewUsername}.kyapture.com
-              </span>
-            </p>
-
-            <div className="mb-4">
-              <label
-                htmlFor="reg-email"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Email address
-              </label>
+          {/* Business name + Username row */}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="reg-display-name">Business name</label>
               <input
-                id="reg-email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={form.email}
+                id="reg-display-name"
+                className={`form-input ${errors.displayName ? "error" : ""}`}
+                type="text"
+                name="displayName"
+                autoComplete="organization"
+                placeholder="Doe Photography"
+                value={form.displayName}
                 onChange={handleChange}
                 disabled={loading}
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? "err-email" : undefined}
-                className={`w-full px-3 py-2 text-sm rounded-lg border
-                  focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  ${
-                    errors.email
-                      ? "border-red-400 bg-red-50 focus:ring-red-200"
-                      : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
-                  }`}
+                aria-invalid={!!errors.displayName}
+                aria-describedby={errors.displayName ? "err-display-name" : undefined}
               />
-              {errors.email && (
-                <p id="err-email" className="mt-1 text-xs text-red-600">
-                  {errors.email}
-                </p>
+              {errors.displayName && (
+                <div id="err-display-name" className="form-error">{errors.displayName}</div>
               )}
             </div>
 
-            <div className="mb-4">
-              <label
-                htmlFor="reg-password"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="reg-password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  placeholder="Minimum 8 characters"
-                  value={form.password}
-                  onChange={handleChange}
-                  disabled={loading}
-                  aria-invalid={!!errors.password}
-                  aria-describedby={
-                    errors.password ? "err-password" : undefined
-                  }
-                  className={`w-full pl-3 pr-10 py-2 text-sm rounded-lg border
-                    focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    ${
-                      errors.password
-                        ? "border-red-400 bg-red-50 focus:ring-red-200"
-                        : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
-                    }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((p) => !p)}
-                  disabled={loading}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  className="absolute inset-y-0 right-0 px-3 flex items-center
-                             text-gray-400 hover:text-gray-600 transition-colors
-                             disabled:cursor-not-allowed"
-                >
-                  {showPassword ? (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8
-                               a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0
-                               0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"
-                      />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </svg>
-                  ) : (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              {errors.password && (
-                <p id="err-password" className="mt-1 text-xs text-red-600">
-                  {errors.password}
-                </p>
-              )}
-            </div>
-
-            <div className="mb-6">
-              <label
-                htmlFor="reg-confirm"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Confirm password
-              </label>
+            <div className="form-group">
+              <label className="form-label" htmlFor="reg-username">Username</label>
               <input
-                id="reg-confirm"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                placeholder="Repeat your password"
-                value={form.confirmPassword}
+                id="reg-username"
+                className={`form-input ${errors.username ? "error" : ""}`}
+                type="text"
+                name="username"
+                autoComplete="username"
+                placeholder="yourname"
+                value={form.username}
                 onChange={handleChange}
                 disabled={loading}
-                aria-invalid={!!errors.confirmPassword}
-                aria-describedby={
-                  errors.confirmPassword ? "err-confirm" : undefined
-                }
-                className={`w-full px-3 py-2 text-sm rounded-lg border
-                  focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  ${
-                    errors.confirmPassword
-                      ? "border-red-400 bg-red-50 focus:ring-red-200"
-                      : "border-gray-300 focus:border-gray-400 focus:ring-gray-100"
-                  }`}
+                aria-invalid={!!errors.username}
+                aria-describedby={errors.username ? "err-username" : "username-preview"}
               />
-              {errors.confirmPassword && (
-                <p id="err-confirm" className="mt-1 text-xs text-red-600">
-                  {errors.confirmPassword}
-                </p>
+              {errors.username && (
+                <div id="err-username" className="form-error">{errors.username}</div>
               )}
             </div>
+          </div>
 
-            <button
-              type="submit"
+          <p id="username-preview" aria-live="polite" className="form-hint" style={{ marginBottom: 16 }}>
+            Your gallery link:{" "}
+            <span style={{ fontWeight: 600, color: "var(--ink)" }}>
+              {previewUsername}.kyapture.com
+            </span>
+          </p>
+
+          {/* Email */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="reg-email">Email address</label>
+            <input
+              id="reg-email"
+              className={`form-input ${errors.email ? "error" : ""}`}
+              type="email"
+              name="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={form.email}
+              onChange={handleChange}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4
-                        bg-gray-900 text-white text-sm font-medium rounded-lg
-                        hover:bg-gray-800 transition-colors
-                        disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <svg
-                    className="animate-spin h-4 w-4 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                  Creating account…
-                </>
-              ) : (
-                "Create my account"
-              )}
-            </button>
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? "err-email" : undefined}
+            />
+            {errors.email && (
+              <div id="err-email" className="form-error">{errors.email}</div>
+            )}
+          </div>
 
-            <p className="mt-5 text-center text-sm text-gray-500">
-              Already have an account?{" "}
-              <Link
-                to="/login"
-                className="font-medium text-gray-900 hover:underline"
+          {/* Password */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="reg-password">Password</label>
+            <div className="input-wrap">
+              <input
+                id="reg-password"
+                className={`form-input ${errors.password ? "error" : ""}`}
+                type={showPassword ? "text" : "password"}
+                name="password"
+                autoComplete="new-password"
+                placeholder="Minimum 8 characters"
+                value={form.password}
+                onChange={handleChange}
+                disabled={loading}
+                aria-invalid={!!errors.password}
+                aria-describedby={errors.password ? "err-password" : undefined}
+              />
+              <button
+                type="button"
+                className="eye-btn"
+                onClick={() => setShowPassword((p) => !p)}
+                disabled={loading}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                Sign in
-              </Link>
-            </p>
-          </form>
-        </div>
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
+            {errors.password && (
+              <div id="err-password" className="form-error">{errors.password}</div>
+            )}
+          </div>
+
+          {/* Confirm password */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="reg-confirm">Confirm password</label>
+            <input
+              id="reg-confirm"
+              className={`form-input ${errors.confirmPassword ? "error" : ""}`}
+              type="password"
+              name="confirmPassword"
+              autoComplete="new-password"
+              placeholder="Repeat your password"
+              value={form.confirmPassword}
+              onChange={handleChange}
+              disabled={loading}
+              aria-invalid={!!errors.confirmPassword}
+              aria-describedby={errors.confirmPassword ? "err-confirm" : undefined}
+            />
+            {errors.confirmPassword && (
+              <div id="err-confirm" className="form-error">{errors.confirmPassword}</div>
+            )}
+          </div>
+
+          <button className="btn-submit" type="submit" disabled={loading}>
+            {loading ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <div className="spinner" />
+                <span>Creating account…</span>
+              </div>
+            ) : (
+              "Create my account"
+            )}
+          </button>
+
+          <p className="auth-footer-text">
+            Already have an account?{" "}
+            <Link to="/login" className="auth-link">Sign in</Link>
+          </p>
+        </form>
       </div>
     </div>
   );

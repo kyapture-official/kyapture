@@ -1,10 +1,143 @@
 # Kyapture Frontend — Update Log
 
-## Date: 15 September 2026
+---
+
+## Date: 21 September 2026
+
+### 1. PixiesetContext — Global Gallery State
+
+Created `context/PixiesetContext.jsx` (247 lines). Centralizes gallery workspace state via
+`useReducer` with 13 action types (UPDATE_META, ADD_PHOTOS, SET_PHOTOS, REMOVE_PHOTO,
+SET_COVER, UPDATE_SETS, UPDATE_DESIGN, UPDATE_SETTINGS, PUBLISH, UNPUBLISH, ADD_TOAST,
+REMOVE_TOAST). Exposes context provider + `usePixieset` hook. Currently consumed by
+`TopNavBar.jsx` (publish/unpublish/addToast) and `GalleryWorkspaceLayout.jsx` (dispatch).
+
+**Note:** Over-engineering audit flagged this — only 4 of 13 actions are used. Could be
+replaced with zustand atoms or simple props when time permits.
 
 ---
 
-## What Was Done Today
+### 2. TopNavBar — Collection Header Bar
+
+Created `components/layout/TopNavBar.jsx`. Breadcrumb navigation (← Back / Galleries /
+Collection Title), published/draft status badge dropdown, Preview button triggering
+`open-preview` custom event, Share dropdown (copy link), More dropdown (Rename, Duplicate,
+Download, Delete). Reads publish state from PixiesetContext.
+
+---
+
+### 3. GallerySecondarySidebar — Icon Navigation
+
+Refactored `components/layout/GallerySecondarySidebar.jsx` from a wide text-based sidebar
+to a narrow 72px dark icon sidebar. Sections: Photos / Design / Settings / Activities nav
+with active state indicators. Back button at top. Matches Pixieset's workspace navigation
+pattern.
+
+---
+
+### 4. GalleryWorkspaceLayout — Workspace Shell
+
+Refactored `pages/dashboard/GalleryWorkspaceLayout.jsx`. Wrapped in `PixiesetProvider`.
+Syncs gallery data (title, slug, status, photos) into context via useEffect. Listens for
+`open-preview` custom event to trigger ClientPreviewModal. Contains TopNavBar +
+SecondarySidebar + `<Outlet />` for nested routes.
+
+---
+
+### 5. GalleryDesignPage — 4-Tab Design Builder
+
+Refactored `pages/dashboard/GalleryDesignPage.jsx`. Four tabs: Cover (hero layout, overlay
+opacity), Typography (font family, heading/body sizes), Color (branding color, background,
+text color), Grid (columns, gap, aspect ratio). Each tab has sub-options with live preview
+panel showing changes in real-time.
+
+---
+
+### 6. GallerySettingsPage — 5-Tab Settings
+
+Refactored `pages/dashboard/GallerySettingsPage.jsx`. Five tabs: General (title, slug,
+description, event date), Privacy (password protection, hide from search, allow indexing),
+Download (allow downloads, require email, watermarks), Favorites (enable favorites, show
+count), Store (enable print store, pricing). All toggles, forms, and save buttons wired.
+
+---
+
+### 7. ActivitiesWorkspace — Activity Tracker
+
+Created `pages/dashboard/ActivitiesWorkspace.jsx` (new). Seven tabs: All Activity,
+Downloads, Favorites, Shares, Comments, Views, Settings. Download categories (full-res,
+web-res, prints). Stats grid with icons. Empty states per tab. Added `/activities` route
+under gallery workspace in `App.jsx`.
+
+---
+
+### 8. ClientPreviewModal — Sticky Header & Scroll Behavior
+
+Refactored `components/shared/ClientPreviewModal.jsx`. Key changes:
+- **Hero:** Changed from `h-screen` to `h-[85vh]` with `id="hero"` scroll target.
+- **Sticky header:** Locks to top when scrolled past hero (`sticky top-0 z-50 bg-white
+  border-b border-gray-200 shadow-sm px-6 py-3`). Left: title + photographer stacked.
+  Right: Favorite, Download, Share, Grid toggle, Close (`space-x-6`).
+- **"BACK TO TOP" button:** Added below photo grid, smooth-scrolls `containerRef` to top.
+- Scroll detection via `handleScroll` callback resets `scrolledPastHero` state.
+
+---
+
+### 9. ERR_CONNECTION_REFUSED — API Connectivity Fix
+
+Root cause: `frontend/.env.local` defined `VITE_API_URL` but `axiosInstance.js` reads
+`VITE_API_BASE_URL`. Env var was silently ignored, falling back to `/api/v1`. Duplicate
+keys in `.env.local` also caused confusion.
+
+**Fixes applied:**
+| File | Change |
+|------|--------|
+| `frontend/.env.local` | Replaced with single `VITE_API_BASE_URL=/api/v1` |
+| `frontend/vite.config.js` | Added `/media` proxy target → `localhost:8000` |
+| `frontend/src/api/axiosInstance.js` | Falls back to `VITE_API_URL` if `VITE_API_BASE_URL` missing. Added `ERR_NETWORK` interceptor logging startup command. |
+| `frontend/src/pages/dashboard/GalleriesPage.jsx` | `handleCreateSubmit` catches `ERR_NETWORK` and shows "Cannot reach the server" toast. |
+
+Backend confirmed running (401 on direct hit to `localhost:8000/api/v1/galleries/`).
+
+---
+
+### 10. Over-Engineering Audit (Updated)
+
+Full codebase re-scan. Previous findings from Sep 15 updated with new state.
+
+**Verified dead code / removable:**
+
+| Tag | What to Cut | Lines | File(s) |
+|-----|------------|-------|---------|
+| `delete` | PixiesetContext — 13-action reducer, only 4 used by 2 consumers | 247 | `context/PixiesetContext.jsx` |
+| `delete` | `_ALLOWED_SIGNATURES` — defined, never referenced | 7 | `core/utils.py:137-143` |
+| `delete` | `debug_task` — unregistered Celery stub | 4 | `config/celery.py:44-47` |
+| `delete` | `StandardResultsSetPagination` + `LargeResultsSetPagination` — never imported | 14 | `core/pagination.py` |
+| `delete` | `IsPhotographer` permission — never imported | 17 | `core/permissions.py` |
+| `delete` | `validateSubdomain` — exported, never imported | 29 | `utils/validator.js:15-43` |
+| `delete` | `constants.js` — all exports (BASE_URL, MEDIA_URL, PAYMENT_METHODS, SUBSCRIPTION_STATUS_COLORS) never imported | 17 | `utils/constants.js` |
+| `delete` | `getPublicGallery` + `verifyPassword` aliases — never called | 2 | `api/clientsApi.js:169,198` |
+| `delete` | `photosApi.upload` backward-compat alias — dead | 3 | `api/photosApi.js:244-246` |
+| `stdlib` | `generate_secure_token` wrappers — duplicate `secrets` module | 2×5 | `core/utils.py:72-77`, `clients/models.py:7-12` |
+| `stdlib` | `hex_color_validator` — identical in two models | 2×4 | `galleries/models.py:8-11`, `users/models.py:11-14` |
+| `stdlib` | `assertNonEmptyString` — duplicated in two API modules | 2×8 | `api/photosApi.js:48-57`, `api/clientsApi.js:20-27` |
+| `stdlib` | `slugify` in useGalleries — reinvents django slug | 7 | `hooks/useGalleries.js:26-32` |
+| `stdlib` | `generateMockUUID` — `crypto.randomUUID()` is native | 7 | `hooks/useGalleries.js:13-19` |
+| `shrink` | `DashboardStatsView` — 3 near-identical return blocks | ~50 | `galleries/views.py:269-372` |
+| `shrink` | `get_gallery()` — copy-pasted across 5 public views | 5×20 | `clients/views.py` |
+| `shrink` | `get_session_token` + `validate_session_token` — duplicated | 2×20 | `clients/views.py:73-95,402-411` |
+| `shrink` | `validate_branding_color` — identical in Create + Update serializers | 2×5 | `galleries/serializers.py:152-156,245-249` |
+| `shrink` | `_get_client_ip` — duplicated in views + serializers | 2×5 | `clients/views.py:227-231`, `clients/serializers.py:210-217` |
+| `shrink` | `getAlphaBrandingColor` — re-defined inline instead of importing | 8 | `pages/client/ClientGalleryPage.jsx:17-24` |
+| `shrink` | `triggerGlobalLogout` — manual localStorage surgery vs zustand | 17 | `api/axiosInstance.js:122-138` |
+
+**Net removable:** ~770 lines, 7 duplicate patterns to consolidate, 0 dependencies removable (framer-motion used in 8 files, prop-types in 1).
+
+---
+
+## Date: 15 September 2026
+
+### What Was Done Today
 
 ### 1. Design System Migration — Cream → Slate/Teal
 
@@ -134,14 +267,14 @@ frontend/
 ├── package.json                  (30 lines)   Dependencies & scripts
 ├── postcss.config.js             (7 lines)    PostCSS + Tailwind plugin
 ├── tailwind.config.js            (77 lines)   Design tokens, animations, shadows
-├── vite.config.js                (14 lines)   Vite dev/build config
+├── vite.config.js                (20 lines)   Vite dev/build config + proxy
 │
 └── src/
     ├── main.jsx                  (10 lines)   React root mount
     ├── App.jsx                   (78 lines)   Route definitions, providers
     │
     ├── api/                                   HTTP clients (Axios wrappers)
-    │   ├── axiosInstance.js       (107 lines)  Axios instance, CSRF, 401 refresh
+    │   ├── axiosInstance.js       (120 lines)  Axios instance, CSRF, 401 refresh, ERR_NETWORK
     │   ├── authApi.js             (100 lines)  Login, register, logout, profile
     │   ├── galleriesApi.js        (218 lines)  CRUD, publish, password, search
     │   ├── photosApi.js           (226 lines)  Upload, delete, reorder, poll
@@ -180,12 +313,15 @@ frontend/
     │   │
     │   ├── layout/                            Page shells
     │   │   ├── DashboardLayout.jsx (490 lines) Sidebar + topbar + mobile drawer
+    │   │   ├── TopNavBar.jsx       (130 lines) Collection breadcrumb + actions bar  ← NEW
+    │   │   ├── GallerySecondarySidebar.jsx (95 lines) Narrow icon nav sidebar      ← NEW
     │   │   ├── CollectionSidebar.jsx (124 lines) Gallery workspace nav
     │   │   └── ClientLayout.jsx    (27 lines)  Public client header/footer
     │   │
     │   ├── shared/                            Feature components
     │   │   ├── CreateGalleryModal.jsx (370 lines) Gallery creation form
     │   │   ├── GalleryCard.jsx     (218 lines)  Gallery card with actions
+    │   │   ├── ClientPreviewModal.jsx (360 lines) Client preview + sticky header   ← MODIFIED
     │   │   ├── PasswordModal.jsx   (360 lines)  Password entry dialog
     │   │   ├── PhotoGrid.jsx       (358 lines)  Dashboard photo grid + drag reorder
     │   │   ├── PhotoLightbox.jsx   (433 lines)  Full-screen lightbox + video
@@ -202,6 +338,9 @@ frontend/
     │       ├── Navbar.jsx          (175 lines)  Sticky nav + mobile menu
     │       └── Footer.jsx          (133 lines)  CTA band + links
     │
+    ├── context/
+    │   └── PixiesetContext.jsx    (247 lines) Global gallery workspace state      ← NEW
+    │
     └── pages/                                 Route-level components
         ├── LandingPage.jsx         (19 lines)  Composes landing components
         │
@@ -212,10 +351,12 @@ frontend/
         │
         ├── dashboard/                         Photographer dashboard
         │   ├── HomePage.jsx        (345 lines)  Greeting, stats, recent galleries
-        │   ├── GalleriesPage.jsx   (352 lines)  Gallery list + search + create
-        │   ├── GalleryWorkspaceLayout.jsx (208 lines) Gallery shell + breadcrumbs
+        │   ├── GalleriesPage.jsx   (358 lines)  Gallery list + search + create + error handling
+        │   ├── GalleryWorkspaceLayout.jsx (230 lines) Gallery shell + breadcrumbs  ← MODIFIED
         │   ├── GalleryPhotosPage.jsx (519 lines) Upload, grid, reorder, delete
-        │   ├── GallerySettingsPage.jsx (398 lines) Gallery config + password
+        │   ├── GalleryDesignPage.jsx (420 lines) 4-tab design builder             ← MODIFIED
+        │   ├── GallerySettingsPage.jsx (450 lines) 5-tab settings panel           ← MODIFIED
+        │   ├── ActivitiesWorkspace.jsx (280 lines) Activity tracker with 7 tabs    ← NEW
         │   └── SettingsPage.jsx    (324 lines)  Profile, branding, logo, password
         │
         ├── subscription/                      Billing
@@ -228,4 +369,4 @@ frontend/
             └── DownloadPage.jsx     (323 lines) Download portal
 ```
 
-**Total:** 58 source files, ~10,400 lines of code (excluding `node_modules`, `dist`, lockfile).
+**Total:** 63 source files, ~11,600 lines of code (excluding `node_modules`, `dist`, lockfile). New files since Sep 15: `PixiesetContext.jsx`, `TopNavBar.jsx`, `GallerySecondarySidebar.jsx`, `ActivitiesWorkspace.jsx`.

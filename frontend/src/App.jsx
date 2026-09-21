@@ -18,6 +18,8 @@ import BillingPage from "./pages/subscription/BillingPage";
 import GalleryWorkspaceLayout from "./pages/dashboard/GalleryWorkspaceLayout";
 import GalleryPhotosPage from "./pages/dashboard/GalleryPhotosPage";
 import GallerySettingsPage from "./pages/dashboard/GallerySettingsPage";
+import GalleryDesignPage from "./pages/dashboard/GalleryDesignPage";
+import ActivitiesWorkspace from "./pages/dashboard/ActivitiesWorkspace";
 // Client portal
 import ClientHomePage from "./pages/client/ClientHomePage";
 import ClientGalleryPage from "./pages/client/ClientGalleryPage";
@@ -64,7 +66,9 @@ export default function App() {
                 it, so DashboardLayout's global nav never renders here. */}
             <Route path="galleries/:id" element={<GalleryWorkspaceLayout />}>
               <Route index element={<GalleryPhotosPage />} />
+              <Route path="design" element={<GalleryDesignPage />} />
               <Route path="settings" element={<GallerySettingsPage />} />
+              <Route path="activities" element={<ActivitiesWorkspace />} />
             </Route>
           </Route>
 

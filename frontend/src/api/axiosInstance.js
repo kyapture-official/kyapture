@@ -3,7 +3,12 @@
 import axios from 'axios'
 
 // ── BASE CONFIGURATION & PATH NORMALIZATION ─────────────────────────────────
-const rawBaseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+// Checks VITE_API_BASE_URL first (correct), falls back to legacy VITE_API_URL
+// for backward compatibility with older .env files.
+const rawBaseURL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  '/api/v1'
 // Normalize the base URL by stripping trailing slashes.
 // Relative paths must always start with a leading slash and end with a trailing
 // slash (e.g. '/auth/login/') to prevent double-slashes while complying with
@@ -59,6 +64,17 @@ const processQueue = (error) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // ── CONNECTION REFUSED: backend not reachable ──────────────────────────
+    // Axios sets code === 'ERR_NETWORK' and message includes
+    // 'ERR_CONNECTION_REFUSED' when the proxy target (localhost:8000) is down.
+    if (!error.response && error.code === 'ERR_NETWORK') {
+      console.error(
+        '[kyapture] Backend unreachable. Ensure the Django server is running on port 8000.\n' +
+        '  Start it with: cd backend && python manage.py runserver\n' +
+        '  Current API base URL:', cleanBaseURL,
+      )
+    }
+
     const originalRequest = error.config
     if (!originalRequest) return Promise.reject(error)
 
