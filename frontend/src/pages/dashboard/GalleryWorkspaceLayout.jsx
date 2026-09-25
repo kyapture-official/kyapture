@@ -138,7 +138,7 @@ function WorkspaceInner() {
           </div>
         )}
 
-        <div className="flex-1 max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8 w-full">
+        <div className="flex-1 max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-24 md:py-8 w-full">
           <Outlet context={{ gallery, setGallery, slug: id, skipNextLoadRef, navigate, isMountedRef }} />
         </div>
       </div>

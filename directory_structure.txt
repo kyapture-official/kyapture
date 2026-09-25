@@ -4,7 +4,9 @@ kyapture/
 ├── README.md
 ├── directory_structure.txt
 ├── docker-compose.yml
+├── opencode.json
 ├── temp_tree.py
+├── update.md
 ├── backend/
 │   ├── Dockerfile
 │   ├── manage.py
@@ -135,18 +137,7 @@ kyapture/
 │   │   ├── django.log
 │   ├── media/
 │   │   ├── test
-│   │   ├── payment_proofs/
-│   │   ├── photographer_logos/
-│   │   │   ├── 2013-10-14_10.35.36.jpg
-│   │   ├── photographers/
-│   │   │   ├── test
-│   │   │   ├── 019e6d88-6966-7c77-8fdb-3e9da4c6746e/
-│   │   │   │   ├── galleries/
-│   │   │   │   │   ├── 019e828f-e2f2-7578-b3dd-d1725ccb1482/
-│   │   │   │   │   │   ├── photos/
-│   │   │   │   │   │   ├── thumbnails/
-│   │   │   ├── 019e8bc9-8d36-7e28-898c-2d755f89218e/
-│   │   │   │   ├── galleries/
+│   │  
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile
@@ -173,11 +164,30 @@ kyapture/
 │   │   │   ├── photosApi.js
 │   │   │   ├── subscriptionsApi.js
 │   │   ├── components/
+│   │   │   ├── client/
+│   │   │   │   ├── ClientBanner.jsx
+│   │   │   │   ├── GalleryFooter.jsx
+│   │   │   │   ├── HeroCover.jsx
+│   │   │   │   ├── MasonryPhotoGrid.jsx
+│   │   │   │   ├── PhotoCard.jsx
+│   │   │   │   ├── StickyGalleryHeader.jsx
+│   │   │   ├── landing/
+│   │   │   │   ├── BrandLogo.jsx
+│   │   │   │   ├── Features.jsx
+│   │   │   │   ├── Footer.jsx
+│   │   │   │   ├── GalleryGrid.jsx
+│   │   │   │   ├── Hero.jsx
+│   │   │   │   ├── Navbar.jsx
+│   │   │   │   ├── StatsTestimonials.jsx
 │   │   │   ├── layout/
 │   │   │   │   ├── ClientLayout.jsx
 │   │   │   │   ├── CollectionSidebar.jsx
 │   │   │   │   ├── DashboardLayout.jsx
+│   │   │   │   ├── GallerySecondarySidebar.jsx
+│   │   │   │   ├── TopNavBar.jsx
 │   │   │   ├── shared/
+│   │   │   │   ├── ClientPreviewModal.jsx
+│   │   │   │   ├── CoverPreview.jsx
 │   │   │   │   ├── CreateGalleryModal.jsx
 │   │   │   │   ├── ErrorBoundary.jsx
 │   │   │   │   ├── GalleryCard.jsx
@@ -186,7 +196,6 @@ kyapture/
 │   │   │   │   ├── PhotoLightbox.jsx
 │   │   │   │   ├── ProtectedRoute.jsx
 │   │   │   │   ├── PublicMasonryGrid.jsx
-│   │   │   │   ├── SubscriptionGird.jsx
 │   │   │   ├── ui/
 │   │   │   │   ├── Badge.jsx
 │   │   │   │   ├── Button.jsx
@@ -195,8 +204,9 @@ kyapture/
 │   │   │   │   ├── Modal.jsx
 │   │   │   │   ├── Spinner.jsx
 │   │   │   │   ├── Toast.jsx
+│   │   ├── context/
+│   │   │   ├── PixiesetContext.jsx
 │   │   ├── hooks/
-│   │   │   ├── useAuth.js
 │   │   │   ├── useGalleries.js
 │   │   │   ├── useSubscription.js
 │   │   ├── pages/
@@ -210,7 +220,9 @@ kyapture/
 │   │   │   │   ├── ClientHomePage.jsx
 │   │   │   │   ├── DownloadPage.jsx
 │   │   │   ├── dashboard/
+│   │   │   │   ├── ActivitiesWorkspace.jsx
 │   │   │   │   ├── GalleriesPage.jsx
+│   │   │   │   ├── GalleryDesignPage.jsx
 │   │   │   │   ├── GalleryPhotosPage.jsx
 │   │   │   │   ├── GallerySettingsPage.jsx
 │   │   │   │   ├── GalleryWorkspaceLayout.jsx
