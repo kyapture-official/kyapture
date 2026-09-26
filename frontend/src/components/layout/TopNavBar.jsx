@@ -1,13 +1,19 @@
+// C:\Users\David\Desktop\kyapture\frontend\src\components\layout\TopNavBar.jsx
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { usePixieset } from "../../context/PixiesetContext";
+import { useAuthStore } from "../../store/authStore";
+import { galleriesApi } from "../../api/galleriesApi";
 
 export default function TopNavBar() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const { user } = useAuthStore();
   const { collection, publishCollection, unpublishCollection, addToast } = usePixieset();
   const [moreOpen, setMoreOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [loading, setLoading] = useState(false); 
   const moreRef = useRef(null);
   const shareRef = useRef(null);
   const statusRef = useRef(null);
@@ -22,20 +28,37 @@ export default function TopNavBar() {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  const handleStatusToggle = () => {
-    if (collection.status === "PUBLISHED") {
-      unpublishCollection();
-      addToast({ message: "Collection set to Draft", type: "info" });
-    } else {
-      publishCollection();
-      addToast({ message: "Collection published!", type: "success" });
-    }
+  const handleStatusToggle = async () => {
+    const isCurrentlyPublished = collection.status === "PUBLISHED";
+    const shouldPublish = !isCurrentlyPublished;
+
+    setLoading(true);
     setStatusOpen(false);
+
+    try {
+      // Backend Database ma POST request hanne
+      await galleriesApi.publishGallery(id, shouldPublish);
+
+      // Backend success vae pachi matra local UI update
+      if (isCurrentlyPublished) {
+        unpublishCollection();
+        addToast({ message: "Collection set to Draft", type: "info" });
+      } else {
+        publishCollection();
+        addToast({ message: "Collection published!", type: "success" });
+      }
+    } catch (error) {
+      console.error("Status update error:", error);
+      addToast({ message: "Failed to update status on server", type: "error" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      const publicUrl = `${window.location.origin}/g/${user.username}/${id}`;
+      await navigator.clipboard.writeText(publicUrl);
       addToast({ message: "Link copied!", type: "success" });
     } catch {
       addToast({ message: "Failed to copy link", type: "error" });
@@ -45,7 +68,8 @@ export default function TopNavBar() {
 
   const handleCopyDirectLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      const publicUrl = `${window.location.origin}/g/${user.username}/${id}`;
+      await navigator.clipboard.writeText(publicUrl);
       addToast({ message: "Direct link copied!", type: "success" });
     } catch {
       addToast({ message: "Failed to copy link", type: "error" });
@@ -84,14 +108,17 @@ export default function TopNavBar() {
           {/* Status Badge Dropdown */}
           <div className="relative" ref={statusRef}>
             <button
-              onClick={() => setStatusOpen(!statusOpen)}
+              onClick={() => !loading && setStatusOpen(!statusOpen)}
+              disabled={loading}
               className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium border cursor-pointer transition-all ${
+                loading ? "opacity-50 cursor-not-allowed" : ""
+              } ${
                 isPublished
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                   : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
               }`}
             >
-              {isPublished ? "Published" : "Draft"}
+              {loading ? "Saving..." : isPublished ? "Published" : "Draft"}
               <svg className="w-2.5 h-2.5 ml-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
               </svg>

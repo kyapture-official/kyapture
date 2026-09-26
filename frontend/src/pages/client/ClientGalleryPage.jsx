@@ -58,11 +58,12 @@ export default function ClientGalleryPage() {
     });
   };
 
-  // Gallery structural metadata
+// Gallery structural metadata
   const [galleryTitle, setGalleryTitle] = useState("");
   const [photographerName, setPhotographerName] = useState("");
   const [photographerLogo, setPhotographerLogo] = useState(null);
   const [brandingColor, setBrandingColor] = useState(null);
+  const [eventDate, setEventDate] = useState(null);
   const [photos, setPhotos] = useState([]);
 
   // UI state-machine properties
@@ -108,6 +109,7 @@ export default function ClientGalleryPage() {
     setGalleryTitle(data.title || "");
     setPhotographerName(data.photographer_name || "");
     setPhotographerLogo(data.photographer_logo || null);
+    setEventDate(data.event_date || null);
     setPhotos(data.photos || []);
     setLocked(false);
     if (data.branding_color) {
@@ -339,13 +341,20 @@ export default function ClientGalleryPage() {
 
   // ── Render Path: Unlocked Gallery View ─────────────────────────────────────
   const coverSrc = photos.length > 0
-    ? (photos.find(p => p.thumbnail_url)?.thumbnail_url || photos.find(p => p.poster_url)?.poster_url)
-    : null;
+  ? (
+      photos.find(p => p.is_cover)?.url ||
+      photos[0]?.url ||
+      photos[0]?.original_url ||
+      photos[0]?.display_url ||
+      photos[0]?.cover_url ||
+      photos[0]?.thumbnail_url
+    )
+  : null;
 
   return (
     <div className="min-h-screen bg-slate-50">
       {/* ── FULL-BLEED HERO COVER BANNER ──────────────────────────────── */}
-      <section className="relative h-[70vh] min-h-[480px] w-full overflow-hidden flex-shrink-0">
+      <section className="relative h-screen min-h-screen w-full overflow-hidden flex-shrink-0">
         {/* Background Image */}
         <div className="absolute inset-0">
           {coverSrc ? (
@@ -365,7 +374,7 @@ export default function ClientGalleryPage() {
         </div>
 
         {/* Hero Content */}
-        <div className="relative z-10 flex flex-col items-center justify-end h-full pb-20 px-6 text-center">
+        <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 text-center">
           {photographerName && (
             <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-white/50 font-light mb-5">
               {photographerName}
@@ -378,9 +387,9 @@ export default function ClientGalleryPage() {
 
           <div className="h-px w-12 my-5 bg-white/30" />
 
-          {gallery.event_date && (
+          {eventDate && (
             <p className="text-xs sm:text-sm text-white/45 font-light tracking-widest uppercase mb-8">
-              {formatDate(gallery.event_date)}
+              {formatDate(eventDate)}
             </p>
           )}
 

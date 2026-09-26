@@ -1,3 +1,4 @@
+// C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GalleryWorkspaceLayout.jsx
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, Outlet } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
@@ -125,7 +126,7 @@ function WorkspaceInner() {
       <GallerySecondarySidebar basePath={`/dashboard/galleries/${id}`} gallery={gallery} />
 
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        <TopNavBar />
+        <TopNavBar gallery={gallery} setGallery={setGallery} slug={id} />
 
         {errorMsg && (
           <div className="max-w-5xl mx-auto px-4 md:px-6 pt-4 w-full">

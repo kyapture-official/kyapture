@@ -69,27 +69,60 @@ class GalleryListSerializer(serializers.ModelSerializer):
         return bool(obj.password_hash)
 
 
+class MediaAssetSimpleSerializer(serializers.ModelSerializer):
+    display_url = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
+    is_cover = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MediaAsset
+        fields = ['id', 'display_url', 'thumbnail_url', 'is_cover']
+
+    def get_is_cover(self, obj):
+        try:
+            return getattr(obj, 'cover_for_gallery', None) is not None or (
+                hasattr(obj, 'gallery') and obj.gallery and obj.gallery.cover_photo_id == obj.id
+            )
+        except Exception:
+            return False
+
+    def get_display_url(self, obj):
+        request = self.context.get('request')
+        img = getattr(obj, 'display_file', None) or getattr(obj, 'thumbnail_file', None)
+        if not img and hasattr(obj, 'file'):
+            img = obj.file
+        return request.build_absolute_uri(img.url) if img and hasattr(img, 'url') and request else None
+
+    def get_thumbnail_url(self, obj):
+        request = self.context.get('request')
+        img = getattr(obj, 'thumbnail_file', None) or getattr(obj, 'display_file', None)
+        if not img and hasattr(obj, 'file'):
+            img = obj.file
+        return request.build_absolute_uri(img.url) if img and hasattr(img, 'url') and request else None
+
+
 class GalleryDetailSerializer(serializers.ModelSerializer):
     """
     GET /api/v1/galleries/{slug}/
     Returns complete gallery settings. Protects password hash.
     """
     cover_url = serializers.SerializerMethodField()
-    photo_count = serializers.IntegerField(read_only=True)
-    is_downloadable = serializers.BooleanField(source='allow_download', read_only=True)
+    photo_count = serializers.IntegerField(read_only=True, default=0)
+    is_downloadable = serializers.BooleanField(source='allow_download', read_only=True, default=False)
     has_password = serializers.SerializerMethodField()
+    photos = serializers.SerializerMethodField()
     
-    # NEW: Scoped photographer metadata mappings
-    owner_username = serializers.CharField(source='photographer.username', read_only=True)
-    photographer_username = serializers.CharField(source='photographer.username', read_only=True)
+    owner_username = serializers.CharField(source='photographer.username', read_only=True, default='')
+    photographer_username = serializers.CharField(source='photographer.username', read_only=True, default='')
+
     class Meta:
         model = Gallery
         fields = [
-            'id', 'title', 'slug', 'description', 'branding_color', 
+            'id', 'title', 'slug', 'description', 'branding_color',
             'cover_url', 'photo_count', 'is_downloadable', 
             'is_active', 'event_date', 'expires_at', 'is_published', 'has_password', 
             'owner_username', 'photographer_username',
-            'watermark_enabled',
+            'watermark_enabled', 'photos',
             'password_hash', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
@@ -97,23 +130,44 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
             'password_hash': {'write_only': True},
         }
 
+    def get_photos(self, obj):
+        try:
+            # 1. Try all common reverse relationship names from Gallery -> MediaAsset
+            for rel_name in ['assets', 'photos', 'media', 'media_assets', 'mediaasset_set']:
+                manager = getattr(obj, rel_name, None)
+                if manager and hasattr(manager, 'all'):
+                    qs = manager.all()
+                    if qs.exists():
+                        if hasattr(qs.model, 'is_active'):
+                            qs = qs.filter(is_active=True)
+                        return MediaAssetSimpleSerializer(qs[:20], many=True, context=self.context).data
+
+            # 2. Try direct filtering via MediaAsset model fields if they point to gallery
+            for fk_field in ['gallery', 'collection', 'folder']:
+                if hasattr(MediaAsset, fk_field):
+                    qs = MediaAsset.objects.filter(**{fk_field: obj})
+                    if qs.exists():
+                        if hasattr(MediaAsset, 'is_active'):
+                            qs = qs.filter(is_active=True)
+                        return MediaAssetSimpleSerializer(qs[:20], many=True, context=self.context).data
+        except Exception:
+            pass
+        return []
+
     def get_cover_url(self, obj):
         request = self.context.get('request')
         cover = obj.cover_photo
         if not cover or not request:
             return None
         image_field = (
-            cover.display_file
-            if cover.media_type == MediaAsset.MediaType.IMAGE
-            else cover.poster_image
+            getattr(cover, 'display_file', None) or getattr(cover, 'thumbnail_file', None) or getattr(cover, 'file', None)
         )
         if not image_field:
             return None
-        return request.build_absolute_uri(image_field.url)
+        return request.build_absolute_uri(image_field.url) if hasattr(image_field, 'url') else None
 
     def get_has_password(self, obj):
         return bool(obj.password_hash)
-
 
 class GalleryCreateSerializer(serializers.ModelSerializer):
     """POST /api/v1/galleries/"""
@@ -229,7 +283,7 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Gallery
         fields = [
-            'title', 'description', 'cover_photo',
+            'title', 'description', 'cover_photo', 'design_settings',
             'branding_color','event_date', 'is_password_protected', 'password',
             'is_downloadable', 'watermark_enabled', 'is_published', 'expires_at',
         ]

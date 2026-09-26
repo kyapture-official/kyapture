@@ -1,3 +1,4 @@
+// C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GallerySettingsPage.jsx
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
@@ -14,7 +15,9 @@ export default function GallerySettingsPage() {
 
   const [title, setTitle] = useState(gallery.title);
   const [brandingColor, setBrandingColor] = useState(gallery.branding_color);
-  const [isDownloadable, setIsDownloadable] = useState(gallery.is_downloadable);
+  const [isDownloadable, setIsDownloadable] = useState(
+    gallery.is_downloadable ?? gallery.allow_download ?? false
+  );
   const [password, setPassword] = useState("");
   const [eventDate, setEventDate] = useState(toDateInputValue(gallery.event_date));
   const [expiresAt, setExpiresAt] = useState(toDateInputValue(gallery.expires_at));
@@ -50,7 +53,7 @@ export default function GallerySettingsPage() {
     const payload = {
       title: title.trim(),
       branding_color: brandingColor,
-      is_downloadable: isDownloadable,
+      is_downloadable: isDownloadable, // allow_download ko thau ma yahi lekhne
       watermark_enabled: watermarkEnabled,
       event_date: eventDate || null,
       expires_at: expiresAt || null,
@@ -74,7 +77,7 @@ export default function GallerySettingsPage() {
       setGallery(updated);
       setTitle(updated.title);
       setBrandingColor(updated.branding_color);
-      setIsDownloadable(updated.is_downloadable);
+      setIsDownloadable(updated.allow_download ?? updated.is_downloadable ?? false);
       setHasPassword(updated.has_password);
       setWatermarkEnabled(updated.watermark_enabled);
       toast("Settings saved successfully", "success");
@@ -305,7 +308,7 @@ export default function GallerySettingsPage() {
             <h2 className="font-serif text-lg text-ink mb-2">Download Settings</h2>
             <p className="text-xs text-muted mb-6">Control how clients download photos.</p>
 
-            <div className="space-y-4">
+            <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
               <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
                   <p className="text-sm font-medium text-ink">Allow Downloads</p>
@@ -341,7 +344,17 @@ export default function GallerySettingsPage() {
                   />
                 </div>
               )}
-            </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-100">
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {updating ? "Saving..." : "Save Download Settings"}
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -351,16 +364,28 @@ export default function GallerySettingsPage() {
             <h2 className="font-serif text-lg text-ink mb-2">Favorites</h2>
             <p className="text-xs text-muted mb-6">Let clients mark their favorite photos.</p>
 
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <div>
-                <p className="text-sm font-medium text-ink">Enable Favorites</p>
-                <p className="text-xs text-muted mt-0.5">Clients can heart photos to create a favorites list</p>
+            <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="text-sm font-medium text-ink">Enable Favorites</p>
+                  <p className="text-xs text-muted mt-0.5">Clients can heart photos to create a favorites list</p>
+                </div>
+                <label className="toggle-wrap">
+                  <input type="checkbox" checked={favoritesEnabled} onChange={(e) => setFavoritesEnabled(e.target.checked)} />
+                  <span className="toggle-slider" />
+                </label>
               </div>
-              <label className="toggle-wrap">
-                <input type="checkbox" checked={favoritesEnabled} onChange={(e) => setFavoritesEnabled(e.target.checked)} />
-                <span className="toggle-slider" />
-              </label>
-            </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-100">
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {updating ? "Saving..." : "Save Favorites Settings"}
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -370,16 +395,32 @@ export default function GallerySettingsPage() {
             <h2 className="font-serif text-lg text-ink mb-2">Store</h2>
             <p className="text-xs text-muted mb-6">Enable print sales directly from your gallery.</p>
 
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <div>
-                <p className="text-sm font-medium text-ink">Enable Store</p>
-                <p className="text-xs text-muted mt-0.5">Clients can purchase prints and products</p>
+            <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="text-sm font-medium text-ink">Enable Store</p>
+                  <p className="text-xs text-muted mt-0.5">Clients can purchase prints and products</p>
+                </div>
+                <label className="toggle-wrap">
+                  <input 
+                    type="checkbox" 
+                    checked={storeEnabled} 
+                    onChange={(e) => setStoreEnabled(e.target.checked)} 
+                  />
+                  <span className="toggle-slider" />
+                </label>
               </div>
-              <label className="toggle-wrap">
-                <input type="checkbox" checked={storeEnabled} onChange={(e) => setStoreEnabled(e.target.checked)} />
-                <span className="toggle-slider" />
-              </label>
-            </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-100">
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {updating ? "Saving..." : "Save Store Settings"}
+                </button>
+              </div>
+            </form>
           </div>
         )}
       </div>

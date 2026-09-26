@@ -3,19 +3,9 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDate } from "../../utils/formatters";
 
-const MOCK_PHOTOS = [
-  "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1606216794074-735e91aa2c92?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1591604466107-ec97de577aff?auto=format&fit=crop&w=600&q=80",
-];
-
 export default function ClientPreviewModal({ open, onClose, gallery }) {
   const [showGrid, setShowGrid] = useState(false);
   const [scrolledPastHero, setScrolledPastHero] = useState(false);
-  const [hoveredPhoto, setHoveredPhoto] = useState(null);
   const [favorites, setFavorites] = useState(new Set());
   const [viewMode, setViewMode] = useState("grid");
   const gridRef = useRef(null);
@@ -26,7 +16,6 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
     if (!open) {
       setShowGrid(false);
       setScrolledPastHero(false);
-      setHoveredPhoto(null);
       setFavorites(new Set());
     }
   }, [open]);
@@ -54,22 +43,6 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
     });
   };
 
-  const toggleFavorite = (idx) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
-      return next;
-    });
-  };
-
-  const handleDownload = (idx) => {
-    const link = document.createElement("a");
-    link.href = MOCK_PHOTOS[idx];
-    link.download = `photo-${idx + 1}.jpg`;
-    link.click();
-  };
-
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -81,13 +54,22 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
   if (!open) return null;
 
   const title = gallery?.title || "Collection";
-  const photographer = gallery?.photographer_name || "Photographer";
+  const photographer = gallery?.photographer_name || gallery?.user?.full_name || "Photographer";
   const date = gallery?.event_date || gallery?.created_at;
-  const coverSrc = gallery?.cover_url;
+  
+  // Extract photos list safely
+  const photos = gallery?.photos || [];
+
+  // Dynamic Cover Image logic (matching Client Page)
+  const coverSrc = gallery?.cover_url || gallery?.cover_photo_url || gallery?.cover_photo?.url || (
+    photos.length > 0
+      ? (photos.find(p => p.is_cover)?.display_url || photos.find(p => p.is_cover)?.url || photos[0]?.display_url || photos[0]?.url || photos[0]?.file || photos[0]?.thumbnail_url)
+      : null
+  );
 
   return createPortal(
     <div className="fixed inset-0 z-[100] bg-white flex flex-col">
-      {/* Close button — only visible over the hero */}
+      {/* Close button — top right */}
       <AnimatePresence>
         {!scrolledPastHero && (
           <motion.button
@@ -105,7 +87,7 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
         )}
       </AnimatePresence>
 
-      {/* Sticky Header Bar — locks when past hero */}
+      {/* Sticky Header Bar */}
       <AnimatePresence>
         {scrolledPastHero && (
           <motion.header
@@ -126,26 +108,8 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
                 </p>
               </div>
 
-              {/* Right: action icons */}
-              <div className="flex items-center space-x-6 flex-shrink-0">
-                <HeaderIconButton
-                  active={favorites.size > 0}
-                  activeClass="text-red-500"
-                  onClick={() => {
-                    const first = MOCK_PHOTOS.findIndex((_, i) => !favorites.has(i));
-                    if (first !== -1) toggleFavorite(first);
-                  }}
-                  label="Favorite"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill={favorites.size > 0 ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                  </svg>
-                </HeaderIconButton>
-                <HeaderIconButton onClick={() => {}} label="Download">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
-                </HeaderIconButton>
+              {/* Right: view modes & close */}
+              <div className="flex items-center space-x-4 flex-shrink-0">
                 <HeaderIconButton onClick={handleShare} label="Share">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
@@ -188,8 +152,8 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto"
       >
-        {/* HERO SECTION */}
-        <section ref={heroRef} id="hero" className="relative h-[85vh] w-full overflow-hidden flex-shrink-0">
+        {/* HERO COVER SECTION */}
+        <section ref={heroRef} id="hero" className="relative h-screen min-h-screen w-full overflow-hidden flex-shrink-0">
           <div className="absolute inset-0">
             {coverSrc ? (
               <img src={coverSrc} alt="" className="w-full h-full object-cover" />
@@ -253,69 +217,45 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
             <div className="h-px w-8 bg-ink/15" />
           </div>
 
-          <div className={`max-w-6xl mx-auto gap-3 ${
-            viewMode === "large"
-              ? "grid grid-cols-1 sm:grid-cols-2"
-              : "grid grid-cols-2 md:grid-cols-3"
-          }`}>
-            {MOCK_PHOTOS.map((src, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.4, delay: i * 0.06 }}
-                className={`relative rounded-xl overflow-hidden bg-slate-100 group ${
-                  viewMode === "large" ? "aspect-[4/3]" : "aspect-[3/2]"
-                }`}
-                onMouseEnter={() => setHoveredPhoto(i)}
-                onMouseLeave={() => setHoveredPhoto(null)}
-              >
-                <img
-                  src={src}
-                  alt={`Photo ${i + 1}`}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  loading="lazy"
-                />
-                <div className={`absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent transition-opacity duration-300 ${
-                  hoveredPhoto === i ? "opacity-100" : "opacity-0"
-                }`} />
-                <div className={`absolute top-3 right-3 flex items-center gap-1.5 transition-opacity duration-300 ${
-                  hoveredPhoto === i ? "opacity-100" : "opacity-0"
-                }`}>
-                  <button
-                    onClick={() => toggleFavorite(i)}
-                    className={`p-2 rounded-full backdrop-blur-md transition-all cursor-pointer ${
-                      favorites.has(i)
-                        ? "bg-red-500/90 text-white"
-                        : "bg-white/90 text-slate-600 hover:bg-white hover:text-red-500"
-                    }`}
-                    aria-label="Favorite"
+          {photos.length > 0 ? (
+            <div className={`max-w-6xl mx-auto gap-4 ${
+              viewMode === "large"
+                ? "grid grid-cols-1 sm:grid-cols-2"
+                : "grid grid-cols-2 md:grid-cols-3"
+            }`}>
+              {photos.map((photo, i) => {
+                const src = typeof photo === "string" 
+                  ? photo 
+                  : (photo.display_url || photo.url || photo.file || photo.original_url || photo.thumbnail_url);
+
+                if (!src) return null;
+
+                return (
+                  <motion.div
+                    key={photo.id || i}
+                    initial={{ opacity: 0, y: 12 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ duration: 0.4, delay: i * 0.05 }}
+                    className="relative rounded-xl overflow-hidden bg-slate-100 group aspect-[3/2] shadow-sm hover:shadow-md transition-shadow"
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill={favorites.has(i) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => handleDownload(i)}
-                    className="p-2 rounded-full bg-white/90 text-slate-600 hover:bg-white hover:text-ink backdrop-blur-md transition-all cursor-pointer"
-                    aria-label="Download"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                  </button>
-                </div>
-                <div className={`absolute bottom-3 left-3 transition-opacity duration-300 ${
-                  hoveredPhoto === i ? "opacity-100" : "opacity-0"
-                }`}>
-                  <span className="text-[10px] text-white/80 font-medium bg-black/30 backdrop-blur-sm rounded-full px-2 py-0.5">
-                    {i + 1} / {MOCK_PHOTOS.length}
-                  </span>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                    <img
+                      src={src}
+                      alt={`Photo ${i + 1}`}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="max-w-6xl mx-auto py-20 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <p className="text-sm text-slate-500 font-sans">
+                No photos uploaded yet in this gallery.
+              </p>
+            </div>
+          )}
 
           {/* Back to Top */}
           <div className="max-w-6xl mx-auto mt-16 mb-8 text-center">

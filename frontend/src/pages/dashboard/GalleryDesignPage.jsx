@@ -1,3 +1,4 @@
+// C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GalleryDesignPage.jsx
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
@@ -52,6 +53,7 @@ export default function GalleryDesignPage() {
     thumbSize: saved.thumbSize || "regular",
     gridSpacing: saved.gridSpacing ?? 16,
     gridStyle: saved.gridStyle || "vertical",
+    coverPhoto: saved.coverPhoto || null, 
   });
 
   const [saving, setSaving] = useState(false);
@@ -312,7 +314,13 @@ export default function GalleryDesignPage() {
       <div className="space-y-4">
         <div className="sticky top-24">
           <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Live Preview</h3>
-          <CoverPreview settings={design} gallery={gallery} />
+          <CoverPreview 
+  settings={design} 
+  gallery={{
+    ...gallery,
+    photos: gallery?.photos || [] 
+  }} 
+/>
           <p className="text-[10px] text-muted mt-2 text-center">This is how clients will see your gallery cover</p>
         </div>
       </div>

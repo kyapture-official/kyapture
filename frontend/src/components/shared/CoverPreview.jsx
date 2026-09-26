@@ -1,3 +1,4 @@
+// C:\Users\David\Desktop\kyapture\frontend\src\components\shared\CoverPreview.jsx
 import { formatDate } from "../../utils/formatters";
 
 /**
@@ -44,7 +45,20 @@ export default function CoverPreview({ settings, gallery }) {
 
   const title = gallery?.title || "Collection Title";
   const date = gallery?.event_date || gallery?.created_at;
-  const coverSrc = gallery?.cover_url;
+  const photos = gallery?.photos || [];
+
+  // Find explicit selected photo from design settings or default active cover
+  const selectedCoverPhoto = settings?.coverPhoto 
+    ? photos.find(p => p.id === settings.coverPhoto) 
+    : photos.find(p => p.is_cover);
+
+  const fallbackPhoto = selectedCoverPhoto || photos[0];
+
+  const coverSrc = gallery?.cover_url || (
+    fallbackPhoto
+      ? (fallbackPhoto.display_url || fallbackPhoto.thumbnail_url || fallbackPhoto.url || fallbackPhoto.original_url)
+      : null
+  );
 
   return (
     <div className={`relative w-full aspect-[4/3] rounded-2xl overflow-hidden border border-slate-200 ${theme.bg} transition-all duration-300`}>
