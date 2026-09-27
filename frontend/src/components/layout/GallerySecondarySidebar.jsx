@@ -99,7 +99,7 @@ export default function GallerySecondarySidebar({ basePath, gallery }) {
           </div>
         </div>
 
-        {/* 2. COVER IMAGE */}
+        {/* 2. COVER IMAGE. */}
         <CollectionCover gallery={gallery} />
 
         {/* 3. ICON NAVIGATION */}
