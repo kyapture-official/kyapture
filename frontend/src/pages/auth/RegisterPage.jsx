@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import { validateEmail, validateUsername } from "../../utils/validator";
+import { Camera, Eye, EyeOff } from "lucide-react";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -141,7 +142,7 @@ export default function RegisterPage() {
       <div className="auth-card animate-fadeUp">
         {/* Logo */}
         <div className="auth-card__logo">
-          <div className="auth-card__logo-icon">📸</div>
+          <div className="auth-card__logo-icon"><Camera size={24} strokeWidth={1.8} aria-hidden="true" /></div>
           <div className="auth-card__brand">Kyapture</div>
         </div>
 
@@ -218,7 +219,7 @@ export default function RegisterPage() {
 
           <p id="username-preview" aria-live="polite" className="form-hint" style={{ marginBottom: 16 }}>
             Your gallery link:{" "}
-            <span style={{ fontWeight: 600, color: "var(--ink)" }}>
+            <span style={{ fontWeight: 600, color: "var(--accent-dark)" }}>
               {previewUsername}.kyapture.com
             </span>
           </p>
@@ -268,7 +269,7 @@ export default function RegisterPage() {
                 disabled={loading}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? "🙈" : "👁"}
+                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
               </button>
             </div>
             {errors.password && (

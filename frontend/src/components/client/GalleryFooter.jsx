@@ -11,7 +11,7 @@ export default function GalleryFooter() {
         {/* Back to Top */}
         <button
           onClick={scrollToTop}
-          className="group flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted hover:text-ink border border-slate-200 hover:border-slate-300 rounded-full px-5 py-2.5 transition-all duration-300 hover:shadow-sm"
+          className="group flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted hover:text-ink border border-cream-200 hover:border-cream-300 rounded-full px-5 py-2.5 transition-all duration-300 hover:shadow-sm"
         >
           Back to Top
           <ArrowUp className="w-3 h-3 group-hover:-translate-y-0.5 transition-transform duration-300" />

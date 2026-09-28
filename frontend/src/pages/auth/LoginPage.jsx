@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { validateEmail } from '../../utils/validator'
+import { Camera, Eye, EyeOff } from 'lucide-react'
 
 /**
  * WHAT: Core Authentication Login Portal
@@ -137,7 +138,7 @@ export default function LoginPage() {
       <div className="auth-card animate-fadeUp">
         {/* Logo */}
         <div className="auth-card__logo">
-          <div className="auth-card__logo-icon">📸</div>
+          <div className="auth-card__logo-icon"><Camera size={24} strokeWidth={1.8} aria-hidden="true" /></div>
           <div className="auth-card__brand">Kyapture</div>
         </div>
 
@@ -176,7 +177,7 @@ export default function LoginPage() {
               className={`form-input ${errors.email ? 'error' : ''}`}
               type="email"
               name="email"
-              placeholder="you@example.com"
+              placeholder="david@example.com"
               value={form.email}
               onChange={handleChange}
               autoComplete="email"
@@ -213,7 +214,7 @@ export default function LoginPage() {
                 disabled={loading}
                 aria-label={showPw ? 'Hide password' : 'Show password'}
               >
-                {showPw ? '🙈' : '👁'}
+                {showPw ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
               </button>
             </div>
             {errors.password && (

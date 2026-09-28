@@ -2,6 +2,7 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { Camera } from 'lucide-react'
 
 /**
  * WHAT: Password Recovery Portal
@@ -127,7 +128,7 @@ export default function ForgotPasswordPage() {
 
       <div className="auth-card animate-fadeUp">
         <div className="auth-card__logo">
-          <div className="auth-card__logo-icon">📸</div>
+          <div className="auth-card__logo-icon"><Camera size={24} strokeWidth={1.8} aria-hidden="true" /></div>
           <div className="auth-card__brand">Kyapture</div>
         </div>
 

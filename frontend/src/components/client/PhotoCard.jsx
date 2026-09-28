@@ -71,7 +71,7 @@ export default function PhotoCard({
     <div
       ref={ref}
       onClick={() => !stillProcessing && onPhotoClick?.(index)}
-      className={`group relative w-full overflow-hidden rounded-lg bg-slate-100 mb-4 break-inside-avoid shadow-sm hover:shadow-card-hover transition-shadow duration-300 select-none ${
+      className={`group relative w-full overflow-hidden rounded-lg bg-cream-100 mb-4 break-inside-avoid shadow-sm hover:shadow-card-hover transition-shadow duration-300 select-none ${
         stillProcessing ? "" : "cursor-pointer"
       }`}
       style={{
@@ -86,14 +86,14 @@ export default function PhotoCard({
       {inView ? (
         <>
           {stillProcessing ? (
-            <div className="absolute inset-0 bg-slate-100 animate-pulse flex items-center justify-center">
-              <span className="text-slate-400 text-[10px] font-light select-none">
+            <div className="absolute inset-0 bg-cream-100 animate-pulse flex items-center justify-center">
+              <span className="text-muted text-[10px] font-light select-none">
                 Processing…
               </span>
             </div>
           ) : hasError ? (
-            <div className="absolute inset-0 bg-slate-200 flex flex-col items-center justify-center p-4">
-              <span className="text-slate-400 text-xs font-light select-none pointer-events-none">
+            <div className="absolute inset-0 bg-cream-300 flex flex-col items-center justify-center p-4">
+              <span className="text-muted text-xs font-light select-none pointer-events-none">
                 Unavailable
               </span>
             </div>
@@ -171,7 +171,7 @@ export default function PhotoCard({
           </div>
         </>
       ) : (
-        <div className="w-full h-full bg-slate-100 animate-pulse" />
+        <div className="w-full h-full bg-cream-100 animate-pulse" />
       )}
     </div>
   );

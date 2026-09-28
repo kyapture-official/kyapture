@@ -88,7 +88,7 @@ export default function TopNavBar() {
   const isPublished = collection.status === "PUBLISHED";
 
   return (
-    <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200">
+    <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-cream-200">
       <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-3">
         {/* Left: Breadcrumbs + Status */}
         <div className="flex items-center gap-2 min-w-0">
@@ -98,7 +98,7 @@ export default function TopNavBar() {
           >
             Collections
           </button>
-          <svg className="w-3 h-3 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <svg className="w-3 h-3 text-muted flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
           </svg>
           <span className="text-xs font-semibold text-ink truncate max-w-[200px]">
@@ -114,8 +114,8 @@ export default function TopNavBar() {
                 loading ? "opacity-50 cursor-not-allowed" : ""
               } ${
                 isPublished
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                  : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+                  ? "bg-brand-green-50 text-brand-green-700 border-brand-green-200 hover:bg-brand-green-100"
+                  : "bg-cream-100 text-muted border-cream-200 hover:bg-cream-300"
               }`}
             >
               {loading ? "Saving..." : isPublished ? "Published" : "Draft"}
@@ -124,10 +124,10 @@ export default function TopNavBar() {
               </svg>
             </button>
             {statusOpen && (
-              <div className="absolute top-full mt-1 left-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-40 animate-scale-in z-50">
+              <div className="absolute top-full mt-1 left-0 bg-surface-light border border-cream-200 rounded-xl shadow-lg py-1 w-40 animate-scale-in z-50">
                 <button
                   onClick={handleStatusToggle}
-                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer"
                 >
                   {isPublished ? "Set to Draft" : "Publish Collection"}
                 </button>
@@ -144,7 +144,7 @@ export default function TopNavBar() {
               const evt = new CustomEvent("open-preview");
               window.dispatchEvent(evt);
             }}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-ink/80 hover:text-ink bg-white hover:bg-slate-50 text-xs font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2 border border-cream-200 text-ink/80 hover:text-ink bg-surface-light hover:bg-cream-100 text-xs font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
@@ -157,7 +157,7 @@ export default function TopNavBar() {
           <div className="relative" ref={shareRef}>
             <button
               onClick={() => { setShareOpen(!shareOpen); setMoreOpen(false); }}
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-ink/80 hover:text-ink bg-white hover:bg-slate-50 text-xs font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow"
+              className="flex items-center gap-1.5 px-3 py-2 border border-cream-200 text-ink/80 hover:text-ink bg-surface-light hover:bg-cream-100 text-xs font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
@@ -165,10 +165,10 @@ export default function TopNavBar() {
               Share
             </button>
             {shareOpen && (
-              <div className="absolute top-full mt-1 right-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-48 animate-scale-in z-50">
+              <div className="absolute top-full mt-1 right-0 bg-surface-light border border-cream-200 rounded-xl shadow-lg py-1 w-48 animate-scale-in z-50">
                 <button
                   onClick={() => { addToast({ message: "Share by email coming soon", type: "info" }); setShareOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer flex items-center gap-2"
                 >
                   <svg className="w-3.5 h-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
@@ -177,7 +177,7 @@ export default function TopNavBar() {
                 </button>
                 <button
                   onClick={handleCopyDirectLink}
-                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer flex items-center gap-2"
                 >
                   <svg className="w-3.5 h-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
@@ -186,7 +186,7 @@ export default function TopNavBar() {
                 </button>
                 <button
                   onClick={() => { addToast({ message: "QR code coming soon", type: "info" }); setShareOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer flex items-center gap-2"
                 >
                   <svg className="w-3.5 h-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
@@ -201,30 +201,30 @@ export default function TopNavBar() {
           <div className="relative" ref={moreRef}>
             <button
               onClick={() => { setMoreOpen(!moreOpen); setShareOpen(false); }}
-              className="p-2 border border-slate-200 text-ink/60 hover:text-ink bg-white hover:bg-slate-50 rounded-xl transition-all cursor-pointer shadow-sm"
+              className="p-2 border border-cream-200 text-ink/60 hover:text-ink bg-surface-light hover:bg-cream-100 rounded-xl transition-all cursor-pointer shadow-sm"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
               </svg>
             </button>
             {moreOpen && (
-              <div className="absolute top-full mt-1 right-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-52 animate-scale-in z-50">
-                <button onClick={handleCopyDirectLink} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer">
+              <div className="absolute top-full mt-1 right-0 bg-surface-light border border-cream-200 rounded-xl shadow-lg py-1 w-52 animate-scale-in z-50">
+                <button onClick={handleCopyDirectLink} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
                   Get direct link
                 </button>
-                <button onClick={() => { addToast({ message: "Email history coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer">
+                <button onClick={() => { addToast({ message: "Email history coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
                   View email history
                 </button>
-                <button onClick={() => { addToast({ message: "Presets coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer">
+                <button onClick={() => { addToast({ message: "Presets coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
                   Manage presets
                 </button>
-                <button onClick={() => { addToast({ message: "Move coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer">
+                <button onClick={() => { addToast({ message: "Move coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
                   Move to...
                 </button>
-                <button onClick={() => { addToast({ message: "Duplicate coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-slate-50 transition-colors cursor-pointer">
+                <button onClick={() => { addToast({ message: "Duplicate coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
                   Duplicate
                 </button>
-                <div className="border-t border-slate-100 my-1" />
+                <div className="border-t border-cream-200 my-1" />
                 <button onClick={handleDelete} className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors cursor-pointer">
                   Delete collection
                 </button>

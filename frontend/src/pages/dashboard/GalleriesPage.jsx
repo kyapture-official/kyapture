@@ -159,7 +159,7 @@ export default function GalleriesPage() {
   if (loading) {
     return (
       <div className="flex h-[60vh] w-full items-center justify-center">
-        <Spinner size="lg" className="text-slate-400" />
+        <Spinner size="lg" className="text-muted" />
       </div>
     );
   }
@@ -177,7 +177,7 @@ export default function GalleriesPage() {
         <button
           type="button"
           onClick={() => setOpenCreate(true)}
-          className="sm:self-start inline-flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 active:scale-[0.98] text-white text-sm font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow-md"
+          className="sm:self-start inline-flex items-center gap-2 px-5 py-2.5 bg-brand-green-600 hover:bg-brand-green-700 active:scale-[0.98] text-white text-sm font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow-md"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -190,11 +190,11 @@ export default function GalleriesPage() {
       <div className="relative max-w-md">
         <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border transition-all duration-200 ${
           searchFocused
-            ? 'border-teal-400/40 bg-white shadow-glow-teal ring-2 ring-teal-500/10'
-            : 'border-slate-200 bg-white hover:border-slate-300'
+            ? 'border-brand-green-400/40 bg-surface-light shadow-glow-brand ring-2 ring-brand-green-500/10'
+            : 'border-cream-200 bg-surface-light hover:border-cream-300'
         }`}>
           <svg
-            className="w-4 h-4 text-slate-400 flex-shrink-0"
+            className="w-4 h-4 text-muted flex-shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -211,17 +211,17 @@ export default function GalleriesPage() {
             onBlur={() => setSearchFocused(false)}
             placeholder="Search collections..."
             aria-label="Search collections"
-            className="flex-1 bg-transparent border-none outline-none text-sm text-ink placeholder:text-slate-400 font-sans"
+            className="flex-1 bg-transparent border-none outline-none text-sm text-ink placeholder:text-muted font-sans"
           />
           {searching && (
-            <Spinner className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            <Spinner className="w-4 h-4 text-muted flex-shrink-0" />
           )}
           {!searching && searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
               aria-label="Clear search"
-              className="text-slate-400 hover:text-ink cursor-pointer text-xs p-0.5 rounded-md hover:bg-slate-100 transition-colors"
+              className="text-muted hover:text-ink cursor-pointer text-xs p-0.5 rounded-md hover:bg-cream-100 transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -243,13 +243,13 @@ export default function GalleriesPage() {
 
       {/* ── EMPTY STATE ── */}
       {galleries.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-          <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-7 h-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+        <div className="text-center py-20 bg-surface-light rounded-2xl border-2 border-dashed border-cream-200">
+          <div className="w-14 h-14 rounded-full bg-cream-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
             </svg>
           </div>
-          <p className="text-sm text-slate-500 font-light mb-4">
+          <p className="text-sm text-muted font-light mb-4">
             {searchQuery
               ? `No collections match "${searchQuery}".`
               : "No collections yet. Create your first gallery to begin."}
@@ -257,7 +257,7 @@ export default function GalleriesPage() {
           {!searchQuery && (
             <button
               onClick={() => setOpenCreate(true)}
-              className="inline-flex items-center gap-2 bg-teal-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 bg-brand-green-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-green-700 transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -278,10 +278,10 @@ export default function GalleriesPage() {
             return (
               <div
                 key={gallery.id}
-                className="group bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-card-hover hover:border-slate-300 transition-all duration-300 flex flex-col h-full"
+                className="group bg-surface-light border border-cream-200 rounded-2xl overflow-hidden hover:shadow-card-hover hover:border-cream-300 transition-all duration-300 flex flex-col h-full"
               >
                 {/* Cover area */}
-                <div className="h-44 bg-slate-100 overflow-hidden relative flex-shrink-0">
+                <div className="h-44 bg-cream-100 overflow-hidden relative flex-shrink-0">
                   {gallery.cover_url ? (
                     <img
                       src={gallery.cover_url}
@@ -305,7 +305,7 @@ export default function GalleriesPage() {
                   {gallery.has_password && (
                     <div className="absolute top-3 right-3 bg-white/90 rounded-lg p-1.5 shadow-sm backdrop-blur-sm">
                       <svg
-                        className="w-4 h-4 text-slate-700"
+                        className="w-4 h-4 text-muted"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -325,20 +325,20 @@ export default function GalleriesPage() {
                 {/* Card body */}
                 <div className="p-5 flex flex-col flex-1 justify-between gap-4">
                   <div className="space-y-1.5">
-                    <h3 className="font-serif text-lg font-bold text-ink group-hover:text-slate-700 transition-colors line-clamp-1">
+                    <h3 className="font-serif text-lg font-bold text-ink group-hover:text-muted transition-colors line-clamp-1">
                       {gallery.title}
                     </h3>
                     <div className="flex items-center gap-1.5">
                       <span
                         className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                           gallery.is_published
-                            ? "bg-emerald-500"
+                            ? "bg-brand-green-500"
                             : gallery.photo_count > 0
                               ? "bg-slate-400"
                               : "bg-slate-300"
                         }`}
                       />
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                      <p className="text-[10px] text-muted uppercase tracking-wider font-semibold">
                         {gallery.photo_count || 0} image
                         {gallery.photo_count !== 1 ? "s" : ""}
                       </p>
@@ -351,7 +351,7 @@ export default function GalleriesPage() {
                       onClick={() =>
                         navigate(`/dashboard/galleries/${gallery.slug}`)
                       }
-                      className="flex-1 py-2.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-ink text-xs font-medium rounded-xl transition-all cursor-pointer bg-white"
+                      className="flex-1 py-2.5 border border-cream-200 hover:border-cream-300 hover:bg-cream-100 text-ink text-xs font-medium rounded-xl transition-all cursor-pointer bg-surface-light"
                     >
                       Manage
                     </button>
@@ -360,7 +360,7 @@ export default function GalleriesPage() {
                       onClick={() => handleCopyLink(gallery)}
                       title="Copy public gallery link"
                       aria-label="Copy public gallery link"
-                      className="px-3 py-2.5 border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-ink hover:bg-slate-50 rounded-xl transition-all cursor-pointer bg-white"
+                      className="px-3 py-2.5 border border-cream-200 hover:border-cream-300 text-muted hover:text-ink hover:bg-cream-100 rounded-xl transition-all cursor-pointer bg-surface-light"
                     >
                       <svg
                         className="w-3.5 h-3.5"

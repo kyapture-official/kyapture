@@ -132,14 +132,14 @@ export default function GallerySettingsPage() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2 space-y-6">
         {/* Tab bar */}
-        <div className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto">
+        <div className="flex gap-1 bg-cream-100 rounded-xl p-1 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex-none px-4 py-2.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? "bg-white text-ink shadow-sm"
+                  ? "bg-surface-light text-ink shadow-sm"
                   : "text-muted hover:text-ink"
               }`}
             >
@@ -156,7 +156,7 @@ export default function GallerySettingsPage() {
 
         {/* General Tab */}
         {activeTab === "general" && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
+          <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
             <h2 className="font-serif text-lg text-ink mb-6">General Settings</h2>
             <form onSubmit={handleSaveSettings} noValidate className="space-y-5">
               <div className="flex flex-col gap-1">
@@ -168,12 +168,12 @@ export default function GallerySettingsPage() {
                   maxLength={100}
                   onChange={(e) => setTitle(e.target.value)}
                   disabled={updating}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
                   required
                 />
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+              <div className="p-4 bg-cream-100 rounded-xl border border-cream-200 text-xs">
                 <span className="font-semibold text-muted uppercase tracking-wider block text-[10px]">Custom URL</span>
                 <div className="mt-2 flex items-center gap-2">
                   <input
@@ -181,7 +181,7 @@ export default function GallerySettingsPage() {
                     value={customUrl}
                     onChange={(e) => setCustomUrl(e.target.value)}
                     disabled={updating}
-                    className="flex-1 px-2 py-1.5 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all font-mono text-ink bg-white disabled:opacity-50"
+                    className="flex-1 px-2 py-1.5 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all font-mono text-ink bg-surface-light disabled:opacity-50"
                     placeholder="your-username"
                   />
                 </div>
@@ -200,7 +200,7 @@ export default function GallerySettingsPage() {
                   onChange={(e) => setCategoryTags(e.target.value)}
                   disabled={updating}
                   placeholder="e.g. wedding, portraits, outdoor"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
                 />
               </div>
 
@@ -212,7 +212,7 @@ export default function GallerySettingsPage() {
                   value={eventDate}
                   onChange={(e) => setEventDate(e.target.value)}
                   disabled={updating}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
                 />
               </div>
 
@@ -224,7 +224,7 @@ export default function GallerySettingsPage() {
                   value={expiresAt}
                   onChange={(e) => setExpiresAt(e.target.value)}
                   disabled={updating}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
                 />
                 <span className="text-[11px] text-muted">After this date, clients lose access.</span>
               </div>
@@ -238,7 +238,7 @@ export default function GallerySettingsPage() {
                     checked={watermarkEnabled}
                     onChange={(e) => setWatermarkEnabled(e.target.checked)}
                     disabled={updating}
-                    className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer disabled:cursor-not-allowed"
+                    className="w-4 h-4 rounded border-cream-300 text-brand-green-600 focus:ring-brand-green-500 cursor-pointer disabled:cursor-not-allowed"
                   />
                   <label className="text-xs text-muted cursor-pointer select-none" htmlFor="gallery-watermark">
                     Apply copyright watermark to photos
@@ -246,11 +246,11 @@ export default function GallerySettingsPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-slate-100">
+              <div className="flex justify-end pt-4 border-t border-cream-200">
                 <button
                   type="submit"
                   disabled={updating || !title.trim()}
-                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {updating ? "Saving..." : "Save Settings"}
                 </button>
@@ -261,12 +261,12 @@ export default function GallerySettingsPage() {
 
         {/* Privacy Tab */}
         {activeTab === "privacy" && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
+          <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
             <h2 className="font-serif text-lg text-ink mb-2">Privacy & Security</h2>
             <p className="text-xs text-muted mb-6">Control access to your gallery.</p>
 
             <div className="space-y-5">
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
                 <div>
                   <p className="text-sm font-medium text-ink">Password Protection</p>
                   <p className="text-xs text-muted mt-0.5">Require a password to view the gallery</p>
@@ -288,12 +288,12 @@ export default function GallerySettingsPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={updating}
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all disabled:opacity-50"
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
                 />
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 border border-slate-200 text-ink text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 border border-cream-200 text-ink text-sm font-medium rounded-lg hover:bg-cream-100 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {password ? "Save" : hasPassword ? "Clear" : "Set"}
                 </button>
@@ -304,12 +304,12 @@ export default function GallerySettingsPage() {
 
         {/* Download Tab */}
         {activeTab === "download" && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
+          <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
             <h2 className="font-serif text-lg text-ink mb-2">Download Settings</h2>
             <p className="text-xs text-muted mb-6">Control how clients download photos.</p>
 
             <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
                 <div>
                   <p className="text-sm font-medium text-ink">Allow Downloads</p>
                   <p className="text-xs text-muted mt-0.5">Let clients download high-resolution photos</p>
@@ -320,7 +320,7 @@ export default function GallerySettingsPage() {
                 </label>
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
                 <div>
                   <p className="text-sm font-medium text-ink">Download PIN</p>
                   <p className="text-xs text-muted mt-0.5">Require a PIN to download photos</p>
@@ -340,16 +340,16 @@ export default function GallerySettingsPage() {
                     onChange={(e) => setDownloadPin(e.target.value)}
                     placeholder="Enter 4-6 digit PIN"
                     maxLength={6}
-                    className="w-full max-w-xs px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/10 transition-all font-mono"
+                    className="w-full max-w-xs px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all font-mono"
                   />
                 </div>
               )}
 
-              <div className="flex justify-end pt-4 border-t border-slate-100">
+              <div className="flex justify-end pt-4 border-t border-cream-200">
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {updating ? "Saving..." : "Save Download Settings"}
                 </button>
@@ -360,12 +360,12 @@ export default function GallerySettingsPage() {
 
         {/* Favorites Tab */}
         {activeTab === "favorites" && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
+          <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
             <h2 className="font-serif text-lg text-ink mb-2">Favorites</h2>
             <p className="text-xs text-muted mb-6">Let clients mark their favorite photos.</p>
 
             <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
                 <div>
                   <p className="text-sm font-medium text-ink">Enable Favorites</p>
                   <p className="text-xs text-muted mt-0.5">Clients can heart photos to create a favorites list</p>
@@ -376,11 +376,11 @@ export default function GallerySettingsPage() {
                 </label>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-slate-100">
+              <div className="flex justify-end pt-4 border-t border-cream-200">
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {updating ? "Saving..." : "Save Favorites Settings"}
                 </button>
@@ -391,12 +391,12 @@ export default function GallerySettingsPage() {
 
         {/* Store Tab */}
         {activeTab === "store" && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
+          <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
             <h2 className="font-serif text-lg text-ink mb-2">Store</h2>
             <p className="text-xs text-muted mb-6">Enable print sales directly from your gallery.</p>
 
             <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
                 <div>
                   <p className="text-sm font-medium text-ink">Enable Store</p>
                   <p className="text-xs text-muted mt-0.5">Clients can purchase prints and products</p>
@@ -411,11 +411,11 @@ export default function GallerySettingsPage() {
                 </label>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-slate-100">
+              <div className="flex justify-end pt-4 border-t border-cream-200">
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {updating ? "Saving..." : "Save Store Settings"}
                 </button>
@@ -427,9 +427,9 @@ export default function GallerySettingsPage() {
 
       {/* Right sidebar — preview */}
       <div className="space-y-8">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden p-6 flex flex-col items-center justify-center text-center py-10 min-h-[300px]">
+        <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card overflow-hidden p-6 flex flex-col items-center justify-center text-center py-10 min-h-[300px]">
           {gallery.cover_url ? (
-            <img src={gallery.cover_url} alt="" className="w-24 h-24 rounded-full object-cover border border-slate-100 mb-4 shadow-sm" />
+            <img src={gallery.cover_url} alt="" className="w-24 h-24 rounded-full object-cover border border-cream-200 mb-4 shadow-sm" />
           ) : (
             <div className="w-16 h-16 rounded-full flex items-center justify-center text-white/30" style={{ backgroundColor: brandingColor }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -440,7 +440,7 @@ export default function GallerySettingsPage() {
           )}
           <h3 className="text-sm font-semibold text-ink">{gallery.title}</h3>
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border mt-2 ${
-            gallery.is_published ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
+            gallery.is_published ? "bg-brand-green-50 text-brand-green-700 border-brand-green-200" : "bg-amber-50 text-amber-700 border-amber-200"
           }`}>
             {gallery.is_published ? "Published" : "Draft"}
           </span>

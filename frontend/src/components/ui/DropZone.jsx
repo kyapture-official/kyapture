@@ -155,12 +155,12 @@ export default function DropZone({
         'relative cursor-pointer rounded-2xl border-2 border-dashed p-10',
         'flex flex-col items-center justify-center gap-3',
         'transition-colors duration-200',
-        'focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2',
+        'focus:outline-none focus:ring-2 focus:ring-brand-green-500 focus:ring-offset-2',
         disabled
-          ? 'border-slate-200 bg-slate-50/50 opacity-50 cursor-not-allowed'
+          ? 'border-cream-200 bg-cream-100/50 opacity-50 cursor-not-allowed'
           : isDragging
-            ? 'border-teal-400 bg-teal-50'
-            : 'border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100',
+            ? 'border-brand-green-400 bg-brand-green-50'
+            : 'border-cream-300 bg-cream-100 hover:border-cream-400 hover:bg-cream-100',
       ].join(' ')}
     >
       <input
@@ -175,9 +175,9 @@ export default function DropZone({
 
       {children ?? (
         <>
-          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+          <div className="w-12 h-12 rounded-full bg-cream-100 flex items-center justify-center border border-cream-200">
             <svg
-              className="w-6 h-6 text-slate-400"
+              className="w-6 h-6 text-muted"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -192,8 +192,8 @@ export default function DropZone({
             </svg>
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-slate-900">Drop photos here</p>
-            <p className="text-xs text-slate-500 mt-1">or click to browse — JPG, PNG, WEBP</p>
+            <p className="text-sm font-medium text-ink">Drop photos here</p>
+            <p className="text-xs text-muted mt-1">or click to browse — JPG, PNG, WEBP</p>
           </div>
         </>
       )}

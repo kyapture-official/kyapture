@@ -1,7 +1,7 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/ui/Badge.jsx
 const variants = {
-  default: 'bg-slate-100 text-ink border border-slate-200',
-  success: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+  default: 'bg-cream-100 text-ink border border-cream-200',
+  success: 'bg-brand-green-100 text-brand-green-700 border border-brand-green-200',
   warning: 'bg-amber-100 text-amber-700 border border-amber-200',
   danger:  'bg-red-100 text-red-600 border border-red-200',
   info:    'bg-sky-100 text-sky-700 border border-sky-200',

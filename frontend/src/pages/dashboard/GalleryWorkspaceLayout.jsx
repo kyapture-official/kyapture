@@ -99,7 +99,7 @@ function WorkspaceInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-cream-100">
         <Spinner size="lg" />
       </div>
     );
@@ -107,7 +107,7 @@ function WorkspaceInner() {
 
   if (errorMsg && !gallery) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-6 text-center gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-cream-100 px-6 text-center gap-4">
         <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
           <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
@@ -122,7 +122,7 @@ function WorkspaceInner() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-cream-100">
       <GallerySecondarySidebar basePath={`/dashboard/galleries/${id}`} gallery={gallery} />
 
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">

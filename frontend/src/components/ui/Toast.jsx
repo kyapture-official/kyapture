@@ -39,15 +39,15 @@ if (typeof document !== 'undefined') {
 
 // ── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const TYPE_STYLES = {
-  success: 'bg-emerald-50  border-emerald-200 text-emerald-900',
+  success: 'bg-brand-green-50  border-brand-green-200 text-brand-green-900',
   error:   'bg-red-50      border-red-200     text-red-900',
   warning: 'bg-amber-50    border-amber-200   text-amber-900',
-  info:    'bg-slate-50 border-slate-200 text-ink',
-  loading: 'bg-white border-slate-200 text-ink',
+  info:    'bg-cream-100 border-cream-200 text-ink',
+  loading: 'bg-surface-light border-cream-200 text-ink',
 }
 
 const TYPE_ICON_COLOR = {
-  success: 'text-emerald-500',
+  success: 'text-brand-green-500',
   error:   'text-red-600',
   warning: 'text-amber-600',
   info:    'text-ink',

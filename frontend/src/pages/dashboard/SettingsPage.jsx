@@ -140,10 +140,10 @@ export default function SettingsPage() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* Profile Card */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card">
+          <div className="bg-surface-light rounded-2xl border border-cream-200 p-6 shadow-card">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center">
-                <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+              <div className="w-9 h-9 rounded-xl bg-brand-green-50 flex items-center justify-center">
+                <svg className="w-5 h-5 text-brand-green-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                 </svg>
               </div>
@@ -194,7 +194,7 @@ export default function SettingsPage() {
                   name="bio"
                   value={profile.bio}
                   onChange={handleProfileChange}
-                  className="w-full px-4 py-2.5 bg-slate-50/20 border border-slate-200 rounded-xl text-sm text-ink placeholder:text-slate-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 resize-none transition-all duration-200"
+                  className="w-full px-4 py-2.5 bg-cream-100/20 border border-cream-200 rounded-xl text-sm text-ink placeholder:text-muted focus:outline-none focus:border-brand-green-500 focus:ring-2 focus:ring-brand-green-500/10 resize-none transition-all duration-200"
                   rows={4}
                   placeholder="Tell your clients about yourself..."
                 />
@@ -213,7 +213,7 @@ export default function SettingsPage() {
                     value={profile.branding_color}
                     onChange={handleProfileChange}
                     disabled={savingProfile}
-                    className="w-10 h-10 border border-slate-200 rounded-xl cursor-pointer bg-transparent"
+                    className="w-10 h-10 border border-cream-200 rounded-xl cursor-pointer bg-transparent"
                   />
                   <input
                     type="text"
@@ -221,7 +221,7 @@ export default function SettingsPage() {
                     value={profile.branding_color}
                     onChange={handleProfileChange}
                     disabled={savingProfile}
-                    className="w-24 px-3 py-1.5 text-sm uppercase rounded-xl border border-slate-200 bg-white font-mono focus:outline-none focus:border-teal-500"
+                    className="w-24 px-3 py-1.5 text-sm uppercase rounded-xl border border-cream-200 bg-surface-light font-mono focus:outline-none focus:border-brand-green-500"
                   />
                 </div>
                 <p className="text-[10px] text-muted font-light mt-1 leading-relaxed">
@@ -231,11 +231,11 @@ export default function SettingsPage() {
 
               {/* Email */}
               <div className="pt-2">
-                <p className="text-xs text-slate-500 mb-1 select-none">Account Email (cannot be changed)</p>
-                <p className="text-sm text-ink bg-slate-50 px-4 py-3 rounded-xl border border-slate-200/50 font-mono w-fit">{user?.email}</p>
+                <p className="text-xs text-muted mb-1 select-none">Account Email (cannot be changed)</p>
+                <p className="text-sm text-ink bg-cream-100 px-4 py-3 rounded-xl border border-cream-200/50 font-mono w-fit">{user?.email}</p>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <div className="pt-4 border-t border-cream-200 flex justify-end">
                 <Button type="submit" loading={savingProfile}>
                   Save Profile Settings
                 </Button>
@@ -244,7 +244,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Password Card */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card">
+          <div className="bg-surface-light rounded-2xl border border-cream-200 p-6 shadow-card">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
                 <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
@@ -281,7 +281,7 @@ export default function SettingsPage() {
                 error={pwErrors.new_password2?.[0]}
                 required
               />
-              <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <div className="pt-4 border-t border-cream-200 flex justify-end">
                 <Button type="submit" loading={savingPw}>
                   Change Password
                 </Button>
@@ -293,7 +293,7 @@ export default function SettingsPage() {
 
         {/* Right Side: Logo Upload */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card flex flex-col items-center text-center space-y-6">
+          <div className="bg-surface-light rounded-2xl border border-cream-200 p-6 shadow-card flex flex-col items-center text-center space-y-6">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
                 <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
@@ -304,11 +304,11 @@ export default function SettingsPage() {
             </div>
 
             {/* Logo Viewer */}
-            <div className="relative w-32 h-32 rounded-2xl border border-slate-200 bg-slate-50/20 flex items-center justify-center overflow-hidden">
+            <div className="relative w-32 h-32 rounded-2xl border border-cream-200 bg-cream-100/20 flex items-center justify-center overflow-hidden">
               {logoURL ? (
                 <img src={logoURL} alt={profile.display_name} className="w-full h-full object-contain p-3 select-none pointer-events-none" />
               ) : (
-                <svg className="w-10 h-10 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-10 h-10 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               )}
@@ -321,7 +321,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-3 w-full">
-              <label className="block w-full text-center px-4 py-2.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 bg-white text-ink text-xs font-medium tracking-wide uppercase rounded-xl cursor-pointer transition-all">
+              <label className="block w-full text-center px-4 py-2.5 border border-cream-200 hover:border-cream-300 hover:bg-cream-100 bg-surface-light text-ink text-xs font-medium tracking-wide uppercase rounded-xl cursor-pointer transition-all">
                 Upload New Logo
                 <input
                   type="file"

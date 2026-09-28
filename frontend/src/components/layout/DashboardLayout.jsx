@@ -201,12 +201,12 @@ export default function DashboardLayout() {
   )?.name || 'Dashboard'
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-cream-bg flex">
 
       {/* ── MOBILE NAV BAR ── */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 z-30 w-full fixed top-0 left-0 right-0">
+      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-surface-light border-b border-cream-200 z-30 w-full fixed top-0 left-0 right-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-brand-green-600 flex items-center justify-center">
             <span className="text-white font-bold text-xs">K</span>
           </div>
           <span className="font-serif text-lg font-medium text-ink tracking-tight">Kyapture</span>
@@ -215,7 +215,7 @@ export default function DashboardLayout() {
           ref={toggleButtonRef}
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="p-2 rounded-xl text-slate-500 hover:text-ink hover:bg-slate-100 transition-all cursor-pointer"
+          className="p-2 rounded-xl text-muted hover:text-ink hover:bg-cream-100 transition-all cursor-pointer"
           aria-label="Open navigation menu"
           aria-haspopup="dialog"
           aria-expanded={mobileMenuOpen}
@@ -227,21 +227,21 @@ export default function DashboardLayout() {
       {/* ── MOBILE SLIDE-OUT DRAWER ── */}
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Navigation menu">
-          <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} aria-hidden="true" />
-          <div ref={mobileNavRef} className="relative w-full max-w-xs bg-slate-900 h-full shadow-2xl flex flex-col z-10 animate-slide-right">
+          <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} aria-hidden="true" />
+          <div ref={mobileNavRef} className="relative w-full max-w-xs bg-parchment h-full shadow-2xl flex flex-col z-10 animate-slide-right">
             {/* Drawer Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-cream-200">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-brand-green-600 flex items-center justify-center">
                   <span className="text-white font-bold text-xs">K</span>
                 </div>
-                <span className="font-serif text-lg font-medium text-white">Kyapture</span>
+                <span className="font-serif text-lg font-medium text-ink">Kyapture</span>
               </div>
               <button
                 ref={closeButtonRef}
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-cream-200 transition-colors cursor-pointer"
                 aria-label="Close menu"
               >
                 {Icons.Close}
@@ -258,15 +258,15 @@ export default function DashboardLayout() {
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative ${
                       isActive
-                        ? 'bg-teal-500/10 text-teal-400 font-semibold'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'bg-brand-green-100 text-brand-green-700 font-semibold'
+                        : 'text-muted hover:text-ink hover:bg-cream-200/70'
                     }`
                   }
                 >
                   {({ isActive }) => (
                     <>
                       {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-teal-400" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-brand-green-600" />
                       )}
                       {item.icon}
                       <span>{item.name}</span>
@@ -277,21 +277,21 @@ export default function DashboardLayout() {
             </nav>
 
             {/* Profile & Logout */}
-            <div className="px-3 py-4 border-t border-white/10">
+            <div className="px-3 py-4 border-t border-cream-200">
               <div className="flex items-center justify-between gap-3 px-2">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-brand-green-600 flex items-center justify-center flex-shrink-0">
                     <span className="text-white text-xs font-semibold">{initials}</span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white leading-none truncate">{displayName}</p>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-1 block">{planLabel}</span>
+                    <p className="text-sm font-semibold text-ink leading-none truncate">{displayName}</p>
+                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider mt-1 block">{planLabel}</span>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => logout()}
-                  className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer shrink-0"
+                  className="p-2 rounded-lg text-muted hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer shrink-0"
                   aria-label="Logout session"
                 >
                   {Icons.Logout}
@@ -304,18 +304,18 @@ export default function DashboardLayout() {
 
       {/* ── DESKTOP SIDEBAR ── */}
       <aside
-        className={`hidden md:flex flex-col justify-between bg-slate-900 h-screen sticky top-0 shrink-0 transition-all duration-300 ease-out ${
+        className={`hidden md:flex flex-col justify-between bg-parchment border-r border-cream-200 h-screen sticky top-0 shrink-0 transition-all duration-300 ease-out ${
           collapsed ? 'w-[72px]' : 'w-[250px]'
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`px-4 py-4 border-b border-white/10 flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-            <div className="w-9 h-9 rounded-xl bg-teal-500 flex items-center justify-center flex-shrink-0">
+          <div className={`px-4 py-4 border-b border-cream-200 flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+            <div className="w-9 h-9 rounded-xl bg-brand-green-600 flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-sm">K</span>
             </div>
             {!collapsed && (
-              <span className="font-serif text-lg font-medium text-white tracking-tight">Kyapture</span>
+              <span className="font-serif text-lg font-medium text-ink tracking-tight">Kyapture</span>
             )}
           </div>
 
@@ -324,7 +324,7 @@ export default function DashboardLayout() {
             {navSections.map((section) => (
               <div key={section.label}>
                 {!collapsed && (
-                  <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest uppercase text-slate-500">
+                  <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest uppercase text-muted">
                     {section.label}
                   </p>
                 )}
@@ -343,18 +343,18 @@ export default function DashboardLayout() {
                             collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'
                           } ${
                             isActive
-                              ? 'bg-teal-500/10 text-teal-400 font-semibold'
-                              : 'text-slate-400 hover:text-white hover:bg-white/5'
+                              ? 'bg-brand-green-100 text-brand-green-700 font-semibold'
+                              : 'text-muted hover:text-ink hover:bg-cream-200/70'
                           }`
                         }
                       >
                         {({ isActive }) => (
                           <>
                             {isActive && !collapsed && (
-                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-teal-400" />
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-brand-green-600" />
                             )}
                             {isActive && collapsed && (
-                              <div className="absolute inset-x-0 -bottom-2.5 mx-auto w-5 h-[2px] rounded-full bg-teal-400" />
+                              <div className="absolute inset-x-0 -bottom-2.5 mx-auto w-5 h-[2px] rounded-full bg-brand-green-600" />
                             )}
                             {item.icon}
                             {!collapsed && <span>{item.name}</span>}
@@ -373,7 +373,7 @@ export default function DashboardLayout() {
             <button
               type="button"
               onClick={() => setCollapsed(c => !c)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-muted hover:text-ink hover:bg-cream-200/70 transition-all cursor-pointer ${
                 collapsed ? 'justify-center' : ''
               }`}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -386,26 +386,26 @@ export default function DashboardLayout() {
           </div>
 
           {/* User Profile */}
-          <div className={`px-3 py-3 border-t border-white/10 ${collapsed ? 'px-2' : ''}`}>
+          <div className={`px-3 py-3 border-t border-cream-200 ${collapsed ? 'px-2' : ''}`}>
             {collapsed ? (
               <div className="flex justify-center py-1">
-                <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-teal-400/30 transition-all" title={displayName}>
+                <div className="w-9 h-9 rounded-full bg-brand-green-600 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-brand-green-400/40 transition-all" title={displayName}>
                   <span className="text-white text-xs font-semibold">{initials}</span>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-3 px-2">
-                <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-brand-green-600 flex items-center justify-center flex-shrink-0">
                   <span className="text-white text-xs font-semibold">{initials}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white leading-none truncate">{displayName}</p>
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-1 block">{planLabel}</span>
+                  <p className="text-sm font-semibold text-ink leading-none truncate">{displayName}</p>
+                  <span className="text-[10px] font-semibold text-muted uppercase tracking-wider mt-1 block">{planLabel}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => logout()}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer shrink-0"
+                  className="p-1.5 rounded-lg text-muted hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer shrink-0"
                   aria-label="Logout session"
                   title="Logout"
                 >
@@ -420,12 +420,12 @@ export default function DashboardLayout() {
       {/* ── MAIN CONTENT AREA ── */}
       <div className="flex-1 w-full flex flex-col min-h-screen">
         {/* Top Header Bar */}
-        <header className="h-[60px] bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center px-4 md:px-6 gap-4 sticky top-0 z-40">
+        <header className="h-[60px] bg-cream-bg/85 backdrop-blur-md border-b border-cream-200 flex items-center px-4 md:px-6 gap-4 sticky top-0 z-40">
           {/* Mobile burger */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="md:hidden p-2 rounded-xl text-slate-500 hover:text-ink hover:bg-slate-100 transition-all cursor-pointer"
+            className="md:hidden p-2 rounded-xl text-muted hover:text-ink hover:bg-cream-100 transition-all cursor-pointer"
             aria-label="Open navigation"
           >
             {Icons.Menu}
@@ -440,23 +440,23 @@ export default function DashboardLayout() {
           {/* Search */}
           <div className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-200 w-64 ${
             searchFocused
-              ? 'border-teal-400/40 bg-white shadow-glow-teal ring-2 ring-teal-500/10'
-              : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+              ? 'border-brand-green-500/50 bg-surface-light shadow-glow-brand ring-2 ring-brand-green-500/15'
+              : 'border-cream-200 bg-surface-light hover:border-cream-300'
           }`}>
-            <span className="text-slate-400">{Icons.Search}</span>
+            <span className="text-muted">{Icons.Search}</span>
             <input
               type="text"
               placeholder="Search anything..."
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
-              className="bg-transparent border-none outline-none text-sm text-ink placeholder:text-slate-400 w-full font-sans"
+              className="bg-transparent border-none outline-none text-sm text-ink placeholder:text-muted w-full font-sans"
             />
           </div>
 
           {/* Notification Bell */}
           <button
             type="button"
-            className="relative p-2 rounded-xl text-slate-500 hover:text-ink hover:bg-slate-100 transition-all cursor-pointer"
+            className="relative p-2 rounded-xl text-muted hover:text-ink hover:bg-cream-100 transition-all cursor-pointer"
             aria-label="Notifications"
           >
             {Icons.Bell}
@@ -467,31 +467,31 @@ export default function DashboardLayout() {
             <button
               type="button"
               onClick={() => setUserMenuOpen(o => !o)}
-              className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 transition-all cursor-pointer"
+              className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-cream-100 transition-all cursor-pointer"
               aria-label="User menu"
               aria-expanded={userMenuOpen}
             >
-              <div className="w-8 h-8 rounded-full bg-teal-500 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-brand-green-600 flex items-center justify-center">
                 <span className="text-white text-[11px] font-semibold">{initials}</span>
               </div>
               <span className="text-sm font-medium text-ink max-w-[100px] truncate">{displayName}</span>
-              <span className={`transition-transform duration-200 text-slate-400 ${userMenuOpen ? 'rotate-180' : ''}`}>
+              <span className={`transition-transform duration-200 text-muted ${userMenuOpen ? 'rotate-180' : ''}`}>
                 {Icons.ChevronDown}
               </span>
             </button>
 
             {/* Dropdown Menu */}
             {userMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl border border-slate-200 shadow-card-hover py-2 z-50 animate-scale-in">
-                <div className="px-4 py-3 border-b border-slate-100">
+              <div className="absolute right-0 top-full mt-2 w-56 bg-surface-light rounded-xl border border-cream-200 shadow-card-hover py-2 z-50 animate-scale-in">
+                <div className="px-4 py-3 border-b border-cream-200">
                   <p className="text-sm font-semibold text-ink truncate">{displayName}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 truncate">{user?.email}</p>
+                  <p className="text-xs text-muted mt-0.5 truncate">{user?.email}</p>
                 </div>
                 <div className="py-1">
                   <NavLink
                     to="/dashboard/settings"
                     onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-600 hover:text-ink hover:bg-slate-50 transition-colors"
+                    className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted hover:text-ink hover:bg-cream-100 transition-colors"
                   >
                     {Icons.Settings}
                     <span>Settings</span>
@@ -499,7 +499,7 @@ export default function DashboardLayout() {
                   <button
                     type="button"
                     onClick={() => { setUserMenuOpen(false); logout(); }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-muted hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                   >
                     {Icons.Logout}
                     <span>Sign Out</span>

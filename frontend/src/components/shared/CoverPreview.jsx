@@ -27,13 +27,13 @@ const TYPOGRAPHY_CLASSES = {
 };
 
 const COLOR_THEMES = {
-  light: { bg: "bg-white", text: "text-ink", sub: "text-muted", accent: "bg-ink" },
+  light: { bg: "bg-surface-light", text: "text-ink", sub: "text-muted", accent: "bg-ink" },
   gold: { bg: "bg-amber-50", text: "text-amber-900", sub: "text-amber-700/60", accent: "bg-amber-600" },
   rose: { bg: "bg-rose-50", text: "text-rose-900", sub: "text-rose-700/60", accent: "bg-rose-500" },
   terracotta: { bg: "bg-orange-50", text: "text-orange-900", sub: "text-orange-700/60", accent: "bg-orange-600" },
   sand: { bg: "bg-stone-100", text: "text-stone-900", sub: "text-stone-600", accent: "bg-stone-500" },
   olive: { bg: "bg-lime-50", text: "text-lime-900", sub: "text-lime-700/60", accent: "bg-lime-700" },
-  agave: { bg: "bg-teal-50", text: "text-teal-900", sub: "text-teal-700/60", accent: "bg-teal-600" },
+  agave: { bg: "bg-brand-green-50", text: "text-brand-green-900", sub: "text-brand-green-700/60", accent: "bg-brand-green-600" },
   sea: { bg: "bg-sky-50", text: "text-sky-900", sub: "text-sky-700/60", accent: "bg-sky-600" },
   dark: { bg: "bg-slate-900", text: "text-white", sub: "text-white/50", accent: "bg-white/20" },
 };
@@ -61,7 +61,7 @@ export default function CoverPreview({ settings, gallery }) {
   );
 
   return (
-    <div className={`relative w-full aspect-[4/3] rounded-2xl overflow-hidden border border-slate-200 ${theme.bg} transition-all duration-300`}>
+    <div className={`relative w-full aspect-[4/3] rounded-2xl overflow-hidden border border-cream-200 ${theme.bg} transition-all duration-300`}>
       {/* Background image / blur overlay */}
       {coverSrc && (
         <>

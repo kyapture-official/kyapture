@@ -82,7 +82,7 @@ export default function StickyGalleryHeader({
     <header
       className={`fixed top-0 left-0 right-0 z-30 transition-all duration-300 ${
         scrolled
-          ? "bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-topbar"
+          ? "bg-[#FDFBF7]/85 backdrop-blur-md border-b border-cream-200/50 shadow-topbar"
           : "bg-transparent"
       }`}
     >
@@ -109,7 +109,7 @@ export default function StickyGalleryHeader({
             }}
             className={`relative p-2 rounded-lg transition-colors duration-200 ${
               scrolled
-                ? "text-ink hover:bg-slate-100"
+                ? "text-ink hover:bg-cream-100"
                 : "text-white/80 hover:text-white hover:bg-white/10"
             }`}
             aria-label={`Favorites${favCount > 0 ? `, ${favCount} items` : ""}`}
@@ -130,7 +130,7 @@ export default function StickyGalleryHeader({
             onClick={() => setShowDownloadModal(true)}
             className={`p-2 rounded-lg transition-colors duration-200 ${
               scrolled
-                ? "text-ink hover:bg-slate-100"
+                ? "text-ink hover:bg-cream-100"
                 : "text-white/80 hover:text-white hover:bg-white/10"
             }`}
             aria-label="Download options"
@@ -144,7 +144,7 @@ export default function StickyGalleryHeader({
               onClick={() => setShowSharePopover(!showSharePopover)}
               className={`p-2 rounded-lg transition-colors duration-200 ${
                 scrolled
-                  ? "text-ink hover:bg-slate-100"
+                  ? "text-ink hover:bg-cream-100"
                   : "text-white/80 hover:text-white hover:bg-white/10"
               }`}
               aria-label="Share gallery"
@@ -153,22 +153,22 @@ export default function StickyGalleryHeader({
             </button>
 
             {showSharePopover && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 animate-scale-in">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-cream-200 py-1.5 animate-scale-in">
                 <button
                   onClick={handleCopyLink}
-                  className="w-full text-left px-4 py-2 text-sm text-ink hover:bg-slate-50 transition-colors"
+                  className="w-full text-left px-4 py-2 text-sm text-ink hover:bg-cream-100 transition-colors"
                 >
                   Copy Link
                 </button>
                 <button
                   onClick={handleEmailShare}
-                  className="w-full text-left px-4 py-2 text-sm text-ink hover:bg-slate-50 transition-colors"
+                  className="w-full text-left px-4 py-2 text-sm text-ink hover:bg-cream-100 transition-colors"
                 >
                   Share via Email
                 </button>
                 <button
                   onClick={handleQRShare}
-                  className="w-full text-left px-4 py-2 text-sm text-ink hover:bg-slate-50 transition-colors"
+                  className="w-full text-left px-4 py-2 text-sm text-ink hover:bg-cream-100 transition-colors"
                 >
                   QR Code
                 </button>
@@ -183,7 +183,7 @@ export default function StickyGalleryHeader({
               scrolled
                 ? slideshowActive
                   ? "text-primary bg-primary/10"
-                  : "text-ink hover:bg-slate-100"
+                  : "text-ink hover:bg-cream-100"
                 : slideshowActive
                   ? "text-white bg-white/20"
                   : "text-white/80 hover:text-white hover:bg-white/10"
@@ -208,7 +208,7 @@ export default function StickyGalleryHeader({
           </p>
           <a
             href={`/g/${username}/${slug}/download`}
-            className="block w-full text-center text-sm font-medium text-ink border border-slate-200 rounded-lg px-4 py-3 hover:bg-slate-50 transition-colors"
+            className="block w-full text-center text-sm font-medium text-ink border border-cream-200 rounded-lg px-4 py-3 hover:bg-cream-100 transition-colors"
           >
             Download Full Gallery
           </a>

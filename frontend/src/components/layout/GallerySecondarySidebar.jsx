@@ -53,7 +53,7 @@ function CollectionCover({ gallery }) {
 
   return (
     <div
-      className="flex h-[180px] w-full items-center justify-center bg-slate-100"
+      className="flex h-[180px] w-full items-center justify-center bg-cream-100"
       style={{ backgroundColor: gallery?.branding_color || "#0D9488" }}
     >
       <Camera className="h-8 w-8 text-white/70" aria-hidden="true" />
@@ -69,24 +69,24 @@ export default function GallerySecondarySidebar({ basePath, gallery }) {
       {/* DESKTOP SIDEBAR */}
       <aside
         aria-label="Collection navigation"
-        className="sticky top-0 z-30 hidden h-screen w-[300px] flex-shrink-0 flex-col border-r border-slate-200 bg-white md:flex"
+        className="sticky top-0 z-30 hidden h-screen w-[300px] flex-shrink-0 flex-col border-r border-cream-200 bg-surface-light md:flex"
       >
         {/* 1. TOP HEADER: Back arrow, Title, Date & Published tag */}
-        <div className="flex items-center p-3.5 border-b border-slate-200">
+        <div className="flex items-center p-3.5 border-b border-cream-200">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <button
               type="button"
               onClick={() => navigate("/dashboard/galleries")}
-              className="text-slate-500 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
+              className="text-muted hover:text-ink transition-colors cursor-pointer shrink-0"
               aria-label="Back to collections"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
             <div className="truncate">
-              <h2 className="text-sm font-semibold text-slate-900 truncate leading-tight">
+              <h2 className="text-sm font-semibold text-ink truncate leading-tight">
                 {gallery?.title || "sari and ravi"}
               </h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-muted">
                 {gallery?.created_at
                   ? new Date(gallery.created_at).toLocaleDateString("en-US", {
                       month: "short",
@@ -103,7 +103,7 @@ export default function GallerySecondarySidebar({ basePath, gallery }) {
         <CollectionCover gallery={gallery} />
 
         {/* 3. ICON NAVIGATION */}
-        <nav className="flex items-center justify-between border-b border-slate-200 px-5 py-2.5">
+        <nav className="flex items-center justify-between border-b border-cream-200 px-5 py-2.5">
           {NAV_ITEMS.map(({ to, end, label, Icon }) => (
             <NavLink
               key={label}
@@ -113,8 +113,8 @@ export default function GallerySecondarySidebar({ basePath, gallery }) {
               className={({ isActive }) =>
                 `group relative flex items-center justify-center p-1.5 transition-colors ${
                   isActive
-                    ? "text-slate-900 border-b-2 border-emerald-500 pb-2 -mb-2.5"
-                    : "text-slate-400 hover:text-slate-700"
+                    ? "text-ink border-b-2 border-brand-green-600 pb-2 -mb-2.5"
+                    : "text-muted hover:text-muted"
                 }`
               }
             >
@@ -127,25 +127,25 @@ export default function GallerySecondarySidebar({ basePath, gallery }) {
         {/* 4. SETS LIST */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-bold text-slate-400 tracking-wider">
+            <span className="text-[11px] font-bold text-muted tracking-wider">
               PHOTOS
             </span>
             <button
               type="button"
-              className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 cursor-pointer"
+              className="flex items-center gap-1 text-xs font-medium text-brand-green-600 hover:text-brand-green-700 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" /> Add Set
             </button>
           </div>
 
-          <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-md cursor-pointer hover:bg-slate-100 transition-colors border border-slate-100">
+          <div className="flex items-center justify-between p-2.5 bg-cream-100 rounded-md cursor-pointer hover:bg-cream-100 transition-colors border border-cream-200">
             <div className="flex items-center gap-2.5">
-              <GripVertical className="h-4 w-4 text-slate-400" />
-              <span className="text-xs font-medium text-slate-800">
+              <GripVertical className="h-4 w-4 text-muted" />
+              <span className="text-xs font-medium text-ink">
                 Highlights (51)
               </span>
             </div>
-            <MoreHorizontal className="h-4 w-4 text-slate-400" />
+            <MoreHorizontal className="h-4 w-4 text-muted" />
           </div>
         </div>
       </aside>
@@ -153,7 +153,7 @@ export default function GallerySecondarySidebar({ basePath, gallery }) {
       {/* MOBILE BOTTOM TABS */}
       <nav
         aria-label="Collection sections"
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-cream-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
       >
         {NAV_ITEMS.map(({ to, end, label, Icon }) => (
           <NavLink
@@ -162,7 +162,7 @@ export default function GallerySecondarySidebar({ basePath, gallery }) {
             end={end}
             className={({ isActive }) =>
               `flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium ${
-                isActive ? "text-emerald-600" : "text-slate-400"
+                isActive ? "text-brand-green-600" : "text-muted"
               }`
             }
           >

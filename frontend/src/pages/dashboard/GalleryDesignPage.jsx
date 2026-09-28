@@ -93,14 +93,14 @@ export default function GalleryDesignPage() {
       {/* Controls panel */}
       <div className="lg:col-span-2 space-y-6">
         {/* Tab bar */}
-        <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+        <div className="flex gap-1 bg-cream-100 rounded-xl p-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 px-4 py-2.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? "bg-white text-ink shadow-sm"
+                  ? "bg-surface-light text-ink shadow-sm"
                   : "text-muted hover:text-ink"
               }`}
             >
@@ -120,13 +120,13 @@ export default function GalleryDesignPage() {
                     onClick={() => update("layout", layout.id)}
                     className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all cursor-pointer ${
                       design.layout === layout.id
-                        ? "bg-teal-500/10 border-teal-500/30 text-teal-700"
-                        : "bg-white border-slate-200 text-muted hover:border-slate-300 hover:text-ink"
+                        ? "bg-brand-green-500/10 border-brand-green-500/30 text-brand-green-700"
+                        : "bg-surface-light border-cream-200 text-muted hover:border-cream-300 hover:text-ink"
                     }`}
                   >
                     <div className={`w-16 h-12 rounded-lg border ${
-                      design.layout === layout.id ? "border-teal-400/40" : "border-slate-200"
-                    } bg-slate-50 flex items-center justify-center`}>
+                      design.layout === layout.id ? "border-brand-green-400/40" : "border-cream-200"
+                    } bg-cream-100 flex items-center justify-center`}>
                       <LayoutThumbnail type={layout.id} active={design.layout === layout.id} />
                     </div>
                     <span className="text-xs font-medium">{layout.label}</span>
@@ -146,8 +146,8 @@ export default function GalleryDesignPage() {
                     onClick={() => update("coverPhoto", photo.id)}
                     className={`aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
                       design.coverPhoto === photo.id
-                        ? "border-teal-500 ring-2 ring-teal-500/20"
-                        : "border-transparent hover:border-slate-300"
+                        ? "border-brand-green-500 ring-2 ring-brand-green-500/20"
+                        : "border-transparent hover:border-cream-300"
                     }`}
                   >
                     <img
@@ -158,7 +158,7 @@ export default function GalleryDesignPage() {
                   </button>
                 ))}
                 {(!gallery?.photos || gallery.photos.length === 0) && (
-                  <div className="col-span-4 py-8 text-center text-xs text-muted bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <div className="col-span-4 py-8 text-center text-xs text-muted bg-cream-100 rounded-xl border border-dashed border-cream-200">
                     Upload photos first to select a cover image.
                   </div>
                 )}
@@ -178,8 +178,8 @@ export default function GalleryDesignPage() {
                     onClick={() => update("typography", typo.id)}
                     className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all cursor-pointer ${
                       design.typography === typo.id
-                        ? "bg-teal-500/10 border-teal-500/30 text-teal-700"
-                        : "bg-white border-slate-200 text-muted hover:border-slate-300 hover:text-ink"
+                        ? "bg-brand-green-500/10 border-brand-green-500/30 text-brand-green-700"
+                        : "bg-surface-light border-cream-200 text-muted hover:border-cream-300 hover:text-ink"
                     }`}
                   >
                     <span className={`text-2xl ${TYPOGRAPHY_CLASSES[typo.id]}`}>{typo.preview}</span>
@@ -190,7 +190,7 @@ export default function GalleryDesignPage() {
             </Section>
 
             <Section title="Typography Preview">
-              <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+              <div className="bg-cream-100 rounded-xl p-6 border border-cream-200">
                 <h3 className={`text-2xl mb-2 ${TYPOGRAPHY_CLASSES[design.typography]} text-ink`}>
                   {gallery?.title || "Collection Title"}
                 </h3>
@@ -214,12 +214,12 @@ export default function GalleryDesignPage() {
                     onClick={() => update("colorPalette", palette.id)}
                     className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all cursor-pointer ${
                       design.colorPalette === palette.id
-                        ? "border-teal-500/40 ring-2 ring-teal-500/10"
-                        : "border-slate-200 hover:border-slate-300"
+                        ? "border-brand-green-500/40 ring-2 ring-brand-green-500/10"
+                        : "border-cream-200 hover:border-cream-300"
                     }`}
                   >
                     <div
-                      className="w-12 h-12 rounded-xl border border-slate-200 shadow-inner"
+                      className="w-12 h-12 rounded-xl border border-cream-200 shadow-inner"
                       style={{ backgroundColor: palette.color }}
                     />
                     <span className="text-xs font-medium text-muted">{palette.label}</span>
@@ -229,7 +229,7 @@ export default function GalleryDesignPage() {
             </Section>
 
             <Section title="Color Preview">
-              <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+              <div className="bg-cream-100 rounded-xl p-6 border border-cream-200">
                 <ColorPreview palette={design.colorPalette} title={gallery?.title} />
               </div>
             </Section>
@@ -247,8 +247,8 @@ export default function GalleryDesignPage() {
                     onClick={() => update("gridStyle", style)}
                     className={`flex-1 px-4 py-3 rounded-xl text-xs font-medium capitalize border transition-all cursor-pointer ${
                       design.gridStyle === style
-                        ? "bg-teal-500/10 border-teal-500/30 text-teal-700"
-                        : "bg-white border-slate-200 text-muted hover:border-slate-300 hover:text-ink"
+                        ? "bg-brand-green-500/10 border-brand-green-500/30 text-brand-green-700"
+                        : "bg-surface-light border-cream-200 text-muted hover:border-cream-300 hover:text-ink"
                     }`}
                   >
                     {style === "vertical" ? "Vertical Masonry" : "Horizontal Grid"}
@@ -265,8 +265,8 @@ export default function GalleryDesignPage() {
                     onClick={() => update("thumbSize", size)}
                     className={`flex-1 px-4 py-3 rounded-xl text-xs font-medium capitalize border transition-all cursor-pointer ${
                       design.thumbSize === size
-                        ? "bg-teal-500/10 border-teal-500/30 text-teal-700"
-                        : "bg-white border-slate-200 text-muted hover:border-slate-300 hover:text-ink"
+                        ? "bg-brand-green-500/10 border-brand-green-500/30 text-brand-green-700"
+                        : "bg-surface-light border-cream-200 text-muted hover:border-cream-300 hover:text-ink"
                     }`}
                   >
                     {size === "regular" ? "Regular Thumbnails" : "Large Thumbnails"}
@@ -283,7 +283,7 @@ export default function GalleryDesignPage() {
                   max="32"
                   value={design.gridSpacing}
                   onChange={(e) => update("gridSpacing", Number(e.target.value))}
-                  className="flex-1 h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-teal-600"
+                  className="flex-1 h-1.5 bg-cream-300 rounded-full appearance-none cursor-pointer accent-brand-green-600"
                 />
                 <span className="text-xs text-muted font-mono w-12 text-right">{design.gridSpacing}px</span>
               </div>
@@ -299,7 +299,7 @@ export default function GalleryDesignPage() {
                 {Array.from({ length: design.gridStyle === "vertical" ? 8 : 6 }).map((_, i) => (
                   <div
                     key={i}
-                    className={`bg-slate-200 rounded-lg ${
+                    className={`bg-cream-300 rounded-lg ${
                       design.thumbSize === "large" ? "aspect-square" : design.gridStyle === "vertical" ? "aspect-[3/4]" : "aspect-[4/3]"
                     }`}
                   />
@@ -338,7 +338,7 @@ function Section({ title, children }) {
 }
 
 function LayoutThumbnail({ type, active }) {
-  const color = active ? "bg-teal-400" : "bg-slate-300";
+  const color = active ? "bg-brand-green-400" : "bg-slate-300";
   return (
     <div className="w-full h-full flex items-center justify-center">
       {type === "center" && <div className={`w-6 h-1 rounded ${color}`} />}
@@ -357,7 +357,7 @@ function LayoutThumbnail({ type, active }) {
 
 function ColorPreview({ palette, title }) {
   const themes = {
-    light: { bg: "bg-white", text: "text-ink" },
+    light: { bg: "bg-surface-light", text: "text-ink" },
     gold: { bg: "bg-amber-50", text: "text-amber-900" },
     rose: { bg: "bg-rose-50", text: "text-rose-900" },
     terracotta: { bg: "bg-orange-50", text: "text-orange-900" },

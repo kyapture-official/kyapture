@@ -234,7 +234,7 @@ export default function CreateGalleryModal({
       {/* Modal Card */}
       <div
         ref={modalRef}
-        className="relative bg-white w-full max-w-md rounded-2xl border border-gray-200 shadow-xl p-6 z-10 overflow-hidden"
+        className="relative bg-surface-light w-full max-w-md rounded-2xl border border-gray-200 shadow-xl p-6 z-10 overflow-hidden"
         style={{ animation: "modalFadeUp 0.18s ease-out both" }}
       >
         {/* Header */}

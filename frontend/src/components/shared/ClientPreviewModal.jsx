@@ -68,7 +68,7 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] bg-white flex flex-col">
+    <div className="fixed inset-0 z-[100] bg-[#FDFBF7] flex flex-col">
       {/* Close button — top right */}
       <AnimatePresence>
         {!scrolledPastHero && (
@@ -95,7 +95,7 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
-            className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm px-6 md:px-12 py-3 flex-shrink-0"
+            className="sticky top-0 z-50 bg-[#FDFBF7] border-b border-gray-200 shadow-sm px-6 md:px-12 py-3 flex-shrink-0"
           >
             <div className="flex justify-between items-center">
               {/* Left: title + photographer */}
@@ -211,7 +211,7 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
         </section>
 
         {/* PHOTO GRID SECTION */}
-        <section ref={gridRef} className="min-h-screen bg-white px-4 sm:px-8 md:px-12 lg:px-20 py-16">
+        <section ref={gridRef} className="min-h-screen bg-[#FDFBF7] px-4 sm:px-8 md:px-12 lg:px-20 py-16">
           <div className="max-w-6xl mx-auto mb-10">
             <h2 className="font-serif text-3xl text-ink mb-2">{title}</h2>
             <div className="h-px w-8 bg-ink/15" />
@@ -237,7 +237,7 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-40px" }}
                     transition={{ duration: 0.4, delay: i * 0.05 }}
-                    className="relative rounded-xl overflow-hidden bg-slate-100 group aspect-[3/2] shadow-sm hover:shadow-md transition-shadow"
+                    className="relative rounded-xl overflow-hidden bg-cream-100 group aspect-[3/2] shadow-sm hover:shadow-md transition-shadow"
                   >
                     <img
                       src={src}
@@ -250,8 +250,8 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
               })}
             </div>
           ) : (
-            <div className="max-w-6xl mx-auto py-20 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-              <p className="text-sm text-slate-500 font-sans">
+            <div className="max-w-6xl mx-auto py-20 text-center bg-cream-100 rounded-2xl border border-dashed border-cream-200">
+              <p className="text-sm text-muted font-sans">
                 No photos uploaded yet in this gallery.
               </p>
             </div>

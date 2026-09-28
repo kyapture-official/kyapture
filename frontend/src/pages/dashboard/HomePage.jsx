@@ -26,8 +26,8 @@ const STATUS_BADGE_VARIANT = {
 
 // Stat card gradient configurations
 const STAT_STYLES = [
-  { accent: 'from-teal-500 to-teal-400', bg: 'bg-teal-50', icon: 'text-teal-600' },
-  { accent: 'from-emerald-500 to-emerald-400', bg: 'bg-emerald-50', icon: 'text-emerald-600' },
+  { accent: 'from-brand-green-500 to-brand-green-400', bg: 'bg-brand-green-50', icon: 'text-brand-green-600' },
+  { accent: 'from-brand-green-600 to-brand-green-500', bg: 'bg-brand-green-100', icon: 'text-brand-green-700' },
   { accent: 'from-blue-500 to-blue-400', bg: 'bg-blue-50', icon: 'text-blue-600' },
   { accent: 'from-violet-500 to-violet-400', bg: 'bg-violet-50', icon: 'text-violet-600' },
 ]
@@ -146,18 +146,18 @@ export default function HomePage() {
     <div className="max-w-7xl mx-auto space-y-8 animate-fade-up">
 
       {/* ── GREETING HERO ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-white to-slate-100 border border-slate-200 p-6 md:p-8">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-surface-light to-cream-100 border border-cream-200 p-6 md:p-8">
         {/* Decorative gradient orb */}
-        <div className="absolute -top-20 -right-20 w-60 h-60 bg-gradient-to-br from-teal-500/10 to-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-20 -right-20 w-60 h-60 bg-gradient-to-br from-brand-green-500/10 to-brand-green-500/5 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-16 -left-16 w-40 h-40 bg-gradient-to-tr from-blue-500/8 to-transparent rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative z-10">
           <h1 className="font-serif text-3xl md:text-4xl text-ink mb-1">
             {greeting}, {user?.display_name?.split(" ")[0] || user?.username}
           </h1>
-          <p className="text-slate-500 text-sm flex items-center gap-1.5 mt-2">
+          <p className="text-muted text-sm flex items-center gap-1.5 mt-2">
             Your studio at
-            <code className="bg-slate-200/80 px-2 py-0.5 rounded-md text-xs text-ink font-mono">
+            <code className="bg-cream-300/80 px-2 py-0.5 rounded-md text-xs text-ink font-mono">
               {studioUrl}
             </code>
           </p>
@@ -172,7 +172,7 @@ export default function HomePage() {
             return (
               <div
                 key={s.label}
-                className="group relative bg-white rounded-2xl border border-slate-200 p-5 overflow-hidden hover:shadow-stat-hover hover:border-slate-300 transition-all duration-300 cursor-default"
+                className="group relative bg-surface-light rounded-2xl border border-cream-200 p-5 overflow-hidden hover:shadow-stat-hover hover:border-cream-300 transition-all duration-300 cursor-default"
               >
                 {/* Gradient top accent */}
                 <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${style.accent}`} />
@@ -186,7 +186,7 @@ export default function HomePage() {
                   <div className={`w-9 h-9 rounded-xl ${style.bg} flex items-center justify-center mb-3`}>
                     <span className={style.icon}>{STAT_ICONS[i]}</span>
                   </div>
-                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">
                     {s.label}
                   </p>
                   <p className="font-serif text-3xl text-ink leading-none">
@@ -201,7 +201,7 @@ export default function HomePage() {
 
       {/* ── SUBSCRIPTION STATUS ── */}
       {!loading && subError && (
-        <div className="bg-white rounded-2xl border border-red-200 p-5 flex items-center justify-between animate-fade-up delay-200">
+        <div className="bg-surface-light rounded-2xl border border-red-200 p-5 flex items-center justify-between animate-fade-up delay-200">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
               <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
@@ -210,12 +210,12 @@ export default function HomePage() {
             </div>
             <div>
               <p className="text-sm font-medium text-ink">Subscription unavailable</p>
-              <p className="text-xs text-slate-500">Could not load your plan status.</p>
+              <p className="text-xs text-muted">Could not load your plan status.</p>
             </div>
           </div>
           <button
             onClick={loadDashboard}
-            className="text-xs font-semibold text-ink px-4 py-2 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer"
+            className="text-xs font-semibold text-ink px-4 py-2 rounded-xl border border-cream-200 hover:border-cream-300 hover:bg-cream-100 transition-all cursor-pointer"
           >
             Retry
           </button>
@@ -223,16 +223,16 @@ export default function HomePage() {
       )}
 
       {!loading && !subError && sub && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-up delay-200">
+        <div className="bg-surface-light rounded-2xl border border-cream-200 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-up delay-200">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+            <div className="w-9 h-9 rounded-xl bg-brand-green-50 flex items-center justify-center">
+              <svg className="w-5 h-5 text-brand-green-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
               </svg>
             </div>
             <div>
               <p className="text-sm font-medium text-ink">{planName} Plan</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted">
                 {sub.expires_at
                   ? `Expires ${formatDate(sub.expires_at)}`
                   : "No expiration"}{" "}
@@ -252,7 +252,7 @@ export default function HomePage() {
           <h2 className="font-serif text-2xl text-ink">Recent Galleries</h2>
           <Link
             to="/dashboard/galleries"
-            className="text-xs font-semibold text-slate-500 hover:text-ink transition-colors flex items-center gap-1"
+            className="text-xs font-semibold text-muted hover:text-ink transition-colors flex items-center gap-1"
           >
             View all
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -268,35 +268,35 @@ export default function HomePage() {
             ))}
           </div>
         ) : galleriesError ? (
-          <div className="py-16 text-center bg-white rounded-2xl border border-red-200 border-dashed">
+          <div className="py-16 text-center bg-surface-light rounded-2xl border border-red-200 border-dashed">
             <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
               <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
               </svg>
             </div>
-            <p className="text-slate-500 text-sm mb-4">
+            <p className="text-muted text-sm mb-4">
               Couldn&apos;t load your galleries.
             </p>
             <button
               onClick={loadDashboard}
-              className="inline-flex items-center gap-2 bg-teal-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 bg-brand-green-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-green-700 transition-colors cursor-pointer"
             >
               Retry
             </button>
           </div>
         ) : galleries.length === 0 ? (
-          <div className="py-16 text-center bg-white rounded-2xl border border-slate-200 border-dashed">
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+          <div className="py-16 text-center bg-surface-light rounded-2xl border border-cream-200 border-dashed">
+            <div className="w-12 h-12 rounded-full bg-cream-100 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-muted" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
             </div>
-            <p className="text-slate-500 text-sm mb-4">
+            <p className="text-muted text-sm mb-4">
               No galleries yet. Create your first one to start delivering photos.
             </p>
             <Link
               to="/dashboard/galleries"
-              className="inline-flex items-center gap-2 bg-teal-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors"
+              className="inline-flex items-center gap-2 bg-brand-green-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-green-700 transition-colors"
             >
               Create Gallery
             </Link>
@@ -307,10 +307,10 @@ export default function HomePage() {
               <Link
                 key={gallery.id}
                 to={`/dashboard/galleries/${gallery.slug}`}
-                className="group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-card-hover hover:border-slate-300 transition-all duration-300"
+                className="group bg-surface-light rounded-2xl border border-cream-200 overflow-hidden hover:shadow-card-hover hover:border-cream-300 transition-all duration-300"
               >
                 {/* Cover Image */}
-                <div className="h-40 bg-slate-100 relative overflow-hidden">
+                <div className="h-40 bg-cream-100 relative overflow-hidden">
                   {gallery.cover_photo ? (
                     <img
                       src={gallery.cover_photo.thumbnail || gallery.cover_photo.image}
@@ -319,7 +319,7 @@ export default function HomePage() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-10 h-10 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                     </div>
@@ -346,14 +346,14 @@ export default function HomePage() {
 
                 {/* Card Body */}
                 <div className="p-4">
-                  <p className="font-medium text-ink text-sm truncate mb-1 group-hover:text-slate-700 transition-colors">
+                  <p className="font-medium text-ink text-sm truncate mb-1 group-hover:text-muted transition-colors">
                     {gallery.title}
                   </p>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-slate-500 font-medium">
+                    <span className="text-[11px] text-muted font-medium">
                       {gallery.photo_count || 0} photo{(gallery.photo_count || 0) !== 1 ? 's' : ''}
                     </span>
-                    <span className="text-[11px] text-teal-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                    <span className="text-[11px] text-brand-green-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
                       Manage
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />

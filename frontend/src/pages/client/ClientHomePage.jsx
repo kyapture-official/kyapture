@@ -20,13 +20,13 @@ export default function ClientHomePage() {
   }, [username])
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
       <Spinner size="lg" />
     </div>
   )
 
   if (error) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
       <p className="text-muted">{error}</p>
     </div>
   )
@@ -61,10 +61,10 @@ export default function ClientHomePage() {
             <Link
               key={gallery.id}
               to={`/${username}/${gallery.slug}`}
-              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-md hover:border-slate-300 transition-all duration-300"
+              className="group bg-white rounded-2xl border border-cream-200 overflow-hidden hover:shadow-md hover:border-cream-300 transition-all duration-300"
               style={{ animationDelay: `${i * 0.06}s` }}
             >
-              <div className="h-48 bg-slate-100 overflow-hidden relative">
+              <div className="h-48 bg-cream-100 overflow-hidden relative">
                 {gallery.cover_url ? (
                   <img
                     src={gallery.cover_url}
