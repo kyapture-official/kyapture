@@ -21,13 +21,21 @@ const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 const isVideoFile = (file) => file.type.startsWith("video/");
 
 // Polling tuning for assets still processing in the background (Celery).
-// 3s cadence, capped at 5 minutes total per "session" (i.e. per continuous
-// stretch of having at least one pending/processing asset) — long enough
-// for a large 4K video on modest worker hardware, short enough that a
-// genuinely stuck task (e.g. worker down, ffmpeg missing) doesn't poll
-// forever. Applies to images too — they go through the exact same async
-// pending→ready window, just usually fast enough not to be noticed.
+// Starts at a 3s cadence and doubles on every tick that finds nothing new
+// (capped at 15s), resetting back to 3s the moment a new upload batch adds
+// pending assets or any asset actually finishes processing — Phase 2
+// large-gallery performance: a gallery with hundreds of pending assets no
+// longer means hundreds of parallel per-asset requests every 3 seconds
+// (see photosApi.getStatusBatch, one request per tick for ALL pending
+// assets), and a long-idle wait (worker busy, big video queue) backs off
+// instead of hammering the API at a fixed cadence the whole time.
+// MAX_POLL_ATTEMPTS bounds the total number of ticks regardless of cadence
+// — long enough for a large 4K video on modest worker hardware, short
+// enough that a genuinely stuck task (worker down, ffmpeg missing) doesn't
+// poll forever. Applies to images too — they go through the exact same
+// async pending→ready window, just usually fast enough not to be noticed.
 const POLL_INTERVAL_MS = 3000;
+const POLL_MAX_INTERVAL_MS = 15000;
 const MAX_POLL_ATTEMPTS = 100;
 
 /**
@@ -127,11 +135,14 @@ export default function GalleryPhotosPage() {
     if (!hasPendingAssets) return;
 
     let attempts = 0;
+    let currentDelay = POLL_INTERVAL_MS;
+    let lastPendingIdsKey = "";
+    let cancelled = false;
+    let timeoutId = null;
 
-    const intervalId = setInterval(async () => {
+    const tick = async () => {
       attempts += 1;
       if (attempts > MAX_POLL_ATTEMPTS) {
-        clearInterval(intervalId);
         if (isMountedRef.current) {
           setErrorMsg(
             "Some items are still processing in the background — this is taking longer than usual. Refresh the page in a bit to check on them.",
@@ -147,33 +158,62 @@ export default function GalleryPhotosPage() {
       );
       if (pendingAssets.length === 0) return;
 
+      const pendingIds = pendingAssets.map((p) => p.id);
+      const pendingIdsKey = [...pendingIds].sort().join(",");
+      if (pendingIdsKey !== lastPendingIdsKey) {
+        // A fresh set of pending assets (e.g. a new upload batch landed
+        // mid-poll) — reset the backoff so it doesn't sit at a slow
+        // cadence right when there's genuinely new work to track.
+        currentDelay = POLL_INTERVAL_MS;
+        lastPendingIdsKey = pendingIdsKey;
+      }
+
+      let anyTransitioned = false;
       try {
-        const results = await Promise.allSettled(
-          pendingAssets.map((asset) => photosApi.getById(asset.id)),
-        );
-        if (!isMountedRef.current) return;
+        const results = await photosApi.getStatusBatch(slug, pendingIds);
+        if (!isMountedRef.current || cancelled) return;
 
         const updatesById = new Map();
-        results.forEach((result) => {
-          if (result.status === "fulfilled") {
-            updatesById.set(result.value.id, result.value);
-          }
-        });
+        (results || []).forEach((asset) => updatesById.set(asset.id, asset));
 
         if (updatesById.size > 0) {
           setPhotos((prev) =>
-            prev.map((p) =>
-              updatesById.has(p.id) ? { ...p, ...updatesById.get(p.id) } : p,
-            ),
+            prev.map((p) => {
+              if (!updatesById.has(p.id)) return p;
+              const updated = updatesById.get(p.id);
+              if (
+                (p.processing_status === "pending" ||
+                  p.processing_status === "processing") &&
+                updated.processing_status !== p.processing_status
+              ) {
+                anyTransitioned = true;
+              }
+              return { ...p, ...updated };
+            }),
           );
         }
-      } catch {
-        // Transient network hiccup — next tick just retries.
-      }
-    }, POLL_INTERVAL_MS);
 
-    return () => clearInterval(intervalId);
-  }, [hasPendingAssets, isMountedRef]);
+        currentDelay = anyTransitioned
+          ? POLL_INTERVAL_MS
+          : Math.min(currentDelay * 2, POLL_MAX_INTERVAL_MS);
+      } catch {
+        // Transient network hiccup — back off and retry rather than
+        // hammering the API at the same cadence during an outage.
+        currentDelay = Math.min(currentDelay * 2, POLL_MAX_INTERVAL_MS);
+      }
+
+      if (!cancelled) {
+        timeoutId = setTimeout(tick, currentDelay);
+      }
+    };
+
+    timeoutId = setTimeout(tick, currentDelay);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [hasPendingAssets, isMountedRef, slug]);
 
   // ── UPLOAD ───────────────────────────────────────────────────────────────
   const handleFilesSelected = async (files) => {

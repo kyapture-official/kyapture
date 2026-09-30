@@ -105,4 +105,15 @@ export const authApi = {
    */
   forgotPassword: (payload) =>
     api.post('/auth/password/reset/', payload).then((res) => res.data),
+
+  /**
+   * WHAT: Confirms a password reset using the emailed uidb64/token pair and
+   *       sets the new password. Called from the link in the reset email.
+   * URI:  POST /api/v1/auth/password/reset/confirm/
+   *
+   * @param   {{ uidb64: string, token: string, new_password: string, new_password2: string }} payload
+   * @returns {Promise<{ message: string }>}
+   */
+  resetPasswordConfirm: (payload) =>
+    api.post('/auth/password/reset/confirm/', payload).then((res) => res.data),
 }

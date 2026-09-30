@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
 import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/ui/Toast";
-import { getAlphaBrandingColor } from "../../utils/colorHelper";
+import { getAlphaBrandingColor } from "../../utils/colorhelper";
 import CreateGalleryModal from "../../components/shared/CreateGalleryModal";
 import Spinner from "../../components/ui/Spinner";
 

@@ -74,6 +74,7 @@ function LazyPhoto({
   onPhotoClick,
   isSelected,
   onToggleSelection,
+  fixedAspect = null,
 }) {
   const [loadedSrc, setLoadedSrc] = useState(null);
   const [errorSrc, setErrorSrc] = useState(null);
@@ -82,11 +83,30 @@ function LazyPhoto({
 
   const downloadHref = buildDownloadHref(photo.download_url, token);
 
-  // Videos have no thumbnail_url/display_url — those are image-only
-  // derived variants. poster_url is the generated frame grab.
+  // Videos have no thumbnail_url/display_url/medium_url — those are
+  // image-only derived variants. poster_url is the generated frame grab.
   const imgSrc = isVideo
     ? photo.poster_url
-    : photo.thumbnail_url || photo.display_url;
+    : photo.thumbnail_url || photo.medium_url || photo.display_url;
+
+  // Responsive image selection (Phase 2, item A): lets the browser pick
+  // the smallest derivative that still covers its actual rendered size
+  // instead of every grid cell downloading the full 2048px display
+  // variant. Video posters have no size tiers, so this is image-only.
+  // `sizes` mirrors this grid's own breakpoints (columns-2 sm:columns-3
+  // lg:columns-4 xl:columns-5) — one column's rendered width, roughly.
+  const imgSrcSet = !isVideo
+    ? [
+        photo.thumbnail_url ? `${photo.thumbnail_url} 640w` : null,
+        photo.medium_url ? `${photo.medium_url} 1280w` : null,
+        photo.display_url ? `${photo.display_url} 2048w` : null,
+      ]
+        .filter(Boolean)
+        .join(", ") || undefined
+    : undefined;
+  const imgSizes = !isVideo
+    ? "(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+    : undefined;
 
   const isLoaded = loadedSrc === imgSrc;
   // Guard against both being undefined/null "matching" and producing a
@@ -103,8 +123,12 @@ function LazyPhoto({
     rootMargin: "200px 0px",
   });
 
+  // A "horizontal" grid style (see PublicMasonryGrid below) forces a
+  // uniform tile aspect ratio instead of each photo's own — that's what
+  // makes it look like a distinct grid rather than the default masonry.
   const aspectRatio =
-    photo.width && photo.height ? `${photo.width} / ${photo.height}` : "3 / 2";
+    fixedAspect ||
+    (photo.width && photo.height ? `${photo.width} / ${photo.height}` : "3 / 2");
 
   const handleContextMenu = (e) => e.preventDefault();
 
@@ -122,9 +146,9 @@ function LazyPhoto({
     <div
       ref={ref}
       onClick={() => !stillProcessing && onPhotoClick?.(index)}
-      className={`group relative w-full overflow-hidden rounded-lg bg-cream-100 mb-3 break-inside-avoid shadow-sm hover:shadow-md transition-shadow duration-300 select-none ${
-        stillProcessing ? "" : "cursor-pointer"
-      }`}
+      className={`group relative w-full overflow-hidden rounded-lg bg-cream-100 shadow-sm hover:shadow-md transition-shadow duration-300 select-none ${
+        fixedAspect ? "" : "mb-3 break-inside-avoid"
+      } ${stillProcessing ? "" : "cursor-pointer"}`}
       style={{
         aspectRatio,
         ...(blurDataUrl &&
@@ -169,6 +193,8 @@ function LazyPhoto({
             <>
               <img
                 src={imgSrc}
+                srcSet={imgSrcSet}
+                sizes={imgSizes}
                 alt={photo.alt || photo.original_name || "Gallery item"}
                 loading="lazy"
                 decoding="async"
@@ -262,11 +288,37 @@ export default function PublicMasonryGrid({
   onPhotoClick,
   selectedAssetIds = new Set(),
   onToggleSelection,
+  // Phase 2, item E — grid behavior/density driven by the gallery's
+  // persisted design_settings (see utils/designSettings.js). Defaults
+  // reproduce the grid's original fixed layout exactly, so a gallery
+  // with no design_settings (or an older one saved before this existed)
+  // renders identically to before.
+  gridStyle = "vertical",
+  thumbSize = "regular",
+  gridSpacing = 12,
 }) {
   if (!photos || photos.length === 0) return null;
 
+  // "vertical" (default) keeps the original CSS multi-column masonry —
+  // each tile keeps its own photo's natural aspect ratio. "horizontal"
+  // switches to a uniform CSS grid of fixed-aspect tiles instead, a
+  // visibly distinct "grid" look per the Design page's own Grid Style
+  // option (GalleryDesignPage.jsx).
+  const isHorizontal = gridStyle === "horizontal";
+  // "large" thumbnails means fewer, bigger columns at every breakpoint.
+  const columnClasses = isHorizontal
+    ? thumbSize === "large"
+      ? "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      : "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+    : thumbSize === "large"
+      ? "columns-1 sm:columns-2 lg:columns-3 xl:columns-4"
+      : "columns-2 sm:columns-3 lg:columns-4 xl:columns-5";
+
   return (
-    <div className="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-3 p-1 w-full mx-auto">
+    <div
+      className={`${columnClasses} p-1 w-full mx-auto`}
+      style={{ gap: `${gridSpacing}px` }}
+    >
       {photos.map((photo, index) => (
         <LazyPhoto
           key={photo.id ?? index}
@@ -276,6 +328,7 @@ export default function PublicMasonryGrid({
           onPhotoClick={onPhotoClick}
           isSelected={selectedAssetIds?.has(photo.id)}
           onToggleSelection={onToggleSelection}
+          fixedAspect={isHorizontal ? "4 / 3" : null}
         />
       ))}
     </div>

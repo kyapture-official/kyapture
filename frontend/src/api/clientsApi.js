@@ -169,6 +169,46 @@ export const clientsApi = {
   getPublicGallery: (...args) => clientsApi.getGallery(...args),
 
   /**
+   * Fetch a subsequent page of a gallery's READY photos/videos.
+   * URI: GET /api/v1/public/{username}/{slug}/photos/?page=N
+   *
+   * WHY (Phase 2, large-gallery performance): getGallery() above only
+   * ever returns the FIRST page of assets (see the gallery payload's
+   * `photos_has_more` / `photos_page_size` fields) — a gallery with
+   * hundreds or thousands of photos is never sent as one giant array.
+   * The client gallery page calls this to fetch page 2, 3, ... as the
+   * visitor scrolls or clicks "load more", using the same password-
+   * session token as getGallery() for protected galleries.
+   *
+   * @param {string} username
+   * @param {string} slug
+   * @param {number} page - 1-indexed page number (2, 3, ...).
+   * @param {string} [token] - Session access token for protected galleries.
+   * @param {Object} [options]
+   * @param {AbortSignal} [options.signal]
+   * @returns {Promise<{ count: number, next: string|null, previous: string|null, results: MediaAsset[] }>}
+   */
+  getGalleryPhotos: async (username, slug, page, token = null, options = {}) => {
+    const path = `${buildGalleryPath(username, slug)}photos/`
+    const { signal } = options || {}
+
+    const config = { signal, params: { page } }
+    if (token) {
+      config.headers = { Authorization: `Bearer ${token}` }
+    }
+
+    try {
+      const res = await api.get(path, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to view more photos.',
+        notFoundMessage: 'This gallery could not be found.',
+      })
+    }
+  },
+
+  /**
    * Verify a gallery's password and exchange it for a short-lived access token.
    * URI: POST /api/v1/public/{username}/{slug}/unlock/
    *

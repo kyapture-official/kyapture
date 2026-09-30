@@ -9,6 +9,7 @@ import DashboardLayout from "./components/layout/DashboardLayout";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
+import ResetPasswordConfirmPage from "./pages/auth/ResetPasswordConfirmPage";
 // Dashboard
 import HomePage from "./pages/dashboard/HomePage";
 import GalleriesPage from "./pages/dashboard/GalleriesPage";
@@ -50,6 +51,10 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route
+            path="/auth/password/reset/confirm/:uidb64/:token"
+            element={<ResetPasswordConfirmPage />}
+          />
 
           {/* Protected photographer dashboard */}
           <Route path="/dashboard" element={<ProtectedRoute />}>

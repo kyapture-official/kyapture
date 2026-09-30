@@ -43,6 +43,15 @@ def auto_delete_media_asset_files_on_db_delete(sender, instance, **kwargs):
                 f"Failed to delete thumbnail_file for MediaAsset {instance.id} on S3/Disk: {str(e)}"
             )
 
+    # 3b. Purge Medium (1280px) File (Images only)
+    if instance.medium_file:
+        try:
+            instance.medium_file.delete(save=False)
+        except Exception as e:
+            logger.error(
+                f"Failed to delete medium_file for MediaAsset {instance.id} on S3/Disk: {str(e)}"
+            )
+
     # 4. Purge Video Poster Frame (Videos only)
     if instance.poster_image:
         try:
@@ -52,13 +61,24 @@ def auto_delete_media_asset_files_on_db_delete(sender, instance, **kwargs):
                 f"Failed to delete poster_image for MediaAsset {instance.id} on S3/Disk: {str(e)}"
             )
 
-    # 5. Purge Looping Hover Preview Clip (Videos only)
+    # 5. Purge Looping Hover Preview Clip (Videos only — legacy field; no
+    #    longer generated for new uploads, but still purged here in case
+    #    an older row has one on disk/S3).
     if instance.preview_file:
         try:
             instance.preview_file.delete(save=False)
         except Exception as e:
             logger.error(
                 f"Failed to delete preview_file for MediaAsset {instance.id} on S3/Disk: {str(e)}"
+            )
+
+    # 5b. Purge H.264/AAC MP4 Playback Derivative (Videos only)
+    if instance.playback_file:
+        try:
+            instance.playback_file.delete(save=False)
+        except Exception as e:
+            logger.error(
+                f"Failed to delete playback_file for MediaAsset {instance.id} on S3/Disk: {str(e)}"
             )
 
     # 6. Unified HLS Chunk Folder Cleanup Hook (Videos only)

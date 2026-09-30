@@ -79,23 +79,23 @@ class RegisterView(APIView):
     Open access registration. Automatically sets secure cookies upon creation.
     """
     permission_classes = [AllowAny]
-    authentication_classes = [] 
+    authentication_classes = []
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
-            
+
             # Response body contains ONLY profile metadata—no raw token exposure
             response = Response({
                 'user': UserProfileSerializer(user, context={'request': request}).data,
             }, status=status.HTTP_201_CREATED)
-            
+
             # Inject secure HttpOnly cookies
             set_auth_cookies(response, str(refresh.access_token), str(refresh))
             return response
-            
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginRateThrottle(AnonRateThrottle):
@@ -117,13 +117,13 @@ class LoginView(APIView):
     """
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [LoginRateThrottle] 
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             data = serializer.validated_data
-            
+
             # Extract credentials and metadata safely
             access_token = data.get('access')
             refresh_token = data.get('refresh')
@@ -137,7 +137,7 @@ class LoginView(APIView):
             # Inject secure HttpOnly cookies
             set_auth_cookies(response, access_token, refresh_token)
             return response
-            
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -151,9 +151,9 @@ class LogoutView(APIView):
     def post(self, request):
         # Automatically extract refresh token from incoming HttpOnly cookies
         refresh_token = request.COOKIES.get('refresh_token')
-        
+
         response = Response({'message': 'Logged out successfully.'}, status=status.HTTP_200_OK)
-        
+
         # Purge both cookies from the browser by setting empty values and immediate expirations
         domain = getattr(settings, 'SESSION_COOKIE_DOMAIN', None)
         response.delete_cookie('access_token', domain=domain)
@@ -166,7 +166,7 @@ class LogoutView(APIView):
                 token.blacklist()
             except TokenError:
                 pass  # Ignore if already blacklisted or expired
-                
+
         return response
 
 
@@ -186,12 +186,12 @@ class CookieTokenRefreshView(APIView):
         try:
             refresh = RefreshToken(refresh_token)
             new_access_token = str(refresh.access_token)
-            
+
             response = Response({'message': 'Session refreshed successfully.'}, status=status.HTTP_200_OK)
-            
+
             domain = getattr(settings, 'SESSION_COOKIE_DOMAIN', None)
             secure = getattr(settings, 'SESSION_COOKIE_SECURE', False)
-            
+
             # Re-inject refreshed access token
             response.set_cookie(
                 key='access_token',
@@ -202,7 +202,7 @@ class CookieTokenRefreshView(APIView):
                 domain=domain,
                 max_age=15 * 60
             )
-            
+
             # Optional: Rotate refresh token if enabled in settings
             if getattr(settings, 'SIMPLE_JWT', {}).get('ROTATE_REFRESH_TOKENS', False):
                 new_refresh_token = str(refresh)
@@ -215,7 +215,7 @@ class CookieTokenRefreshView(APIView):
                     domain=domain,
                     max_age=7 * 24 * 60 * 60
                 )
-                
+
             return response
         except TokenError:
             return Response({'error': 'Invalid or expired session.'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -231,8 +231,8 @@ class MeView(APIView):
 
     def put(self, request):
         serializer = UserProfileSerializer(
-            request.user, 
-            data=request.data, 
+            request.user,
+            data=request.data,
             partial=True,
             context={'request': request}
         )
@@ -255,23 +255,23 @@ class ChangePasswordView(APIView):
             serializer.save()
             return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
 
 class TotalUsersView(APIView):
     """GET /api/total-users - Public count metrics and recent user avatars"""
     permission_classes = [AllowAny]
-    authentication_classes = [] 
+    authentication_classes = []
 
     def get(self, request):
         queryset = User.objects.filter(is_superuser=False, is_staff=False)
         count = queryset.count()
-        
+
         # Fetch the latest 5 registered photographers for the landing page avatar row
         latest = queryset.order_by('-date_joined')[:5]
-        
+
         # Muted aesthetic color palette matching frontend expectations
         color_palette = ['#8c6d4f', '#4a7c6f', '#5c6b73', '#7b5c8c', '#8c5c5c']
-        
+
         latest_users = []
         for index, user in enumerate(latest):
             name = user.display_name or user.username or 'U'
@@ -304,22 +304,54 @@ class PasswordResetRateThrottle(AnonRateThrottle):
 class PasswordResetRequestView(APIView):
     """
     POST /api/v1/auth/password/reset/
+
+    Anti-enumeration contract: this endpoint returns the SAME 200 response,
+    with the SAME generic message, whether or not `email` matches a real
+    account — and it does so unconditionally, regardless of what happens
+    while trying to build/send the actual email. That second half used to
+    be the weak point: template rendering and send_mail() ran inside a
+    try/except that only caught User.DoesNotExist, so a missing template
+    (or any other send-path failure) propagated as an uncaught 500 for
+    real accounts while a non-existent email still quietly returned 200 —
+    an exception-shaped way to find out which emails have accounts. Every
+    failure past "does this user exist" is now caught, logged, and
+    swallowed behind the identical response below.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
     throttle_classes = [PasswordResetRateThrottle]
 
+    GENERIC_MESSAGE = (
+        'If an active account is registered with that email, a secure '
+        'password reset link has been sent.'
+    )
+
     def post(self, request):
         email = request.data.get('email', '').strip().lower()
         if not email:
             return Response(
-                {'error': 'A valid email address is required to reset passwords.'}, 
+                {'error': 'A valid email address is required to reset passwords.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        generic_response = Response(
+            {'message': self.GENERIC_MESSAGE}, status=status.HTTP_200_OK
+        )
+
         try:
             user = User.objects.get(email=email, is_active=True)
-            
+        except User.DoesNotExist:
+            # No account for this email — return the exact same response as
+            # the success path below. Nothing here should ever distinguish
+            # "no such account" from "account exists, email dispatch failed".
+            return generic_response
+
+        # From here on, everything is best-effort. A template bug, an SES
+        # outage, or any other failure while composing/sending the email
+        # must never surface as a 500 and must never change the response
+        # shape — that would defeat the whole point of the identical
+        # generic_response above. Log it and move on.
+        try:
             token = default_token_generator.make_token(user)
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
 
@@ -332,25 +364,23 @@ class PasswordResetRequestView(APIView):
             text_body = render_to_string('users/emails/password_reset_email.txt', email_context)
             html_body = render_to_string('users/emails/password_reset_email.html', email_context)
 
-            try:
-                send_mail(
-                    subject='Reset your Kyapture password',
-                    message=text_body,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    html_message=html_body,
-                    fail_silently=False,
-                )
-                logger.info('Password reset email dispatched for user_id=%s', user.id)
-            except Exception:
-                logger.exception('Failed to send password reset email for user_id=%s', user.id)
+            send_mail(
+                subject='Reset your Kyapture password',
+                message=text_body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                html_message=html_body,
+                fail_silently=False,
+            )
+            logger.info('Password reset email dispatched for user_id=%s', user.id)
+        except Exception:
+            logger.exception(
+                'Password reset email failed to send for user_id=%s — request '
+                'still reports success to the caller (anti-enumeration contract).',
+                user.id,
+            )
 
-        except User.DoesNotExist:
-            pass
-
-        return Response({
-            'message': 'If an active account is registered with that email, a secure password reset link has been compiled.'
-        }, status=status.HTTP_200_OK)
+        return generic_response
 
 
 class PasswordResetConfirmView(APIView):
@@ -368,13 +398,13 @@ class PasswordResetConfirmView(APIView):
 
         if not (uidb64 and token and new_password):
             return Response(
-                {'error': 'UID, token, and new password parameters are all required.'}, 
+                {'error': 'UID, token, and new password parameters are all required.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if new_password != new_password2:
             return Response(
-                {'error': 'Passwords do not match.'}, 
+                {'error': 'Passwords do not match.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -383,13 +413,13 @@ class PasswordResetConfirmView(APIView):
             user = User.objects.get(pk=uid, is_active=True)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             return Response(
-                {'error': 'Invalid reset link. The user associated with this token does not exist.'}, 
+                {'error': 'Invalid reset link. The user associated with this token does not exist.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if not default_token_generator.check_token(user, token):
             return Response(
-                {'error': 'This password reset link has expired or is invalid.'}, 
+                {'error': 'This password reset link has expired or is invalid.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -400,7 +430,7 @@ class PasswordResetConfirmView(APIView):
             validate_password(new_password, user=user)
         except DjangoValidationError as e:
             return Response(
-                {'error': list(e.messages)[0], 'details': list(e.messages)}, 
+                {'error': list(e.messages)[0], 'details': list(e.messages)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

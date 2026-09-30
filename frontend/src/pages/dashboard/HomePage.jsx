@@ -311,9 +311,9 @@ export default function HomePage() {
               >
                 {/* Cover Image */}
                 <div className="h-40 bg-cream-100 relative overflow-hidden">
-                  {gallery.cover_photo ? (
+                  {gallery.cover_url ? (
                     <img
-                      src={gallery.cover_photo.thumbnail || gallery.cover_photo.image}
+                      src={gallery.cover_url}
                       alt={gallery.title ? `${gallery.title} cover photo` : "Gallery cover photo"}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                     />

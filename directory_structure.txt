@@ -137,7 +137,12 @@ kyapture/
 │   │   ├── django.log
 │   ├── media/
 │   │   ├── test
-│   │  
+│   │   ├── payment_proofs/
+│   │   │  
+│   │   ├── photographer_logos/
+│   │   │  
+│   │   ├── photographers/
+│   │   │   ├── test
 │   ├── static/
 ├── frontend/
 │   ├── Dockerfile

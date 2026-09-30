@@ -1,6 +1,35 @@
 # C:/Users/LENOVO/Desktop/kyapture/docker-compose.yml
 version: "3.9"
 
+# ─────────────────────────────────────────────────────────────
+# LOCAL DEVELOPMENT STACK — not a production deployment manifest.
+#
+# Every service here is intentionally dev-shaped: the backend runs Django's
+# `runserver` (not gunicorn), Postgres/Redis ports are exposed to the host
+# for local psql/redis-cli debugging, and code is live-mounted for hot
+# reload. Settings module selection follows that: every Django-based
+# service (backend, celery_worker, celery_beat) takes its
+# DJANGO_SETTINGS_MODULE from backend/.env — currently
+# `config.settings.development` — so the three processes that make up one
+# logical application always agree on which settings they're running under.
+#
+# Previously celery_worker/celery_beat force-overrode
+# DJANGO_SETTINGS_MODULE=config.settings.production here while backend did
+# not, so the web process and the task-queue processes silently ran under
+# two different settings modules in the same "local dev" stack — and since
+# production.py enforces real SECRET_KEY/S3/email/DB env vars (see its
+# fail-loud guards), the worker and beat processes could not actually boot
+# against this file's plain local Postgres/Redis config at all. Fixed by
+# removing that override; all three now follow backend/.env like the web
+# process already did.
+#
+# A real production deployment (ECS/k8s/systemd/whatever hosts this) is a
+# separate manifest, not this file — it should set
+# DJANGO_SETTINGS_MODULE=config.settings.production explicitly, alongside
+# real SECRET_KEY/DB_*/AWS_*/DEFAULT_FROM_EMAIL values, and run gunicorn
+# (the backend Dockerfile's own CMD) rather than `runserver`.
+# ─────────────────────────────────────────────────────────────
+
 services:
   # 1. DATABASE SERVICE (PostgreSQL)
   db:
@@ -42,8 +71,11 @@ services:
     build: ./backend
     # Reuses the exact same backend build image but executes the Celery worker instead
     command: celery -A config worker -l info
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.production
+    # DJANGO_SETTINGS_MODULE intentionally NOT overridden here — it comes
+    # from backend/.env below, exactly like the `backend` service above, so
+    # the worker always agrees with the web process on which settings
+    # module it's running under. See the stack-level note at the top of
+    # this file for why an explicit override here was wrong.
     volumes:
       - ./backend:/app  # Live code mount
       - media_data:/app/media  # Shared media directory
@@ -61,8 +93,9 @@ services:
   celery_beat:
     build: ./backend
     command: celery -A config beat -l info
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.production
+    # Same as celery_worker above: DJANGO_SETTINGS_MODULE comes from
+    # backend/.env, not an override here, so beat, the worker, and the web
+    # process all run under one consistent settings module.
     volumes:
       - ./backend:/app
     env_file:

@@ -26,22 +26,19 @@ export default function GallerySettingsPage() {
   const [updating, setUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Settings sub-state
-  const [customUrl, setCustomUrl] = useState(gallery.custom_url || "davilandd");
-  const [categoryTags, setCategoryTags] = useState(gallery.category_tags || "");
-  const [downloadPin, setDownloadPin] = useState("");
-  const [pinEnabled, setPinEnabled] = useState(gallery.download_pin_enabled ?? false);
-  const [favoritesEnabled, setFavoritesEnabled] = useState(gallery.favorites_enabled ?? true);
-  const [storeEnabled, setStoreEnabled] = useState(gallery.store_enabled ?? false);
-  const [sliderEnabled, setSliderEnabled] = useState(gallery.slider_enabled ?? false);
-  const [slideshowEnabled, setSlideshowEnabled] = useState(gallery.slideshow_enabled ?? false);
+  // Locked product decision: the MVP gallery URL is /g/:username/:slug —
+  // stable, server-assigned, not photographer-editable (there is no
+  // custom-URL/vanity-slug feature; the slug is generated once from the
+  // title at creation and never changes on a title edit, see
+  // GalleryUpdateSerializer.update()). This tab shows it read-only.
+  const ownerUsername = gallery.owner_username ?? gallery.photographer_username ?? "unknown";
+  const canonicalPath = `/g/${ownerUsername}/${gallery.slug}`;
+  const canonicalUrl = typeof window !== "undefined" ? `${window.location.origin}${canonicalPath}` : canonicalPath;
 
   const tabs = [
     { id: "general", label: "General" },
     { id: "privacy", label: "Privacy" },
     { id: "download", label: "Download" },
-    { id: "favorites", label: "Favorites" },
-    { id: "store", label: "Store" },
   ];
 
   const handleSaveSettings = async (e) => {
@@ -57,20 +54,12 @@ export default function GallerySettingsPage() {
       watermark_enabled: watermarkEnabled,
       event_date: eventDate || null,
       expires_at: expiresAt || null,
-      custom_url: customUrl,
-      category_tags: categoryTags,
-      download_pin_enabled: pinEnabled,
-      favorites_enabled: favoritesEnabled,
-      store_enabled: storeEnabled,
-      slider_enabled: sliderEnabled,
-      slideshow_enabled: slideshowEnabled,
     };
 
     try {
       let updated;
       if (USE_MOCK_DATA) {
-        const mockSlug = payload.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-        updated = { ...gallery, ...payload, slug: mockSlug };
+        updated = { ...gallery, ...payload };
       } else {
         updated = await galleriesApi.updateGallery(slug, payload);
       }
@@ -81,10 +70,8 @@ export default function GallerySettingsPage() {
       setHasPassword(updated.has_password);
       setWatermarkEnabled(updated.watermark_enabled);
       toast("Settings saved successfully", "success");
-      if (updated.slug !== slug) {
-        skipNextLoadRef.current = true;
-        navigate(`/dashboard/galleries/${updated.slug}/settings`, { replace: true });
-      }
+      // Slug is stable across a title edit (see docstring above), so there's
+      // no slug-drift redirect to handle here anymore.
     } catch (err) {
       if (isMountedRef.current) {
         setErrorMsg(err.response?.data?.detail || "Failed to save settings.");
@@ -125,8 +112,6 @@ export default function GallerySettingsPage() {
       if (isMountedRef.current) setUpdating(false);
     }
   };
-
-  const ownerUsername = gallery.owner_username ?? gallery.photographer_username ?? "unknown";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -174,34 +159,11 @@ export default function GallerySettingsPage() {
               </div>
 
               <div className="p-4 bg-cream-100 rounded-xl border border-cream-200 text-xs">
-                <span className="font-semibold text-muted uppercase tracking-wider block text-[10px]">Custom URL</span>
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={customUrl}
-                    onChange={(e) => setCustomUrl(e.target.value)}
-                    disabled={updating}
-                    className="flex-1 px-2 py-1.5 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all font-mono text-ink bg-surface-light disabled:opacity-50"
-                    placeholder="your-username"
-                  />
-                </div>
-                <p className="mt-1.5 text-muted truncate">
-                  /g/<span className="text-ink font-bold">{customUrl || "your-username"}</span>/
-                  <span className="text-ink font-mono">{title.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "your-slug"}</span>
+                <span className="font-semibold text-muted uppercase tracking-wider block text-[10px]">Gallery Link</span>
+                <p className="mt-2 text-ink font-mono break-all">{canonicalUrl}</p>
+                <p className="mt-1.5 text-muted">
+                  This link stays the same even if you change the title above.
                 </p>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-ink/80" htmlFor="gallery-tags">Category Tags</label>
-                <input
-                  id="gallery-tags"
-                  type="text"
-                  value={categoryTags}
-                  onChange={(e) => setCategoryTags(e.target.value)}
-                  disabled={updating}
-                  placeholder="e.g. wedding, portraits, outdoor"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
-                />
               </div>
 
               <div className="flex flex-col gap-1">
@@ -320,31 +282,6 @@ export default function GallerySettingsPage() {
                 </label>
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
-                <div>
-                  <p className="text-sm font-medium text-ink">Download PIN</p>
-                  <p className="text-xs text-muted mt-0.5">Require a PIN to download photos</p>
-                </div>
-                <label className="toggle-wrap">
-                  <input type="checkbox" checked={pinEnabled} onChange={(e) => setPinEnabled(e.target.checked)} />
-                  <span className="toggle-slider" />
-                </label>
-              </div>
-
-              {pinEnabled && (
-                <div className="flex flex-col gap-1 ml-4">
-                  <label className="text-xs font-semibold text-ink/80">Set Download PIN</label>
-                  <input
-                    type="text"
-                    value={downloadPin}
-                    onChange={(e) => setDownloadPin(e.target.value)}
-                    placeholder="Enter 4-6 digit PIN"
-                    maxLength={6}
-                    className="w-full max-w-xs px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all font-mono"
-                  />
-                </div>
-              )}
-
               <div className="flex justify-end pt-4 border-t border-cream-200">
                 <button
                   type="submit"
@@ -352,72 +289,6 @@ export default function GallerySettingsPage() {
                   className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {updating ? "Saving..." : "Save Download Settings"}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Favorites Tab */}
-        {activeTab === "favorites" && (
-          <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
-            <h2 className="font-serif text-lg text-ink mb-2">Favorites</h2>
-            <p className="text-xs text-muted mb-6">Let clients mark their favorite photos.</p>
-
-            <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
-                <div>
-                  <p className="text-sm font-medium text-ink">Enable Favorites</p>
-                  <p className="text-xs text-muted mt-0.5">Clients can heart photos to create a favorites list</p>
-                </div>
-                <label className="toggle-wrap">
-                  <input type="checkbox" checked={favoritesEnabled} onChange={(e) => setFavoritesEnabled(e.target.checked)} />
-                  <span className="toggle-slider" />
-                </label>
-              </div>
-
-              <div className="flex justify-end pt-4 border-t border-cream-200">
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {updating ? "Saving..." : "Save Favorites Settings"}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Store Tab */}
-        {activeTab === "store" && (
-          <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
-            <h2 className="font-serif text-lg text-ink mb-2">Store</h2>
-            <p className="text-xs text-muted mb-6">Enable print sales directly from your gallery.</p>
-
-            <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
-                <div>
-                  <p className="text-sm font-medium text-ink">Enable Store</p>
-                  <p className="text-xs text-muted mt-0.5">Clients can purchase prints and products</p>
-                </div>
-                <label className="toggle-wrap">
-                  <input 
-                    type="checkbox" 
-                    checked={storeEnabled} 
-                    onChange={(e) => setStoreEnabled(e.target.checked)} 
-                  />
-                  <span className="toggle-slider" />
-                </label>
-              </div>
-
-              <div className="flex justify-end pt-4 border-t border-cream-200">
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {updating ? "Saving..." : "Save Store Settings"}
                 </button>
               </div>
             </form>

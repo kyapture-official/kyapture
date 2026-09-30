@@ -8,7 +8,7 @@ import subprocess
 import tempfile 
 from decimal import Decimal
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageCms
 from PIL.ImageOps import exif_transpose
 from PIL import Image as PILImage
 
@@ -186,39 +186,61 @@ def validate_magic_bytes(file_obj):
     
 def strip_exif_gps(file_obj):
     """
-    Strips raw GPS location coordinates from JPEG EXIF metadata to protect client privacy,
-    while leaving harmless metadata (camera lens, aperture, shutter speed) intact.
+    Strips raw GPS location coordinates from JPEG EXIF metadata to protect
+    client privacy, while leaving every other byte of the file — pixel
+    data, ICC color profile, quality, and all non-GPS metadata (camera,
+    lens, aperture, shutter speed) — completely untouched.
+
+    This result becomes MediaAsset.original_file: the private, permanent
+    master copy Phase 2 requires to be byte-preserved. The previous
+    implementation decoded the image with PIL and re-saved it (even at
+    quality=100), which always fully recompresses JPEG pixel data and
+    silently drops the ICC profile — that re-encode was happening to
+    every uploaded original, not just a derivative. piexif.insert()
+    instead rewrites only the JPEG's APP1/EXIF segment directly in the
+    raw byte stream: pixel data is never decoded or recompressed.
     """
     try:
         file_obj.seek(0)
-        img = PILImage.open(file_obj)
+        raw_bytes = file_obj.read()
+        file_obj.seek(0)
 
-        # Skip PNGs or JPEGs without EXIF footprints
-        if img.format != 'JPEG' or 'exif' not in img.info:
+        # Only JPEGs carry EXIF the way piexif understands it; PNGs (and
+        # anything else) pass through completely untouched, exactly as
+        # before.
+        if not raw_bytes.startswith(b'\xff\xd8'):
+            return file_obj
+
+        try:
+            exif_dict = piexif.load(raw_bytes)
+        except Exception:
+            # No parseable EXIF segment — nothing to strip, original
+            # bytes already carry no GPS data.
+            return file_obj
+
+        if not exif_dict.get('GPS'):
+            # No GPS tags present — return the original bytes completely
+            # untouched instead of doing a needless rewrite.
             file_obj.seek(0)
             return file_obj
 
-        exif_dict = piexif.load(img.info['exif'])
-        
-        # Purge GPS tags completely
-        exif_dict.pop('GPS', None)
+        exif_dict['GPS'] = {}
         clean_exif_bytes = piexif.dump(exif_dict)
 
         output_stream = io.BytesIO()
-        img.save(output_stream, format='JPEG', exif=clean_exif_bytes, quality=100)
-        output_stream.seek(0)
+        piexif.insert(clean_exif_bytes, raw_bytes, output_stream)
+        clean_bytes = output_stream.getvalue()
 
-        # Wrap back into standard Django InMemoryUploadedFile
         return InMemoryUploadedFile(
-            file=output_stream,
+            file=io.BytesIO(clean_bytes),
             field_name=None,
             name=file_obj.name,
-            content_type='image/jpeg',
-            size=output_stream.getbuffer().nbytes,
+            content_type=getattr(file_obj, 'content_type', None) or 'image/jpeg',
+            size=len(clean_bytes),
             charset=None
         )
     except Exception:
-        # 3. Log warning so failure rate is monitorable instead of silent
+        # Log warning so failure rate is monitorable instead of silent
         logger.warning("strip_exif_gps failed for %s — uploading with EXIF intact", file_obj.name)
         file_obj.seek(0)
         return file_obj
@@ -322,163 +344,270 @@ def apply_copyright_watermark(img, text):
         # Fallback security: If watermarking fails, return the original image un-watermarked
         return img.convert('RGB') if img.mode != 'RGB' else img
 
+def _normalize_to_srgb(img):
+    """
+    Best-effort ICC color-profile normalization — applied to DERIVATIVES
+    only, never to the preserved original (see strip_exif_gps, which
+    never touches color data).
+
+    If the source carries an embedded ICC profile, converts pixel data
+    through it into sRGB so a wide-gamut capture (Adobe RGB, ProPhoto
+    RGB, a camera or Lightroom's own profile) renders correctly — a
+    browser always treats an untagged image as sRGB, so an unconverted
+    wide-gamut image looks washed out or oversaturated. The embedded
+    profile is then dropped from the result: once pixel data is
+    genuinely sRGB, carrying a profile along just adds bytes for no
+    visual benefit.
+
+    Never raises: a missing, unreadable, or unconvertible ICC profile
+    falls back to a plain RGB conversion rather than failing the whole
+    derivative pipeline over a bad embedded profile.
+    """
+    icc_bytes = img.info.get('icc_profile')
+    if icc_bytes:
+        try:
+            src_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc_bytes))
+            srgb_profile = ImageCms.createProfile('sRGB')
+            converted = ImageCms.profileToProfile(img, src_profile, srgb_profile, outputMode='RGB')
+            converted.info.pop('icc_profile', None)
+            return converted
+        except Exception:
+            logger.warning("ICC-to-sRGB conversion failed; falling back to plain RGB conversion")
+    return img.convert('RGB') if img.mode != 'RGB' else img
+
+
 def process_image_pipeline(image_file, watermark_text=None):
     """
-    Unified High-Performance Image Processing Pipeline.
-    
-    Reads the original source file exactly once in memory, fixes EXIF orientation,
-    conditionally applies translucent copyright watermarks, and generates:
-    1. Display WebP (Max 2048px on longest edge, 80% quality)
-    2. Thumbnail WebP (Max 600px on longest edge, 70% quality)
-    3. BlurHash Base85 string
-    
-    Returns tuple: (display_file, thumbnail_file, blurhash_str)
+    Unified image-derivative pipeline: PRESERVED ORIGINAL (handled
+    upstream by strip_exif_gps — never touched here) → OPTIMIZED
+    DERIVATIVES.
+
+    Reads the source file once, fixes EXIF orientation, normalizes color
+    to sRGB (see _normalize_to_srgb), conditionally applies a
+    translucent copyright watermark, and generates the MVP 640/1280/2048
+    derivative set (evaluated against the Phase 2 plan as written — a
+    fourth tier or AVIF was not added, since there's no demonstrated MVP
+    need for either):
+
+    1. Display WebP   — max 2048px on the longest edge (full-screen /
+       lightbox view)
+    2. Medium WebP    — max 1280px on the longest edge (typical in-page
+       grid-column width on desktop/tablet — the gap the previous
+       two-tier set left, forcing a phone-sized 600/640px image or the
+       full 2048px lightbox image into an ordinary page view)
+    3. Thumbnail WebP — max 640px on the longest edge (grid thumbnails,
+       including on high-DPI phone screens)
+    4. BlurHash string
+
+    Every derivative is generated from the SAME normalized, oriented,
+    optionally-watermarked in-memory image — the source is read exactly
+    once. Generation is a pure function of image_file's bytes, so
+    re-running it (a Celery retry) always reproduces the same output for
+    the same input; combined with PublicMediaStorage's deterministic,
+    overwrite-on-write keys (apps/photos/models.py, apps/core/storage.py)
+    that makes retries idempotent and orphan-free.
+
+    Returns tuple: (display_file, medium_file, thumbnail_file, blurhash_str)
     """
     image_file.seek(0)
     img = Image.open(image_file)
-    img = exif_transpose(img)  # Rotate image based on DSLR metadata orientation
-    
-    # ─── 1. Generate WebP Display File (2048px Lightbox View) ───
-    display_img = img.copy()
-    display_img.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
-    
-    # Apply watermark if enabled
-    if watermark_text:
-        display_img = apply_copyright_watermark(display_img, watermark_text)
-        
-    display_stream = io.BytesIO()
-    display_img.save(display_stream, format='WEBP', quality=80)
-    display_stream.seek(0)
-    
-    display_filename = os.path.splitext(image_file.name)[0] + "_display.webp"
-    display_file = SimpleUploadedFile(display_filename, display_stream.read(), content_type="image/webp")
+    img = exif_transpose(img)       # Correct rotation from DSLR/phone orientation metadata
+    img = _normalize_to_srgb(img)   # Correct wide-gamut color profiles to browser-standard sRGB
 
-    # ─── 2. Generate WebP Thumbnail File (600px Grid View) ───
-    thumb_img = img.copy()
-    thumb_img.thumbnail((600, 600), Image.Resampling.LANCZOS)
-    
-    # Apply watermark to thumbnails to protect gallery grid scraping
-    if watermark_text:
-        thumb_img = apply_copyright_watermark(thumb_img, watermark_text)
-        
-    thumb_stream = io.BytesIO()
-    thumb_img.save(thumb_stream, format='WEBP', quality=70)
-    thumb_stream.seek(0)
-    
-    thumb_filename = os.path.splitext(image_file.name)[0] + "_thumb.webp"
-    thumbnail_file = SimpleUploadedFile(thumb_filename, thumb_stream.read(), content_type="image/webp")
+    base_name = os.path.splitext(image_file.name)[0]
 
-    # ─── 3. Generate BlurHash String ───
+    def _make_derivative(max_edge, quality, suffix):
+        derivative_img = img.copy()
+        derivative_img.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+
+        if watermark_text:
+            derivative_img = apply_copyright_watermark(derivative_img, watermark_text)
+
+        stream = io.BytesIO()
+        # WebP save() never carries over EXIF/ICC metadata unless it's
+        # explicitly passed in — derivatives are metadata-free by
+        # construction here, not because anything is being stripped.
+        derivative_img.save(stream, format='WEBP', quality=quality)
+        stream.seek(0)
+
+        filename = f"{base_name}_{suffix}.webp"
+        return SimpleUploadedFile(filename, stream.read(), content_type="image/webp")
+
+    # ─── 1. Display WebP (2048px — full-screen lightbox view) ───
+    display_file = _make_derivative(2048, 82, "display")
+
+    # ─── 2. Medium WebP (1280px — grid/in-page column width) ───
+    medium_file = _make_derivative(1280, 80, "medium")
+
+    # ─── 3. Thumbnail WebP (640px — grid thumbnails, incl. high-DPI phones) ───
+    thumbnail_file = _make_derivative(640, 75, "thumb")
+
+    # ─── 4. Generate BlurHash String ───
+    # Previously this ALWAYS fell back to one single hardcoded placeholder
+    # string for every image ever uploaded, for two independent reasons:
+    #   (a) the `blurhash` package was never listed in requirements.txt,
+    #       so `import blurhash` always raised ImportError;
+    #   (b) even installed, the call used `x_components=`/`y_components=`
+    #       keyword arguments that don't exist on the real `blurhash`
+    #       PyPI package (its actual signature is `components_x=`/
+    #       `components_y=`), AND that package's encode() needs a plain
+    #       3-dimensional [y][x][r,g,b] array, not a PIL Image object —
+    #       both would have raised TypeError even with the package
+    #       installed. Both are fixed below; verified against the real
+    #       `blurhash==1.1.5` package.
     default_placeholder = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
     blurhash_str = default_placeholder
     try:
         import blurhash
         blur_img = img.copy()
-        # Keep dimensions extremely small to guarantee immediate calculation speeds
+        # Small, fixed size keeps encode time negligible regardless of
+        # source resolution — blurhash is a heavily-downsampled summary,
+        # so more input resolution buys nothing.
         blur_img.thumbnail((100, 100), Image.Resampling.LANCZOS)
         if blur_img.mode != 'RGB':
             blur_img = blur_img.convert('RGB')
-        blurhash_str = blurhash.encode(blur_img, x_components=4, y_components=4)
-    except Exception:
-        pass  # Gracefully falls back to grey placeholder if package is missing or errors out
 
-    # Reset stream pointers for S3 upload preservation
+        width, height = blur_img.size
+        pixels = list(blur_img.getdata())
+        pixel_rows = [pixels[y * width:(y + 1) * width] for y in range(height)]
+        blurhash_str = blurhash.encode(pixel_rows, components_x=4, components_y=4)
+    except Exception:
+        logger.warning("blurhash encode failed for %s — using placeholder", image_file.name)
+
+    # Reset stream pointer for S3 upload preservation
     image_file.seek(0)
-    
-    return display_file, thumbnail_file, blurhash_str
+
+    return display_file, medium_file, thumbnail_file, blurhash_str
 
 def process_video_pipeline(video_file):
     """
-    Unified Systems-Level Video Processing Pipeline.
-    
-    Spools an uploaded in-memory video stream to a temporary disk file, 
-    and executes safe subprocess pipelines calling FFprobe and FFmpeg to:
-    1. Query format metadata and extract the exact video duration in seconds.
-    2. Capture a high-res poster frame (JPEG) from the 2-second timestamp.
-    3. Transcode a 3-second silent looping WebM hover-preview clip (downsampled to 320px).
-    
-    Guarantees absolute filesystem hygiene by unlinking and purging all 
-    temporary files from disk inside a robust 'finally' block.
+    Video-derivative pipeline: PRIVATE ORIGINAL VIDEO (untouched here —
+    only ever read) → ASYNC PROCESSING → BROWSER-FRIENDLY DERIVATIVE.
+
+    Spools the original video to a temporary disk file using CHUNKED
+    reads (`video_file.chunks()`) instead of one `.read()` call that
+    materializes the entire file as an in-memory `bytes` object — the
+    previous implementation did exactly that, so a multi-GB upload held
+    its full size in the Celery worker's RAM at once. Chunked reads keep
+    memory bounded to one chunk regardless of file size, and work
+    identically whether original_file is on local disk or streamed from
+    S3 (PrivateMediaStorage).
+
+    Then runs safe (shell=False, fixed argument-list) FFprobe/FFmpeg
+    subprocess calls to:
+    1. Extract the exact video duration.
+    2. Capture a poster frame (JPEG) at a timestamp GUARANTEED to fall
+       inside the video's actual duration. The previous hardcoded
+       "seek to 00:00:02" produced a completely empty/failed output for
+       any video shorter than 2 seconds — a real bug, and "short video"
+       is one of the explicit MVP test cases this phase calls for.
+    3. Transcode ONE browser-compatible H.264 (yuv420p) / AAC MP4
+       derivative with faststart (front-loaded moov atom, so playback
+       can begin before the whole file downloads), scaled DOWN (never
+       up) to a 1080p-max height. 1080p mirrors the image pipeline's own
+       precedent of a fixed largest-tier cap (2048px) — the product
+       defines no other video resolution limit today, so this is an
+       explicit, documented inference, not a measured requirement.
+       Replaces the previous 3-second silent WebM hover-preview clip:
+       confirmed dead code (no frontend view reads `preview_url` /
+       `preview_file`), so generating it was a wasted FFmpeg pass and a
+       wasted stored derivative — exactly what "do not generate
+       unnecessary video variants" rules out.
+
+    Guarantees filesystem hygiene by unlinking every temp file from disk
+    inside a 'finally' block regardless of success or failure.
+
+    Returns tuple: (poster_file, playback_file, duration_seconds)
     """
-    # Initialize variables for the finally-block cleanup safety net
     temp_video_path = None
     temp_poster_path = None
-    temp_preview_path = None
+    temp_playback_path = None
 
     try:
-        # 1. Spool the in-memory video stream to a temporary secure disk path
+        # 1. Stream the original to a temp disk file in bounded chunks —
+        #    never materialize the whole video as one in-memory object.
         video_file.seek(0)
-        video_bytes = video_file.read()
-        video_file.seek(0)
-
         ext = os.path.splitext(video_file.name)[1].lower() or ".mp4"
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_video:
-            temp_video.write(video_bytes)
             temp_video_path = temp_video.name
+            for chunk in video_file.chunks():
+                temp_video.write(chunk)
+        video_file.seek(0)
 
-        # 2. Extract Video Duration using FFprobe
+        # 2. Extract exact video duration using FFprobe
         ffprobe_cmd = [
-            'ffprobe', '-v', 'error', 
-            '-show_entries', 'format=duration', 
-            '-of', 'default=noprint_wrappers=1:nokey=1', 
+            'ffprobe', '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
             temp_video_path
         ]
-        
-        # Run process safely (shell=False prevents command injection vulnerabilities)
         duration_result = subprocess.run(
-            ffprobe_cmd, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE, 
-            text=True, 
+            ffprobe_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
             check=True
         )
-        duration = int(float(duration_result.stdout.strip()))
+        duration_float = float((duration_result.stdout or "0").strip() or 0.0)
+        duration = int(duration_float)
 
-        # 3. Extract Video Poster Frame (JPEG at 2-second mark) using FFmpeg
+        # 3. Extract a poster frame (JPEG) at a SAFE timestamp — the
+        #    clip's midpoint, capped at 2s, so it reliably lands inside
+        #    both very short and ordinary-length videos (never seeks
+        #    past end-of-file the way a hardcoded 2s offset could).
+        poster_ts = max(0.0, min(2.0, duration_float * 0.5)) if duration_float > 0 else 0.0
+
         temp_poster_fd, temp_poster_path = tempfile.mkstemp(suffix=".jpg")
         os.close(temp_poster_fd)
 
-        # -ss placed before -i activates fast input-seeking (O(1) execution speed)
         ffmpeg_poster_cmd = [
-            'ffmpeg', '-y', '-ss', '00:00:02', 
-            '-i', temp_video_path, 
-            '-vframes', '1', '-f', 'image2', 
+            'ffmpeg', '-y', '-ss', f'{poster_ts:.3f}',
+            '-i', temp_video_path,
+            '-vframes', '1', '-f', 'image2',
             temp_poster_path
         ]
         subprocess.run(ffmpeg_poster_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
-        # Read the generated JPEG poster back into a Django SimpleUploadedFile
         with open(temp_poster_path, 'rb') as f:
             poster_data = f.read()
         poster_name = os.path.splitext(video_file.name)[0] + "_poster.jpg"
         poster_file = SimpleUploadedFile(poster_name, poster_data, content_type="image/jpeg")
 
-        # 4. Transcode 3-second Silent WebM Hover Preview (Scale down to 320px width)
-        temp_preview_fd, temp_preview_path = tempfile.mkstemp(suffix=".webm")
-        os.close(temp_preview_fd)
+        # 4. Transcode ONE browser-compatible H.264/AAC MP4 playback
+        #    derivative. yuv420p is required for broad decoder
+        #    compatibility (notably Safari/iOS); faststart lets playback
+        #    begin before the full file has downloaded; scale-down-only
+        #    (via min(1080, ih)) never upscales a smaller source.
+        #    Works unmodified for video-only sources too — ffmpeg simply
+        #    emits no audio stream when the input has none.
+        temp_playback_fd, temp_playback_path = tempfile.mkstemp(suffix=".mp4")
+        os.close(temp_playback_fd)
 
-        ffmpeg_preview_cmd = [
-            'ffmpeg', '-y', '-ss', '00:00:02', '-t', '3', 
-            '-i', temp_video_path, 
-            '-vf', 'scale=320:-1', '-an', '-f', 'webm', 
-            temp_preview_path
+        ffmpeg_playback_cmd = [
+            'ffmpeg', '-y', '-i', temp_video_path,
+            '-vf', "scale='-2:min(1080,ih)'",
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-movflags', '+faststart',
+            '-f', 'mp4',
+            temp_playback_path
         ]
-        subprocess.run(ffmpeg_preview_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(ffmpeg_playback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
-        # Read the WebM preview clip back into a Django SimpleUploadedFile
-        with open(temp_preview_path, 'rb') as f:
-            preview_data = f.read()
-        preview_name = os.path.splitext(video_file.name)[0] + "_preview.webm"
-        preview_file = SimpleUploadedFile(preview_name, preview_data, content_type="video/webm")
+        with open(temp_playback_path, 'rb') as f:
+            playback_data = f.read()
+        playback_name = os.path.splitext(video_file.name)[0] + "_playback.mp4"
+        playback_file = SimpleUploadedFile(playback_name, playback_data, content_type="video/mp4")
 
-        return poster_file, preview_file, duration
+        return poster_file, playback_file, duration
 
     except Exception as e:
         raise RuntimeError(f"FFmpeg/FFprobe system processing execution failed: {str(e)}")
 
     finally:
-        # Strict Filesystem Hygiene: Clean up all disk remnants regardless of success or failure
-        for path in [temp_video_path, temp_poster_path, temp_preview_path]:
+        # Strict filesystem hygiene: clean up all disk remnants regardless of success or failure
+        for path in [temp_video_path, temp_poster_path, temp_playback_path]:
             if path and os.path.exists(path):
                 try:
                     os.remove(path)
@@ -490,14 +619,30 @@ def sanitize_text(text):
     Surgically strips all HTML/JS tags from user-provided input strings.
     Prevents persistent Cross-Site Scripting (XSS) payload storage 
     inside gallery titles, descriptions, and photographer bio fields.
+
+    bleach.clean() is built for producing HTML-safe *markup*, so besides
+    removing tags it also HTML-entity-escapes survivors (e.g. "&" becomes
+    "&amp;", '"' becomes "&quot;"). We store this as plain text — React
+    renders it as JSX text content, never via dangerouslySetInnerHTML — so
+    that escaping has no protective value here and only corrupts normal
+    input (an ampersand in a couple's names, a title in quotes, emoji are
+    passed through untouched by bleach but neighboring quotes/ampersands
+    were getting mangled). html.unescape() after cleaning restores the
+    literal characters. This is safe: tags themselves were already removed
+    by strip=True, so unescaping cannot re-introduce a live tag — at worst
+    an encoded "&lt;script&gt;" becomes the inert literal text "<script>",
+    which renders as visible text, not executable markup.
     """
     if not text:
         return ""
-        
+
     try:
         import bleach
-        # Strips out all HTML tags and attributes entirely
-        return bleach.clean(text, tags=[], strip=True)
+        import html
+        # Strip all HTML tags/attributes, then undo bleach's entity-escaping
+        # of the plain-text characters that survive (&, quotes, etc).
+        cleaned = bleach.clean(text, tags=[], strip=True)
+        return html.unescape(cleaned)
     except ImportError:
         # Fallback safeguard: If bleach is not installed, run basic character stripping
         import re

@@ -3,6 +3,7 @@ import os
 from decimal import Decimal
 from django.db import models
 from apps.core.models import BaseModel
+from apps.core.storage import PrivateMediaStorage, PublicMediaStorage
 
 
 # ─────────────────────────────────────────────────────────────
@@ -24,31 +25,68 @@ def get_original_asset_path(instance, filename):
 
 
 def get_display_photo_path(instance, filename):
-    """Generates paths for 2048px WebP full-screen display images (null for videos)."""
+    """Generates paths for 2048px WebP full-screen/lightbox display images (null for videos)."""
     photographer_id = instance.gallery.photographer.id
     gallery_id = instance.gallery.id
     return f"photographers/{photographer_id}/galleries/{gallery_id}/photos/{instance.id}_display.webp"
 
 
+def get_medium_photo_path(instance, filename):
+    """
+    Generates paths for 1280px WebP mid-size images — the middle rung of
+    the 640/1280/2048 srcset (grid columns at typical desktop/tablet
+    widths land here; avoids forcing a phone-sized 640px view or a
+    full 2048px lightbox load for an ordinary in-page gallery view).
+    """
+    photographer_id = instance.gallery.photographer.id
+    gallery_id = instance.gallery.id
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/photos/{instance.id}_medium.webp"
+
+
 def get_thumbnail_photo_path(instance, filename):
-    """Generates paths for 600px WebP grid thumbnails (null for videos)."""
+    """Generates paths for 640px WebP grid thumbnails (null for videos)."""
     photographer_id = instance.gallery.photographer.id
     gallery_id = instance.gallery.id
     return f"photographers/{photographer_id}/galleries/{gallery_id}/thumbnails/{instance.id}_thumb.webp"
 
 
 def get_video_poster_path(instance, filename):
-    """Generates paths for frame-captured video poster thumbnails (null for images)."""
+    """
+    Generates paths for frame-captured video poster thumbnails (null for
+    images). Extension is .jpg because that's what the pipeline actually
+    produces (FFmpeg -f image2 JPEG bytes) — a prior .webp extension here
+    caused storage backends that infer Content-Type from the key
+    extension (S3 via django-storages) to serve real JPEG bytes labeled
+    image/webp, which browsers can fail to render (F-25b).
+    """
     photographer_id = instance.gallery.photographer.id
     gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_poster.webp"
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_poster.jpg"
 
 
 def get_video_preview_path(instance, filename):
-    """Generates paths for looping hover silent preview clips (null for images)."""
+    """
+    Generates paths for the (legacy, no longer generated) looping hover
+    preview clip. Kept only so any already-processed rows with a
+    preview_file keep resolving; process_video_asset no longer creates
+    new ones — confirmed unused by any frontend UI (nothing reads
+    preview_url), so generating it was pure wasted processing/storage.
+    """
     photographer_id = instance.gallery.photographer.id
     gallery_id = instance.gallery.id
     return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_preview.webm"
+
+
+def get_video_playback_path(instance, filename):
+    """
+    Generates paths for the browser-compatible H.264/AAC MP4 playback
+    derivative — what PublicVideoStreamView actually serves for inline
+    viewing, so an original MOV/HEVC/variable-codec upload always has a
+    guaranteed-playable derivative regardless of the source codec.
+    """
+    photographer_id = instance.gallery.photographer.id
+    gallery_id = instance.gallery.id
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_playback.mp4"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -98,19 +136,42 @@ class MediaAsset(BaseModel):
     )
 
     # ─── Tier 1: Shared Original Source (Downloads) ───
-    original_file = models.FileField(upload_to=get_original_asset_path, max_length=500)
+    # PrivateMediaStorage: private ACL + signed, expiring URLs. Never
+    # served directly — always reached through an authorization-gated
+    # download endpoint (PublicPhotoDownloadView, the ZIP endpoint, or the
+    # dashboard's own tenant-scoped views).
+    original_file = models.FileField(
+        upload_to=get_original_asset_path, max_length=500, storage=PrivateMediaStorage()
+    )
 
     # ─── Image Specific Fields ───
-    display_file = models.ImageField(upload_to=get_display_photo_path, max_length=500, null=True, blank=True)
-    thumbnail_file = models.ImageField(upload_to=get_thumbnail_photo_path, max_length=500, null=True, blank=True)
+    # All derivatives use PublicMediaStorage: public-read, unsigned,
+    # immutable-cacheable, overwrite-on-retry. See apps/core/storage.py.
+    display_file = models.ImageField(
+        upload_to=get_display_photo_path, max_length=500, null=True, blank=True, storage=PublicMediaStorage()
+    )
+    medium_file = models.ImageField(
+        upload_to=get_medium_photo_path, max_length=500, null=True, blank=True, storage=PublicMediaStorage()
+    )
+    thumbnail_file = models.ImageField(
+        upload_to=get_thumbnail_photo_path, max_length=500, null=True, blank=True, storage=PublicMediaStorage()
+    )
     blurhash = models.CharField(max_length=100, blank=True, null=True)
     width = models.PositiveIntegerField(null=True, blank=True)   
     height = models.PositiveIntegerField(null=True, blank=True)  
 
     # ─── Video Specific Fields ───
     stream_url = models.URLField(max_length=500, blank=True, null=True)  
-    poster_image = models.ImageField(upload_to=get_video_poster_path, max_length=500, null=True, blank=True)
-    preview_file = models.FileField(upload_to=get_video_preview_path, max_length=500, null=True, blank=True)
+    poster_image = models.ImageField(
+        upload_to=get_video_poster_path, max_length=500, null=True, blank=True, storage=PublicMediaStorage()
+    )
+    preview_file = models.FileField(
+        upload_to=get_video_preview_path, max_length=500, null=True, blank=True, storage=PublicMediaStorage()
+    )
+    # Browser-compatible H.264/AAC MP4 derivative — see get_video_playback_path().
+    playback_file = models.FileField(
+        upload_to=get_video_playback_path, max_length=500, null=True, blank=True, storage=PublicMediaStorage()
+    )
     duration = models.PositiveIntegerField(null=True, blank=True)  
     
     # OLD video_status is now a unified asset processing status

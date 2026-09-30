@@ -15,6 +15,7 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
     Allows public clients to browse unified gallery streams cleanly.
     """
     display_url = serializers.SerializerMethodField()
+    medium_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     poster_url = serializers.SerializerMethodField()
     preview_url = serializers.SerializerMethodField()
@@ -29,6 +30,7 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
             'title', 
             'original_name',
             'display_url', 
+            'medium_url',
             'thumbnail_url', 
             'blurhash', 
             'width', 
@@ -46,6 +48,17 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if obj.display_file and request:
             return request.build_absolute_uri(obj.display_file.url)
+        return None
+
+    def get_medium_url(self, obj):
+        """
+        1280px WebP tier — the srcset middle rung for typical in-page
+        grid-column widths (the frontend builds `srcset`/`sizes` from
+        thumbnail_url/medium_url/display_url; see PublicMasonryGrid.jsx).
+        """
+        request = self.context.get('request')
+        if obj.medium_file and request:
+            return request.build_absolute_uri(obj.medium_file.url)
         return None
 
     def get_thumbnail_url(self, obj):
@@ -123,21 +136,67 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
 class PublicGallerySerializer(serializers.ModelSerializer):
     """
     GET /api/v1/public/{username}/{slug}/
-    Exposes only safe, public metadata fields for client viewing.
+    Exposes only safe, public metadata fields for client viewing — the
+    fields the MVP client gallery page actually renders (cover/hero,
+    event date, download gating, password gate, photo grid, design
+    settings). Nothing photographer-only (no internal ids beyond the
+    gallery's own, no password_hash, no owner account details) is ever
+    included here.
+
+    Phase 2 (large-gallery performance): 'photos' is now only the FIRST
+    PAGE of READY assets (GalleryMediaPagination.page_size, currently
+    60) instead of the gallery's entire asset list embedded in one
+    response — a 2000-photo gallery no longer means a 2000-entry JSON
+    array (and 2000 signed/URL-built entries) on every single gallery
+    load. The view (PublicGalleryView) queries that first page itself
+    and passes it in via context['photos_page'] alongside the total
+    READY count, so this serializer never re-queries or re-paginates —
+    it only renders what it's handed. Further pages are fetched by the
+    frontend from PublicGalleryPhotosView as the client scrolls.
     """
     photographer_name = serializers.SerializerMethodField()
     photographer_logo = serializers.SerializerMethodField()
-    # Alias: maps the unified 'assets' relationship back to the 'photos' key for David's React app
-    photos = PublicMediaAssetSerializer(source='assets', many=True, read_only=True)
+    cover_url = serializers.SerializerMethodField()
+    photos = serializers.SerializerMethodField()
+    photos_count = serializers.SerializerMethodField()
+    photos_has_more = serializers.SerializerMethodField()
+    photos_page_size = serializers.SerializerMethodField()
 
     class Meta:
         model = Gallery
         fields = [
             'id', 'title', 'description', 'slug', 'branding_color',
+            'cover_url', 'event_date', 'design_settings',
             'photographer_name', 'photographer_logo', 'allow_download', 'watermark_enabled',
-            'is_password_protected', 'photos',
+            'is_password_protected',
+            'photos', 'photos_count', 'photos_has_more', 'photos_page_size',
         ]
         read_only_fields = fields
+
+    def get_photos(self, obj):
+        """
+        Renders whichever page of READY assets the view already fetched
+        (context['photos_page'] — a plain list, not a queryset: the view
+        builds it with an explicit LIMIT via GalleryMediaPagination, so
+        there is no unbounded query hiding behind this field). Falls back
+        to an empty list — never re-queries obj.assets here — if a caller
+        ever instantiates this serializer without that context, since a
+        silent full-table fetch is exactly the giant-payload regression
+        this change exists to prevent.
+        """
+        photos_page = self.context.get('photos_page')
+        if photos_page is None:
+            return []
+        return PublicMediaAssetSerializer(photos_page, many=True, context=self.context).data
+
+    def get_photos_count(self, obj):
+        return self.context.get('photos_total_count', 0)
+
+    def get_photos_has_more(self, obj):
+        return bool(self.context.get('photos_has_more', False))
+
+    def get_photos_page_size(self, obj):
+        return self.context.get('photos_page_size', 0)
 
     def get_photographer_name(self, obj):
         """Falls back to username if display_name is empty or null."""
@@ -149,6 +208,28 @@ class PublicGallerySerializer(serializers.ModelSerializer):
         if obj.photographer.logo and request:
             return request.build_absolute_uri(obj.photographer.logo.url)
         return None
+
+    def get_cover_url(self, obj):
+        """
+        Same source of truth as the dashboard side
+        (GalleryDetailSerializer.get_cover_url) — the model's cover_photo
+        FK, which GalleryUpdateSerializer keeps in sync with the Design
+        page's selection and with auto-assignment on first processed
+        upload. Falls back to poster_image for a video cover (videos have
+        no thumbnail_file/display_file of their own).
+        """
+        request = self.context.get('request')
+        cover = obj.cover_photo
+        if not cover or not request:
+            return None
+        image_field = (
+            getattr(cover, 'display_file', None)
+            or getattr(cover, 'thumbnail_file', None)
+            or getattr(cover, 'poster_image', None)
+        )
+        if not image_field or not hasattr(image_field, 'url'):
+            return None
+        return request.build_absolute_uri(image_field.url)
 
 
 class GalleryUnlockSerializer(serializers.Serializer):

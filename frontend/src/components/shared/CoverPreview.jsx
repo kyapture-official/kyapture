@@ -1,47 +1,21 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\components\shared\CoverPreview.jsx
 import { formatDate } from "../../utils/formatters";
+import { resolveDesignSettings } from "../../utils/designSettings";
 
 /**
  * WHAT: Live cover page preview — renders a scaled-down representation of
  *       the client-facing gallery cover based on the current design settings.
  * WHY:  Instant visual feedback as the photographer adjusts layout, typography,
  *       colors, and grid options in the design builder.
+ *
+ * The layout/typography/color option → class mapping lives in
+ * ../../utils/designSettings.js, shared with the real public client
+ * gallery (ClientGalleryPage.jsx) so this preview and what a guest
+ * actually sees stay in lockstep.
  */
 
-const LAYOUT_CLASSES = {
-  center: "items-center text-center",
-  left: "items-start text-left pl-10",
-  novel: "items-center text-center",
-  vintage: "items-center text-center",
-  frame: "items-center text-center",
-  stripe: "items-center text-center",
-};
-
-const TYPOGRAPHY_CLASSES = {
-  sans: "font-sans",
-  serif: "font-serif",
-  modern: "font-sans tracking-tight",
-  timeless: "font-serif italic",
-  bold: "font-sans font-bold",
-  subtle: "font-sans font-light tracking-wide",
-};
-
-const COLOR_THEMES = {
-  light: { bg: "bg-surface-light", text: "text-ink", sub: "text-muted", accent: "bg-ink" },
-  gold: { bg: "bg-amber-50", text: "text-amber-900", sub: "text-amber-700/60", accent: "bg-amber-600" },
-  rose: { bg: "bg-rose-50", text: "text-rose-900", sub: "text-rose-700/60", accent: "bg-rose-500" },
-  terracotta: { bg: "bg-orange-50", text: "text-orange-900", sub: "text-orange-700/60", accent: "bg-orange-600" },
-  sand: { bg: "bg-stone-100", text: "text-stone-900", sub: "text-stone-600", accent: "bg-stone-500" },
-  olive: { bg: "bg-lime-50", text: "text-lime-900", sub: "text-lime-700/60", accent: "bg-lime-700" },
-  agave: { bg: "bg-brand-green-50", text: "text-brand-green-900", sub: "text-brand-green-700/60", accent: "bg-brand-green-600" },
-  sea: { bg: "bg-sky-50", text: "text-sky-900", sub: "text-sky-700/60", accent: "bg-sky-600" },
-  dark: { bg: "bg-slate-900", text: "text-white", sub: "text-white/50", accent: "bg-white/20" },
-};
-
 export default function CoverPreview({ settings, gallery }) {
-  const layout = LAYOUT_CLASSES[settings.layout] || LAYOUT_CLASSES.center;
-  const typo = TYPOGRAPHY_CLASSES[settings.typography] || TYPOGRAPHY_CLASSES.serif;
-  const theme = COLOR_THEMES[settings.colorPalette] || COLOR_THEMES.light;
+  const { layoutClass: layout, typographyClass: typo, theme } = resolveDesignSettings(settings);
 
   const title = gallery?.title || "Collection Title";
   const date = gallery?.event_date || gallery?.created_at;

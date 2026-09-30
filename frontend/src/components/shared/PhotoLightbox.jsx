@@ -403,6 +403,15 @@ export default function PhotoLightbox({
             <img
               key={index}
               src={activePhoto.display_url}
+              srcSet={
+                [
+                  activePhoto.medium_url ? `${activePhoto.medium_url} 1280w` : null,
+                  activePhoto.display_url ? `${activePhoto.display_url} 2048w` : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || undefined
+              }
+              sizes="100vw"
               alt={
                 activePhoto.alt ||
                 activePhoto.original_name ||

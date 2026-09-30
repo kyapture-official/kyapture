@@ -45,6 +45,12 @@ class Gallery(BaseModel):
         validators=[hex_color_validator]
     )
 
+    # Locked product decision: Design is a real MVP feature (cover layout,
+    # typography, color palette, grid style/spacing, selected cover photo id).
+    # Kept intentionally simple — a JSON blob of a small fixed set of choices,
+    # not a theme builder. See docs/KYAPTURE_PRODUCT_DECISIONS.md #6.
+    design_settings = models.JSONField(default=dict, blank=True)
+
     # Access Control Settings
     is_password_protected = models.BooleanField(default=False)
     password_hash = models.CharField(max_length=255, null=True, blank=True)

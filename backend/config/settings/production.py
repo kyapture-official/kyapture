@@ -34,6 +34,51 @@ if not _secret_key or _secret_key == _insecure_default:
     )
 
 
+# ─── ENFORCE A REAL DATABASE CONNECTION (Fail Loudly, Don't Silently Degrade) ─
+# base.py never defines DATABASES at all — only development.py does, scoped
+# to local Postgres defaults via DB_NAME/DB_USER/DB_PASSWORD/DB_HOST/DB_PORT.
+# Without an explicit block here, Django silently falls back to its own
+# built-in default (settings.DATABASES == {}). That looks completely fine at
+# import time — `manage.py check` even passes — and only blows up the first
+# time any code path actually touches the ORM:
+#   django.core.exceptions.ImproperlyConfigured: settings.DATABASES is
+#   improperly configured. Please supply the ENGINE value.
+# That's effectively every authenticated request, every public gallery view,
+# and every Celery task (photo/video processing, the subscription-expiry
+# sweep) — the entire application, not an edge case.
+#
+# Reuses the exact same DB_NAME/DB_USER/DB_PASSWORD/DB_HOST/DB_PORT env var
+# names development.py already uses, so one .env/deployment-secret naming
+# convention covers both environments — only the values differ per target.
+_required_db_vars = ("DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST")
+_missing_db_vars = [name for name in _required_db_vars if not os.getenv(name)]
+
+if _missing_db_vars:
+    raise ImproperlyConfigured(
+        "Production requires a real PostgreSQL connection, but the following "
+        f"required environment variable(s) are missing or empty: {', '.join(_missing_db_vars)}. "
+        "Set these in your production environment (deployment secrets, not "
+        "backend/.env) before starting this service."
+    )
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("DB_NAME"),
+        "USER": os.getenv("DB_USER"),
+        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "HOST": os.getenv("DB_HOST"),
+        "PORT": os.getenv("DB_PORT", "5432"),
+        # Reuses a connection across requests within a worker process instead
+        # of opening a fresh one every time (Django's own default is 0 — no
+        # persistence). This is Django's built-in connection persistence,
+        # not a PgBouncer/pooler replacement — tunable via env without a
+        # code change once real traffic patterns are known.
+        "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+    }
+}
+
+
 # ─── ENFORCE S3 MEDIA STORAGE (Fail Loudly, Don't Silently Degrade) ─────────
 # base.py's STORAGES block falls back to FileSystemStorage whenever any of
 # the three AWS_* vars below is missing — that's the right behavior in dev,
@@ -122,6 +167,22 @@ if not CORS_ALLOWED_ORIGINS or CORS_ALLOWED_ORIGINS == [""]:
         "https://kyapture.com",
     ]
 
+# CSRF trusts these origins for the Origin-header check on unsafe requests
+# (POST/PUT/PATCH/DELETE) made with the cookie-authenticated JWT flow —
+# CookieJWTAuthentication.enforce_csrf() runs Django's real CSRFCheck on
+# every unsafe request, and without CSRF_TRUSTED_ORIGINS set here, every one
+# of those requests fails CSRF validation in production the moment the SPA
+# and the API are reached via different origins (e.g. app.kyapture.com vs
+# api.kyapture.com) — which is the deployment shape ALLOWED_HOSTS/
+# CORS_ALLOWED_ORIGINS above are already set up for. Reuses the same env var
+# convention as development.py so one .env-style list covers both.
+CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
+if not CSRF_TRUSTED_ORIGINS or CSRF_TRUSTED_ORIGINS == [""]:
+    CSRF_TRUSTED_ORIGINS = [
+        "https://app.kyapture.com",
+        "https://kyapture.com",
+    ]
+
 # ─── 2. WHITENOISE STATIC FILE SERVING ───────────────────────────────────────
 
 # Dynamically inject WhiteNoise middleware directly below Django's SecurityMiddleware
@@ -145,8 +206,40 @@ CSRF_COOKIE_SECURE = True
 # Enforce secure cookie flags globally across subdomains
 SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN", ".kyapture.com")
 
+# CSRF cookie needs the same domain as the session cookie — without this it
+# defaults to Django's own None (host-only), which is fine for a single-host
+# deployment but breaks the moment the SPA (app.kyapture.com) and the API
+# (api.kyapture.com) are split, matching the CORS/CSRF_TRUSTED_ORIGINS shape
+# already assumed above.
+CSRF_COOKIE_DOMAIN = os.getenv("CSRF_COOKIE_DOMAIN", SESSION_COOKIE_DOMAIN)
+
 # Force SSL Redirect: Automatically redirect all unencrypted HTTP requests to HTTPS
 SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True") == "True"
+
+# Tells Django to trust the X-Forwarded-Proto header set by the TLS-terminating
+# reverse proxy (nginx / load balancer) in front of gunicorn. Without this,
+# Django believes every request — even ones that reached the proxy over
+# HTTPS — arrived over plain HTTP, because gunicorn itself only ever sees
+# the proxy's internal HTTP connection. Two concrete failures this causes if
+# left unset: SECURE_SSL_REDIRECT above can loop (Django "redirects" an
+# already-HTTPS request to HTTPS again, proxy strips it back to HTTP, repeat),
+# and request.build_absolute_uri() — used for cover/display/thumbnail URLs
+# and the password-reset link — emits http:// links, which browsers then
+# block or flag as mixed content on an https:// page.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Companion to the header above: makes Django trust X-Forwarded-Host too, so
+# request.get_host() (also used by build_absolute_uri) reflects the host the
+# browser actually requested rather than gunicorn's internal bind address.
+USE_X_FORWARDED_HOST = True
+
+# Django's own throttle/rate-limiting IP detection walks the X-Forwarded-For
+# chain; NUM_PROXIES tells it how many trusted hops sit in front of the app
+# (nginx = 1) so it reads the correct client IP instead of the proxy's own
+# address (which would make every visitor share one throttle bucket) or a
+# spoofable client-supplied value (if trusted with 0 hops accounted for).
+# Adjust if the real topology adds a CDN/load balancer in front of nginx.
+NUM_PROXIES = int(os.getenv("NUM_PROXIES", "1"))
 
 # HTTP Strict Transport Security (HSTS): Instructs browsers to ONLY communicate via HTTPS
 SECURE_HSTS_SECONDS = 31536000  # 1 Year duration (security standard)

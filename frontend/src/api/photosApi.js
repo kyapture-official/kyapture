@@ -130,6 +130,15 @@ export const photosApi = {
       formData,
       {
         signal,
+        // Bulk media uploads can legitimately run well past axiosInstance's
+        // shared 15s default (large files, many files, slow client
+        // connections) — that global timeout is meant for ordinary JSON
+        // API calls, not uploads, so it's overridden here to effectively
+        // unbounded (0 = no axios-side timeout). Cancellation is still
+        // fully available: the caller's AbortController `signal` (wired
+        // through to the browser's fetch/XHR cancellation) is unaffected —
+        // the person can still cancel an in-flight upload at any time.
+        timeout: 0,
         onUploadProgress: (evt) => {
           if (typeof onProgress === 'function' && evt.total) {
             onProgress(Math.round((evt.loaded * 100) / evt.total))
@@ -208,6 +217,37 @@ export const photosApi = {
   getById: async (photoId, signal) => {
     assertNonEmptyString(photoId, 'photosApi.getById: photoId')
     const { data } = await api.get(`/photos/photo/${encodeURIComponent(photoId)}/`, { signal })
+    return data
+  },
+
+  /**
+   * WHAT: Fetch current status/metadata for a BATCH of assets in one request.
+   * URI:  GET /api/v1/photos/{gallery_slug}/status/?ids=id1,id2,id3
+   *
+   * WHY (Phase 2, large-gallery performance): replaces the old N-parallel-
+   * requests polling storm (one GET per pending asset, every 3 seconds,
+   * fanned out via Promise.allSettled — see GalleryPhotosPage.jsx) with a
+   * SINGLE request covering every still-processing asset at once. A
+   * gallery mid-upload with 200 pending videos previously meant 200
+   * requests every 3 seconds; this is 1.
+   *
+   * Backend caps the id list at 200 per request (PhotoBatchStatusView) —
+   * callers with more pending assets than that should chunk their id list,
+   * though in practice a single upload batch rarely approaches 200 videos.
+   *
+   * @param   {string}   gallerySlug
+   * @param   {string[]} photoIds - Asset UUIDs currently pending/processing
+   * @returns {Promise<MediaAsset[]>}
+   */
+  getStatusBatch: async (gallerySlug, photoIds, signal) => {
+    assertNonEmptyString(gallerySlug, 'photosApi.getStatusBatch: gallerySlug')
+    assertStringIdArray(photoIds, 'photosApi.getStatusBatch: photoIds')
+
+    const uniqueIds = [...new Set(photoIds)]
+    const { data } = await api.get(
+      `/photos/${encodeURIComponent(gallerySlug)}/status/`,
+      { params: { ids: uniqueIds.join(',') }, signal }
+    )
     return data
   },
 

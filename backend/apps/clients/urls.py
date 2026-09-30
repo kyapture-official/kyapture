@@ -7,6 +7,7 @@ from .views import (
     PublicPhotoDownloadView,
     PublicPhotographerPortfolioView,
     PublicVideoStreamView, 
+    PublicGalleryPhotosView,
 )
 
 urlpatterns = [
@@ -37,6 +38,14 @@ path(
         '<str:username>/<slug:slug>/photo/<uuid:photo_id>/download/',
         PublicPhotoDownloadView.as_view(),
         name='public-photo-download'
+    ),
+
+    # Route: GET /api/v1/public/{username}/{slug}/photos/?page=2
+    # Phase 2 large-gallery pagination continuation — see PublicGalleryPhotosView.
+    path(
+        '<str:username>/<slug:slug>/photos/',
+        PublicGalleryPhotosView.as_view(),
+        name='public-gallery-photos'
     ),
 
 

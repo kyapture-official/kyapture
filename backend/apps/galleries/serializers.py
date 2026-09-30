@@ -122,7 +122,7 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
             'cover_url', 'photo_count', 'is_downloadable', 
             'is_active', 'event_date', 'expires_at', 'is_published', 'has_password', 
             'owner_username', 'photographer_username',
-            'watermark_enabled', 'photos',
+            'watermark_enabled', 'design_settings', 'photos',
             'password_hash', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
@@ -325,11 +325,21 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """
         Updates the gallery instance safely. If a new password is submitted,
-        hashes it using raw bcrypt. If the title actually changed, regenerates
-        the slug — scoped per-photographer and checked against
-        RESERVED_GALLERY_SLUGS, the same way GalleryCreateSerializer.create()
-        does. exclude_pk=instance.pk is mandatory here: without it, the
-        gallery's own current slug row counts as a self-collision.
+        hashes it using raw bcrypt.
+
+        Locked product decision: gallery URLs are stable — the slug is
+        assigned once at creation and a title edit must NEVER change it
+        (changing the slug would break every link already shared with
+        clients). So, unlike GalleryCreateSerializer.create(), title
+        changes here only ever touch instance.title, never instance.slug.
+
+        If design_settings carries a 'coverPhoto' id (the Design page's
+        cover-photo picker), sync it onto the model's cover_photo FK so
+        there is a single source of truth for "which photo is the cover"
+        driving both the dashboard listing (GalleryListSerializer.cover_url)
+        and the client-facing hero (PublicGallerySerializer.cover_url) —
+        validated the same way an explicit cover_photo field is: must
+        belong to this gallery.
         """
         raw_password = validated_data.pop('password', '').strip()
 
@@ -340,14 +350,17 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         elif not validated_data.get('is_password_protected', instance.is_password_protected):
             instance.password_hash = None
 
-        new_title = validated_data.get('title')
-        if new_title is not None and new_title != instance.title:
-            instance.slug = generate_unique_slug(
-                Gallery, new_title,
-                reserved_words=RESERVED_GALLERY_SLUGS,
-                exclude_pk=instance.pk,
-                photographer=instance.photographer,
-            )
+        design_settings = validated_data.get('design_settings')
+        if isinstance(design_settings, dict) and 'coverPhoto' in design_settings:
+            cover_photo_id = design_settings.get('coverPhoto')
+            if cover_photo_id:
+                cover_asset = MediaAsset.objects.filter(
+                    pk=cover_photo_id, gallery_id=instance.pk
+                ).first()
+                if cover_asset:
+                    validated_data['cover_photo'] = cover_asset
+            else:
+                validated_data['cover_photo'] = None
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

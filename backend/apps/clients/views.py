@@ -19,7 +19,9 @@ from apps.photos.models import MediaAsset
 from .serializers import (
     PublicGallerySerializer,
     GalleryUnlockSerializer,
+    PublicMediaAssetSerializer,
 )
+from apps.core.pagination import GalleryMediaPagination
 
 import logging
 import zipfile
@@ -52,13 +54,20 @@ class PublicGalleryView(APIView):
         """
         Retrieves a published, active gallery mapped to a specific photographer.
         This prevents MultipleObjectsReturned crashes on shared slug namespaces [1.1.2].
+
+        Phase 2: deliberately does NOT prefetch the gallery's assets
+        anymore — a gallery with hundreds/thousands of photos would mean
+        prefetching (and serializing) every one of them on every single
+        gallery-page load. get() below fetches only the first PAGE of
+        READY assets explicitly instead (see GalleryMediaPagination); a
+        guest never sees a broken thumbnail for a photo that's still
+        processing or failed, exactly as before — just paginated now.
         """
         try:
             now = timezone.now()
             return (
                 Gallery.objects
                 .select_related('photographer')
-                .prefetch_related('assets')
                 .get(
                     Q(expires_at__isnull=True) | Q(expires_at__gt=now),
                     slug=slug,
@@ -69,6 +78,23 @@ class PublicGalleryView(APIView):
             )
         except Gallery.DoesNotExist:
             return None
+
+    def get_ready_assets_page(self, gallery, page_size):
+        """
+        Fetches exactly ONE bounded page of this gallery's READY assets,
+        ordered the same way the dashboard grid orders them (MediaAsset's
+        own Meta.ordering = ['order', 'created_at']), plus the total READY
+        count. Two small, indexed queries (idx_gallery_assets_order
+        covers both), regardless of how many thousands of assets the
+        gallery has — never an unbounded SELECT of every asset.
+        """
+        ready_qs = MediaAsset.objects.filter(
+            gallery=gallery,
+            processing_status=MediaAsset.ProcessingStatus.READY,
+        ).order_by('order', 'created_at')
+        total_count = ready_qs.count()
+        first_page = list(ready_qs[:page_size])
+        return first_page, total_count
 
     def get_session_token(self, request):
         """
@@ -122,12 +148,16 @@ class PublicGalleryView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED
                 )
 
-                # 3. Access granted: Return fully serialized public metadata 
-        # username/slug passed through context so PublicMediaAssetSerializer
-        # can build each video's playback_url. gallery.photographer is
-        # already select_related here, so reading it once is free — reading
+                # 3. Access granted: fetch the first page of READY assets and
+        # return fully serialized public metadata. username/slug passed
+        # through context so PublicMediaAssetSerializer can build each
+        # video's playback_url. gallery.photographer is already
+        # select_related here, so reading it once is free — reading
         # obj.gallery.photographer per-video inside the child serializer
         # would NOT be cached and would re-query once per video (N+1).
+        page_size = GalleryMediaPagination.page_size
+        photos_page, total_count = self.get_ready_assets_page(gallery, page_size)
+
         serializer = PublicGallerySerializer(
             gallery,
             context={
@@ -135,9 +165,90 @@ class PublicGalleryView(APIView):
                 'gallery': gallery,
                 'username': gallery.photographer.username,
                 'slug': gallery.slug,
+                'photos_page': photos_page,
+                'photos_total_count': total_count,
+                'photos_has_more': total_count > len(photos_page),
+                'photos_page_size': page_size,
             }
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PublicGalleryPhotosView(APIView):
+    """
+    GET /api/v1/public/{username}/{slug}/photos/
+    GET .../photos/?page=2&token=<access_token>
+
+    Phase 2 (large-gallery performance) continuation endpoint: serves
+    subsequent pages of a gallery's READY media assets, picking up after
+    the first page PublicGalleryView already embeds inline (see its
+    'photos'/'photos_has_more'/'photos_page_size' fields). Standard DRF
+    {count, next, previous, results} pagination envelope.
+
+    Duplicates PublicGalleryView's gallery lookup + password/session-token
+    gate rather than sharing it — matching this app's existing convention
+    of small per-view copies of that same gate (GalleryUnlockView,
+    PublicVideoStreamView, PublicGalleryDownloadView all do this too).
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    pagination_class = GalleryMediaPagination
+
+    def get_gallery(self, username, slug):
+        try:
+            now = timezone.now()
+            return Gallery.objects.select_related('photographer').get(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+                slug=slug,
+                photographer__username=username,
+                is_published=True,
+                is_active=True,
+            )
+        except Gallery.DoesNotExist:
+            return None
+
+    def get_session_token(self, request):
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            return auth_header[len('Bearer '):].strip()
+        return request.query_params.get('token', '').strip()
+
+    def validate_session_token(self, token, gallery):
+        if not token:
+            return False
+        return ClientSession.objects.filter(access_token=token, gallery=gallery).exists()
+
+    def get(self, request, username, slug):
+        gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
+        if not gallery:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if gallery.is_password_protected:
+            token = self.get_session_token(request)
+            if not self.validate_session_token(token, gallery):
+                return Response(
+                    {'error': 'Invalid or expired access token.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+        ready_qs = MediaAsset.objects.filter(
+            gallery=gallery,
+            processing_status=MediaAsset.ProcessingStatus.READY,
+        ).order_by('order', 'created_at')
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(ready_qs, request, view=self)
+        serializer = PublicMediaAssetSerializer(
+            page,
+            many=True,
+            context={
+                'request': request,
+                'gallery': gallery,
+                'username': gallery.photographer.username,
+                'slug': gallery.slug,
+            }
+        )
+        return paginator.get_paginated_response(serializer.data)
 
 
 class GalleryUnlockView(APIView):
@@ -432,19 +543,31 @@ class PublicVideoStreamView(APIView):
         except MediaAsset.DoesNotExist:
             return Response({'error': 'Video not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if not asset.original_file:
+        # Prefer the processed, browser-guaranteed-compatible H.264/AAC MP4
+        # derivative (faststart, capped at 1080p — see process_video_pipeline)
+        # over the original: it's smaller, starts playing sooner, and
+        # decodes reliably in every modern browser regardless of the
+        # source codec/container (MOV/HEVC included). Falls back to the
+        # original file only while processing hasn't completed yet
+        # (PENDING/PROCESSING) or failed, so playback still works —
+        # just unoptimized — rather than breaking until a retry succeeds.
+        video_field = asset.playback_file if asset.playback_file else asset.original_file
+        if not video_field:
             return Response({'error': 'Video file is not available.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Any storage backend other than local disk is treated as remote
-        # object storage (S3 in this project) — redirect to its own
-        # presigned, Range-capable URL rather than proxying bytes ourselves.
-        if default_storage.__class__.__name__ != 'FileSystemStorage':
-            return HttpResponseRedirect(asset.original_file.url)
+        # Check the storage actually backing THIS field, not one
+        # project-wide default — original_file (PrivateMediaStorage) and
+        # playback_file (PublicMediaStorage) are independent storage
+        # classes as of Phase 2 (apps/core/storage.py), so the choice of
+        # "redirect to remote URL" vs "stream from local disk" must be
+        # made per-field.
+        if video_field.storage.__class__.__name__ != 'FileSystemStorage':
+            return HttpResponseRedirect(video_field.url)
 
         # Local disk (dev) — FileResponse handles Range headers automatically
         # and guesses content-type from the stored filename's extension.
-        asset.original_file.open('rb')
-        return FileResponse(asset.original_file)
+        video_field.open('rb')
+        return FileResponse(video_field)
     
 
 class PublicPhotoDownloadView(APIView):

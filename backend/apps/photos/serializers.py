@@ -35,9 +35,11 @@ class MediaAssetSerializer(serializers.ModelSerializer):
     """
     original_url = serializers.SerializerMethodField()
     display_url = serializers.SerializerMethodField()
+    medium_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     poster_url = serializers.SerializerMethodField()
     preview_url = serializers.SerializerMethodField()
+    playback_url = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaAsset
@@ -50,6 +52,7 @@ class MediaAssetSerializer(serializers.ModelSerializer):
             'order',
             'original_url',
             'display_url',
+            'medium_url',
             'thumbnail_url',
             'blurhash',
             'width',
@@ -57,6 +60,7 @@ class MediaAssetSerializer(serializers.ModelSerializer):
             'stream_url',
             'poster_url',
             'preview_url',
+            'playback_url',
             'duration',
             'processing_status',
             'created_at',
@@ -75,6 +79,13 @@ class MediaAssetSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.display_file.url)
         return None
 
+    def get_medium_url(self, obj):
+        """1280px WebP tier — see MediaAsset.medium_file (Phase 2)."""
+        request = self.context.get('request')
+        if obj.medium_file and request:
+            return request.build_absolute_uri(obj.medium_file.url)
+        return None
+
     def get_thumbnail_url(self, obj):
         request = self.context.get('request')
         if obj.thumbnail_file and request:
@@ -91,6 +102,18 @@ class MediaAssetSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if obj.preview_file and request:
             return request.build_absolute_uri(obj.preview_file.url)
+        return None
+
+    def get_playback_url(self, obj):
+        """
+        Browser-compatible H.264/AAC MP4 derivative — see
+        MediaAsset.playback_file (Phase 2). None until video processing
+        completes; the dashboard preview can fall back to original_url
+        in the meantime the same way it always could.
+        """
+        request = self.context.get('request')
+        if obj.playback_file and request:
+            return request.build_absolute_uri(obj.playback_file.url)
         return None
 
 

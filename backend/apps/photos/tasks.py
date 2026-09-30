@@ -8,14 +8,42 @@ from apps.core.utils import process_image_pipeline
 logger = logging.getLogger(__name__)
 
 
+def _auto_assign_cover_if_missing(asset):
+    """
+    Locked product decision (Phase 1, item 6): the gallery's cover is
+    auto-assigned from the first successful (READY) photo/video upload
+    when the gallery doesn't have one yet.
+
+    Implemented as a single conditional UPDATE — not a
+    select-then-save — specifically so it's race-safe when several
+    assets in the same batch finish processing concurrently: Django
+    translates .filter(cover_photo__isnull=True).update(...) into one
+    atomic 'UPDATE ... WHERE cover_photo_id IS NULL' at the database
+    level, so only the first asset to reach this line for a given
+    gallery can ever win, with no read-modify-write gap for a second
+    worker to race into.
+    """
+    from apps.galleries.models import Gallery
+    try:
+        Gallery.objects.filter(
+            pk=asset.gallery_id, cover_photo__isnull=True
+        ).update(cover_photo_id=asset.id)
+    except Exception:
+        # Cover assignment is a nice-to-have side effect of processing —
+        # never let it fail (or retry) the processing task itself.
+        logger.exception(
+            f"[Task] Auto-cover-assign failed for asset {asset.id}, gallery {asset.gallery_id}."
+        )
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def process_photo_asset(self, asset_id):
     """
     Asynchronously processes uploaded high-res photographs in the background.
-    
-    Generates WebP display variants (2048px), WebP thumbnails (600px), 
-    and computes the BlurHash string.
-    
+
+    Generates the 640/1280/2048 WebP derivative set (thumbnail, medium,
+    display) and computes the BlurHash string.
+
     Tries up to 3 times with a 60-second delay on transient errors. On final
     failure, transitions status to FAILED, preserving the original file so 
     clients can still download the asset.
@@ -47,12 +75,13 @@ def process_photo_asset(self, asset_id):
             photographer = asset.gallery.photographer
             watermark_text = f"© {photographer.display_name or photographer.username}"
 
-        display_file, thumbnail_file, blurhash_str = process_image_pipeline(
+        display_file, medium_file, thumbnail_file, blurhash_str = process_image_pipeline(
             asset.original_file, watermark_text=watermark_text
         )
 
         # 5. Populate the processed tiers and transition status to 'ready'
         asset.display_file = display_file
+        asset.medium_file = medium_file
         asset.thumbnail_file = thumbnail_file
         asset.blurhash = blurhash_str
         asset.processing_status = MediaAsset.ProcessingStatus.READY
@@ -60,12 +89,15 @@ def process_photo_asset(self, asset_id):
         # Save only the modified columns to prevent overwriting other concurrent table updates
         asset.save(update_fields=[
             'display_file', 
+            'medium_file',
             'thumbnail_file', 
             'blurhash', 
             'processing_status'
         ])
 
-        logger.info(f"[Task] Successfully transcoded Photo {asset_id} to WebP Display, Thumbnail, and BlurHash.")
+        logger.info(f"[Task] Successfully transcoded Photo {asset_id} to WebP Display/Medium/Thumbnail and BlurHash.")
+
+        _auto_assign_cover_if_missing(asset)
 
     except MediaAsset.DoesNotExist:
         logger.warning(f"[Task] MediaAsset {asset_id} not found in database. Aborting task.")
@@ -84,11 +116,12 @@ def process_photo_asset(self, asset_id):
 def process_video_asset(self, asset_id):
     """
     Asynchronously processes uploaded high-res video assets in the background.
-    
-    Spools the original file to a temporary location, extracts duration metrics,
-    captures a poster frame image, and transcodes a short, silent looping 
-    WebM preview clip.
-    
+
+    Spools the original file to a temporary location in bounded chunks,
+    extracts duration metrics, captures a poster frame image, and
+    transcodes one browser-compatible H.264/AAC MP4 playback derivative
+    (faststart, scaled down to a 1080p-max height).
+
     Wrapped in exception shields and automatic retries to guarantee state-machine
     integrity across transient system bottlenecks.
     """
@@ -116,23 +149,25 @@ def process_video_asset(self, asset_id):
         logger.info(f"[Task] Initiating FFmpeg subprocess pipeline for video asset {asset_id}...")
 
         # 4. Execute the secure FFmpeg and FFprobe subprocess transcoding pipeline
-        poster_file, preview_file, duration = process_video_pipeline(asset.original_file)
+        poster_file, playback_file, duration = process_video_pipeline(asset.original_file)
 
         # 5. Populate the processed video fields and transition status to 'ready'
         asset.poster_image = poster_file
-        asset.preview_file = preview_file
+        asset.playback_file = playback_file
         asset.duration = duration
         asset.processing_status = MediaAsset.ProcessingStatus.READY
         
         # Save only the modified columns to prevent database overwrite collisions
         asset.save(update_fields=[
             'poster_image', 
-            'preview_file', 
+            'playback_file', 
             'duration', 
             'processing_status'
         ])
 
-        logger.info(f"[Task] Successfully transcoded Video {asset_id} and extracted poster frame.")
+        logger.info(f"[Task] Successfully transcoded Video {asset_id}: poster + H.264/AAC MP4 playback derivative.")
+
+        _auto_assign_cover_if_missing(asset)
 
     except MediaAsset.DoesNotExist:
         logger.warning(f"[Task] MediaAsset {asset_id} not found in database. Aborting task.")

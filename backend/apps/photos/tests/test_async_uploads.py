@@ -85,12 +85,16 @@ class PhotoAsyncUploadTestCase(APITestCase):
         upload_url = f"/api/v1/photos/{self.gallery.slug}/upload/"
         img = self.generate_dummy_image("wedding_entrance.jpg")
 
-        response = self.client.post(upload_url, {"image": [img]}, format="multipart")
-        
-        # ─── DEBUG PRINT ───
-        print("\n=== DEBUG: UPLOAD RESPONSE DATA ===")
-        print(response.data if hasattr(response, 'data') else response.content)
-        print("===================================\n")
+        # PhotoListUploadView.post() dispatches the Celery task via
+        # transaction.on_commit(...), which Django's TestCase/APITestCase
+        # never actually fires by default (each test runs inside an outer
+        # atomic block that's rolled back, not committed, at the end).
+        # captureOnCommitCallbacks(execute=True) is Django's documented
+        # way to make on_commit hooks run synchronously inside a test —
+        # without it this assertion would fail even with a fully correct
+        # view, because 'delay' would never be called at all.
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(upload_url, {"image": [img]}, format="multipart")
 
         # 1. Assert HTTP Status 202 Accepted (Non-blocking design)
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)

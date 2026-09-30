@@ -5,6 +5,7 @@ from .views import (
     PhotoDetailView,
     PhotoBulkDeleteView,
     PhotoReorderView,
+    PhotoBatchStatusView,
 )
 
 urlpatterns = [
@@ -29,6 +30,14 @@ urlpatterns = [
         name='photo-reorder'
     ),
     
+    # Route: GET batched processing-status lookup for polling
+    # (Phase 2 — replaces the old per-asset polling storm)
+    path(
+        '<slug:gallery_slug>/status/',
+        PhotoBatchStatusView.as_view(),
+        name='photo-batch-status'
+    ),
+
     # Route: GET list of gallery assets (images/videos)
     path(
         '<slug:gallery_slug>/', 

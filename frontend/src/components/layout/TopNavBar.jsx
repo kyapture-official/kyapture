@@ -77,12 +77,20 @@ export default function TopNavBar() {
     setMoreOpen(false);
   };
 
-  const handleDelete = () => {
-    if (window.confirm("Delete this collection? This cannot be undone.")) {
-      addToast({ message: "Collection deleted", type: "info" });
-      navigate("/dashboard/galleries");
+  const handleDelete = async () => {
+    if (!window.confirm("Delete this collection? This cannot be undone.")) {
+      setMoreOpen(false);
+      return;
     }
     setMoreOpen(false);
+    try {
+      await galleriesApi.deleteGallery(id);
+      addToast({ message: "Collection deleted", type: "info" });
+      navigate("/dashboard/galleries");
+    } catch (error) {
+      console.error("Delete gallery error:", error);
+      addToast({ message: "Failed to delete collection", type: "error" });
+    }
   };
 
   const isPublished = collection.status === "PUBLISHED";
@@ -167,15 +175,6 @@ export default function TopNavBar() {
             {shareOpen && (
               <div className="absolute top-full mt-1 right-0 bg-surface-light border border-cream-200 rounded-xl shadow-lg py-1 w-48 animate-scale-in z-50">
                 <button
-                  onClick={() => { addToast({ message: "Share by email coming soon", type: "info" }); setShareOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer flex items-center gap-2"
-                >
-                  <svg className="w-3.5 h-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                  </svg>
-                  Share by email
-                </button>
-                <button
                   onClick={handleCopyDirectLink}
                   className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer flex items-center gap-2"
                 >
@@ -183,15 +182,6 @@ export default function TopNavBar() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                   </svg>
                   Get direct link
-                </button>
-                <button
-                  onClick={() => { addToast({ message: "QR code coming soon", type: "info" }); setShareOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer flex items-center gap-2"
-                >
-                  <svg className="w-3.5 h-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
-                  </svg>
-                  Get QR code
                 </button>
               </div>
             )}
@@ -211,18 +201,6 @@ export default function TopNavBar() {
               <div className="absolute top-full mt-1 right-0 bg-surface-light border border-cream-200 rounded-xl shadow-lg py-1 w-52 animate-scale-in z-50">
                 <button onClick={handleCopyDirectLink} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
                   Get direct link
-                </button>
-                <button onClick={() => { addToast({ message: "Email history coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
-                  View email history
-                </button>
-                <button onClick={() => { addToast({ message: "Presets coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
-                  Manage presets
-                </button>
-                <button onClick={() => { addToast({ message: "Move coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
-                  Move to...
-                </button>
-                <button onClick={() => { addToast({ message: "Duplicate coming soon", type: "info" }); setMoreOpen(false); }} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
-                  Duplicate
                 </button>
                 <div className="border-t border-cream-200 my-1" />
                 <button onClick={handleDelete} className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors cursor-pointer">

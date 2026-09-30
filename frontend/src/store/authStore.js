@@ -115,6 +115,25 @@ export const useAuthStore = create(
 
 
       /**
+       * WHAT: Password reset confirmation — exchanges the emailed uidb64/token
+       *       pair plus a new password for an actual password change.
+       *       Deliberately does NOT touch auth cookies/state: the reset link
+       *       is opened logged-out, and on success the page sends the person
+       *       to /login to authenticate normally with the new password,
+       *       matching how ForgotPasswordPage's success state already links
+       *       back to /login rather than assuming a session.
+       */
+      resetPasswordConfirm: async ({ uidb64, token, newPassword, newPassword2 }) => {
+        await authApi.resetPasswordConfirm({
+          uidb64,
+          token,
+          new_password: newPassword,
+          new_password2: newPassword2,
+        });
+      },
+
+
+      /**
        * WHAT: Optimistic user profile updater.
        */
       updateUser: (updatedFields) => {

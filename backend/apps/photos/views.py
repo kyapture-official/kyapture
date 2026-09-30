@@ -199,6 +199,46 @@ class PhotoListUploadView(APIView):
         )
 
 
+class PhotoBatchStatusView(APIView):
+    """
+    GET /api/v1/photos/{gallery_slug}/status/?ids=<uuid>,<uuid>,...
+
+    Phase 2 (large-gallery performance): replaces the dashboard's previous
+    per-asset polling pattern — N parallel GET /photo/{id}/ requests,
+    once per still-processing asset, every 3 seconds — with exactly ONE
+    request per poll tick regardless of how many assets are mid-processing
+    (a big batch upload could mean dozens of videos processing at once).
+    Same tenant scoping as every other view here: a gallery that isn't
+    this photographer's returns 404, and any requested id that doesn't
+    belong to THIS gallery is silently excluded from the response,
+    consistent with PhotoBulkDeleteView's existing "unknown ids ignored"
+    behavior.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, gallery_slug):
+        try:
+            gallery = Gallery.objects.get(
+                slug=gallery_slug, photographer=request.user, is_active=True
+            )
+        except Gallery.DoesNotExist:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        raw_ids = request.query_params.get('ids', '')
+        requested_ids = [v.strip() for v in raw_ids.split(',') if v.strip()]
+        if not requested_ids:
+            return Response([], status=status.HTTP_200_OK)
+
+        # Defensive cap — this is a polling endpoint for assets currently
+        # in flight, not a general listing endpoint; no legitimate poll
+        # tick needs more than a couple hundred ids at once.
+        requested_ids = requested_ids[:200]
+
+        assets = MediaAsset.objects.filter(gallery=gallery, id__in=requested_ids)
+        serializer = MediaAssetSerializer(assets, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class PhotoDetailView(APIView):
     """
     GET    /api/v1/photos/photo/{photo_id}/ - Retrieve metadata of a single media asset.

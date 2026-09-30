@@ -83,7 +83,21 @@ api.interceptors.response.use(
       originalRequest.url?.includes('/auth/login/') ||
       originalRequest.url?.includes('/auth/register/')
 
-    if (error.response?.status === 401 && !isAuthRoute && !originalRequest._retry) {
+    // Guest/public gallery requests (clientsApi.js) share this same axios
+    // instance with the photographer-authenticated API modules
+    // (galleriesApi.js, photosApi.js, authApi.js, ...), but a guest has no
+    // access/refresh cookie pair at all — a 401 from a public gallery
+    // route (wrong/missing unlock token, gallery not accessible) is an
+    // ordinary, expected response for that guest, never a signal that a
+    // photographer's session needs refreshing or ending. Without this
+    // check, a guest 401 here would attempt a refresh using whatever
+    // cookies happen to be in the browser and, on failure, log out any
+    // photographer session active in that same browser/tab. Public gallery
+    // error handling (404/401/expired/password) is instead handled by the
+    // calling code in clientsApi.js / ClientGalleryPage.jsx.
+    const isPublicRoute = originalRequest.url?.includes('/public/')
+
+    if (error.response?.status === 401 && !isAuthRoute && !isPublicRoute && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })

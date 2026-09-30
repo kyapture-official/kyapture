@@ -9,6 +9,7 @@ import PhotoLightbox from "../../components/shared/PhotoLightbox";
 import PasswordModal from "../../components/shared/PasswordModal";
 import Spinner from "../../components/ui/Spinner";
 import { formatDate } from "../../utils/formatters";
+import { resolveDesignSettings } from "../../utils/designSettings";
 
 /**
  * Safely parses, normalizes, and appends alpha-channel hex codes to custom branding colors.
@@ -64,7 +65,25 @@ export default function ClientGalleryPage() {
   const [photographerLogo, setPhotographerLogo] = useState(null);
   const [brandingColor, setBrandingColor] = useState(null);
   const [eventDate, setEventDate] = useState(null);
+  const [coverUrl, setCoverUrl] = useState(null);
+  const [allowDownload, setAllowDownload] = useState(false);
   const [photos, setPhotos] = useState([]);
+
+  // Phase 2 large-gallery pagination: the initial gallery payload embeds
+  // only the FIRST page of READY photos (see PublicGallerySerializer /
+  // GalleryMediaPagination). These track whether more pages exist and
+  // drive the "Load more" control below the grid.
+  const [photosHasMore, setPhotosHasMore] = useState(false);
+  const [loadingMorePhotos, setLoadingMorePhotos] = useState(false);
+  const nextPageRef = useRef(2);
+
+  // Phase 2, item E — the gallery's persisted design_settings (Phase 1
+  // persisted them; this is what actually applies them client-side).
+  // resolveDesignSettings() supplies sane defaults so a gallery with no
+  // design_settings yet renders exactly as before (serif typography,
+  // light theme, vertical masonry, regular thumbnails).
+  const [designSettings, setDesignSettings] = useState(null);
+  const resolvedDesign = resolveDesignSettings(designSettings);
 
   // UI state-machine properties
   const [loading, setLoading] = useState(true);
@@ -110,7 +129,12 @@ export default function ClientGalleryPage() {
     setPhotographerName(data.photographer_name || "");
     setPhotographerLogo(data.photographer_logo || null);
     setEventDate(data.event_date || null);
+    setCoverUrl(data.cover_url || null);
+    setAllowDownload(Boolean(data.allow_download));
     setPhotos(data.photos || []);
+    setPhotosHasMore(Boolean(data.photos_has_more));
+    nextPageRef.current = 2;
+    setDesignSettings(data.design_settings || null);
     setLocked(false);
     if (data.branding_color) {
       setBrandingColor(data.branding_color);
@@ -174,13 +198,23 @@ export default function ClientGalleryPage() {
         if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
         if (fetchId !== activeFetchId.current) return;
 
-        const status = err.response?.status;
+        // clientsApi.js's normalizeError() sets `.status` directly on the
+        // thrown Error (not `.response.status` — these are already-normalized
+        // errors, not raw axios errors), so that's what must be read here.
+        const status = err.status;
         if (status === 404) {
+          // Nonexistent gallery AND expired/unpublished/deactivated gallery
+          // both resolve to this same 404 server-side (PublicGalleryView's
+          // lookup query intentionally can't distinguish "never existed"
+          // from "no longer available" without leaking which one it is to
+          // an unauthenticated guest), so both show the same not-found state.
           setNotFound(true);
           return;
         }
 
         if (status === 401) {
+          // Invalid/expired unlock token for a password-protected gallery —
+          // drop the stale session token and show the password gate again.
           setSession(sessionKey, null);
           setLocked(true);
           setPhotos([]);
@@ -245,11 +279,7 @@ export default function ClientGalleryPage() {
     } catch (err) {
       if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
       if (unlockId !== activeUnlockId.current) return;
-      const msg =
-        err.response?.data?.password?.[0] ||
-        err.response?.data?.detail ||
-        "Incorrect password. Please try again.";
-      setPwError(msg);
+      setPwError(err.message || "Incorrect password. Please try again.");
     } finally {
       if (unlockId === activeUnlockId.current) {
         setPwLoading(false);
@@ -260,6 +290,33 @@ export default function ClientGalleryPage() {
   const retry = () => {
     const currentFetchId = ++activeFetchId.current;
     fetchGallery(token, currentFetchId);
+  };
+
+  /**
+   * Fetches the next page of READY photos/videos and appends it to the
+   * grid in place — the visitor never loses their scroll position or
+   * selection state the way a full gallery re-fetch would.
+   */
+  const loadMorePhotos = async () => {
+    if (loadingMorePhotos || !photosHasMore) return;
+    setLoadingMorePhotos(true);
+    try {
+      const data = await clientsApi.getGalleryPhotos(
+        username,
+        slug,
+        nextPageRef.current,
+        token,
+      );
+      setPhotos((prev) => [...prev, ...(data.results || [])]);
+      setPhotosHasMore(Boolean(data.next));
+      nextPageRef.current += 1;
+    } catch (err) {
+      if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
+      // A failed "load more" isn't fatal to the page already on screen —
+      // leave photosHasMore as-is so the visitor can simply try again.
+    } finally {
+      setLoadingMorePhotos(false);
+    }
   };
 
   // ── Render Path: Loading State ─────────────────────────────────────────────
@@ -340,19 +397,14 @@ export default function ClientGalleryPage() {
   }
 
   // ── Render Path: Unlocked Gallery View ─────────────────────────────────────
-  const coverSrc = photos.length > 0
-  ? (
-      photos.find(p => p.is_cover)?.url ||
-      photos[0]?.url ||
-      photos[0]?.original_url ||
-      photos[0]?.display_url ||
-      photos[0]?.cover_url ||
-      photos[0]?.thumbnail_url
-    )
-  : null;
+  const coverSrc = coverUrl || (
+    photos.length > 0
+      ? (photos[0]?.display_url || photos[0]?.thumbnail_url || photos[0]?.poster_url)
+      : null
+  );
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7]">
+    <div className={`min-h-screen ${resolvedDesign.theme.bg}`}>
       {/* ── FULL-BLEED HERO COVER BANNER ──────────────────────────────── */}
       <section className="relative h-screen min-h-screen w-full overflow-hidden flex-shrink-0">
         {/* Background Image */}
@@ -381,7 +433,7 @@ export default function ClientGalleryPage() {
             </p>
           )}
 
-          <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-white font-medium tracking-tight mb-4">
+          <h1 className={`${resolvedDesign.typographyClass} text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-white font-medium tracking-tight mb-4`}>
             {galleryTitle}
           </h1>
 
@@ -424,12 +476,15 @@ export default function ClientGalleryPage() {
       >
         {/* Grid header */}
         <div className="max-w-6xl mx-auto mb-10 text-center">
-          <h2 className="font-serif text-3xl text-ink mb-2">{galleryTitle}</h2>
-          <div className="h-px w-12 mx-auto bg-ink/15" />
+          <h2 className={`${resolvedDesign.typographyClass} text-3xl ${resolvedDesign.theme.text} mb-2`}>
+            {galleryTitle}
+          </h2>
+          <div className={`h-px w-12 mx-auto ${resolvedDesign.theme.accent} opacity-30`} />
         </div>
 
-        {/* Gallery Actions */}
-        {photos.length > 0 && (
+        {/* Gallery Actions — only rendered when the photographer has
+            downloads enabled for this gallery (allow_download). */}
+        {photos.length > 0 && allowDownload && (
           <div className="flex justify-center mb-8 gap-3">
             <button
               onClick={handleDownloadSelected}
@@ -450,13 +505,29 @@ export default function ClientGalleryPage() {
             </p>
           </div>
         ) : (
-          <PublicMasonryGrid
-            photos={photos}
-            token={token}
-            onPhotoClick={setLightboxIndex}
-            selectedAssetIds={selectedAssetIds}
-            onToggleSelection={toggleSelection}
-          />
+          <>
+            <PublicMasonryGrid
+              photos={photos}
+              token={token}
+              onPhotoClick={setLightboxIndex}
+              selectedAssetIds={selectedAssetIds}
+              onToggleSelection={toggleSelection}
+              gridStyle={resolvedDesign.gridStyle}
+              thumbSize={resolvedDesign.thumbSize}
+              gridSpacing={resolvedDesign.gridSpacing}
+            />
+            {photosHasMore && (
+              <div className="flex justify-center mt-10">
+                <button
+                  onClick={loadMorePhotos}
+                  disabled={loadingMorePhotos}
+                  className="text-xs uppercase tracking-widest text-ink border border-ink/30 px-8 py-3 rounded-full hover:bg-ink/5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingMorePhotos ? "Loading…" : "Load More"}
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {lightboxIndex !== null && (

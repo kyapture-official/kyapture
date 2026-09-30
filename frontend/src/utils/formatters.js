@@ -50,21 +50,22 @@ export const toDateInputValue = (value) => {
  * WHY:  Dynamic link generator that converts your gallery share links depending
  *       on whether you are running locally (localhost paths) or in production (subdomains).
  */
+// Locked product decision: the MVP client gallery URL is path-based only —
+// /g/:username/:slug — everywhere, including production. Wildcard subdomain
+// galleries (username.domain.tld) are explicitly post-MVP (no wildcard DNS/
+// TLS/routing infrastructure exists for them yet); this must stay
+// path-based until that infrastructure is actually built. See
+// docs/KYAPTURE_PRODUCT_DECISIONS.md #3-4.
 export const buildClientGalleryUrl = (username, slug) => {
   if (!username || !slug) return ''
-  
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
-  const isLocalhost = currentHost.includes('localhost') || currentHost.includes('127.0.0.1')
 
-  if (isLocalhost) {
-    return `http://localhost:5173/g/${username}/${slug}`
+  if (typeof window !== 'undefined') {
+    // Same-origin path build — correct in dev, staging, and production
+    // alike, and immune to VITE_APP_DOMAIN drifting from the real origin.
+    return `${window.location.origin}/g/${username}/${slug}`
   }
 
-  // Production wildcard subdomain formatting
-  const rawDomain = import.meta.env.VITE_APP_DOMAIN || currentHost
-  const baseDomain = rawDomain.replace(/^(www\.|app\.)/, '')
-  
-  return `https://${username.toLowerCase()}.${baseDomain}/${slug}`
+  return `/g/${username}/${slug}`
 }
 
 /**
