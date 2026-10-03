@@ -5,11 +5,17 @@ import { authApi } from '../../api/authApi'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Spinner from '../../components/ui/Spinner'
+import UpgradePrompt from '../../components/shared/UpgradePrompt'
+import { useSubscription } from '../../hooks/useSubscription'
 import { useToast } from '../../components/ui/Toast'
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuthStore()
   const toast = useToast()
+  // Branding is a Pro+ feature. The server decides (and enforces) this; the
+  // locked state below is only the explanation the API's refusal would otherwise lack.
+  const { entitlements, loading: planLoading } = useSubscription()
+  const brandingLocked = !planLoading && !entitlements.branding
 
   const [profile, setProfile] = useState({
     display_name: user?.display_name || '',
@@ -72,6 +78,14 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Reset so choosing the same file again (after a rejection) still fires onChange.
+    e.target.value = ''
+
+    if (!entitlements.branding) {
+      toast('Custom branding is available on the Pro plan and above.', 'error')
+      return
+    }
+
     const MAX_SIZE = 2 * 1024 * 1024
     if (file.size > MAX_SIZE) {
       toast('Logo file exceeds the 2MB size limit.', 'error')
@@ -89,7 +103,13 @@ export default function SettingsPage() {
       setLogoURL(updatedUser.logo)
       toast('Logo uploaded successfully!', 'success')
     } catch (err) {
-      toast(err.response?.data?.logo?.[0] || 'Logo upload failed.', 'error')
+      const data = err.response?.data
+      toast(
+        data?.code === 'branding_requires_upgrade'
+          ? 'Custom branding is available on the Pro plan and above.'
+          : data?.details?.logo?.[0] || data?.logo?.[0] || data?.error || 'Logo upload failed.',
+        'error',
+      )
     } finally {
       setLogoUploading(false)
     }
@@ -321,16 +341,23 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-3 w-full">
+              {brandingLocked ? (
+                <UpgradePrompt
+                  title="Branding is a Pro feature"
+                  message="Add your business logo to every client gallery with the Pro plan or above."
+                />
+              ) : (
               <label className="block w-full text-center px-4 py-2.5 border border-cream-200 hover:border-cream-300 hover:bg-cream-100 bg-surface-light text-ink text-xs font-medium tracking-wide uppercase rounded-xl cursor-pointer transition-all">
-                Upload New Logo
+                {logoURL ? 'Replace Logo' : 'Upload New Logo'}
                 <input
                   type="file"
                   accept="image/png, image/jpeg, image/webp"
                   onChange={handleLogoUpload}
-                  disabled={logoUploading}
+                  disabled={logoUploading || planLoading}
                   className="hidden"
                 />
               </label>
+              )}
 
               {logoURL && (
                 <button
@@ -345,7 +372,7 @@ export default function SettingsPage() {
             </div>
 
             <p className="text-[10px] text-muted leading-relaxed font-light select-none">
-              Supports PNG, JPG, and WEBP. Maximum file size: 2MB. Logo appears at the top of your public gallery views.
+              Supports PNG, JPG, and WEBP. Maximum file size: 2MB. Your logo appears at the top of your client galleries{brandingLocked ? ' once your plan includes Branding' : ''}.
             </p>
           </div>
         </div>

@@ -1,7 +1,10 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/users/models.py
+import os
+import uuid
 import uuid6
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from apps.core.storage import PublicMediaStorage
 from .managers import CustomUserManager
 from django.core.validators import RegexValidator
 
@@ -12,6 +15,22 @@ hex_color_validator = RegexValidator(
     regex=r'^#[0-9a-fA-F]{6}$',
     message='Color must be a valid 6-character HEX code (e.g., #FFFFFF).'
 )
+
+
+def get_branding_logo_path(instance, filename):
+    """
+    Branding logos are client-visible by design, so they live in
+    PublicMediaStorage like the other client-visible derivatives (stable,
+    non-expiring URL; never the presigned/expiring default storage).
+
+    Unlike a derivative, a logo's key is UNIQUE PER UPLOAD: public media is
+    served with a one-year `immutable` cache header, so overwriting one fixed
+    key on "replace logo" would leave browsers/CDNs showing the old logo. A
+    fresh key makes replacement visible immediately; the previous file is
+    deleted by UserProfileSerializer.update().
+    """
+    ext = os.path.splitext(filename)[1].lower() or '.png'
+    return f"photographers/{instance.id}/branding/logo_{uuid.uuid4().hex[:12]}{ext}"
 
 
 class User(AbstractUser):
@@ -70,7 +89,8 @@ class User(AbstractUser):
 
 
     logo = models.ImageField(
-        upload_to='photographer_logos/',
+        upload_to=get_branding_logo_path,
+        storage=PublicMediaStorage(),
         null=True,
         blank=True,
         help_text="Business logo shown on this photographer's public gallery pages."

@@ -1,6 +1,7 @@
 #C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py
 import bcrypt
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status
@@ -167,6 +168,12 @@ class GallerySearchView(APIView):
             'count': total_count,
             'truncated': total_count > self.SEARCH_RESULT_LIMIT,
         }, status=status.HTTP_200_OK)
+def _watermark_state(gallery):
+    """(enabled, settings block) — what decides how client-visible derivatives are built."""
+    design = gallery.design_settings if isinstance(gallery.design_settings, dict) else {}
+    return gallery.watermark_enabled, design.get('watermark')
+
+
 class GalleryDetailView(APIView):
     """
     GET    /api/v1/galleries/{slug}/  — View detailed settings of a specific gallery.
@@ -227,8 +234,18 @@ class GalleryDetailView(APIView):
             partial=True,
             context={'request': request}
         )
+        # Captured before save() mutates the instance, to detect a watermark change.
+        watermark_before = _watermark_state(gallery)
         if serializer.is_valid():
             updated_gallery = serializer.save()
+            if _watermark_state(updated_gallery) != watermark_before:
+                # Existing READY images keep the derivatives they have until
+                # this background job re-applies the new settings; it never
+                # runs inside the request, and is skipped if the save rolls back.
+                from apps.photos.tasks import regenerate_gallery_watermarks
+                transaction.on_commit(
+                    lambda gid=str(updated_gallery.id): regenerate_gallery_watermarks.delay(gid)
+                )
             return Response(
                 serializer.to_representation(updated_gallery),
                 status=status.HTTP_200_OK

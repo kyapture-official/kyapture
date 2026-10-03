@@ -3,7 +3,8 @@ from celery import shared_task
 import logging
 # Defer imports to task execution time to completely bypass circular imports
 from apps.photos.models import MediaAsset
-from apps.core.utils import process_image_pipeline, process_download_master
+from apps.core.utils import process_image_pipeline, process_download_master, regenerate_display_derivatives
+from apps.core.watermark import build_watermark_spec, current_signature
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,106 @@ def _auto_assign_cover_if_missing(asset):
         logger.exception(
             f"[Task] Auto-cover-assign failed for asset {asset.id}, gallery {asset.gallery_id}."
         )
+
+
+def _reconcile_watermark_if_settings_changed(asset, used_signature):
+    """
+    Processing can take a while; the photographer may change the watermark
+    settings mid-flight. If the gallery's current watermark differs from the
+    one this asset was just built with, queue a regeneration so the asset
+    converges instead of staying stale. Never fails the processing task.
+    """
+    try:
+        from apps.galleries.models import Gallery
+        gallery = Gallery.objects.select_related('photographer').get(pk=asset.gallery_id)
+        if current_signature(gallery) != used_signature:
+            regenerate_asset_watermark.delay(str(asset.id))
+    except Exception:
+        logger.exception("[Task] Watermark reconcile check failed for asset %s", asset.id)
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=30)
+def regenerate_asset_watermark(self, asset_id):
+    """
+    Re-applies the gallery's CURRENT watermark settings to ONE already-READY
+    image asset's client-visible derivatives (display/medium/thumbnail).
+
+    - Reads the preserved original; never writes to it, and never touches
+      the Download Master or BlurHash.
+    - Idempotent: a no-op when the asset's stored watermark_signature already
+      matches the gallery's current one, so duplicate/overlapping runs are
+      harmless and a finished gallery costs one cheap check per asset.
+    - Fail-safe: if regeneration fails, the existing derivatives (and the
+      asset's READY status) are left exactly as they were; the failure is
+      logged and retried.
+    """
+    asset = (
+        MediaAsset.objects.select_related('gallery__photographer')
+        .filter(
+            id=asset_id,
+            media_type=MediaAsset.MediaType.IMAGE,
+            processing_status=MediaAsset.ProcessingStatus.READY,
+        )
+        .first()
+    )
+    if asset is None or not asset.original_file:
+        return
+
+    watermark = build_watermark_spec(asset.gallery)
+    signature = watermark.signature if watermark else ''
+    if asset.watermark_signature == signature:
+        return
+
+    try:
+        display_file, medium_file, thumbnail_file = regenerate_display_derivatives(
+            asset.original_file, watermark=watermark
+        )
+    except Exception as exc:
+        logger.exception("[Task] Watermark regeneration failed for asset %s", asset_id)
+        raise self.retry(exc=exc)
+
+    asset.display_file = display_file
+    asset.medium_file = medium_file
+    asset.thumbnail_file = thumbnail_file
+    asset.watermark_signature = signature
+    asset.save(update_fields=['display_file', 'medium_file', 'thumbnail_file', 'watermark_signature'])
+    logger.info("[Task] Re-applied watermark (%s) to asset %s", signature or 'none', asset_id)
+
+
+@shared_task
+def regenerate_gallery_watermarks(gallery_id):
+    """
+    Fans out watermark regeneration for one gallery's READY images whose
+    derivatives don't match the gallery's current watermark settings. Runs on
+    the Celery worker (queued when settings change), never inside the
+    settings request. Each asset is its own small task, staggered so a large
+    gallery trickles through the worker pool instead of arriving as one burst.
+    Safe to run repeatedly: assets already correct are excluded here and are
+    no-ops in the per-asset task.
+    """
+    from apps.galleries.models import Gallery
+    gallery = Gallery.objects.select_related('photographer').filter(pk=gallery_id).first()
+    if gallery is None:
+        return 0
+
+    signature = current_signature(gallery)
+    stale_ids = (
+        MediaAsset.objects
+        .filter(
+            gallery_id=gallery.pk,
+            media_type=MediaAsset.MediaType.IMAGE,
+            processing_status=MediaAsset.ProcessingStatus.READY,
+        )
+        .exclude(watermark_signature=signature)
+        .values_list('id', flat=True)
+        .iterator(chunk_size=500)
+    )
+    queued = 0
+    for asset_id in stale_ids:
+        regenerate_asset_watermark.apply_async(args=[str(asset_id)], countdown=(queued // 25) * 2)
+        queued += 1
+    logger.info("[Task] Queued watermark regeneration for %s asset(s) in gallery %s", queued, gallery_id)
+    return queued
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -85,15 +186,16 @@ def process_photo_asset(self, asset_id):
 
         logger.info(f"[Task] Starting single-pass image processing for asset {asset_id}...")
 
-        # 4. Run your optimized, single-pass in-memory WebP and BlurHash generators
-        watermark_text = None
-        if asset.gallery.watermark_enabled:
-            photographer = asset.gallery.photographer
-            watermark_text = f"© {photographer.display_name or photographer.username}"
+        # 4. Run your optimized, single-pass in-memory WebP and BlurHash generators.
+        # The watermark (if the gallery has one enabled AND the photographer
+        # is entitled) goes onto the client-visible display/medium/thumbnail
+        # tiers only - never the original, never the Download Master.
+        watermark = build_watermark_spec(asset.gallery)
 
         display_file, medium_file, thumbnail_file, download_file, blurhash_str = process_image_pipeline(
-            asset.original_file, watermark_text=watermark_text
+            asset.original_file, watermark=watermark
         )
+        used_signature = watermark.signature if watermark else ''
 
         # 5. Populate the processed tiers and transition status to 'ready'
         asset.display_file = display_file
@@ -101,6 +203,7 @@ def process_photo_asset(self, asset_id):
         asset.thumbnail_file = thumbnail_file
         asset.download_file = download_file
         asset.blurhash = blurhash_str
+        asset.watermark_signature = used_signature
         asset.processing_status = MediaAsset.ProcessingStatus.READY
         
         # Save only the modified columns to prevent overwriting other concurrent table updates
@@ -110,12 +213,14 @@ def process_photo_asset(self, asset_id):
             'thumbnail_file', 
             'download_file',
             'blurhash', 
+            'watermark_signature',
             'processing_status'
         ])
 
         logger.info(f"[Task] Successfully transcoded Photo {asset_id} to WebP Display/Medium/Thumbnail and BlurHash.")
 
         _auto_assign_cover_if_missing(asset)
+        _reconcile_watermark_if_settings_changed(asset, used_signature)
 
     except MediaAsset.DoesNotExist:
         logger.warning(f"[Task] MediaAsset {asset_id} not found in database. Aborting task.")

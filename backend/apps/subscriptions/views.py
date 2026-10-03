@@ -9,6 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .entitlements import get_feature_entitlements
 from .models import SubscriptionPlan, UserSubscription, ManualPayment
 from .serializers import (
     SubscriptionPlanSerializer,
@@ -72,6 +73,7 @@ class MySubscriptionView(APIView):
                 'message': 'No subscription found. Select a plan to get started.',
                 'plan': None,
                 'expires_at': None,
+                'entitlements': get_feature_entitlements(request.user),
             }, status=status.HTTP_200_OK)
 
         serializer = UserSubscriptionSerializer(subscription, context={'request': request})

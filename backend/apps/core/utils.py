@@ -1,6 +1,7 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/core/utils.py
 import io
 import logging
+import math
 import piexif
 import os
 import re
@@ -9,7 +10,7 @@ import subprocess
 import tempfile
 from decimal import Decimal
 
-from PIL import Image, ImageDraw, ImageFont, ImageCms
+from PIL import Image, ImageDraw, ImageFont, ImageCms, ImageChops, ImageStat
 from PIL.ImageOps import exif_transpose
 from PIL import Image as PILImage
 
@@ -355,56 +356,13 @@ def raise_gating_violation(message, code):
 
 def apply_copyright_watermark(img, text):
     """
-    Overlays a translucent white copyright text with a subtle dark drop shadow 
-    at the bottom-right corner of the image.
-    Calculates font-size dynamically relative to image width to support 4K/8K images.
+    Legacy entry point, kept for existing callers: a plain text watermark with
+    the default position/size/opacity. All rendering now lives in
+    apps/core/watermark.py (relative sizing, safe fonts, logged fallback).
     """
-    try:
-        # 1. Create a transparent overlay layer matching original image dimensions
-        watermark_layer = Image.new('RGBA', img.size, (255, 255, 255, 0))
-        draw = ImageDraw.Draw(watermark_layer)
-        
-        # 2. Compute dynamic, scale-proportional font size (3% of image width)
-        width, height = img.size
-        font_size = max(16, int(width * 0.03))
-        
-        try:
-            # Fallback chain: Arial truetype -> default system font
-            font = ImageFont.truetype("arial.ttf", font_size)
-        except IOError:
-            font = ImageFont.load_default()
+    from apps.core.watermark import DEFAULTS, apply_watermark, make_spec
+    return apply_watermark(img, make_spec({**DEFAULTS, 'text': text}))
 
-        clean_text = f" {text} "
-
-        # 3. Calculate text bounding dimensions for bottom-right corner positioning
-        try:
-            left, top, right, bottom = draw.textbbox((0, 0), clean_text, font=font)
-            text_width = right - left
-            text_height = bottom - top
-        except AttributeError:
-            # Fallback for older Pillow installations
-            text_width, text_height = draw.textsize(clean_text, font=font) if hasattr(draw, 'textsize') else (100, 20)
-
-        # Set 5% margins from the image borders
-        margin_x = int(width * 0.05)
-        margin_y = int(height * 0.05)
-        x = width - text_width - margin_x
-        y = height - text_height - margin_y
-
-        # 4. Draw Translucent Shadow (Black at 35% opacity) for visibility on white backdrops
-        draw.text((x + 2, y + 2), clean_text, font=font, fill=(0, 0, 0, 90))
-
-        # 5. Draw Primary Text (White at 55% opacity)
-        draw.text((x, y), clean_text, font=font, fill=(255, 255, 255, 140))
-
-        # 6. Composite the transparent overlay back onto the original image
-        if img.mode != 'RGBA':
-            img = img.convert('RGBA')
-            
-        return Image.alpha_composite(img, watermark_layer).convert('RGB')
-    except Exception:
-        # Fallback security: If watermarking fails, return the original image un-watermarked
-        return img.convert('RGB') if img.mode != 'RGB' else img
 
 def _normalize_to_srgb(img):
     """
@@ -438,30 +396,85 @@ def _normalize_to_srgb(img):
     return img.convert('RGB') if img.mode != 'RGB' else img
 
 
-def _make_download_master(image, source_format, base_name):
-    """Encode one full-resolution, private client-download derivative."""
+DOWNLOAD_MAX_EDGE = 3600
+DOWNLOAD_MIN_PSNR = 35.0
+JPEG_DOWNLOAD_STRATEGIES = (
+    (84, 2),  # 4:2:0
+    (86, 2),
+    (88, 2),  # 4:2:0
+    (90, 2),
+    (92, 2),
+    (88, 1),  # 4:2:2
+    (90, 1),
+    (92, 1),
+    (88, 0),  # 4:4:4
+    (90, 0),
+    (92, 0),
+)
+
+
+def _file_size(file_obj):
+    size = getattr(file_obj, 'size', None)
+    if size is not None:
+        return size
+    position = file_obj.tell()
+    file_obj.seek(0, io.SEEK_END)
+    size = file_obj.tell()
+    file_obj.seek(position)
+    return size
+
+
+def _jpeg_psnr(source, candidate):
+    candidate_rgb = candidate.convert('RGB')
+    difference = ImageChops.difference(source, candidate_rgb)
+    channel_rms = ImageStat.Stat(difference).rms
+    mean_square_error = sum(value ** 2 for value in channel_rms) / len(channel_rms)
+    if mean_square_error == 0:
+        return float('inf')
+    return 20 * math.log10(255 / math.sqrt(mean_square_error))
+
+
+def _make_download_master(image, source_format, base_name, original_size=None):
+    """Encode a bounded, private client-download derivative."""
     stream = io.BytesIO()
     if source_format in ('JPEG', 'JPG'):
-        # Quality 90 plus optimized progressive encoding is a conservative
-        # photographic-download tradeoff: materially smaller camera exports
-        # without downsampling or introducing normal-viewing artifacts.
-        # JPEG cannot carry an arbitrary camera working profile safely once
-        # re-encoded without retaining extra metadata. Convert through its
-        # embedded profile to sRGB first so color appearance remains stable.
-        _normalize_to_srgb(image).save(
-            stream,
-            format='JPEG',
-            quality=90,
-            optimize=True,
-            progressive=True,
-        )
+        source = _normalize_to_srgb(image)
+        source.thumbnail((DOWNLOAD_MAX_EDGE, DOWNLOAD_MAX_EDGE), Image.Resampling.LANCZOS)
+        candidates = []
+        for quality, subsampling in JPEG_DOWNLOAD_STRATEGIES:
+            candidate_stream = io.BytesIO()
+            source.save(
+                candidate_stream,
+                format='JPEG',
+                quality=quality,
+                optimize=True,
+                progressive=True,
+                subsampling=subsampling,
+            )
+            candidate_bytes = candidate_stream.getvalue()
+            if original_size is not None and len(candidate_bytes) > original_size:
+                continue
+            candidate = Image.open(io.BytesIO(candidate_bytes))
+            psnr = _jpeg_psnr(source, candidate)
+            if psnr >= DOWNLOAD_MIN_PSNR:
+                candidates.append((len(candidate_bytes), -psnr, candidate_bytes))
+
+        if not candidates:
+            return None
+
+        _, _, encoded_bytes = min(candidates)
+        stream.write(encoded_bytes)
         filename = f"{base_name}_download.jpg"
         content_type = 'image/jpeg'
     elif source_format == 'PNG':
+        source = image.copy()
+        source.thumbnail((DOWNLOAD_MAX_EDGE, DOWNLOAD_MAX_EDGE), Image.Resampling.LANCZOS)
         png_kwargs = {'format': 'PNG', 'optimize': True}
-        if image.info.get('icc_profile'):
-            png_kwargs['icc_profile'] = image.info['icc_profile']
-        image.save(stream, **png_kwargs)
+        if source.info.get('icc_profile'):
+            png_kwargs['icc_profile'] = source.info['icc_profile']
+        source.save(stream, **png_kwargs)
+        if original_size is not None and stream.tell() > original_size:
+            return None
         filename = f"{base_name}_download.png"
         content_type = 'image/png'
     else:
@@ -478,12 +491,65 @@ def process_download_master(image_file):
     source_image = exif_transpose(source_image)
     base_name = os.path.splitext(image_file.name)[0]
     try:
-        return _make_download_master(source_image, source_format, base_name)
+        return _make_download_master(
+            source_image,
+            source_format,
+            base_name,
+            original_size=_file_size(image_file),
+        )
     finally:
         image_file.seek(0)
 
 
-def process_image_pipeline(image_file, watermark_text=None):
+_DISPLAY_TIERS = (
+    # (max longest edge px, WebP quality, filename suffix)
+    (2048, 82, "display"),   # full-screen / lightbox view
+    (1280, 80, "medium"),    # typical in-page grid-column width
+    (640, 75, "thumb"),      # grid thumbnails, incl. high-DPI phones
+)
+
+
+def _build_display_tiers(img, base_name, watermark=None):
+    """
+    The three client-visible WebP derivatives from one oriented, sRGB-normalized
+    image, optionally watermarked. Shared by first-time processing and by
+    regeneration after a watermark-setting change so both always produce
+    identical tiers. WebP save() never carries EXIF/ICC metadata unless it is
+    passed explicitly — derivatives are metadata-free by construction.
+    """
+    from apps.core.watermark import apply_watermark
+
+    files = []
+    for max_edge, quality, suffix in _DISPLAY_TIERS:
+        derivative_img = img.copy()
+        derivative_img.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        if watermark is not None:
+            derivative_img = apply_watermark(derivative_img, watermark)
+        stream = io.BytesIO()
+        derivative_img.save(stream, format='WEBP', quality=quality)
+        files.append(SimpleUploadedFile(f"{base_name}_{suffix}.webp", stream.getvalue(), content_type="image/webp"))
+    return tuple(files)
+
+
+def regenerate_display_derivatives(image_file, watermark=None):
+    """
+    Rebuilds ONLY the display/medium/thumbnail tiers from the preserved
+    original, with `watermark` (or none). Does not touch the Download Master,
+    the BlurHash or the original — used to re-apply watermark settings to
+    already-processed assets. Pure function of (original bytes, spec), so
+    running it twice yields the same files.
+    Returns (display_file, medium_file, thumbnail_file).
+    """
+    image_file.seek(0)
+    try:
+        img = exif_transpose(Image.open(image_file))
+        img = _normalize_to_srgb(img)
+        return _build_display_tiers(img, os.path.splitext(image_file.name)[0], watermark)
+    finally:
+        image_file.seek(0)
+
+
+def process_image_pipeline(image_file, watermark_text=None, watermark=None):
     """
     Unified image-derivative pipeline: PRESERVED ORIGINAL (handled
     upstream by strip_exif_gps — never touched here) → OPTIMIZED
@@ -514,9 +580,19 @@ def process_image_pipeline(image_file, watermark_text=None):
     overwrite-on-write keys (apps/photos/models.py, apps/core/storage.py)
     that makes retries idempotent and orphan-free.
 
+    `watermark` is a WatermarkSpec (apps/core/watermark.py) or None. It is
+    applied to the display/medium/thumbnail tiers ONLY. The Download Master
+    is built from the un-watermarked, oriented source and the preserved
+    original is never written to here — see the contract in watermark.py.
+    `watermark_text` is the legacy plain-text form and is converted to a spec.
+
     Returns tuple: (display_file, medium_file, thumbnail_file,
     download_file, blurhash_str)
     """
+    if watermark is None and watermark_text:
+        from apps.core.watermark import DEFAULTS, make_spec
+        watermark = make_spec({**DEFAULTS, 'text': watermark_text})
+
     image_file.seek(0)
     img = Image.open(image_file)
     source_format = (img.format or '').upper()
@@ -529,38 +605,20 @@ def process_image_pipeline(image_file, watermark_text=None):
 
     base_name = os.path.splitext(image_file.name)[0]
 
-    def _make_derivative(max_edge, quality, suffix):
-        derivative_img = img.copy()
-        derivative_img.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+    # ─── 1-3. Display (2048px) / Medium (1280px) / Thumbnail (640px) WebP ───
+    display_file, medium_file, thumbnail_file = _build_display_tiers(img, base_name, watermark)
 
-        if watermark_text:
-            derivative_img = apply_copyright_watermark(derivative_img, watermark_text)
-
-        stream = io.BytesIO()
-        # WebP save() never carries over EXIF/ICC metadata unless it's
-        # explicitly passed in — derivatives are metadata-free by
-        # construction here, not because anything is being stripped.
-        derivative_img.save(stream, format='WEBP', quality=quality)
-        stream.seek(0)
-
-        filename = f"{base_name}_{suffix}.webp"
-        return SimpleUploadedFile(filename, stream.read(), content_type="image/webp")
-
-    # ─── 1. Display WebP (2048px — full-screen lightbox view) ───
-    display_file = _make_derivative(2048, 82, "display")
-
-    # ─── 2. Medium WebP (1280px — grid/in-page column width) ───
-    medium_file = _make_derivative(1280, 80, "medium")
-
-    # ─── 3. Thumbnail WebP (640px — grid thumbnails, incl. high-DPI phones) ───
-    thumbnail_file = _make_derivative(640, 75, "thumb")
-
-    # ─── 4. Full-resolution client Download Master ────────────────────────
-    # This deliberately does not resize. JPEGs are high-quality progressive
-    # JPEGs with optimized Huffman tables; PNGs stay lossless and retain
-    # transparency. Unknown/special source types get no derivative and the
-    # download views safely fall back to the preserved original.
-    download_file = _make_download_master(download_source, source_format, base_name)
+    # ─── 4. Bounded client Download Master ─────────────────────────────────
+    # JPEGs are measured across high-quality progressive strategies and are
+    # capped at DOWNLOAD_MAX_EDGE. PNGs stay lossless and retain transparency.
+    # If no candidate is both visually acceptable and no larger than the
+    # source, the download views safely fall back to the preserved original.
+    download_file = _make_download_master(
+        download_source,
+        source_format,
+        base_name,
+        original_size=_file_size(image_file),
+    )
 
     # ─── 5. Generate BlurHash String ───
     # Previously this ALWAYS fell back to one single hardcoded placeholder

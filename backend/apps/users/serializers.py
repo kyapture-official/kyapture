@@ -1,11 +1,16 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/users/serializers.py
+import logging
 import re
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
+from apps.core.branding import InvalidLogo, sanitize_logo_upload
+from apps.subscriptions.entitlements import BRANDING, require_feature
 from .models import User
+
+logger = logging.getLogger(__name__)
 
 # List of reserved system subdomains to prevent hijacking/spoofing
 RESERVED_USERNAMES = {
@@ -49,6 +54,49 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if value and not re.match(r'^#[0-9a-fA-F]{6}$', value):
             raise serializers.ValidationError('Color must be a valid hex code (e.g., #FF5733).')
         return value
+
+    def to_internal_value(self, data):
+        """
+        Check the Branding entitlement BEFORE any field parses the upload.
+        DRF's ImageField decodes the file with Pillow during field
+        validation, which would otherwise run on an untrusted file for an
+        account that is not allowed to upload one, and answer a Free user's
+        bad file with a 400 instead of the real reason (403).
+        """
+        if self.instance is not None and hasattr(data, 'get') and data.get('logo') not in (None, ''):
+            require_feature(self.instance, BRANDING)
+        return super().to_internal_value(data)
+
+    def validate_logo(self, value):
+        """
+        Branding is a Pro+ feature, enforced HERE (server-side) — the settings
+        UI's locked state is only a courtesy. Setting/replacing a logo needs
+        the entitlement; removing one (value is None) never does, so a
+        photographer whose plan lapsed can still clean up. The upload itself
+        is validated by Pillow and re-encoded (see apps/core/branding.py).
+        """
+        if value is None:
+            return value
+        require_feature(self.instance, BRANDING)
+        try:
+            return sanitize_logo_upload(value)
+        except InvalidLogo as exc:
+            raise serializers.ValidationError(str(exc))
+
+    def update(self, instance, validated_data):
+        previous_logo = instance.logo.name if instance.logo else None
+        instance = super().update(instance, validated_data)
+        if 'logo' in validated_data and previous_logo:
+            current_logo = instance.logo.name if instance.logo else None
+            if previous_logo != current_logo:
+                # Unique key per upload (see get_branding_logo_path), so the
+                # old file is now an orphan — delete it. Never let a storage
+                # hiccup fail the profile save the user just made.
+                try:
+                    instance.logo.storage.delete(previous_logo)
+                except Exception:
+                    logger.exception('Failed to delete replaced branding logo %s', previous_logo)
+        return instance
 
 
 class RegisterSerializer(serializers.ModelSerializer):

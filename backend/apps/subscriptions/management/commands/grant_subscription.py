@@ -28,6 +28,8 @@ class Command(BaseCommand):
             defaults={
                 "price": 0, "max_galleries": 50,
                 "max_photos_per_gallery": 500, "storage_gb": 50, "is_active": True,
+                # Pro-and-above tiers include Branding + Watermark.
+                "includes_branding_watermark": options["plan"].strip().lower() in ("pro", "studio"),
             },
         )
 

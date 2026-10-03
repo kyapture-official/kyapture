@@ -117,6 +117,8 @@ export default function ClientGalleryPage() {
     if (photos.length === 0) return;
     setSlideshowAutoplay(true);
     setSlideshowIndex(0);
+  // A logo URL that fails to load is hidden rather than shown as a broken image.
+  const [logoFailed, setLogoFailed] = useState(false);
   };
 
 // Gallery structural metadata
@@ -173,6 +175,7 @@ export default function ClientGalleryPage() {
   const abortControllerRef = useRef(null);
 
   /**
+    setLogoFailed(false);
    * Applies and cleanses the dynamic branding color properties safely.
    */
   const applyGalleryData = useCallback((data) => {
@@ -605,6 +608,16 @@ export default function ClientGalleryPage() {
         {/* Background Image */}
         <div className="absolute inset-0">
           {coverSrc ? (
+          {/* The photographer's logo — the server only sends it while their
+              plan includes Branding, so no entitlement logic lives here. */}
+          {photographerLogo && !logoFailed && (
+            <img
+              src={photographerLogo}
+              alt={photographerName ? `${photographerName} logo` : "Photographer logo"}
+              onError={() => setLogoFailed(true)}
+              className="mb-6 max-h-20 max-w-[12rem] object-contain drop-shadow-[0_1px_6px_rgba(0,0,0,0.35)]"
+            />
+          )}
             <img
               src={coverSrc}
               alt=""

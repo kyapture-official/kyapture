@@ -30,7 +30,17 @@ class SubscriptionPlan(BaseModel):
     max_galleries = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     max_photos_per_gallery = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     storage_gb = models.PositiveIntegerField(validators=[MinValueValidator(1)])
-    
+
+    # Feature entitlement: Pro-and-above tiers include client-gallery Branding
+    # (business logo) and Watermarking. A plan flag rather than a plan-name
+    # check at enforcement time, so which tiers qualify is plain data an admin
+    # can change in Django admin. Read through
+    # apps/subscriptions/entitlements.py — never directly by feature code.
+    includes_branding_watermark = models.BooleanField(
+        default=False,
+        help_text="Plan includes custom Branding (logo) and Watermark.",
+    )
+
     is_active = models.BooleanField(default=True)
 
     class Meta:

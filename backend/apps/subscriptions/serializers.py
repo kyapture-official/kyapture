@@ -26,6 +26,7 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             'max_photos_per_gallery',
             'storage_gb',
             'storage_bytes',
+            'includes_branding_watermark',
         ]
         read_only_fields = fields
 
@@ -49,6 +50,7 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
     storage_used_gb = serializers.SerializerMethodField()
     galleries_used = serializers.SerializerMethodField()
     photos_used = serializers.SerializerMethodField()
+    entitlements = serializers.SerializerMethodField()
 
     class Meta:
         model = UserSubscription
@@ -65,9 +67,15 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
             'storage_used_gb',
             'galleries_used',
             'photos_used',
+            'entitlements',
         ]
         read_only_fields = fields
 
+    def get_entitlements(self, obj):
+        # Computed from the live subscription (active AND unexpired), not from
+        # this row's own status field, so a lapsed plan reads as Free.
+        from .entitlements import get_feature_entitlements
+        return get_feature_entitlements(obj.user)
 
     def get_days_remaining(self, obj):
         """Calculates exact days left in active session. Protects negative values."""

@@ -14,6 +14,7 @@ from rest_framework.test import APITestCase
 
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
+from apps.subscriptions.testing import grant_plan
 
 User = get_user_model()
 
@@ -111,6 +112,10 @@ class GalleryUpdateTestCase(APITestCase):
 
     # ── Core supported-field round trip ──────────────────────────────────
     def test_patch_supported_fields_round_trip(self):
+        # Watermark is a Pro+ feature; this round trip exercises it, so the
+        # photographer needs the entitlement (the Free-user rejection is
+        # covered in test_branding_watermark_entitlements).
+        grant_plan(self.photographer)
         payload = {
             "cover_photo": str(self.asset.id),
             "branding_color": "#FF5733",

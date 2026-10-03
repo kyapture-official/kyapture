@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
 import { useToast } from "../../components/ui/Toast";
 import { toDateInputValue } from "../../utils/formatters";
+import WatermarkSettings from "../../components/shared/WatermarkSettings";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
@@ -22,7 +23,6 @@ export default function GallerySettingsPage() {
   const [eventDate, setEventDate] = useState(toDateInputValue(gallery.event_date));
   const [expiresAt, setExpiresAt] = useState(toDateInputValue(gallery.expires_at));
   const [hasPassword, setHasPassword] = useState(gallery.has_password);
-  const [watermarkEnabled, setWatermarkEnabled] = useState(gallery.watermark_enabled ?? false);
   const [updating, setUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -45,6 +45,7 @@ export default function GallerySettingsPage() {
     { id: "general", label: "General" },
     { id: "privacy", label: "Privacy" },
     { id: "download", label: "Download" },
+    { id: "watermark", label: "Watermark" },
   ];
 
   const handleSaveSettings = async (e) => {
@@ -57,7 +58,6 @@ export default function GallerySettingsPage() {
       title: title.trim(),
       branding_color: brandingColor,
       is_downloadable: isDownloadable, // allow_download ko thau ma yahi lekhne
-      watermark_enabled: watermarkEnabled,
       event_date: eventDate || null,
       expires_at: expiresAt || null,
     };
@@ -74,7 +74,6 @@ export default function GallerySettingsPage() {
       setBrandingColor(updated.branding_color);
       setIsDownloadable(updated.allow_download ?? updated.is_downloadable ?? false);
       setHasPassword(updated.has_password);
-      setWatermarkEnabled(updated.watermark_enabled);
       toast("Settings saved successfully", "success");
       // Slug is stable across a title edit (see docstring above), so there's
       // no slug-drift redirect to handle here anymore.
@@ -228,23 +227,6 @@ export default function GallerySettingsPage() {
                 <span className="text-[11px] text-muted">After this date, clients lose access.</span>
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-ink/80" htmlFor="gallery-watermark">Default Watermark</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="gallery-watermark"
-                    type="checkbox"
-                    checked={watermarkEnabled}
-                    onChange={(e) => setWatermarkEnabled(e.target.checked)}
-                    disabled={updating}
-                    className="w-4 h-4 rounded border-cream-300 text-brand-green-600 focus:ring-brand-green-500 cursor-pointer disabled:cursor-not-allowed"
-                  />
-                  <label className="text-xs text-muted cursor-pointer select-none" htmlFor="gallery-watermark">
-                    Apply copyright watermark to photos
-                  </label>
-                </div>
-              </div>
-
               <div className="flex justify-end pt-4 border-t border-cream-200">
                 <button
                   type="submit"
@@ -256,6 +238,16 @@ export default function GallerySettingsPage() {
               </div>
             </form>
           </div>
+        )}
+
+        {/* Watermark Tab — owns its own save, plan gating and background re-apply */}
+        {activeTab === "watermark" && (
+          <WatermarkSettings
+            gallery={gallery}
+            setGallery={setGallery}
+            slug={slug}
+            isMountedRef={isMountedRef}
+          />
         )}
 
         {/* Privacy Tab */}

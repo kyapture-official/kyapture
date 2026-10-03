@@ -171,6 +171,12 @@ export default function PricingPage() {
                       <span className="text-brand-green-500 font-bold">✓</span>
                       Password-protected galleries
                     </li>
+                    {plan.includes_branding_watermark && (
+                      <li className="flex items-center gap-2">
+                        <span className="text-brand-green-500 font-bold">✓</span>
+                        Custom branding &amp; watermark
+                      </li>
+                    )}
                     <li className="flex items-center gap-2">
                       <span className="text-brand-green-500 font-bold">✓</span>
                       Client download controls

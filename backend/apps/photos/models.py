@@ -230,6 +230,14 @@ class MediaAsset(BaseModel):
         upload_to=get_download_photo_path, max_length=500, null=True, blank=True, storage=PrivateMediaStorage()
     )
     blurhash = models.CharField(max_length=100, blank=True, null=True)
+
+    # Fingerprint of the watermark baked into the display/medium/thumbnail
+    # derivatives ('' = none). Lets regeneration after a watermark-setting
+    # change skip assets that are already correct (idempotent, safe to
+    # re-run) and doubles as the cache-busting `?v=` on derivative URLs
+    # (apps/core/watermark.py::versioned_url). Never describes the original
+    # or the Download Master — those are never watermarked.
+    watermark_signature = models.CharField(max_length=32, blank=True, default='')
     width = models.PositiveIntegerField(null=True, blank=True)   
     height = models.PositiveIntegerField(null=True, blank=True)  
 

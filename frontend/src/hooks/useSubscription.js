@@ -11,6 +11,13 @@ const FREE_PLAN_LIMITS = {
   allow_video: false,
 }
 
+// Paid, plan-gated features. The server is the source of truth: it computes
+// these from the live subscription (active AND unexpired plan flagged for the
+// feature) and sends them with /subscriptions/my-subscription/. Until that
+// answer arrives — or if it fails — everything reads as locked, so the UI can
+// never offer a feature the API would refuse. The API enforces regardless.
+const NO_ENTITLEMENTS = { branding: false, watermark: false }
+
 
 export function useSubscription() {
   const isMountedRef       = useRef(false)
@@ -95,6 +102,11 @@ export function useSubscription() {
       : FREE_PLAN_LIMITS
   }, [isSubscribed, plan])
 
+  const entitlements = useMemo(
+    () => ({ ...NO_ENTITLEMENTS, ...(subscription?.entitlements || {}) }),
+    [subscription],
+  )
+
   const usage = useMemo(() => ({
     galleriesUsed:    subscription?.galleries_used     ?? 0,
     photosUsed:        subscription?.photos_used        ?? 0,
@@ -109,6 +121,7 @@ export function useSubscription() {
     plan,
     isSubscribed,
     limits,
+    entitlements,
     usage,
     loading,
     error,

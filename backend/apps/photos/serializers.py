@@ -5,6 +5,7 @@ from PIL import Image as PILImage, UnidentifiedImageError
 from PIL.ImageOps import exif_transpose
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import serializers
+from apps.core.watermark import versioned_url
 
 from apps.core.utils import (
     validate_magic_bytes,
@@ -83,20 +84,20 @@ class MediaAssetSerializer(serializers.ModelSerializer):
     def get_display_url(self, obj):
         request = self.context.get('request')
         if obj.display_file and request:
-            return request.build_absolute_uri(obj.display_file.url)
+            return versioned_url(request.build_absolute_uri(obj.display_file.url), obj)
         return None
 
     def get_medium_url(self, obj):
         """1280px WebP tier — see MediaAsset.medium_file (Phase 2)."""
         request = self.context.get('request')
         if obj.medium_file and request:
-            return request.build_absolute_uri(obj.medium_file.url)
+            return versioned_url(request.build_absolute_uri(obj.medium_file.url), obj)
         return None
 
     def get_thumbnail_url(self, obj):
         request = self.context.get('request')
         if obj.thumbnail_file and request:
-            return request.build_absolute_uri(obj.thumbnail_file.url)
+            return versioned_url(request.build_absolute_uri(obj.thumbnail_file.url), obj)
         return None
 
     def get_poster_url(self, obj):

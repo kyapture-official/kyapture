@@ -5,8 +5,8 @@ from .models import SubscriptionPlan, UserSubscription, ManualPayment
 
 @admin.register(SubscriptionPlan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ['name', 'price', 'max_galleries', 'max_photos_per_gallery', 'storage_gb', 'is_active']
-    list_filter = ['is_active']
+    list_display = ['name', 'price', 'max_galleries', 'max_photos_per_gallery', 'storage_gb', 'includes_branding_watermark', 'is_active']
+    list_filter = ['is_active', 'includes_branding_watermark']
     search_fields = ['name']
 
 

@@ -1,10 +1,12 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/clients/serializers.py
 import bcrypt
 from rest_framework import serializers
+from apps.core.watermark import versioned_url
 
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset, PhotoSet
 from apps.core.utils import generate_secure_token
+from apps.subscriptions.entitlements import BRANDING, has_feature
 from .models import ClientSession, Favorite, DownloadLog
 from django.urls import reverse
 
@@ -62,7 +64,7 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
     def get_display_url(self, obj):
         request = self.context.get('request')
         if obj.display_file and request:
-            return request.build_absolute_uri(obj.display_file.url)
+            return versioned_url(request.build_absolute_uri(obj.display_file.url), obj)
         return None
 
     def get_medium_url(self, obj):
@@ -73,13 +75,13 @@ class PublicMediaAssetSerializer(serializers.ModelSerializer):
         """
         request = self.context.get('request')
         if obj.medium_file and request:
-            return request.build_absolute_uri(obj.medium_file.url)
+            return versioned_url(request.build_absolute_uri(obj.medium_file.url), obj)
         return None
 
     def get_thumbnail_url(self, obj):
         request = self.context.get('request')
         if obj.thumbnail_file and request:
-            return request.build_absolute_uri(obj.thumbnail_file.url)
+            return versioned_url(request.build_absolute_uri(obj.thumbnail_file.url), obj)
         return None
 
     def get_poster_url(self, obj):
@@ -178,6 +180,7 @@ class PublicGallerySerializer(serializers.ModelSerializer):
     photos_page_size = serializers.SerializerMethodField()
     photo_sets = serializers.SerializerMethodField()
     has_download_pin = serializers.SerializerMethodField()
+    design_settings = serializers.SerializerMethodField()
 
     class Meta:
         model = Gallery
@@ -239,10 +242,32 @@ class PublicGallerySerializer(serializers.ModelSerializer):
     
     
     def get_photographer_logo(self, obj):
+        """
+        The business logo is a Pro+ feature: shown to clients only while the
+        photographer is CURRENTLY entitled, so a lapsed plan stops showing it
+        without the file or setting being touched. The URL is the public
+        media URL of the logo itself (see get_branding_logo_path) — never a
+        private/original storage path.
+        """
         request = self.context.get('request')
-        if obj.photographer.logo and request:
-            return request.build_absolute_uri(obj.photographer.logo.url)
-        return None
+        if not (obj.photographer.logo and request):
+            return None
+        if not has_feature(obj.photographer, BRANDING):
+            return None
+        return request.build_absolute_uri(obj.photographer.logo.url)
+
+    def get_design_settings(self, obj):
+        """
+        The gallery's persisted look-and-feel for the client page. The
+        photographer's private watermark configuration (text, position, ...)
+        lives in the same JSON blob but is processing input, not display
+        input — it is baked into the images and is not part of the public
+        payload.
+        """
+        settings_blob = obj.design_settings
+        if not isinstance(settings_blob, dict):
+            return {}
+        return {key: value for key, value in settings_blob.items() if key != 'watermark'}
 
     def get_cover_url(self, obj):
         """
@@ -264,7 +289,9 @@ class PublicGallerySerializer(serializers.ModelSerializer):
         )
         if not image_field or not hasattr(image_field, 'url'):
             return None
-        return request.build_absolute_uri(image_field.url)
+        url = request.build_absolute_uri(image_field.url)
+        # Image derivatives carry the watermark version; a video poster does not.
+        return url if image_field is getattr(cover, 'poster_image', None) else versioned_url(url, cover)
 
 
 class GalleryUnlockSerializer(serializers.Serializer):

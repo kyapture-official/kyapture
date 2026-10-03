@@ -1,6 +1,8 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/galleries/serializers.py
 import bcrypt 
 from rest_framework import serializers
+from apps.core.watermark import validate_watermark_config
+from apps.subscriptions.entitlements import WATERMARK, require_feature
 
 from apps.core.utils import generate_unique_slug, sanitize_text
 from apps.photos.models import MediaAsset
@@ -201,6 +203,12 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
             'is_published', 'expires_at', 'event_date',
         ]
 
+    def validate_watermark_enabled(self, value):
+        """Watermark is a Pro+ feature; turning it OFF is always allowed."""
+        if value:
+            require_feature(self.context['request'].user, WATERMARK)
+        return value
+
     def validate_title(self, value):
         """Strips raw HTML/JS tags to defend against persistent XSS."""
         return sanitize_text(value)
@@ -293,6 +301,57 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
             'branding_color','event_date', 'is_password_protected', 'password',
             'is_downloadable', 'watermark_enabled', 'is_published', 'expires_at',
         ]
+
+    def validate_watermark_enabled(self, value):
+        """Watermark is a Pro+ feature; turning it OFF is always allowed."""
+        if value:
+            require_feature(self.context['request'].user, WATERMARK)
+        return value
+
+    def validate_design_settings(self, value):
+        """
+        design_settings is the gallery's small fixed set of look-and-feel
+        choices plus the private `watermark` block (type/text/position/
+        opacity/size/margin) — see apps/core/watermark.py.
+
+        - The watermark block is validated field by field; nothing
+          unvalidated reaches the renderer.
+        - Saving a watermark configuration is Pro+ only, enforced here. A
+          block identical to what is already stored is not a change, so a
+          lapsed photographer's Design page can still save other settings.
+        - A save that omits the block (e.g. the Design page, which doesn't
+          know about it) keeps the stored one instead of wiping it.
+        """
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('design_settings must be an object.')
+        value = dict(value)
+        existing = (self.instance.design_settings or {}) if self.instance else {}
+        existing_block = existing.get('watermark') if isinstance(existing, dict) else None
+
+        if 'watermark' not in value:
+            if existing_block is not None:
+                value['watermark'] = existing_block
+            return value
+
+        incoming = value['watermark']
+        if incoming is None:                      # explicit clear: always allowed
+            value.pop('watermark')
+            return value
+
+        config, errors = validate_watermark_config(incoming)
+        if errors:
+            raise serializers.ValidationError({'watermark': errors})
+
+        stored_config, _ = validate_watermark_config(existing_block) if isinstance(existing_block, dict) else (None, None)
+        if config != stored_config:
+            request = self.context['request']
+            require_feature(request.user, WATERMARK)
+            if config['type'] == 'logo' and not request.user.logo:
+                raise serializers.ValidationError({
+                    'watermark': {'type': 'Upload your business logo in Branding settings to use a logo watermark.'}
+                })
+        value['watermark'] = config
+        return value
 
     def validate_title(self, value):
         """Strips raw HTML/JS tags to defend against persistent XSS."""

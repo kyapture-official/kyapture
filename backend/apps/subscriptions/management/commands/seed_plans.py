@@ -19,6 +19,7 @@ class Command(BaseCommand):
                 'max_galleries': 3,
                 'max_photos_per_gallery': 100,
                 'storage_gb': 5,
+                'includes_branding_watermark': False,
             },
             {
                 'name': 'Pro',
@@ -26,6 +27,7 @@ class Command(BaseCommand):
                 'max_galleries': 20,
                 'max_photos_per_gallery': 500,
                 'storage_gb': 50,
+                'includes_branding_watermark': True,
             },
             {
                 'name': 'Studio',
@@ -33,6 +35,7 @@ class Command(BaseCommand):
                 'max_galleries': 100,
                 'max_photos_per_gallery': 2000,
                 'storage_gb': 200,
+                'includes_branding_watermark': True,
             },
         ]
 
