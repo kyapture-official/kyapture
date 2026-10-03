@@ -5,7 +5,7 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
@@ -27,6 +27,7 @@ from .serializers import (
     LoginSerializer,
     UserProfileSerializer,
     ChangePasswordSerializer,
+    UserSettingsSerializer,
 )
 from .utils import blacklist_all_outstanding_tokens_for_user
 
@@ -285,9 +286,25 @@ class MeView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class PasswordChangeRateThrottle(UserRateThrottle):
+    """Per-user limit on change-password attempts: the current-password check is guessable otherwise."""
+    scope = 'password_change'
+
+
 class ChangePasswordView(APIView):
-    """PUT /api/v1/auth/change-password/ - Requires authenticated cookie authorization"""
+    """
+    PUT /api/v1/auth/change-password/ - Requires authenticated cookie authorization
+
+    On success every outstanding refresh token for the account is revoked (see
+    ChangePasswordSerializer.save), which signs out every OTHER device. The
+    device that just made the change is then given a fresh session so the user
+    isn't bounced to the login screen when their short-lived access token
+    lapses a few minutes later. Access tokens already issued elsewhere stay
+    valid until they expire (ACCESS_TOKEN_LIFETIME, 15 minutes) — a property
+    of stateless JWTs this app deliberately does not change.
+    """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [PasswordChangeRateThrottle]
 
     def put(self, request):
         serializer = ChangePasswordSerializer(
@@ -295,9 +312,54 @@ class ChangePasswordView(APIView):
             context={'request': request}
         )
         if serializer.is_valid():
-            serializer.save()
-            return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
+            user = serializer.save()
+            response = Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
+            refresh = RefreshToken.for_user(user)
+            set_auth_cookies(response, str(refresh.access_token), str(refresh))
+            return response
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LogoutAllView(APIView):
+    """
+    POST /api/v1/auth/logout-all/
+    Signs the account out everywhere: blacklists EVERY outstanding refresh
+    token (this device included) and clears this browser's cookies. Real
+    server-side revocation — refresh tokens stop working immediately; an
+    access token already in flight elsewhere lapses within
+    ACCESS_TOKEN_LIFETIME (15 minutes).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        blacklist_all_outstanding_tokens_for_user(request.user)
+        response = Response({'message': 'Signed out of all sessions.'}, status=status.HTTP_200_OK)
+        domain = getattr(settings, 'SESSION_COOKIE_DOMAIN', None)
+        response.delete_cookie('access_token', domain=domain)
+        response.delete_cookie('refresh_token', domain=domain)
+        return response
+
+
+class UserSettingsView(APIView):
+    """
+    GET/PATCH /api/v1/auth/settings/
+    Notification preferences, privacy, and Collection Defaults for the
+    signed-in photographer. Scoped to request.user — there is no id anywhere
+    in the request to manipulate. Unknown keys are rejected (400), so a typo or
+    a probe for a privileged field is never silently "saved".
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(UserSettingsSerializer(request.user).data)
+
+    def patch(self, request):
+        serializer = UserSettingsSerializer(
+            request.user, data=request.data, partial=True, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSettingsSerializer(request.user).data)
 
 
 class PublicMetricsRateThrottle(AnonRateThrottle):

@@ -6,7 +6,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
-from apps.core.branding import InvalidLogo, sanitize_logo_upload
+from apps.core.branding import InvalidLogo, sanitize_avatar_upload, sanitize_logo_upload
+from apps.users.collection_defaults import validate_collection_defaults
 from apps.subscriptions.entitlements import BRANDING, require_feature
 from .models import User
 
@@ -34,6 +35,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'phone', 'website', 'is_active_plan', 'created_at'
         ]
         read_only_fields = ['id', 'email', 'is_active_plan', 'created_at']
+        # Uniqueness is enforced by validate_username below (case-normalized,
+        # excluding the user's own row, with the app's own wording); the model's
+        # generic UniqueValidator would answer first with "user with this
+        # username already exists." and duplicate that check.
+        extra_kwargs = {'username': {'validators': []}}
 
     def validate_username(self, value):
         clean_username = value.strip().lower()
@@ -54,6 +60,33 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if value and not re.match(r'^#[0-9a-fA-F]{6}$', value):
             raise serializers.ValidationError('Color must be a valid hex code (e.g., #FF5733).')
         return value
+
+    def validate_display_name(self, value):
+        """The name clients see on every gallery (studio / business name). Plain text, required."""
+        from apps.core.utils import sanitize_text
+        clean = sanitize_text(value or '').strip()
+        if not clean:
+            raise serializers.ValidationError('Display name is required.')
+        return clean
+
+    def validate_bio(self, value):
+        from apps.core.utils import sanitize_text
+        return sanitize_text(value or '').strip()
+
+    def validate_phone(self, value):
+        value = (value or '').strip()
+        if value and not re.match(r'^[0-9+()\-.\s]{3,20}$', value):
+            raise serializers.ValidationError('Enter a valid phone number (digits, spaces and + - ( ) only).')
+        return value
+
+    def validate_avatar(self, value):
+        """The profile picture is shown on the public portfolio: validated and re-encoded like the logo."""
+        if value is None:
+            return value
+        try:
+            return sanitize_avatar_upload(value)
+        except InvalidLogo as exc:
+            raise serializers.ValidationError(str(exc))
 
     def to_internal_value(self, data):
         """
@@ -207,8 +240,11 @@ class ChangePasswordSerializer(serializers.Serializer):
 
     def validate(self, data):
         if data['new_password'] != data['new_password2']:
-            raise serializers.ValidationError({'new_password': 'New passwords do not match.'})
-            
+            raise serializers.ValidationError({'new_password2': 'New passwords do not match.'})
+
+        if data['new_password'] == data['old_password']:
+            raise serializers.ValidationError({'new_password': 'Choose a password different from your current one.'})
+
         try:
             validate_password(data['new_password'], user=self.context['request'].user)
         except DjangoValidationError as e:
@@ -241,4 +277,85 @@ class ChangePasswordSerializer(serializers.Serializer):
         from .utils import blacklist_all_outstanding_tokens_for_user
         blacklist_all_outstanding_tokens_for_user(user)
 
+        return user
+
+
+# ─────────────────────────────────────────────────────────────
+# SETTINGS: notifications / privacy / collection defaults
+# GET/PATCH /api/v1/auth/settings/
+# ─────────────────────────────────────────────────────────────
+
+class _StrictSerializer(serializers.Serializer):
+    """Rejects unknown keys, so a typo or a probe for a privileged field can never look like a saved setting."""
+
+    def to_internal_value(self, data):
+        if hasattr(data, 'keys'):
+            unknown = set(data.keys()) - set(self.fields)
+            if unknown:
+                raise serializers.ValidationError({key: 'Unknown setting.' for key in sorted(unknown)})
+        return super().to_internal_value(data)
+
+
+class NotificationPreferencesSerializer(_StrictSerializer):
+    downloads = serializers.BooleanField(required=False)
+    favorites = serializers.BooleanField(required=False)
+    payments = serializers.BooleanField(required=False)
+
+
+class PrivacySettingsSerializer(_StrictSerializer):
+    portfolio_public = serializers.BooleanField(required=False)
+
+
+class UserSettingsSerializer(_StrictSerializer):
+    """
+    The settings that have a backend home: notification preferences, privacy,
+    and Collection Defaults. Always scoped to request.user (the view passes
+    the instance); there is no id in the URL or body to manipulate.
+    """
+    notifications = NotificationPreferencesSerializer(required=False)
+    privacy = PrivacySettingsSerializer(required=False)
+    collection_defaults = serializers.JSONField(required=False)
+
+    FIELD_MAP = {
+        'downloads': 'notify_downloads',
+        'favorites': 'notify_favorites',
+        'payments': 'notify_payments',
+    }
+
+    def validate_collection_defaults(self, value):
+        clean, errors = validate_collection_defaults(value)
+        if errors:
+            raise serializers.ValidationError(errors)
+        if clean.get('watermark_enabled') and not (self.instance.collection_defaults or {}).get('watermark_enabled'):
+            # Newly switching the watermark default ON is a Pro+ action; leaving
+            # an existing value, or switching it off, never is.
+            from apps.subscriptions.entitlements import WATERMARK, require_feature
+            require_feature(self.instance, WATERMARK)
+        return clean
+
+    def to_representation(self, user):
+        from apps.users.collection_defaults import get_collection_defaults
+        return {
+            'notifications': {
+                'downloads': user.notify_downloads,
+                'favorites': user.notify_favorites,
+                'payments': user.notify_payments,
+            },
+            'privacy': {'portfolio_public': user.portfolio_public},
+            'collection_defaults': get_collection_defaults(user),
+        }
+
+    def update(self, user, validated_data):
+        fields = []
+        for public_name, value in (validated_data.get('notifications') or {}).items():
+            setattr(user, self.FIELD_MAP[public_name], value)
+            fields.append(self.FIELD_MAP[public_name])
+        for public_name, value in (validated_data.get('privacy') or {}).items():
+            setattr(user, public_name, value)
+            fields.append(public_name)
+        if 'collection_defaults' in validated_data:
+            user.collection_defaults = validated_data['collection_defaults']
+            fields.append('collection_defaults')
+        if fields:
+            user.save(update_fields=fields)
         return user

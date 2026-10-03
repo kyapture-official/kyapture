@@ -100,6 +100,7 @@ REST_FRAMEWORK = {
         "password_unlock": "5/minute",      # Tight brute-force security for private galleries
         "password_reset": "5/hour",
         "login": "5/minute",                # Tight brute-force security for photographer login
+        "password_change": "10/hour",       # Per-user: guards the current-password check against guessing
         # Phase 4 (F-41 fix): ordinary public gallery browsing/streaming/
         # single-file-download/portfolio traffic previously fell through
         # to the blanket "anon: 100/day" above — fine for a rarely-hit
@@ -133,6 +134,16 @@ SIMPLE_JWT = {
 
 # Core Auth and I18N configuration
 AUTH_USER_MODEL = "users.User"
+
+# Password policy. This was previously unset (an empty list), which made every
+# validate_password() call in registration, password change and password reset
+# a silent no-op - any password, including a single character, was accepted.
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

@@ -1320,7 +1320,9 @@ class PublicPhotographerPortfolioView(APIView):
         # same "return 404, don't distinguish why" pattern this app
         # already uses everywhere else to avoid enumeration.
         photographer = get_object_or_404(
-            User.objects.filter(is_active=True, is_staff=False, is_superuser=False),
+            User.objects.filter(
+                is_active=True, is_staff=False, is_superuser=False, portfolio_public=True
+            ),
             username=username.strip().lower()
         )
 

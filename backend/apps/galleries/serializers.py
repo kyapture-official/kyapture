@@ -2,6 +2,7 @@
 import bcrypt 
 from rest_framework import serializers
 from apps.core.watermark import validate_watermark_config
+from apps.users.collection_defaults import apply_collection_defaults
 from apps.subscriptions.entitlements import WATERMARK, require_feature
 
 from apps.core.utils import generate_unique_slug, sanitize_text
@@ -238,6 +239,14 @@ class GalleryCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         photographer = self.context['request'].user
         raw_password = validated_data.pop('password', '').strip()
+
+        # The photographer's Collection Defaults fill in anything this request
+        # did not set explicitly. They are consulted only here, at creation —
+        # never when an existing gallery is edited — so they cannot change
+        # an existing collection. See apps/users/collection_defaults.py.
+        validated_data = apply_collection_defaults(
+            photographer, validated_data, set(getattr(self, 'initial_data', {}) or {})
+        )
 
         slug = generate_unique_slug(
             Gallery,

@@ -97,6 +97,32 @@ export const authApi = {
     api.put('/auth/change-password/', payload).then((res) => res.data),
 
   /**
+   * WHAT: Signs the account out everywhere — the server blacklists every
+   *       outstanding refresh token (this device included) and clears cookies.
+   * URI:  POST /api/v1/auth/logout-all/
+   */
+  logoutAll: () =>
+    api.post('/auth/logout-all/', {}).then((res) => res.data),
+
+  /**
+   * WHAT: Notification preferences, privacy, and Collection Defaults.
+   * URI:  GET /api/v1/auth/settings/
+   *
+   * @returns {Promise<{ notifications: {downloads, favorites, payments},
+   *                     privacy: {portfolio_public}, collection_defaults: object }>}
+   */
+  getSettings: () =>
+    api.get('/auth/settings/').then((res) => res.data),
+
+  /**
+   * WHAT: Saves any subset of those sections; the response is the full saved
+   *       state, so callers render what the server actually stored.
+   * URI:  PATCH /api/v1/auth/settings/
+   */
+  updateSettings: (payload) =>
+    api.patch('/auth/settings/', payload).then((res) => res.data),
+
+  /**
    * WHAT: Dispatches a password recovery request instructions email.
    * URI:  POST /api/v1/auth/password/reset/
    *

@@ -1,4 +1,5 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/views.py
+import logging
 from datetime import timedelta
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -9,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.users.notifications import notify_payment_reviewed
 from .entitlements import get_feature_entitlements
 from .models import SubscriptionPlan, UserSubscription, ManualPayment
 from .serializers import (
@@ -18,6 +20,8 @@ from .serializers import (
     AdminPaymentListSerializer,   # Integrated Day 3 Serializer
     AdminPaymentReviewSerializer, # Integrated Day 3 Serializer
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PlanListView(APIView):
@@ -242,6 +246,10 @@ class AdminPaymentReviewView(APIView):
                     photographer.is_active_plan = True
                     photographer.save(update_fields=['is_active_plan'])
 
+                    # Email the photographer (if they kept payment alerts on) once
+                    # this transaction actually commits.
+                    notify_payment_reviewed(payment)
+
                     # Serialize the successful active state to match API specs
                     return Response({
                         "message": "Payment approved. Subscription activated.",
@@ -256,6 +264,7 @@ class AdminPaymentReviewView(APIView):
                     if admin_note:
                         payment.notes = admin_note
                     payment.save(update_fields=['status', 'verified_by', 'notes'])
+                    notify_payment_reviewed(payment)
 
                     return Response({
                         "message": "Payment rejected.",
@@ -263,9 +272,12 @@ class AdminPaymentReviewView(APIView):
                         "subscription": None
                     }, status=status.HTTP_200_OK)
 
-        except Exception as e:
-            # PostgreSQL rolls back any changes inside the context block on exception raised
+        except Exception:
+            # PostgreSQL rolls back any changes inside the context block on
+            # exception raised. The detail goes to the server log only — it can
+            # carry SQL/driver text that must never reach the client.
+            logger.exception('Payment review failed for payment %s', payment_id)
             return Response(
-                {"error": f"State machine transition aborted due to internal server error: {str(e)}"}, 
+                {"error": "Could not complete the review. No changes were saved.", "code": "review_failed"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

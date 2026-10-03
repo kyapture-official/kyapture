@@ -1,382 +1,67 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/pages/dashboard/SettingsPage.jsx
-import { useState, useCallback } from 'react'
-import { useAuthStore } from '../../store/authStore'
-import { authApi } from '../../api/authApi'
-import Button from '../../components/ui/Button'
-import Input from '../../components/ui/Input'
-import Spinner from '../../components/ui/Spinner'
-import UpgradePrompt from '../../components/shared/UpgradePrompt'
-import { useSubscription } from '../../hooks/useSubscription'
-import { useToast } from '../../components/ui/Toast'
+import { Navigate, NavLink, useParams } from 'react-router-dom'
+import ProfileSection from '../../components/settings/ProfileSection'
+import AccountSection from '../../components/settings/AccountSection'
+import SecuritySection from '../../components/settings/SecuritySection'
+import BrandingSection from '../../components/settings/BrandingSection'
+import NotificationsSection from '../../components/settings/NotificationsSection'
+import PlanBillingSection from '../../components/settings/PlanBillingSection'
+import CollectionDefaultsSection from '../../components/settings/CollectionDefaultsSection'
+import PrivacySection from '../../components/settings/PrivacySection'
+
+/**
+ * The Settings structure. Each section is its own URL
+ * (/dashboard/settings/<id>), so a refresh, a shared link and the browser's
+ * back button all land on the same section. Every section is backed by real
+ * persistence — see the section components for what each one saves and where.
+ */
+const SECTIONS = [
+  { id: 'profile', label: 'Profile', Component: ProfileSection },
+  { id: 'account', label: 'Account', Component: AccountSection },
+  { id: 'security', label: 'Security', Component: SecuritySection },
+  { id: 'branding', label: 'Branding', Component: BrandingSection },
+  { id: 'notifications', label: 'Notifications', Component: NotificationsSection },
+  { id: 'plan-billing', label: 'Plan & Billing', Component: PlanBillingSection },
+  { id: 'collection-defaults', label: 'Collection Defaults', Component: CollectionDefaultsSection },
+  { id: 'privacy', label: 'Privacy', Component: PrivacySection },
+]
+
+const linkClass = ({ isActive }) =>
+  `block whitespace-nowrap rounded-lg px-3.5 py-2.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 ${
+    isActive ? 'bg-surface-light font-medium text-ink shadow-sm' : 'text-muted hover:bg-cream-100 hover:text-ink'
+  }`
 
 export default function SettingsPage() {
-  const { user, updateUser } = useAuthStore()
-  const toast = useToast()
-  // Branding is a Pro+ feature. The server decides (and enforces) this; the
-  // locked state below is only the explanation the API's refusal would otherwise lack.
-  const { entitlements, loading: planLoading } = useSubscription()
-  const brandingLocked = !planLoading && !entitlements.branding
+  const { section } = useParams()
+  const active = SECTIONS.find((s) => s.id === section)
 
-  const [profile, setProfile] = useState({
-    display_name: user?.display_name || '',
-    bio: user?.bio || '',
-    username: user?.username || '',
-    branding_color: user?.branding_color || '#111827',
-  })
-  
-  const [logoURL, setLogoURL] = useState(user?.logo || null)
-  const [pw, setPw] = useState({ old_password: '', new_password: '', new_password2: '' })
-
-  const [savingProfile, setSavingProfile] = useState(false)
-  const [savingPw, setSavingPw] = useState(false)
-  const [logoUploading, setLogoUploading] = useState(false)
-  const [pwErrors, setPwErrors] = useState({})
-
-  const hasSubdomainChanged = profile.username.trim() !== (user?.username || '')
-
-  const handleProfileChange = useCallback((e) => {
-    const { name, value } = e.target
-    setProfile((prev) => ({ ...prev, [name]: value }))
-  }, [])
-
-  const handlePasswordChange = useCallback((e) => {
-    const { name, value } = e.target
-    setPw((prev) => ({ ...prev, [name]: value }))
-  }, [])
-
-  const saveProfile = async (e) => {
-    e.preventDefault()
-    if (!profile.display_name.trim() || !profile.username.trim() || savingProfile) return
-
-    setSavingProfile(true)
-    try {
-      const normalizedSubdomain = profile.username.trim().toLowerCase()
-      const payload = {
-        display_name: profile.display_name.trim(),
-        bio: profile.bio.trim(),
-        username: normalizedSubdomain,
-        branding_color: profile.branding_color,
-      }
-
-      const updatedUser = await authApi.updateMe(payload)
-      updateUser(updatedUser)
-      setProfile({
-        display_name: updatedUser.display_name || '',
-        bio: updatedUser.bio || '',
-        username: updatedUser.username || '',
-        branding_color: updatedUser.branding_color || '#111827',
-      })
-      toast('Profile updated!', 'success')
-    } catch (err) {
-      toast(err.response?.data?.username?.[0] || err.response?.data?.detail || 'Failed to save.', 'error')
-    } finally {
-      setSavingProfile(false)
-    }
-  }
-
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // Reset so choosing the same file again (after a rejection) still fires onChange.
-    e.target.value = ''
-
-    if (!entitlements.branding) {
-      toast('Custom branding is available on the Pro plan and above.', 'error')
-      return
-    }
-
-    const MAX_SIZE = 2 * 1024 * 1024
-    if (file.size > MAX_SIZE) {
-      toast('Logo file exceeds the 2MB size limit.', 'error')
-      return
-    }
-
-    setLogoUploading(true)
-    
-    const formData = new FormData()
-    formData.append('logo', file)
-
-    try {
-      const updatedUser = await authApi.updateMe(formData)
-      updateUser(updatedUser)
-      setLogoURL(updatedUser.logo)
-      toast('Logo uploaded successfully!', 'success')
-    } catch (err) {
-      const data = err.response?.data
-      toast(
-        data?.code === 'branding_requires_upgrade'
-          ? 'Custom branding is available on the Pro plan and above.'
-          : data?.details?.logo?.[0] || data?.logo?.[0] || data?.error || 'Logo upload failed.',
-        'error',
-      )
-    } finally {
-      setLogoUploading(false)
-    }
-  }
-
-  const handleLogoDelete = async () => {
-    if (logoUploading) return
-    setLogoUploading(true)
-
-    try {
-      const updatedUser = await authApi.updateMe({ logo: null })
-      updateUser(updatedUser)
-      setLogoURL(null)
-      toast('Logo removed successfully.', 'success')
-    } catch (err) {
-      toast('Failed to remove logo.', 'error')
-    } finally {
-      setLogoUploading(false)
-    }
-  }
-
-  const savePassword = async (e) => {
-    e.preventDefault()
-    setPwErrors({})
-    setSavingPw(true)
-    try {
-      await authApi.changePassword(pw)
-      setPw({ old_password: '', new_password: '', new_password2: '' })
-      toast('Password changed!', 'success')
-    } catch (err) {
-      setPwErrors(err.response?.data || {})
-    } finally {
-      setSavingPw(false)
-    }
-  }
+  if (!active) return <Navigate to="/dashboard/settings/profile" replace />
+  const { Component } = active
 
   return (
-    <div className="max-w-5xl mx-auto animate-fade-up">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="font-serif text-3xl md:text-4xl text-ink mb-1">Branding & Profile Settings</h1>
-        <p className="text-sm text-muted">Manage your photographer profile, color identity, and logo.</p>
+    <div className="mx-auto max-w-5xl animate-fade-up">
+      <div className="mb-6">
+        <h1 className="mb-1 font-serif text-3xl text-ink md:text-4xl">Settings</h1>
+        <p className="text-sm text-muted">Manage your profile, account, notifications and collection defaults.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Side: General Profile, Color, and Security forms */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Profile Card */}
-          <div className="bg-surface-light rounded-2xl border border-cream-200 p-6 shadow-card">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-9 h-9 rounded-xl bg-brand-green-50 flex items-center justify-center">
-                <svg className="w-5 h-5 text-brand-green-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                </svg>
-              </div>
-              <h2 className="font-serif text-xl text-ink">Profile</h2>
-            </div>
-            <form onSubmit={saveProfile} className="space-y-5">
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
-                  label="Display name"
-                  name="display_name"
-                  value={profile.display_name}
-                  onChange={handleProfileChange}
-                  required
-                />
-                
-                <Input
-                  label="Username (subdomain)"
-                  name="username"
-                  value={profile.username}
-                  onChange={handleProfileChange}
-                  required
-                  hint={`Your public URL: ${profile.username.trim().toLowerCase() || 'username'}.kyapture.com`}
-                />
-              </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
+        {/* Section navigation: a tab strip on small screens, a sticky list on desktop */}
+        <nav aria-label="Settings sections" className="lg:sticky lg:top-6 lg:self-start">
+          <ul className="-mx-4 flex gap-1 overflow-x-auto rounded-xl bg-cream-100 p-1 px-4 sm:mx-0 sm:px-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:bg-transparent lg:p-0">
+            {SECTIONS.map(({ id, label }) => (
+              <li key={id} className="flex-none lg:flex-auto">
+                <NavLink to={`/dashboard/settings/${id}`} className={linkClass}>
+                  {label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-              {/* Subdomain Warning */}
-              {hasSubdomainChanged && (
-                <div role="alert" className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1.5 leading-relaxed animate-fade-up">
-                  <div className="flex items-center gap-1.5 font-semibold text-amber-900">
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    Warning: Changing your Subdomain will break existing links!
-                  </div>
-                  <p>
-                    Updating your subdomain from <strong>"{user?.username}"</strong> to <strong>"{profile.username.trim().toLowerCase()}"</strong> 
-                    will instantly break all shared links currently in use by your clients.
-                  </p>
-                </div>
-              )}
-
-              {/* Biography */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="bio-input" className="text-sm font-medium text-ink/80 block select-none">Biography</label>
-                <textarea
-                  id="bio-input"
-                  name="bio"
-                  value={profile.bio}
-                  onChange={handleProfileChange}
-                  className="w-full px-4 py-2.5 bg-cream-100/20 border border-cream-200 rounded-xl text-sm text-ink placeholder:text-muted focus:outline-none focus:border-brand-green-500 focus:ring-2 focus:ring-brand-green-500/10 resize-none transition-all duration-200"
-                  rows={4}
-                  placeholder="Tell your clients about yourself..."
-                />
-              </div>
-
-              {/* Brand Color */}
-              <div className="flex flex-col gap-1.5 max-w-xs">
-                <label htmlFor="brand-color" className="text-sm font-medium text-ink/80 block select-none">
-                  Portfolio Brand Color
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    id="brand-color"
-                    name="branding_color"
-                    value={profile.branding_color}
-                    onChange={handleProfileChange}
-                    disabled={savingProfile}
-                    className="w-10 h-10 border border-cream-200 rounded-xl cursor-pointer bg-transparent"
-                  />
-                  <input
-                    type="text"
-                    name="branding_color"
-                    value={profile.branding_color}
-                    onChange={handleProfileChange}
-                    disabled={savingProfile}
-                    className="w-24 px-3 py-1.5 text-sm uppercase rounded-xl border border-cream-200 bg-surface-light font-mono focus:outline-none focus:border-brand-green-500"
-                  />
-                </div>
-                <p className="text-[10px] text-muted font-light mt-1 leading-relaxed">
-                  Applies dynamic styling highlights to your public collections and password gates.
-                </p>
-              </div>
-
-              {/* Email */}
-              <div className="pt-2">
-                <p className="text-xs text-muted mb-1 select-none">Account Email (cannot be changed)</p>
-                <p className="text-sm text-ink bg-cream-100 px-4 py-3 rounded-xl border border-cream-200/50 font-mono w-fit">{user?.email}</p>
-              </div>
-
-              <div className="pt-4 border-t border-cream-200 flex justify-end">
-                <Button type="submit" loading={savingProfile}>
-                  Save Profile Settings
-                </Button>
-              </div>
-            </form>
-          </div>
-
-          {/* Password Card */}
-          <div className="bg-surface-light rounded-2xl border border-cream-200 p-6 shadow-card">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                </svg>
-              </div>
-              <h2 className="font-serif text-xl text-ink">Change Password</h2>
-            </div>
-            <form onSubmit={savePassword} className="flex flex-col gap-4">
-              <Input
-                label="Current password"
-                type="password"
-                name="old_password"
-                value={pw.old_password}
-                onChange={handlePasswordChange}
-                error={pwErrors.old_password?.[0]}
-                required
-              />
-              <Input
-                label="New password"
-                type="password"
-                name="new_password"
-                value={pw.new_password}
-                onChange={handlePasswordChange}
-                error={pwErrors.new_password?.[0]}
-                required
-              />
-              <Input
-                label="Confirm new password"
-                type="password"
-                name="new_password2"
-                value={pw.new_password2}
-                onChange={handlePasswordChange}
-                error={pwErrors.new_password2?.[0]}
-                required
-              />
-              <div className="pt-4 border-t border-cream-200 flex justify-end">
-                <Button type="submit" loading={savingPw}>
-                  Change Password
-                </Button>
-              </div>
-            </form>
-          </div>
-
+        <div className="min-w-0">
+          <Component />
         </div>
-
-        {/* Right Side: Logo Upload */}
-        <div className="lg:col-span-1">
-          <div className="bg-surface-light rounded-2xl border border-cream-200 p-6 shadow-card flex flex-col items-center text-center space-y-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
-                <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z" />
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-ink tracking-wider uppercase">Business Logo</h3>
-            </div>
-
-            {/* Logo Viewer */}
-            <div className="relative w-32 h-32 rounded-2xl border border-cream-200 bg-cream-100/20 flex items-center justify-center overflow-hidden">
-              {logoURL ? (
-                <img src={logoURL} alt={profile.display_name} className="w-full h-full object-contain p-3 select-none pointer-events-none" />
-              ) : (
-                <svg className="w-10 h-10 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              )}
-
-              {logoUploading && (
-                <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                  <Spinner />
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3 w-full">
-              {brandingLocked ? (
-                <UpgradePrompt
-                  title="Branding is a Pro feature"
-                  message="Add your business logo to every client gallery with the Pro plan or above."
-                />
-              ) : (
-              <label className="block w-full text-center px-4 py-2.5 border border-cream-200 hover:border-cream-300 hover:bg-cream-100 bg-surface-light text-ink text-xs font-medium tracking-wide uppercase rounded-xl cursor-pointer transition-all">
-                {logoURL ? 'Replace Logo' : 'Upload New Logo'}
-                <input
-                  type="file"
-                  accept="image/png, image/jpeg, image/webp"
-                  onChange={handleLogoUpload}
-                  disabled={logoUploading || planLoading}
-                  className="hidden"
-                />
-              </label>
-              )}
-
-              {logoURL && (
-                <button
-                  type="button"
-                  onClick={handleLogoDelete}
-                  disabled={logoUploading}
-                  className="w-full text-center py-2 text-xs font-semibold text-red-600 hover:text-red-700 bg-transparent hover:bg-red-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-red-100"
-                >
-                  Remove Logo
-                </button>
-              )}
-            </div>
-
-            <p className="text-[10px] text-muted leading-relaxed font-light select-none">
-              Supports PNG, JPG, and WEBP. Maximum file size: 2MB. Your logo appears at the top of your client galleries{brandingLocked ? ' once your plan includes Branding' : ''}.
-            </p>
-          </div>
-        </div>
-
       </div>
     </div>
   )

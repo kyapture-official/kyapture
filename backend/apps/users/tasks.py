@@ -36,3 +36,18 @@ def flush_expired_jwt_tokens(self):
     except Exception as exc:
         logger.error(f"[flush_expired_jwt_tokens] Failed: {exc}")
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=120)
+def send_notification_email(self, user_id, kind, subject, body):
+    """
+    Delivers one photographer notification email (see apps/users/notifications.py).
+    Re-checks the user preference at send time; retries transient mail failures.
+    """
+    from .notifications import deliver_notification
+
+    try:
+        return deliver_notification(user_id, kind, subject, body)
+    except Exception as exc:
+        logger.exception("[send_notification_email] %s email for user %s failed", kind, user_id)
+        raise self.retry(exc=exc)

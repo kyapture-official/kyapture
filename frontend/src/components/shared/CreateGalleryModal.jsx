@@ -1,6 +1,7 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/CreateGalleryModal.jsx
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useAuthStore } from "../../store/authStore";
+import { authApi } from "../../api/authApi";
 
 /**
  * WHAT: Create Gallery Modal Overlay
@@ -84,6 +85,8 @@ export default function CreateGalleryModal({
   // [F1] Dependency array [submitting] — only syncs on the renders that matter,
   //      not on every keystroke the user types in the title field.
   const submittingRef = useRef(false);
+  // Set once the user touches the download checkbox, so a late-arriving default can't overwrite their choice.
+  const downloadTouchedRef = useRef(false);
   useLayoutEffect(() => {
     submittingRef.current = submitting;
   }, [submitting]);
@@ -101,6 +104,26 @@ export default function CreateGalleryModal({
     setEventDate("");
     setErrorMsg("");
     setTitleInvalid(false);
+
+    // Start from the photographer's saved Collection Defaults (Settings →
+    // Collection Defaults). This only pre-fills the form: the values shown are
+    // the values sent, and a failure to load them just leaves the standard
+    // starting state. Publish / expiry / design / watermark defaults are
+    // applied by the server when the collection is created.
+    downloadTouchedRef.current = false;
+    let cancelled = false;
+    authApi
+      .getSettings()
+      .then((settings) => {
+        const wanted = settings?.collection_defaults?.is_downloadable;
+        if (!cancelled && !downloadTouchedRef.current && typeof wanted === "boolean") {
+          setDownloadable(wanted);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   // ── AUTO-FOCUS ────────────────────────────────────────────────────────────
@@ -361,7 +384,10 @@ export default function CreateGalleryModal({
               id="new-gallery-download"
               type="checkbox"
               checked={downloadable}
-              onChange={(e) => setDownloadable(e.target.checked)}
+              onChange={(e) => {
+                downloadTouchedRef.current = true;
+                setDownloadable(e.target.checked);
+              }}
               disabled={submitting}
               className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900 disabled:cursor-not-allowed cursor-pointer"
             />

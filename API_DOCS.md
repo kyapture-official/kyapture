@@ -715,6 +715,48 @@ Authentication: Required (IsAuthenticated)
 Important: The registered endpoint is /api/v1/subscriptions/payments/, not /api/v1/subscriptions/pay/.
 
 Request Body — multipart/form-data
+⚙️ Settings, Security & Account (apps/users)
+
+GET / PATCH /api/v1/auth/settings/
+
+Notification preferences, privacy and Collection Defaults for the signed-in
+photographer. Scoped to the caller — there is no id in the URL or body. Unknown
+keys are rejected with 400 (never silently ignored). The response is always the
+full stored state.
+
+{
+  "notifications": { "downloads": false, "favorites": false, "payments": true },
+  "privacy": { "portfolio_public": true },
+  "collection_defaults": {
+    "is_published": true, "is_downloadable": true, "watermark_enabled": false,
+    "expires_in_days": 30,
+    "design": { "typography": "bold", "colorPalette": "sea", "layout": "center",
+                "gridStyle": "vertical", "thumbSize": "regular", "gridSpacing": 16 }
+  }
+}
+
+- Each notification flag gates an email that is really sent: a client download or
+  favorite (coalesced to one email per collection per 15 minutes) and a payment
+  approved/rejected.
+- `portfolio_public: false` makes /api/v1/public/{username}/ return the same 404
+  as a nonexistent photographer; individual gallery links are unaffected.
+- Collection Defaults apply once, at collection creation, only to fields the
+  create request did not set. They never change an existing gallery.
+  `watermark_enabled: true` needs a Pro+ plan (403 watermark_requires_upgrade).
+
+PUT /api/v1/auth/me/ — profile (display_name, username, bio, phone, website,
+avatar, logo, branding_color). The email is read-only. Avatar and logo uploads are
+validated and re-encoded; `{"avatar": null}` removes the picture.
+
+PUT /api/v1/auth/change-password/ — { old_password, new_password, new_password2 }.
+Enforces the password policy (8+ characters, not too common, not all numeric, not
+similar to the account's username/email), is throttled per user (10/hour), revokes
+every outstanding refresh token, and returns fresh cookies for the calling device.
+
+POST /api/v1/auth/logout-all/ — blacklists every outstanding refresh token for the
+account and clears this browser's cookies. Access tokens already issued live up to
+15 minutes.
+
 
 plan: "0190106a-ef1a-7b3c-b2f2-10e82f1217e9"
 amount: "19.99"

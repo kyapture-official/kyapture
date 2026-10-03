@@ -17,6 +17,16 @@ hex_color_validator = RegexValidator(
 )
 
 
+def get_profile_avatar_path(instance, filename):
+    """
+    The avatar is shown on the public portfolio page, so like the branding
+    logo it lives in PublicMediaStorage under a unique key per upload (a
+    fixed key would be stuck behind the year-long immutable cache header).
+    """
+    ext = os.path.splitext(filename)[1].lower() or '.png'
+    return f"photographers/{instance.id}/profile/avatar_{uuid.uuid4().hex[:12]}{ext}"
+
+
 def get_branding_logo_path(instance, filename):
     """
     Branding logos are client-visible by design, so they live in
@@ -56,8 +66,9 @@ class User(AbstractUser):
     display_name = models.CharField(max_length=100, blank=True)
     bio = models.TextField(blank=True)
     avatar = models.ImageField(
-        upload_to='avatars/', 
-        null=True, 
+        upload_to=get_profile_avatar_path,
+        storage=PublicMediaStorage(),
+        null=True,
         blank=True
     )
     # NEW: Optional photographer metadata fields
@@ -101,6 +112,27 @@ class User(AbstractUser):
         validators=[hex_color_validator],
         help_text="Default brand accent color, pre-filled when creating new galleries."
     )
+
+    # ── Settings: notification preferences ─────────────────────────────────
+    # Each flag gates an email that is actually sent (see
+    # apps/users/notifications.py) — there is no preference without a
+    # matching send path. Payment notices are transactional about the user's
+    # own billing, so they default on; activity alerts are opt-in.
+    notify_downloads = models.BooleanField(default=False)
+    notify_favorites = models.BooleanField(default=False)
+    notify_payments = models.BooleanField(default=True)
+
+    # ── Settings: privacy ──────────────────────────────────────────────────
+    # Whether /g/<username>/ (the public portfolio listing) exists. Individual
+    # gallery links are unaffected — they are governed by each gallery's own
+    # publish/password settings.
+    portfolio_public = models.BooleanField(default=True)
+
+    # ── Settings: Collection Defaults ──────────────────────────────────────
+    # Starting values for NEW collections only (see
+    # apps/users/collection_defaults.py for the schema and how it is applied).
+    # Never read when an existing gallery is edited or displayed.
+    collection_defaults = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = 'users'

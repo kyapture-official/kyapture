@@ -62,7 +62,7 @@ export default function App() {
             <Route element={<DashboardLayout />}>
               <Route index element={<HomePage />} />
               <Route path="galleries" element={<GalleriesPage />} />
-              <Route path="settings" element={<SettingsPage />} />
+              <Route path="settings/:section?" element={<SettingsPage />} />
               <Route path="billing" element={<BillingPage />} />
             </Route>
 

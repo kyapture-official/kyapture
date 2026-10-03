@@ -262,7 +262,7 @@ export default function WatermarkSettings({ gallery, setGallery, slug, isMounted
             ) : (
               <span>
                 A logo watermark uses your business logo.{" "}
-                <Link to="/dashboard/settings" className="font-medium text-ink underline underline-offset-2">
+                <Link to="/dashboard/settings/branding" className="font-medium text-ink underline underline-offset-2">
                   Upload it in Branding settings
                 </Link>{" "}
                 first.
