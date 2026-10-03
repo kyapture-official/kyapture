@@ -1,5 +1,5 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GallerySettingsPage.jsx
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
 import { useToast } from "../../components/ui/Toast";
@@ -23,6 +23,7 @@ export default function GallerySettingsPage() {
   const [eventDate, setEventDate] = useState(toDateInputValue(gallery.event_date));
   const [expiresAt, setExpiresAt] = useState(toDateInputValue(gallery.expires_at));
   const [hasPassword, setHasPassword] = useState(gallery.has_password);
+  const passwordInputRef = useRef(null);
   const [updating, setUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -31,6 +32,13 @@ export default function GallerySettingsPage() {
   const [hasDownloadPin, setHasDownloadPin] = useState(gallery.has_download_pin ?? false);
   const [downloadPin, setDownloadPin] = useState("");
   const [pinUpdating, setPinUpdating] = useState(false);
+  const initialDownloadPolicy = gallery.design_settings?.downloads || {};
+  const [allowedDownloadSizes, setAllowedDownloadSizes] = useState(
+    initialDownloadPolicy.allowed_sizes || ["download", "web"],
+  );
+  const [requireDownloadEmail, setRequireDownloadEmail] = useState(
+    initialDownloadPolicy.require_email !== false,
+  );
 
   // Locked product decision: the MVP gallery URL is /g/:username/:slug —
   // stable, server-assigned, not photographer-editable (there is no
@@ -60,6 +68,13 @@ export default function GallerySettingsPage() {
       is_downloadable: isDownloadable, // allow_download ko thau ma yahi lekhne
       event_date: eventDate || null,
       expires_at: expiresAt || null,
+      design_settings: {
+        ...(gallery.design_settings || {}),
+        downloads: {
+          allowed_sizes: allowedDownloadSizes,
+          require_email: requireDownloadEmail,
+        },
+      },
     };
 
     try {
@@ -74,6 +89,9 @@ export default function GallerySettingsPage() {
       setBrandingColor(updated.branding_color);
       setIsDownloadable(updated.allow_download ?? updated.is_downloadable ?? false);
       setHasPassword(updated.has_password);
+      const updatedPolicy = updated.design_settings?.downloads || {};
+      setAllowedDownloadSizes(updatedPolicy.allowed_sizes || ["download", "web"]);
+      setRequireDownloadEmail(updatedPolicy.require_email !== false);
       toast("Settings saved successfully", "success");
       // Slug is stable across a title edit (see docstring above), so there's
       // no slug-drift redirect to handle here anymore.
@@ -121,6 +139,11 @@ export default function GallerySettingsPage() {
   const handleSavePassword = async (e) => {
     e.preventDefault();
     if (updating) return;
+    if (!password && !hasPassword) {
+      setErrorMsg("Enter a password before enabling password protection.");
+      passwordInputRef.current?.focus();
+      return;
+    }
     if (!password && hasPassword) {
       if (!window.confirm("Remove password protection?")) return;
     }
@@ -129,13 +152,21 @@ export default function GallerySettingsPage() {
       if (USE_MOCK_DATA) {
         const newHasPassword = Boolean(password);
         setHasPassword(newHasPassword);
-        setGallery((prev) => ({ ...prev, has_password: newHasPassword }));
+        setGallery((prev) => ({
+          ...prev,
+          has_password: newHasPassword,
+          is_password_protected: newHasPassword,
+        }));
         setPassword("");
         toast(password ? "Password set" : "Password removed", "success");
       } else {
         const response = await galleriesApi.setGalleryPassword(slug, password || null);
         setHasPassword(response.has_password);
-        setGallery((prev) => ({ ...prev, has_password: response.has_password }));
+        setGallery((prev) => ({
+          ...prev,
+          has_password: response.has_password,
+          is_password_protected: response.is_password_protected,
+        }));
         setPassword("");
         toast(password ? "Password set" : "Password removed", "success");
       }
@@ -263,21 +294,36 @@ export default function GallerySettingsPage() {
                   <p className="text-xs text-muted mt-0.5">Require a password to view the gallery</p>
                 </div>
                 <label className="toggle-wrap">
-                  <input type="checkbox" checked={hasPassword} onChange={(e) => {
-                    if (!e.target.checked) {
-                      handleSavePassword({ preventDefault: () => {} });
-                    }
-                  }} />
+                  <input
+                    type="checkbox"
+                    checked={hasPassword}
+                    disabled={updating}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        // The server intentionally refuses an enabled state
+                        // without a password. Move the user to the real
+                        // action rather than showing a false-on toggle.
+                        setErrorMsg("Enter a password below, then select Set to enable protection.");
+                        passwordInputRef.current?.focus();
+                      } else {
+                        handleSavePassword({ preventDefault: () => {} });
+                      }
+                    }}
+                  />
                   <span className="toggle-slider" />
                 </label>
               </div>
 
               <form onSubmit={handleSavePassword} className="flex gap-3">
                 <input
+                  ref={passwordInputRef}
                   type="password"
                   placeholder={hasPassword ? "Enter new password" : "Set a password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setErrorMsg("");
+                  }}
                   disabled={updating}
                   className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
                 />
@@ -311,10 +357,39 @@ export default function GallerySettingsPage() {
                 </label>
               </div>
 
+              <fieldset className="rounded-xl border border-cream-200 p-4 space-y-3">
+                <legend className="px-1 text-sm font-medium text-ink">Allowed download sizes</legend>
+                {[
+                  { value: "download", label: "High Resolution", hint: "Uses the protected Download Master." },
+                  { value: "web", label: "Web Size", hint: "Uses the web-optimized file." },
+                ].map((size) => (
+                  <label key={size.value} className="flex cursor-pointer items-start gap-3 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      checked={allowedDownloadSizes.includes(size.value)}
+                      disabled={!isDownloadable}
+                      onChange={(event) => setAllowedDownloadSizes((current) => {
+                        if (event.target.checked) return [...current, size.value];
+                        return current.filter((value) => value !== size.value);
+                      })}
+                      className="mt-0.5 accent-brand-green-600 disabled:cursor-not-allowed"
+                    />
+                    <span><span className="block font-medium">{size.label}</span><span className="block text-xs text-muted">{size.hint}</span></span>
+                  </label>
+                ))}
+                {isDownloadable && allowedDownloadSizes.length === 0 && <p className="text-xs text-red-600">Choose at least one download size.</p>}
+              </fieldset>
+
+              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-cream-200 p-4">
+                <span><span className="block text-sm font-medium text-ink">Require email</span><span className="block text-xs text-muted mt-0.5">Record the downloader’s email before any download.</span></span>
+                <input type="checkbox" checked={requireDownloadEmail} disabled={!isDownloadable} onChange={(event) => setRequireDownloadEmail(event.target.checked)} className="h-4 w-4 accent-brand-green-600 disabled:cursor-not-allowed" />
+              </label>
+              {!requireDownloadEmail && !hasDownloadPin && isDownloadable && <p className="text-xs text-amber-700">Frictionless downloads are on: clients will not be asked for email or a PIN.</p>}
+
               <div className="flex justify-end pt-4 border-t border-cream-200">
                 <button
                   type="submit"
-                  disabled={updating}
+                  disabled={updating || (isDownloadable && allowedDownloadSizes.length === 0)}
                   className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {updating ? "Saving..." : "Save Download Settings"}

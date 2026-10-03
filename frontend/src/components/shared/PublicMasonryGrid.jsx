@@ -6,19 +6,6 @@ import { buildClientGalleryUrl, formatDuration } from "../../utils/formatters";
 import { getBlurhashDataUrl } from "../../utils/blurhashDataUrl";
 import { useToast } from "../ui/Toast";
 
-/**
- * Appends the client's unlock token to a download_url, matching the same
- * ?token= convention clientsApi.getGallery() already uses. download_url
- * from the backend is deliberately token-less — see
- * PublicMediaAssetSerializer.get_download_url for why.
- */
-function buildDownloadHref(downloadUrl, token) {
-  if (!downloadUrl) return null;
-  return token
-    ? `${downloadUrl}${downloadUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`
-    : downloadUrl;
-}
-
 const PLAY_ICON = (
   <svg
     width="20"
@@ -46,6 +33,7 @@ function LazyPhoto({
   isFavorited = false,
   onToggleFavorite,
   allowDownload = false,
+  onDownloadPhoto,
 }) {
   const [loadedSrc, setLoadedSrc] = useState(null);
   const [errorSrc, setErrorSrc] = useState(null);
@@ -53,7 +41,10 @@ function LazyPhoto({
 
   const isVideo = photo.media_type === "video";
 
-  const downloadHref = allowDownload ? buildDownloadHref(photo.download_url, token) : null;
+  // Download is an explicit action: the button opens the download dialog
+  // (size, plus email/PIN only when the gallery needs them) rather than
+  // linking straight at the file. The server authorizes the actual request.
+  const canDownload = Boolean(allowDownload && photo.download_url && onDownloadPhoto);
 
   // Videos have no thumbnail_url/display_url/medium_url — those are
   // image-only derived variants. poster_url is the generated frame grab.
@@ -235,18 +226,20 @@ function LazyPhoto({
               </button>
             )}
 
-            {downloadHref && (
-              <a
-                href={downloadHref}
-                download={photo.original_name || true}
-                onClick={(e) => e.stopPropagation()}
+            {canDownload && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDownloadPhoto(photo);
+                }}
                 onContextMenu={(e) => e.stopPropagation()}
                 className="rounded bg-black/35 p-2 text-white transition-colors hover:bg-black/55 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 aria-label="Download this photo"
                 title="Download photo"
               >
                 <Download className="h-4 w-4" />
-              </a>
+              </button>
             )}
 
             <button
@@ -285,6 +278,7 @@ export default function PublicMasonryGrid({
   favoritedIds = new Set(),
   onToggleFavorite,
   allowDownload = false,
+  onDownloadPhoto,
 }) {
   if (!photos || photos.length === 0) return null;
 
@@ -322,6 +316,7 @@ export default function PublicMasonryGrid({
           isFavorited={favoritedIds?.has(photo.id)}
           onToggleFavorite={onToggleFavorite}
           allowDownload={allowDownload}
+          onDownloadPhoto={onDownloadPhoto}
         />
       ))}
     </div>

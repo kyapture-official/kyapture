@@ -74,8 +74,8 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
     def get_entitlements(self, obj):
         # Computed from the live subscription (active AND unexpired), not from
         # this row's own status field, so a lapsed plan reads as Free.
-        from .entitlements import get_feature_entitlements
-        return get_feature_entitlements(obj.user)
+        from .entitlements import entitlements_for_subscription
+        return entitlements_for_subscription(obj.user, obj)
 
     def get_days_remaining(self, obj):
         """Calculates exact days left in active session. Protects negative values."""

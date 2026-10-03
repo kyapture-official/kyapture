@@ -9,6 +9,7 @@ from apps.photos.models import MediaAsset, PhotoSet
 from apps.core.utils import generate_secure_token
 from apps.subscriptions.entitlements import BRANDING, has_feature
 from .models import ClientSession, Favorite, DownloadLog
+from .download_access import get_download_policy
 from django.urls import reverse
 
 
@@ -175,12 +176,14 @@ class PublicGallerySerializer(serializers.ModelSerializer):
     photographer_name = serializers.SerializerMethodField()
     photographer_logo = serializers.SerializerMethodField()
     cover_url = serializers.SerializerMethodField()
+    cover_medium_url = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
     photos_count = serializers.SerializerMethodField()
     photos_has_more = serializers.SerializerMethodField()
     photos_page_size = serializers.SerializerMethodField()
     photo_sets = serializers.SerializerMethodField()
     has_download_pin = serializers.SerializerMethodField()
+    download_policy = serializers.SerializerMethodField()
     design_settings = serializers.SerializerMethodField()
     share_url = serializers.SerializerMethodField()
 
@@ -188,9 +191,9 @@ class PublicGallerySerializer(serializers.ModelSerializer):
         model = Gallery
         fields = [
             'id', 'title', 'description', 'slug', 'branding_color', 'share_url',
-            'cover_url', 'event_date', 'design_settings',
+            'cover_url', 'cover_medium_url', 'event_date', 'design_settings',
             'photographer_name', 'photographer_logo', 'allow_download', 'watermark_enabled',
-            'is_password_protected', 'has_download_pin',
+            'is_password_protected', 'has_download_pin', 'download_policy',
             'photos', 'photos_count', 'photos_has_more', 'photos_page_size',
             'photo_sets',
         ]
@@ -212,6 +215,9 @@ class PublicGallerySerializer(serializers.ModelSerializer):
 
     def get_has_download_pin(self, obj):
         return bool(obj.download_pin_hash)
+
+    def get_download_policy(self, obj):
+        return get_download_policy(obj)
 
     def get_photos(self, obj):
         """
@@ -297,6 +303,20 @@ class PublicGallerySerializer(serializers.ModelSerializer):
         url = request.build_absolute_uri(image_field.url)
         # Image derivatives carry the watermark version; a video poster does not.
         return url if image_field is getattr(cover, 'poster_image', None) else versioned_url(url, cover)
+
+
+    def get_cover_medium_url(self, obj):
+        """
+        The 1280px tier of the same cover, so the hero <img> can offer the
+        browser a srcset (medium for phones/small windows, display for wide
+        screens) instead of every visitor downloading the 2048px file.
+        Image covers only — a video poster has no size tiers.
+        """
+        request = self.context.get('request')
+        cover = obj.cover_photo
+        if not cover or not request or not cover.medium_file or not cover.display_file:
+            return None
+        return versioned_url(request.build_absolute_uri(cover.medium_file.url), cover)
 
 
 class GalleryUnlockSerializer(serializers.Serializer):
@@ -432,14 +452,15 @@ class DownloadLogSerializer(serializers.ModelSerializer):
     media_asset_title = serializers.SerializerMethodField()
     media_asset_name = serializers.SerializerMethodField()
     photo_set_name = serializers.SerializerMethodField()
-
     scope = serializers.SerializerMethodField()
     pin_state = serializers.SerializerMethodField()
+    filename = serializers.SerializerMethodField()
+
     class Meta:
         model = DownloadLog
         fields = [
             'id', 'email', 'download_type', 'resolution', 'pin_verified', 'pin_state',
-            'media_asset_id', 'media_asset_title', 'media_asset_name', 'photo_set_name', 'scope',
+            'media_asset_id', 'media_asset_title', 'media_asset_name', 'photo_set_name', 'scope', 'filename',
             'created_at',
         ]
         read_only_fields = fields
@@ -449,6 +470,15 @@ class DownloadLogSerializer(serializers.ModelSerializer):
         if not obj.media_asset_id or not obj.media_asset:
             return None
         return obj.media_asset.original_name or None
+
+    def get_filename(self, obj):
+        """The attachment name produced by the public download endpoint."""
+        if obj.media_asset_id and obj.media_asset:
+            return obj.media_asset.original_name or None
+        stem = obj.gallery.slug
+        if obj.photo_set_id and obj.photo_set:
+            stem = f'{stem}-{obj.photo_set.name}'
+        return f'{stem}.zip'
 
     def get_scope(self, obj):
         """What the client actually downloaded, in words."""

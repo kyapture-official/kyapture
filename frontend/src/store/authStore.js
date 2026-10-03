@@ -4,6 +4,10 @@ import { create }                     from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { authApi }                    from '../api/authApi';
 
+// init() does its work at most once per page load, however many callers ask
+// (App's bootstrap, ProtectedRoute, React StrictMode's double-invoked effect).
+let initPromise = null;
+
 export const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -24,7 +28,8 @@ export const useAuthStore = create(
        *       If the access cookie is expired, axiosInstance's interceptor will 
        *       silently refresh it in the background before this call completes.
        */
-      init: async () => {
+      init: () => {
+        if (!initPromise) initPromise = (async () => {
         try {
           // The browser automatically attaches your HttpOnly access_token cookie
           const user = await authApi.me();
@@ -47,6 +52,8 @@ export const useAuthStore = create(
             set({ loading: false });
           }
         }
+        })();
+        return initPromise;
       },
 
 

@@ -47,6 +47,17 @@ export const useClientStore = create(
       // Map: { 'username:gallery-slug' → 'client-uid' }
       clientUids: {},
 
+      // Remembered DOWNLOAD authorization, one per gallery — earned by the
+      // explicit Download step (email + PIN when the gallery needs them),
+      // never by merely opening or browsing the gallery. Holds the
+      // short-lived signed download_token the server issued, so the client
+      // isn't asked for email/PIN again for every photo. Same
+      // sessionStorage lifetime as the unlock tokens above (gone when the
+      // tab closes) plus the server's own expiry. The PIN itself is never
+      // stored — only the token.
+      // Map: { 'username:gallery-slug' → { token, email, expiresAt (ms) } }
+      downloadAccess: {},
+
       hasHydrated: false,
       setHasHydrated: (value) => set({ hasHydrated: value }),
 
@@ -77,6 +88,34 @@ export const useClientStore = create(
       },
 
       /**
+       * WHAT: Remember a freshly issued download access token for a gallery.
+       */
+      setDownloadAccess: (sessionKey, access) => {
+        if (!sessionKey) return
+        set((state) => {
+          const next = { ...state.downloadAccess }
+          if (!access) {
+            delete next[sessionKey]
+          } else {
+            next[sessionKey] = access
+          }
+          return { downloadAccess: next }
+        })
+      },
+
+      /**
+       * WHAT: The remembered download access for a gallery, or null once it
+       *       has expired (or was never earned). Synchronous, usable
+       *       outside render.
+       */
+      getDownloadAccess: (sessionKey) => {
+        if (!sessionKey) return null
+        const access = get().downloadAccess[sessionKey]
+        if (!access || !access.token || !(access.expiresAt > Date.now())) return null
+        return access
+      },
+
+      /**
        * WHAT: Returns this gallery's client_uid, generating and persisting
        *       one on first call if none exists yet.
        */
@@ -97,7 +136,11 @@ export const useClientStore = create(
     {
       name:    'client-session-storage',
       storage: createJSONStorage(getBrowserSessionStorage),
-      partialize: (state) => ({ sessions: state.sessions, clientUids: state.clientUids }),
+      partialize: (state) => ({
+        sessions: state.sessions,
+        clientUids: state.clientUids,
+        downloadAccess: state.downloadAccess,
+      }),
 
       onRehydrateStorage: () => (state, error) => {
         if (error) {

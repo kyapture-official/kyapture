@@ -312,35 +312,92 @@ export const clientsApi = {
   },
 
   /**
-   * Builds the direct <a href> for a single photo/video download,
-   * appending the optional token/resolution/pin query params this
-   * gallery needs. Never fetches — PublicPhotoDownloadView is a plain
-   * GET meant to be used as a real anchor href (forces a "Save As").
+   * Step one of an explicit Download: ask the server to authorize it.
+   * URI: POST /api/v1/public/{username}/{slug}/download-access/
+   *
+   * Called only when the client chooses Download — never while opening or
+   * browsing a gallery. The server verifies the download PIN (when the
+   * gallery has one) and the email, and returns a short-lived signed
+   * `download_token` that authorizes the actual file/ZIP requests, so
+   * email/PIN are asked once per session rather than once per photo.
+   *
+   * Rejects with an Error whose `.code` is one of: pin_required,
+   * invalid_pin, email_required, invalid_email, session_required,
+   * downloads_disabled (see download_access.py).
+   *
+   * @param {string} username
+   * @param {string} slug
+   * @param {Object} credentials
+   * @param {string} [credentials.email]
+   * @param {string} [credentials.pin]
+   * @param {string} [credentials.token] - gallery unlock token (protected galleries)
+   * @param {Object} [options]
+   * @param {AbortSignal} [options.signal]
+   * @returns {Promise<{ download_token: string, expires_in: number, email: string, pin_verified: boolean }>}
+   */
+  requestDownloadAccess: async (username, slug, credentials = {}, options = {}) => {
+    const path = `${buildGalleryPath(username, slug)}download-access/`
+    const { email, pin, token } = credentials || {}
+    const { signal } = options || {}
+
+    const body = {}
+    if (email) body.email = email
+    if (pin) body.pin = pin
+
+    const config = { signal }
+    if (token) config.headers = { Authorization: `Bearer ${token}` }
+
+    try {
+      const res = await api.post(path, body, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'Unable to authorize this download.',
+        notFoundMessage: 'This gallery could not be found.',
+      })
+    }
+  },
+
+  /**
+   * Builds the direct <a href> for a single photo/video download. Never
+   * fetches — PublicPhotoDownloadView is a plain GET meant to be used as a
+   * real anchor href (forces a "Save As"). The download PIN never goes in
+   * the URL: the client first earns a `downloadToken` via
+   * requestDownloadAccess().
    *
    * @param {string} downloadUrl - photo.download_url from the API (already token-less)
    * @param {Object} [opts]
-   * @param {string} [opts.token]
-   * @param {string} [opts.resolution] - 'web' | 'original'
-   * @param {string} [opts.pin]
+   * @param {string} [opts.token] - gallery unlock token (protected galleries)
+   * @param {string} [opts.downloadToken] - from requestDownloadAccess()
+   * @param {string} [opts.resolution] - 'web' | 'download' | 'original'
    */
   buildPhotoDownloadHref: (downloadUrl, opts = {}) => {
     if (!downloadUrl) return null
     const params = new URLSearchParams()
     if (opts.token) params.set('token', opts.token)
+    if (opts.downloadToken) params.set('download_token', opts.downloadToken)
     if (opts.resolution) params.set('resolution', opts.resolution)
-    if (opts.pin) params.set('pin', opts.pin)
     const qs = params.toString()
     return qs ? `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}${qs}` : downloadUrl
   },
 
   /**
-   * Builds the direct streaming ZIP link for an entire gallery. This is kept
-   * as a URL helper so the browser, not axios, owns a potentially large file.
+   * Builds the direct streaming ZIP link for an entire gallery, or one
+   * photo set of it. This is kept as a URL helper so the browser, not
+   * axios, owns a potentially large file.
+   *
+   * @param {Object} [opts]
+   * @param {string} [opts.token] - gallery unlock token (protected galleries)
+   * @param {string} [opts.downloadToken] - from requestDownloadAccess()
+   * @param {string} [opts.resolution] - 'web' | 'download' | 'original'
+   * @param {string} [opts.setId] - limit the archive to this photo set
    */
   buildGalleryDownloadAllHref: (username, slug, opts = {}) => {
     const params = new URLSearchParams()
     if (opts.token) params.set('token', opts.token)
-    if (opts.pin) params.set('pin', opts.pin)
+    if (opts.downloadToken) params.set('download_token', opts.downloadToken)
+    if (opts.resolution) params.set('resolution', opts.resolution)
+    if (opts.setId) params.set('set', opts.setId)
     const query = params.toString()
     const path = `${buildGalleryPath(username, slug)}download-all/`
     return `${buildPublicApiUrl(path)}${query ? `?${query}` : ''}`

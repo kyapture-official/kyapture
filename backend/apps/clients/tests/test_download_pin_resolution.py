@@ -184,6 +184,18 @@ class GalleryZipDownloadPinAndResolutionTestCase(APITestCase):
         log = DownloadLog.objects.get()
         self.assertEqual(log.resolution, DownloadLog.Resolution.WEB)
 
+    def test_original_resolution_serves_original_bytes(self):
+        response = self.client.post(
+            self.url,
+            {"email": "guest@example.com", "pin": "9999", "resolution": "original"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        with zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content))) as archive:
+            self.assertEqual(archive.read("photo.jpg"), b"ORIGINAL-BYTES-HERE")
+        log = DownloadLog.objects.get()
+        self.assertEqual(log.resolution, DownloadLog.Resolution.ORIGINAL)
+
     def test_invalid_resolution_rejected(self):
         response = self.client.post(
             self.url,
@@ -197,6 +209,10 @@ class SinglePhotoDownloadPinAndResolutionTestCase(APITestCase):
     """GET /api/v1/public/{username}/{slug}/photo/{photo_id}/download/"""
 
     def setUp(self):
+        # A request carrying ?pin= is held to the tight 'password_unlock'
+        # throttle (PIN-guess protection) — clear the process-wide cache so
+        # these tests don't exhaust each other's 5/min budget.
+        cache.clear()
         self.photographer = User.objects.create_user(
             email="singlepin@kyapture.com", password="SecurePassword123!", username="singlepinphotog",
         )

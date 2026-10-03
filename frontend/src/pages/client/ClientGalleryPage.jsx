@@ -1,12 +1,14 @@
 // File Location: frontend/src/pages/client/ClientGalleryPage.jsx
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useClientStore } from "../../store/clientStore";
 import { clientsApi } from "../../api/clientsApi";
 import PublicMasonryGrid from "../../components/shared/PublicMasonryGrid";
 import PhotoLightbox from "../../components/shared/PhotoLightbox";
 import PasswordModal from "../../components/shared/PasswordModal";
+import GallerySkeleton from "../../components/client/GallerySkeleton";
+import DownloadModal from "../../components/client/DownloadModal";
 import ShareMenu from "../../components/shared/ShareMenu";
 import { resolveShareUrl } from "../../utils/share";
 import Spinner from "../../components/ui/Spinner";
@@ -46,7 +48,6 @@ function getAlphaBrandingColor(hexColor, alphaHex = "14") {
 
 export default function ClientGalleryPage() {
   const { username, slug } = useParams();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedSetId = searchParams.get("set");
 
@@ -61,6 +62,10 @@ export default function ClientGalleryPage() {
   const [activeSetId, setActiveSetId] = useState(null);
   const [favoritedIds, setFavoritedIds] = useState(new Set());
   const [hasDownloadPin, setHasDownloadPin] = useState(false);
+  const [downloadPolicy, setDownloadPolicy] = useState({
+    allowed_sizes: ["download", "web"],
+    require_email: true,
+  });
   const [isPasswordProtected, setIsPasswordProtected] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState(null);
   const [slideshowAutoplay, setSlideshowAutoplay] = useState(false);
@@ -78,46 +83,45 @@ export default function ClientGalleryPage() {
     [isPasswordProtected, token, sessionKey, getOrCreateClientUid],
   );
 
-  // A download PIN still goes through its existing form. Unpinned galleries
-  // can hand the browser the streamed ZIP URL directly without buffering it
-  // through axios.
-  const handleDownloadGallery = () => {
-    if (!hasDownloadPin) {
-      const downloadHref = clientsApi.buildGalleryDownloadAllHref(username, slug, { token });
-      toast("Preparing download…", "info");
-      const anchor = document.createElement("a");
-      anchor.href = downloadHref;
-      anchor.download = `${slug}.zip`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
+  // Download is always an explicit action: it opens the download dialog
+  // (size choice, plus email/PIN only when authorization is needed), and
+  // only then asks the server to authorize. Browsing never reaches it.
+  // target: { type: 'gallery', setId? } | { type: 'photo', photo } | null
+  const [downloadTarget, setDownloadTarget] = useState(null);
+
+  const openGalleryDownload = () =>
+    setDownloadTarget({ type: "gallery", setId: activeSetId || null });
+
+  const openPhotoDownload = (photo) => {
+    if (!photo?.download_url) {
+      toast("This file isn't available for download.", "error");
       return;
     }
-
-    navigate(`/g/${username}/${slug}/download`, {
-      state: {
-        selectedIds: [],
-      },
-    });
+    setDownloadTarget({ type: "photo", photo });
   };
 
   const openSlideshow = () => {
     if (photos.length === 0) return;
     setSlideshowAutoplay(true);
     setSlideshowIndex(0);
-  // A logo URL that fails to load is hidden rather than shown as a broken image.
-  const [logoFailed, setLogoFailed] = useState(false);
   };
 
 // Gallery structural metadata
   const [galleryTitle, setGalleryTitle] = useState("");
   const [photographerName, setPhotographerName] = useState("");
   const [photographerLogo, setPhotographerLogo] = useState(null);
+  // A logo URL that fails to load is hidden rather than shown as a broken image.
+  const [logoFailed, setLogoFailed] = useState(false);
   const [brandingColor, setBrandingColor] = useState(null);
   const [eventDate, setEventDate] = useState(null);
   const [coverUrl, setCoverUrl] = useState(null);
+  const [coverMediumUrl, setCoverMediumUrl] = useState(null);
+  // Failures are shown as failures (with a retry), not as an empty set.
+  const [setLoadError, setSetLoadError] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [allowDownload, setAllowDownload] = useState(false);
   const [photos, setPhotos] = useState([]);
+  const [photosCount, setPhotosCount] = useState(0);
 
   // Phase 2 large-gallery pagination: the initial gallery payload embeds
   // only the FIRST page of READY photos (see PublicGallerySerializer /
@@ -163,7 +167,6 @@ export default function ClientGalleryPage() {
   const abortControllerRef = useRef(null);
 
   /**
-    setLogoFailed(false);
    * Applies and cleanses the dynamic branding color properties safely.
    */
   const applyGalleryData = useCallback((data) => {
@@ -171,16 +174,23 @@ export default function ClientGalleryPage() {
     setPhotographerName(data.photographer_name || "");
     setPhotographerLogo(data.photographer_logo || null);
     setShareUrl(data.share_url || null);
+    setLogoFailed(false);
     setEventDate(data.event_date || null);
     setCoverUrl(data.cover_url || null);
+    setCoverMediumUrl(data.cover_medium_url || null);
     setAllowDownload(Boolean(data.allow_download));
     setPhotos(data.photos || []);
+    setPhotosCount(Number(data.photos_count) || (data.photos || []).length);
     setPhotosHasMore(Boolean(data.photos_has_more));
     nextPageRef.current = 2;
     setDesignSettings(data.design_settings || null);
     setLocked(false);
     setPhotoSets(data.photo_sets || []);
     setHasDownloadPin(Boolean(data.has_download_pin));
+    setDownloadPolicy(data.download_policy || {
+      allowed_sizes: ["download", "web"],
+      require_email: true,
+    });
     setIsPasswordProtected(Boolean(data.is_password_protected));
     if (data.branding_color) {
       setBrandingColor(data.branding_color);
@@ -372,6 +382,7 @@ export default function ClientGalleryPage() {
   const loadMorePhotos = async () => {
     if (loadingMorePhotos || !photosHasMore) return;
     setLoadingMorePhotos(true);
+    setLoadMoreError(false);
     try {
       const data = await clientsApi.getGalleryPhotosBySet(
         username,
@@ -386,7 +397,8 @@ export default function ClientGalleryPage() {
     } catch (err) {
       if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
       // A failed "load more" isn't fatal to the page already on screen —
-      // leave photosHasMore as-is so the visitor can simply try again.
+      // leave photosHasMore as-is and offer an inline retry.
+      setLoadMoreError(true);
     } finally {
       setLoadingMorePhotos(false);
     }
@@ -401,6 +413,7 @@ export default function ClientGalleryPage() {
     async (setId) => {
       const requestId = ++activeSetRequestId.current;
       setPhotosLoadingSet(true);
+      setSetLoadError(false);
       try {
         const data = await clientsApi.getGalleryPhotosBySet(username, slug, 1, setId, token);
         if (requestId !== activeSetRequestId.current) return;
@@ -411,6 +424,7 @@ export default function ClientGalleryPage() {
         if (requestId !== activeSetRequestId.current) return;
         setPhotos([]);
         setPhotosHasMore(false);
+        setSetLoadError(true);
       } finally {
         if (requestId === activeSetRequestId.current) {
           setPhotosLoadingSet(false);
@@ -455,13 +469,15 @@ export default function ClientGalleryPage() {
     (setId) => {
       if (!photoSets.some((set) => set.id === setId) || setId === activeSetId) return;
 
+      // Only update the URL. The sync effect above reacts to it and performs
+      // the one load for the new set — doing the load here as well made every
+      // tab switch fetch the same page three times (here, the effect seeing
+      // the not-yet-updated URL, then the effect again once it caught up).
       const params = new URLSearchParams(searchParams);
       params.set("set", setId);
       setSearchParams(params);
-      setActiveSetId(setId);
-      void loadPhotoSet(setId);
     },
-    [activeSetId, loadPhotoSet, photoSets, searchParams, setSearchParams],
+    [activeSetId, photoSets, searchParams, setSearchParams],
   );
 
   /**
@@ -579,17 +595,6 @@ export default function ClientGalleryPage() {
       : null
   );
 
-  // Per-photo hover/lightbox download links go straight to a plain <a
-  // href> GET — there's no way to prompt for a PIN inline on a bare
-  // anchor click without a much bigger UX build-out. Rather than let
-  // clicking one silently 401 with a raw JSON error page, this hides
-  // those single-item download affordances whenever the gallery has a
-  // PIN configured; the toolbar's gallery download routes through
-  // DownloadPage's real PIN form instead.
-  const displayPhotos = hasDownloadPin
-    ? photos.map((p) => ({ ...p, download_url: null }))
-    : photos;
-
   return (
     <div className={`min-h-screen ${resolvedDesign.theme.bg}`}>
       {/* ── FULL-BLEED HERO COVER BANNER ──────────────────────────────── */}
@@ -599,6 +604,17 @@ export default function ClientGalleryPage() {
           {coverSrc ? (
             <img
               src={coverSrc}
+              // The hero is the page's largest paint: give the browser the
+              // 1280px tier for phones/small windows and the 2048px tier for
+              // wide screens, and fetch it ahead of the grid.
+              srcSet={
+                coverUrl && coverMediumUrl && coverSrc === coverUrl
+                  ? `${coverMediumUrl} 1280w, ${coverUrl} 2048w`
+                  : undefined
+              }
+              sizes="100vw"
+              fetchPriority="high"
+              decoding="async"
               alt=""
               className="w-full h-full object-cover"
             />
@@ -712,7 +728,7 @@ export default function ClientGalleryPage() {
               {allowDownload && (
                 <button
                   type="button"
-                  onClick={handleDownloadGallery}
+                  onClick={openGalleryDownload}
                   className="rounded p-2 text-slate-600 transition hover:bg-slate-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                   aria-label="Download gallery"
                   title="Download gallery"
@@ -746,8 +762,17 @@ export default function ClientGalleryPage() {
 
         {/* Dynamic Visual Masonry vs Empty State Fallback */}
         {photosLoadingSet ? (
-          <div className="flex justify-center py-24">
-            <Spinner className="w-6 h-6 text-ink" />
+          <GallerySkeleton />
+        ) : setLoadError ? (
+          <div className="text-center py-24 border border-dashed border-cream-300 rounded-xl bg-white">
+            <p className="text-sm text-muted font-light mb-4">We couldn't load these photos.</p>
+            <button
+              type="button"
+              onClick={() => void loadPhotoSet(activeSetId)}
+              className="text-xs uppercase tracking-widest text-ink border border-ink/30 px-4 py-2 rounded-full hover:bg-ink/5 transition"
+            >
+              Try again
+            </button>
           </div>
         ) : photos.length === 0 ? (
           <div className="text-center py-24 border border-dashed border-cream-300 rounded-xl bg-white">
@@ -758,7 +783,7 @@ export default function ClientGalleryPage() {
         ) : (
           <>
             <PublicMasonryGrid
-              photos={displayPhotos}
+              photos={photos}
               token={token}
               username={username}
               slug={slug}
@@ -769,6 +794,7 @@ export default function ClientGalleryPage() {
               favoritedIds={favoritedIds}
               onToggleFavorite={handleToggleFavorite}
               allowDownload={allowDownload}
+              onDownloadPhoto={openPhotoDownload}
             />
             {photosHasMore && (
               <div className="flex justify-center mt-10">
@@ -777,7 +803,7 @@ export default function ClientGalleryPage() {
                   disabled={loadingMorePhotos}
                   className="text-xs uppercase tracking-widest text-ink border border-ink/30 px-8 py-3 rounded-full hover:bg-ink/5 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loadingMorePhotos ? "Loading…" : "Load More"}
+                  {loadingMorePhotos ? "Loading…" : loadMoreError ? "Couldn't load more — try again" : "Load More"}
                 </button>
               </div>
             )}
@@ -786,7 +812,7 @@ export default function ClientGalleryPage() {
 
         {lightboxIndex !== null && (
           <PhotoLightbox
-            photos={displayPhotos}
+            photos={photos}
             index={lightboxIndex}
             token={token}
             onClose={() => setLightboxIndex(null)}
@@ -794,12 +820,13 @@ export default function ClientGalleryPage() {
             videoAccessToken={token}
             isFavorited={favoritedIds.has(photos[lightboxIndex]?.id)}
             onToggleFavorite={handleToggleFavorite}
+            onDownload={allowDownload ? openPhotoDownload : undefined}
           />
         )}
 
         {slideshowIndex !== null && (
           <PhotoLightbox
-            photos={displayPhotos}
+            photos={photos}
             index={slideshowIndex}
             token={token}
             onClose={() => {
@@ -810,9 +837,23 @@ export default function ClientGalleryPage() {
             videoAccessToken={token}
             isFavorited={favoritedIds.has(photos[slideshowIndex]?.id)}
             onToggleFavorite={handleToggleFavorite}
+            onDownload={allowDownload ? openPhotoDownload : undefined}
             slideshowMode={slideshowAutoplay}
           />
         )}
+
+        <DownloadModal
+          open={downloadTarget !== null}
+          onClose={() => setDownloadTarget(null)}
+          username={username}
+          slug={slug}
+          galleryToken={token}
+          hasDownloadPin={hasDownloadPin}
+          downloadPolicy={downloadPolicy}
+          target={downloadTarget}
+          photoSets={photoSets}
+          photoCount={photosCount}
+        />
       </main>
 
       {/* Footer */}

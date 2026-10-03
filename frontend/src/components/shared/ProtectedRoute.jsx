@@ -1,5 +1,5 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/shared/ProtectedRoute.jsx
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Navigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import Spinner from '../ui/Spinner'
@@ -8,7 +8,12 @@ export default function ProtectedRoute({ children }) {
   // Targeted selectors — this component re-renders only when these two values change
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const loading         = useAuthStore((s) => s.loading)
+  const init            = useAuthStore((s) => s.init)
   const location = useLocation()
+
+  // Normally App's bootstrap has already started this; the call is idempotent
+  // and covers arriving here by in-app navigation from a guest-only route.
+  useEffect(() => { init() }, [init])
 
   // Phase 1: Hold rendering until App.jsx's init() resolves the session
   if (loading) {

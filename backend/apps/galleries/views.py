@@ -54,7 +54,9 @@ class GalleryListCreateView(APIView):
         queryset = (
             Gallery.objects
             .filter(photographer=request.user, is_active=True)
-            .select_related('cover_photo')
+            # GalleryListSerializer reads photographer.username on every row;
+            # without the join that was one extra query PER gallery (N+1).
+            .select_related('cover_photo', 'photographer')
             .annotate(photo_count=Count('assets'))
         )
 
@@ -152,7 +154,7 @@ class GallerySearchView(APIView):
             Gallery.objects
             .filter(photographer=request.user, is_active=True)
             .filter(Q(title__icontains=query) | Q(description__icontains=query))
-            .select_related('cover_photo')
+            .select_related('cover_photo', 'photographer')
             .annotate(photo_count=Count('assets'))
             .order_by('-created_at')
         )
@@ -194,7 +196,7 @@ class GalleryDetailView(APIView):
         try:
             return (
                 Gallery.objects
-                .select_related('cover_photo')
+                .select_related('cover_photo', 'photographer')
                 .annotate(photo_count=Count('assets'))
                 .get(slug=slug, photographer=user, is_active=True)
             )
@@ -299,32 +301,25 @@ class DashboardStatsView(APIView):
     def get(self, request):
         photographer = request.user
         from django.utils import timezone
-        from apps.photos.models import MediaAsset
-        from apps.subscriptions.models import UserSubscription
 
-        # 1. Fetch single-pass subscription limits and usage metrics from PostgreSQL
+        # 1. Fetch single-pass subscription limits and usage metrics from PostgreSQL.
+        #    The metrics call already read the active subscription and counted
+        #    media for active galleries, so neither is queried a second time here.
         metrics = get_user_subscription_metrics(photographer)
+        photos_used = metrics["active_photos_count"]
 
-        # 2. Count total media assets (both photos and videos) across all active galleries
-        photos_used = MediaAsset.objects.filter(
-            gallery__photographer=photographer,
-            gallery__is_active=True
-        ).count()
-
-        # 3. Resolve active subscription expiration parameters safely
+        # 3. Resolve active subscription expiration parameters
         days_remaining = 0
         expires_at = None
         subscription_status = "no_subscription"
 
-        try:
-            sub = UserSubscription.objects.get(user=photographer, status='active')
+        sub = metrics["active_subscription"]
+        if sub is not None:
             subscription_status = sub.status
             if sub.expires_at:
                 expires_at = sub.expires_at
                 if sub.expires_at > timezone.now():
                     days_remaining = (sub.expires_at - timezone.now()).days
-        except UserSubscription.DoesNotExist:
-            pass
 
         # 4. Handle Admin Bypass case cleanly
         if photographer.is_superuser or photographer.is_staff:
@@ -464,9 +459,27 @@ class GallerySetPasswordView(APIView):
             is_active=True
         )
         
-        # Safely extract password, converting NoneType to empty string
-        password = request.data.get('password')
-        password = password.strip() if password else ''
+        # A malformed JSON body must not reach ``.strip()`` or bcrypt and
+        # turn a photographer setting click into a 500. ``null`` is the
+        # deliberate clear contract; a non-empty string enables protection.
+        raw_password = request.data.get('password')
+        if raw_password is None:
+            password = ''
+        elif not isinstance(raw_password, str):
+            return Response(
+                {'error': 'Password must be a string.', 'code': 'invalid_password'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        else:
+            password = raw_password.strip()
+
+        # bcrypt only accepts the first 72 bytes. Reject longer values rather
+        # than silently truncating a secret the photographer believes is used.
+        if len(password.encode('utf-8')) > 72:
+            return Response(
+                {'error': 'Password must be 72 bytes or fewer.', 'code': 'invalid_password'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         
         
         # Deferred import: avoids a module-load-time circular dependency

@@ -49,6 +49,8 @@ export default function GalleryPhotosPage() {
   const [photos, setPhotos] = useState([]);
   const [photosLoading, setPhotosLoading] = useState(true);
   const [uploadQueue, setUploadQueue] = useState([]);
+  const uploadQueueRef = useRef([]);
+  uploadQueueRef.current = uploadQueue;
   const [errorMsg, setErrorMsg] = useState("");
   const [isGridDragging, setIsGridDragging] = useState(false);
 
@@ -279,6 +281,7 @@ export default function GalleryPhotosPage() {
         previewUrl,
         progress: 0,
         isVideo: isVideoFile(file),
+        setId: activeSetId,
       };
     });
     setUploadQueue((previous) => [...previous, ...queueItems]);
@@ -315,45 +318,10 @@ export default function GalleryPhotosPage() {
       return;
     }
 
-    const uploadSetId = activeSetId;
     let uploadedAtLeastOne = false;
 
     for (const item of queueItems) {
-      const formData = new FormData();
-      formData.append(item.isVideo ? "video" : "image", item.file);
-      formData.append("set_id", uploadSetId);
-
-      try {
-        const uploaded = await photosApi.uploadBulk(slug, formData, (progress) => {
-          if (isMountedRef.current) {
-            setUploadQueue((previous) =>
-              previous.map((queueItem) =>
-                queueItem.id === item.id ? { ...queueItem, progress } : queueItem,
-              ),
-            );
-          }
-        });
-        uploadedAtLeastOne = true;
-        if (isMountedRef.current) {
-          const newAssets = Array.isArray(uploaded) ? uploaded : [uploaded];
-          if (String(activeSetIdRef.current) === String(uploadSetId)) {
-            setPhotos((previous) => [...previous, ...newAssets]);
-          }
-          setUploadQueue((previous) => previous.filter((queueItem) => queueItem.id !== item.id));
-        }
-
-        URL.revokeObjectURL(item.previewUrl);
-        blobUrlsRef.current = blobUrlsRef.current.filter((url) => url !== item.previewUrl);
-      } catch (error) {
-        if (isMountedRef.current) {
-          setUploadQueue((previous) =>
-            previous.map((queueItem) =>
-              queueItem.id === item.id ? { ...queueItem, error: true } : queueItem,
-            ),
-          );
-          setErrorMsg(getErrorMessage(error, `Failed to upload ${item.file.name}.`));
-        }
-      }
+      if (await uploadQueueItem(item)) uploadedAtLeastOne = true;
     }
 
     if (uploadedAtLeastOne) {
@@ -361,6 +329,71 @@ export default function GalleryPhotosPage() {
         // The upload succeeded; leave the visible grid intact if only the
         // follow-up count refresh has a transient failure.
       });
+    }
+  };
+
+  /**
+   * Uploads ONE queued file into the set it was queued for. Shared by the
+   * initial batch and by per-file Retry, so a retry behaves exactly like the
+   * first attempt. Resolves true on success; on failure the row stays in the
+   * queue with its own error message and a Retry button (the shared banner
+   * is only a summary, not the only place the reason shows up).
+   */
+  const uploadQueueItem = async (item) => {
+    const formData = new FormData();
+    formData.append(item.isVideo ? "video" : "image", item.file);
+    formData.append("set_id", item.setId);
+
+    try {
+      const uploaded = await photosApi.uploadBulk(slug, formData, (progress) => {
+        if (isMountedRef.current) {
+          setUploadQueue((previous) =>
+            previous.map((queueItem) =>
+              queueItem.id === item.id ? { ...queueItem, progress } : queueItem,
+            ),
+          );
+        }
+      });
+      if (isMountedRef.current) {
+        const newAssets = Array.isArray(uploaded) ? uploaded : [uploaded];
+        if (String(activeSetIdRef.current) === String(item.setId)) {
+          setPhotos((previous) => [...previous, ...newAssets]);
+        }
+        setUploadQueue((previous) => previous.filter((queueItem) => queueItem.id !== item.id));
+      }
+
+      URL.revokeObjectURL(item.previewUrl);
+      blobUrlsRef.current = blobUrlsRef.current.filter((url) => url !== item.previewUrl);
+      return true;
+    } catch (error) {
+      const message = getErrorMessage(error, `Failed to upload ${item.file.name}.`);
+      if (isMountedRef.current) {
+        setUploadQueue((previous) =>
+          previous.map((queueItem) =>
+            queueItem.id === item.id
+              ? { ...queueItem, error: true, errorMessage: message }
+              : queueItem,
+          ),
+        );
+        setErrorMsg(message);
+      }
+      return false;
+    }
+  };
+
+  const handleRetryFailed = async (itemId) => {
+    const item = uploadQueueRef.current.find((queueItem) => queueItem.id === itemId);
+    if (!item || !item.error) return;
+    setErrorMsg("");
+    setUploadQueue((previous) =>
+      previous.map((queueItem) =>
+        queueItem.id === itemId
+          ? { ...queueItem, error: false, errorMessage: undefined, progress: 0 }
+          : queueItem,
+      ),
+    );
+    if (await uploadQueueItem(item)) {
+      refreshSets().catch(() => {});
     }
   };
 
@@ -599,16 +632,30 @@ export default function GalleryPhotosPage() {
                   {item.file.name}
                   {item.isVideo && <span className="ml-1.5 text-[9px] uppercase tracking-wide text-muted">Video</span>}
                 </div>
+                {item.error && item.errorMessage && (
+                  <div className="mt-0.5 truncate text-[10px] text-red-600" title={item.errorMessage}>
+                    {item.errorMessage}
+                  </div>
+                )}
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-cream-300">
                   <div className={`h-full rounded-full transition-all ${item.error ? "bg-red-400" : "bg-ink"}`} style={{ width: `${item.error ? 100 : item.progress}%` }} />
                 </div>
               </div>
               {item.error ? (
-                <button type="button" onClick={() => handleDismissFailed(item.id)} className="flex-shrink-0 cursor-pointer text-[10px] font-medium text-red-600 hover:text-red-700">
-                  Failed · Dismiss
-                </button>
+                <div className="flex flex-shrink-0 items-center gap-2 text-[10px] font-medium">
+                  <button type="button" onClick={() => handleRetryFailed(item.id)} className="cursor-pointer text-ink hover:underline">
+                    Retry
+                  </button>
+                  <button type="button" onClick={() => handleDismissFailed(item.id)} className="cursor-pointer text-red-600 hover:text-red-700">
+                    Dismiss
+                  </button>
+                </div>
               ) : (
-                <span className="flex-shrink-0 text-[10px] text-muted">{item.progress}%</span>
+                // At 100% the bytes are sent but the server is still saving the
+                // file and queuing processing — say so instead of a frozen "100%".
+                <span className="flex-shrink-0 text-[10px] text-muted">
+                  {item.progress >= 100 ? "Finalizing…" : `${item.progress}%`}
+                </span>
               )}
             </div>
           ))}

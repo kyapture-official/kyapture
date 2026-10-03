@@ -56,6 +56,7 @@ TEMPLATES = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # Must be placed at the top of middleware stack
+    "apps.core.middleware.JsonGZipMiddleware",  # JSON only; wraps everything below so error bodies compress too
     "apps.core.middleware.ApiExceptionMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -254,6 +255,12 @@ GALLERY_TRASH_RETENTION_DAYS = int(os.getenv("GALLERY_TRASH_RETENTION_DAYS", "30
 # apps/clients/views.py's session-validation gate, which checks this
 # expiry the same way it already checks token/gallery match.
 CLIENT_SESSION_TTL_DAYS = int(os.getenv("CLIENT_SESSION_TTL_DAYS", "30"))
+
+# Lifetime of the signed download access token a client earns by passing the
+# download PIN / email step (see apps/clients/download_access.py). Short on
+# purpose: it only needs to cover one browsing-and-downloading visit, and it
+# is additionally invalidated the moment the gallery's PIN changes.
+DOWNLOAD_ACCESS_TTL_SECONDS = int(os.getenv("DOWNLOAD_ACCESS_TTL_SECONDS", str(2 * 60 * 60)))
 
 # DownloadLog retention (Phase 4 — DB cleanup). Purely an operational
 # cleanup of old lead-generation rows; not a security control.

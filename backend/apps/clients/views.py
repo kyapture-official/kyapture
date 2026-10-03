@@ -3,7 +3,6 @@ import os
 import time
 import tempfile
 import zipfile
-import bcrypt
 from django.conf import settings
 from django.http import StreamingHttpResponse, HttpResponse, FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -27,17 +26,131 @@ from .serializers import (
     FavoriteToggleSerializer,
 )
 from apps.core.pagination import GalleryMediaPagination
+
+INVALID_SET = object()
+
+
+def parse_set_id(raw):
+    """
+    Normalizes the public `?set=` filter: None for "no filter", a UUID for a
+    well-formed id, and INVALID_SET for a malformed one. A malformed value
+    used to reach the ORM and raise ValidationError -> an unhandled 500 on a
+    public, unauthenticated endpoint; it now simply matches nothing, exactly
+    like a well-formed id for a set that doesn't exist.
+    """
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        return INVALID_SET
 from apps.core.utils import (
     sanitize_download_filename,
     ALREADY_COMPRESSED_EXTS,
     process_download_master,
 )
+from .download_access import (
+    as_clean_str,
+    authorize_download,
+    download_access_ttl,
+    error_response,
+    get_download_policy,
+    issue_download_token,
+    resolution_is_allowed,
+    validate_client_email,
+    verify_pin,
+)
 
 import logging
-import zipfile
+import uuid
 
 
 logger = logging.getLogger(__name__)
+
+DOWNLOAD_RESOLUTIONS = ('web', 'download', 'original')
+
+
+def _validate_download_resolution(gallery, resolution):
+    """Return an API error when a valid size is disabled by its owner."""
+    if resolution not in DOWNLOAD_RESOLUTIONS:
+        return Response(
+            {'error': "resolution must be 'web', 'download', or 'original'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not resolution_is_allowed(gallery, resolution):
+        return Response(
+            {'error': 'That download size is not available for this gallery.', 'code': 'resolution_not_allowed'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
+def _get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+def _resolve_zip_source(asset, resolution):
+    """
+    Which stored file represents `asset` inside a ZIP at the requested
+    resolution. 'web' prefers the already-generated display derivative and
+    falls back to the original (still processing, or a video — videos have
+    no display_file); 'download' is the private Download Master (lazily
+    backfilled for legacy assets); 'original' is the authorized original.
+    """
+    if resolution == 'web' and getattr(asset, 'display_file', None):
+        return asset.display_file
+    if resolution == 'download':
+        return _get_client_download_source(asset)[0]
+    return asset.original_file
+
+
+def _zip_entry_base_name(asset, source_field, resolution):
+    """
+    Sanitized archive filename for `asset`. A Web Size entry is the display
+    WebP derivative, so its extension must match those bytes rather than the
+    camera original's (a .jpg name holding WebP data is a lying file).
+    """
+    safe_name = sanitize_download_filename(asset.original_name, fallback=str(asset.id))
+    display_file = getattr(asset, 'display_file', None)
+    if resolution == 'web' and display_file and source_field.name == display_file.name:
+        safe_name = os.path.splitext(safe_name)[0] + os.path.splitext(source_field.name)[1]
+    return safe_name
+
+
+def _unique_zip_entry_name(safe_name, used_names):
+    """
+    De-duplicates archive entry names. Comparison is case-insensitive:
+    `Photo.jpg` and `photo.JPG` are one file on Windows/macOS extraction,
+    so treating them as distinct would silently drop one for those clients.
+    `used_names` holds lower-cased names.
+    """
+    entry_name = safe_name
+    base, ext = os.path.splitext(safe_name)
+    suffix = 1
+    while entry_name.lower() in used_names:
+        entry_name = f'{base}_{suffix}{ext}'
+        suffix += 1
+    used_names.add(entry_name.lower())
+    return entry_name
+
+
+def _get_photo_set(gallery, raw_set_id):
+    """
+    Resolves a client-supplied set id to a PhotoSet OF THIS GALLERY, or None.
+    Scoped by gallery, so another gallery's set id can never be resolved,
+    and a malformed UUID is treated as "no such set" instead of a 500.
+    """
+    raw_set_id = as_clean_str(raw_set_id)
+    if not raw_set_id:
+        return None
+    try:
+        return PhotoSet.objects.filter(id=raw_set_id, gallery=gallery).first()
+    except (ValueError, ValidationError):
+        return None
 
 
 def _get_client_download_source(asset):
@@ -91,6 +204,23 @@ class PublicGalleryBrowseThrottle(AnonRateThrottle):
     scope = 'public_gallery_browse'
 
 
+class PinGuessThrottledMixin:
+    """
+    The single-file and direct-ZIP downloads are plain GETs on the generous
+    browse throttle. Accepting a raw `?pin=` there would let a 4-digit
+    download PIN be brute-forced at browsing speed, so any request that
+    actually carries a PIN is additionally held to the tight
+    'password_unlock' rate, exactly like the POST/unlock endpoints.
+    Requests authorized by a download access token are unaffected.
+    """
+
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.request.query_params.get('pin'):
+            throttles.append(PasswordUnlockRateThrottle())
+        return throttles
+
+
 class PublicGalleryView(APIView):
     """
     GET /api/v1/public/{username}/{slug}/
@@ -120,7 +250,9 @@ class PublicGalleryView(APIView):
             now = timezone.now()
             return (
                 Gallery.objects
-                .select_related('photographer')
+                # cover_photo rides along in the same query — PublicGallerySerializer
+                # reads it for cover_url, which was a separate round trip.
+                .select_related('photographer', 'cover_photo')
                 .get(
                     Q(expires_at__isnull=True) | Q(expires_at__gt=now),
                     slug=slug,
@@ -150,7 +282,9 @@ class PublicGalleryView(APIView):
             gallery=gallery,
             processing_status=MediaAsset.ProcessingStatus.READY,
         )
-        if photo_set_id:
+        if photo_set_id is INVALID_SET:
+            ready_qs = ready_qs.none()
+        elif photo_set_id:
             ready_qs = ready_qs.filter(photo_set_id=photo_set_id)
         ready_qs = ready_qs.order_by('order', 'created_at')
         total_count = ready_qs.count()
@@ -233,7 +367,7 @@ class PublicGalleryView(APIView):
         # obj.gallery.photographer per-video inside the child serializer
         # would NOT be cached and would re-query once per video (N+1).
         page_size = GalleryMediaPagination.page_size
-        photo_set_id = request.query_params.get('set', '').strip() or None
+        photo_set_id = parse_set_id(request.query_params.get('set', ''))
         photos_page, total_count = self.get_ready_assets_page(gallery, page_size, photo_set_id)
 
         serializer = PublicGallerySerializer(
@@ -315,8 +449,10 @@ class PublicGalleryPhotosView(APIView):
             gallery=gallery,
             processing_status=MediaAsset.ProcessingStatus.READY,
         )
-        photo_set_id = request.query_params.get('set', '').strip()
-        if photo_set_id:
+        photo_set_id = parse_set_id(request.query_params.get('set', ''))
+        if photo_set_id is INVALID_SET:
+            ready_qs = ready_qs.none()
+        elif photo_set_id:
             ready_qs = ready_qs.filter(photo_set_id=photo_set_id)
         ready_qs = ready_qs.order_by('order', 'created_at')
 
@@ -545,6 +681,118 @@ class GalleryFavoritesView(APIView):
         return Response({'favorited': False}, status=status.HTTP_200_OK)
 
 
+class PublicDownloadAccessView(APIView):
+    """
+    POST /api/v1/public/{username}/{slug}/download-access/
+    Body: { email?, pin?, token? }      (token may also be a Bearer header)
+
+    Step one of an explicit client Download. Opening, browsing, favoriting
+    and sharing a gallery never reach this endpoint — it runs only when the
+    client chooses Download. It authorizes the download SERVER-side:
+
+      1. gallery is published/active/unexpired and allow_download is on
+      2. a password-protected gallery still requires its own unlock session
+         (the gallery password and the download PIN are separate gates)
+      3. the download PIN, when the gallery has one
+      4. a valid email (lead capture) — taken from the unlock session when
+         the client already gave one there, otherwise required in the body
+
+    On success returns a short-lived signed `download_token` the client then
+    presents to the single-file / ZIP endpoints, so email and PIN are asked
+    once instead of for every photo. See download_access.py for what the
+    token is bound to and why it is not a long-lived bearer secret.
+
+    Uses the tight 'password_unlock' throttle: this is the one place a PIN
+    can be guessed, so it gets the same brute-force protection as the
+    gallery password.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [PasswordUnlockRateThrottle]
+
+    def post(self, request, username, slug):
+        try:
+            gallery = Gallery.objects.select_related('photographer').get(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
+                slug=slug.strip().lower(),
+                photographer__username=username.strip().lower(),
+                is_published=True,
+                is_active=True,
+            )
+        except Gallery.DoesNotExist:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not gallery.allow_download:
+            return error_response(
+                'Downloads are disabled for this gallery.', 'downloads_disabled',
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        session = None
+        if gallery.is_password_protected:
+            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+            token = (
+                auth_header[len('Bearer '):].strip()
+                if auth_header.startswith('Bearer ')
+                else as_clean_str(request.data.get('token'))
+            )
+            session = ClientSession.objects.not_expired().filter(
+                access_token=token, gallery=gallery
+            ).first() if token else None
+            if session is None:
+                return error_response(
+                    'An active unlocked session is required to download this gallery.',
+                    'session_required', status.HTTP_401_UNAUTHORIZED,
+                )
+
+        pin_verified = False
+        if gallery.download_pin_hash:
+            raw_pin = request.data.get('pin')
+            if not as_clean_str(raw_pin):
+                return error_response(
+                    'A download PIN is required for this gallery.', 'pin_required',
+                    status.HTTP_401_UNAUTHORIZED,
+                )
+            if not verify_pin(gallery, raw_pin):
+                return error_response(
+                    'Incorrect download PIN.', 'invalid_pin', status.HTTP_401_UNAUTHORIZED,
+                )
+            pin_verified = True
+
+        policy = get_download_policy(gallery)
+        email = None
+        if as_clean_str(request.data.get('email')):
+            email, email_error = validate_client_email(request.data.get('email'))
+            if email_error:
+                return email_error
+        elif session is not None and session.email:
+            email = session.email
+        elif policy['require_email']:
+            _, email_error = validate_client_email(None)
+            return email_error
+
+        # Remember the email on the unlock session (never overwriting one
+        # the client already gave) so downloads and favorite activity for
+        # this unlocked visit are attributed consistently.
+        if session is not None:
+            updates = []
+            if email and not session.email:
+                session.email = email
+                updates.append('email')
+            if not session.has_download_access:
+                session.has_download_access = True
+                updates.append('has_download_access')
+            if updates:
+                session.save(update_fields=updates)
+
+        return Response({
+            'download_token': issue_download_token(gallery, email, pin_verified),
+            'expires_in': download_access_ttl(),
+            'email': email,
+            'pin_verified': pin_verified,
+        }, status=status.HTTP_200_OK)
+
+
 class PublicGalleryDownloadView(APIView):
     """
     POST /api/v1/public/{username}/{slug}/download/
@@ -574,40 +822,6 @@ class PublicGalleryDownloadView(APIView):
         except Gallery.DoesNotExist:
             return None
 
-    def _get_client_ip(self, request):
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            return x_forwarded_for.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR')
-
-    def _verify_download_pin(self, gallery, request):
-        """
-        Second, independent gate from the gallery access password — see
-        Gallery.download_pin_hash's docstring. Returns
-        (pin_was_required_and_passed: bool, error_response or None).
-        A gallery with no PIN configured always passes with
-        pin_was_required_and_passed=False (nothing to log as "verified").
-        """
-        if not gallery.download_pin_hash:
-            return False, None
-
-        pin = (request.data.get('pin') or '').strip()
-        if not pin:
-            return False, Response(
-                {'error': 'A download PIN is required for this gallery.', 'code': 'pin_required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-        try:
-            valid = bcrypt.checkpw(pin.encode('utf-8'), gallery.download_pin_hash.encode('utf-8'))
-        except Exception:
-            valid = False
-        if not valid:
-            return False, Response(
-                {'error': 'Incorrect download PIN.', 'code': 'invalid_pin'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-        return True, None
-
     def post(self, request, username, slug):
         # 1. Fetch the gallery
         gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
@@ -623,7 +837,7 @@ class PublicGalleryDownloadView(APIView):
 
         # 3. Guard: Verify password if protected
         if gallery.is_password_protected:
-            token = request.data.get('token', '').strip() or request.query_params.get('token', '').strip()
+            token = as_clean_str(request.data.get('token')) or request.query_params.get('token', '').strip()
 
             # Assert a valid, non-expired ClientSession has been registered for this guest token
             valid_session = ClientSession.objects.not_expired().filter(
@@ -637,19 +851,26 @@ class PublicGalleryDownloadView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED
                 )
 
-        # 3b. Guard: verify the optional download PIN, independent of the
-        # gallery access password above.
-        pin_verified, pin_error = self._verify_download_pin(gallery, request)
-        if pin_error:
-            return pin_error
+        # 3b. Guard: the download PIN gate (a PIN or a download access token
+        # earned by passing it), independent of the gallery password above.
+        authorization, auth_error = authorize_download(
+            gallery,
+            pin=request.data.get('pin'),
+            download_token=request.data.get('download_token'),
+        )
+        if auth_error:
+            return auth_error
+        pin_verified = authorization.pin_verified
 
-        # 4. Validate guest email (Photographer lead capture)
-        email = request.data.get('email', '').strip()
-        if not email:
-            return Response(
-                {'error': 'A valid email address is required to initiate downloads.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # 4. Guest email (photographer lead capture): taken from the
+        # authorized download session when there is one, else from the body.
+        # A deliberately frictionless gallery has neither a PIN nor a
+        # require-email rule, so email=None is the correct audited outcome.
+        email = authorization.email
+        if not email and get_download_policy(gallery)['require_email']:
+            email, email_error = validate_client_email(request.data.get('email'))
+            if email_error:
+                return email_error
 
         # 4b. Resolution choice: 'web' serves the already-generated 2048px
         # WebP display derivative (no regeneration, no extra stored
@@ -660,25 +881,17 @@ class PublicGalleryDownloadView(APIView):
         # display derivative yet (still processing, or a video — videos
         # have no display_file) falls back to its original rather than
         # silently dropping it from the ZIP.
-        resolution = (request.data.get('resolution') or 'download').strip().lower()
-        if resolution not in ('web', 'download', 'original'):
-            return Response(
-                {'error': "resolution must be 'web', 'download', or 'original'."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        resolution = as_clean_str(request.data.get('resolution')).lower() or 'download'
+        resolution_error = _validate_download_resolution(gallery, resolution)
+        if resolution_error:
+            return resolution_error
 
         # Which PhotoSet (if any) this download was scoped to — validated
         # against this gallery before use, both as a real filter and as
         # the activity-log field, so an arbitrary/malformed client-
         # supplied value can neither leak another gallery's set nor crash
         # the query with an invalid UUID.
-        raw_set_id = request.data.get('set_id')
-        photo_set = None
-        if raw_set_id:
-            try:
-                photo_set = PhotoSet.objects.filter(id=raw_set_id, gallery=gallery).first()
-            except (ValueError, ValidationError):
-                photo_set = None
+        photo_set = _get_photo_set(gallery, request.data.get('set_id'))
 
         # 5. Fetch media assets (Support Selective Download).
         # asset_ids is validated through a real UUIDField list, exactly
@@ -753,14 +966,7 @@ class PublicGalleryDownloadView(APIView):
             # Open the zip archive writer
             with zipfile.ZipFile(temp_zip_path, 'w') as zip_file:
                 for asset in assets:
-                    # 'web' prefers the already-generated display derivative;
-                    # falls back to the original when none exists yet
-                    # (still processing) or for videos (no display_file).
-                    source_field = asset.original_file
-                    if resolution == 'web' and getattr(asset, 'display_file', None):
-                        source_field = asset.display_file
-                    elif resolution == 'download':
-                        source_field, _ = _get_client_download_source(asset)
+                    source_field = _resolve_zip_source(asset, resolution)
 
                     if not source_field:
                         continue
@@ -773,15 +979,9 @@ class PublicGalleryDownloadView(APIView):
                     # two same-named entries in the archive, which most
                     # unzip tools resolve by keeping only one — a real,
                     # silent data-loss bug for the client, not a cosmetic one.
-                    safe_name = sanitize_download_filename(asset.original_name, fallback=str(asset.id))
-                    entry_name = safe_name
-                    if entry_name in used_names:
-                        base, ext = os.path.splitext(safe_name)
-                        suffix = 1
-                        while entry_name in used_names:
-                            entry_name = f"{base}_{suffix}{ext}"
-                            suffix += 1
-                    used_names.add(entry_name)
+                    entry_name = _unique_zip_entry_name(
+                        _zip_entry_base_name(asset, source_field, resolution), used_names
+                    )
 
                     # Already-compressed media (every format this pipeline
                     # ever produces or accepts) gains nothing from DEFLATE
@@ -809,7 +1009,7 @@ class PublicGalleryDownloadView(APIView):
                         logger.exception(
                             "Failed to add asset %s to ZIP for gallery %s", asset.id, gallery.id
                         )
-                        used_names.discard(entry_name)
+                        used_names.discard(entry_name.lower())
                     finally:
                         source_field.close()
 
@@ -818,11 +1018,10 @@ class PublicGalleryDownloadView(APIView):
             # compilation failure above raises out to the except block
             # below and never reaches this line, so a failed download is
             # never recorded as if it succeeded (the F-27 finding this closes).
-            ip_address = self._get_client_ip(request)
             DownloadLog.objects.create(
                 gallery=gallery,
                 email=email,
-                ip_address=ip_address,
+                ip_address=_get_client_ip(request),
                 download_type=DownloadLog.DownloadType.GALLERY,
                 resolution=resolution,
                 pin_verified=pin_verified,
@@ -852,24 +1051,36 @@ class PublicGalleryDownloadView(APIView):
             response['Content-Disposition'] = f'attachment; filename="{safe_zip_name}"'
             return response
 
-        except Exception as e:
-            # If ZIP compilation completely crashes, clean up the temp file
+        except Exception:
+            # If ZIP compilation completely crashes, clean up the temp file.
+            # The raw exception stays in the server log — it can carry
+            # storage paths/bucket names and must never reach the client.
+            logger.exception('Failed to compile ZIP for gallery %s', gallery.id)
             if os.path.exists(temp_zip_path):
                 os.remove(temp_zip_path)
             return Response(
-                {"error": f"Failed to compile download package: {str(e)}"},
+                {'error': 'Unable to prepare this download. Please try again.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
-class PublicGalleryDirectDownloadView(PublicGalleryDownloadView):
+class PublicGalleryDirectDownloadView(PinGuessThrottledMixin, PublicGalleryDownloadView):
     """
-    GET /api/v1/public/{username}/{slug}/download-all/?token=<access_token>
+    GET /api/v1/public/{username}/{slug}/download-all/
+        ?token=<gallery unlock token>            (password-protected galleries)
+        &download_token=<download access token>  (from POST .../download-access/)
+        &resolution=web|download|original        (default: download)
+        &set=<photo set id>                      (optional: that set only)
 
-    Anchor-friendly full-gallery download for the public client view. Unlike
-    the existing POST download endpoint, this intentionally has no lead form:
-    it is used only for galleries without a download PIN. The client retains
-    the existing POST/email/PIN flow when a download PIN is configured.
+    Anchor-friendly full-gallery (or single-set) download: the browser, not
+    axios, owns the potentially large streamed ZIP. Every gate is enforced
+    here, server-side — gallery published/active/unexpired, allow_download,
+    the gallery password session, and the download PIN (via a download
+    access token or a raw PIN). Hiding the button in the UI is never the
+    only protection.
+
+    A gallery with neither a password nor a PIN needs no token at all:
+    the download is then simply anonymous (email=None in the activity log).
     """
     throttle_classes = [PublicGalleryBrowseThrottle]
 
@@ -881,27 +1092,6 @@ class PublicGalleryDirectDownloadView(PublicGalleryDownloadView):
             slug=slug,
             photographer__username=username,
         ).first()
-
-    def _verify_download_pin(self, gallery, request):
-        if not gallery.download_pin_hash:
-            return False, None
-
-        pin = request.query_params.get('pin', '').strip()
-        if not pin:
-            return False, Response(
-                {'error': 'A download PIN is required for this gallery.', 'code': 'pin_required'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        try:
-            valid = bcrypt.checkpw(pin.encode('utf-8'), gallery.download_pin_hash.encode('utf-8'))
-        except Exception:
-            valid = False
-        if not valid:
-            return False, Response(
-                {'error': 'Incorrect download PIN.', 'code': 'invalid_pin'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return True, None
 
     def get(self, request, username, slug):
         gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
@@ -923,19 +1113,42 @@ class PublicGalleryDirectDownloadView(PublicGalleryDownloadView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        pin_verified, pin_error = self._verify_download_pin(gallery, request)
-        if pin_error:
-            return pin_error
+        authorization, auth_error = authorize_download(
+            gallery,
+            pin=request.query_params.get('pin'),
+            download_token=request.query_params.get('download_token'),
+            denied_status=status.HTTP_403_FORBIDDEN,
+        )
+        if auth_error:
+            return auth_error
+
+        resolution = request.query_params.get('resolution', '').strip().lower() or 'download'
+        resolution_error = _validate_download_resolution(gallery, resolution)
+        if resolution_error:
+            return resolution_error
+
+        # A set scope must name a set of THIS gallery. An unknown/foreign/
+        # malformed id is rejected rather than silently widened to the whole
+        # gallery, so the client never gets a different download than the
+        # one they asked for.
+        photo_set = None
+        if request.query_params.get('set', '').strip():
+            photo_set = _get_photo_set(gallery, request.query_params.get('set'))
+            if photo_set is None:
+                return Response({'error': 'Photo set not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         # The public gallery only exposes READY media. Match that contract for
         # a collection download so failed/pending uploads never become ZIP
         # entries. PublicPhotoDownloadView supports both image and video
         # originals, so both ready media types are included here too.
-        assets = list(MediaAsset.objects.filter(
+        assets_qs = MediaAsset.objects.filter(
             gallery=gallery,
             processing_status=MediaAsset.ProcessingStatus.READY,
             media_type__in=[MediaAsset.MediaType.IMAGE, MediaAsset.MediaType.VIDEO],
-        ).exclude(original_file=''))
+        ).exclude(original_file='')
+        if photo_set:
+            assets_qs = assets_qs.filter(photo_set=photo_set)
+        assets = list(assets_qs)
         if not assets:
             return Response({'error': 'No ready media is available to download.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -957,15 +1170,12 @@ class PublicGalleryDirectDownloadView(PublicGalleryDownloadView):
             added_asset_count = 0
             with zipfile.ZipFile(temp_zip_path, 'w', compression=zipfile.ZIP_STORED) as zip_file:
                 for asset in assets:
-                    source_field, _ = _get_client_download_source(asset)
-                    safe_name = sanitize_download_filename(asset.original_name, fallback=str(asset.id))
-                    entry_name = safe_name
-                    base, ext = os.path.splitext(safe_name)
-                    suffix = 1
-                    while entry_name in used_names:
-                        entry_name = f'{base}_{suffix}{ext}'
-                        suffix += 1
-                    used_names.add(entry_name)
+                    source_field = _resolve_zip_source(asset, resolution)
+                    if not source_field:
+                        continue
+                    entry_name = _unique_zip_entry_name(
+                        _zip_entry_base_name(asset, source_field, resolution), used_names
+                    )
 
                     try:
                         source_field.open('rb')
@@ -975,7 +1185,7 @@ class PublicGalleryDirectDownloadView(PublicGalleryDownloadView):
                         added_asset_count += 1
                     except Exception:
                         logger.exception('Failed to add asset %s to public ZIP for gallery %s', asset.id, gallery.id)
-                        used_names.discard(entry_name)
+                        used_names.discard(entry_name.lower())
                     finally:
                         source_field.close()
 
@@ -983,13 +1193,17 @@ class PublicGalleryDirectDownloadView(PublicGalleryDownloadView):
                 os.remove(temp_zip_path)
                 return Response({'error': 'No ready media is available to download.'}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Logged only now — after every gate passed and the archive was
+            # actually built — so a refused or failed attempt never appears
+            # in the photographer's Download Activity.
             DownloadLog.objects.create(
                 gallery=gallery,
-                email=None,
-                ip_address=self._get_client_ip(request),
+                email=authorization.email,
+                ip_address=_get_client_ip(request),
                 download_type=DownloadLog.DownloadType.GALLERY,
-                resolution=DownloadLog.Resolution.DOWNLOAD,
-                pin_verified=pin_verified,
+                resolution=resolution,
+                pin_verified=authorization.pin_verified,
+                photo_set=photo_set,
             )
 
             def file_iterator(file_path, chunk_size=65536):
@@ -1004,7 +1218,8 @@ class PublicGalleryDirectDownloadView(PublicGalleryDownloadView):
                         pass
 
             response = StreamingHttpResponse(file_iterator(temp_zip_path), content_type='application/zip')
-            safe_zip_name = sanitize_download_filename(f'{gallery.slug}.zip', fallback='gallery.zip')
+            zip_stem = f'{gallery.slug}-{photo_set.name}' if photo_set else gallery.slug
+            safe_zip_name = sanitize_download_filename(f'{zip_stem}.zip', fallback='gallery.zip')
             response['Content-Disposition'] = f'attachment; filename="{safe_zip_name}"'
             return response
         except Exception:
@@ -1129,10 +1344,11 @@ class PublicVideoStreamView(APIView):
         return FileResponse(video_field)
     
 
-class PublicPhotoDownloadView(APIView):
+class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
     """
     GET /api/v1/public/{username}/{slug}/photo/{photo_id}/download/
-    GET .../download/?token=<access_token>&resolution=web|download|original&pin=1234
+    GET .../download/?token=<unlock token>&download_token=<download access token>
+                     &resolution=web|download|original
 
     Streams ONE file (image OR video — despite the URL saying "photo",
     nothing here restricts media_type; PublicMediaAssetSerializer.download_url
@@ -1141,12 +1357,15 @@ class PublicPhotoDownloadView(APIView):
     across browsers and storage backends, so it's what download_url
     always points to — never a bare S3/disk URL.
 
-    Deliberately does NOT require an email (unlike the bulk ZIP endpoint).
-    A single-photo hover/lightbox download is meant to be frictionless once
-    a gallery is unlocked; the "Download All" button keeps the email-capture
-    step for lead generation. It DOES still respect the gallery's optional
-    download PIN (query param, since this is a plain <a href> GET, not a
-    JSON POST — same convention as ?token=).
+    Authorization is entirely server-side. A client chooses Download in the
+    UI, which first calls POST .../download-access/ (email + PIN when the
+    gallery needs them) and then points this plain <a href> GET at the file
+    with the short-lived `download_token` it got back — so email/PIN are
+    asked once per session, not once per photo, and the PIN never sits in a
+    URL. The email travels inside that token and is recorded on the
+    DownloadLog row. A raw `?pin=` is still accepted (and held to the tight
+    brute-force throttle) for scripted callers. A gallery with no PIN stays
+    reachable without a token; that anonymous download logs email=None.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -1188,24 +1407,13 @@ class PublicPhotoDownloadView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED
                 )
 
-        pin_verified = False
-        if gallery.download_pin_hash:
-            pin = request.query_params.get('pin', '').strip()
-            if not pin:
-                return Response(
-                    {'error': 'A download PIN is required for this gallery.', 'code': 'pin_required'},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-            try:
-                valid_pin = bcrypt.checkpw(pin.encode('utf-8'), gallery.download_pin_hash.encode('utf-8'))
-            except Exception:
-                valid_pin = False
-            if not valid_pin:
-                return Response(
-                    {'error': 'Incorrect download PIN.', 'code': 'invalid_pin'},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-            pin_verified = True
+        authorization, auth_error = authorize_download(
+            gallery,
+            pin=request.query_params.get('pin'),
+            download_token=request.query_params.get('download_token'),
+        )
+        if auth_error:
+            return auth_error
 
         try:
             asset = MediaAsset.objects.get(id=photo_id, gallery=gallery)
@@ -1213,8 +1421,9 @@ class PublicPhotoDownloadView(APIView):
             return Response({'error': 'Photo not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         resolution = request.query_params.get('resolution', 'download').strip().lower()
-        if resolution not in ('web', 'download', 'original'):
-            resolution = 'download'
+        resolution_error = _validate_download_resolution(gallery, resolution)
+        if resolution_error:
+            return resolution_error
 
         # 'web' prefers the smaller, already-generated derivative — the
         # display WebP for an image, the H.264 playback MP4 for a video —
@@ -1267,8 +1476,8 @@ class PublicPhotoDownloadView(APIView):
         # that turned out to be unavailable.
         DownloadLog.objects.create(
             gallery=gallery,
-            email=None,
-            ip_address=self._get_client_ip(request),
+            email=authorization.email,
+            ip_address=_get_client_ip(request),
             media_asset=asset,
             download_type=(
                 DownloadLog.DownloadType.VIDEO
@@ -1276,7 +1485,7 @@ class PublicPhotoDownloadView(APIView):
                 else DownloadLog.DownloadType.PHOTO
             ),
             resolution=resolution,
-            pin_verified=pin_verified,
+            pin_verified=authorization.pin_verified,
         )
 
         response = FileResponse(
@@ -1286,12 +1495,6 @@ class PublicPhotoDownloadView(APIView):
             content_type='application/octet-stream',
         )
         return response
-
-    def _get_client_ip(self, request):
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            return x_forwarded_for.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR')
 
 
 class PublicPhotographerPortfolioView(APIView):
@@ -1319,6 +1522,10 @@ class PublicPhotographerPortfolioView(APIView):
         # as public photographer portfolios; excluding them here is the
         # same "return 404, don't distinguish why" pattern this app
         # already uses everywhere else to avoid enumeration.
+        # A photographer who turned their public portfolio off (Settings →
+        # Privacy) gets the same 404 as a nonexistent one, so the page can't be
+        # used to learn that the account exists. Individual gallery links are
+        # separate routes and keep following each gallery's own settings.
         photographer = get_object_or_404(
             User.objects.filter(
                 is_active=True, is_staff=False, is_superuser=False, portfolio_public=True
@@ -1345,7 +1552,7 @@ class PublicPhotographerPortfolioView(APIView):
                 is_active=True,
                 is_password_protected=False,
             )
-            .select_related('cover_photo')
+            .select_related('cover_photo', 'photographer')
             .annotate(photo_count=Count('assets'))
             .order_by('-created_at')
         )

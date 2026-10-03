@@ -17,6 +17,38 @@ RESERVED_GALLERY_SLUGS = {
     'set-download-pin', 'favorites', 'download-logs', 'sets',
 }
 
+DOWNLOAD_SIZE_VALUES = {'download', 'web'}
+
+
+def normalize_download_settings(value):
+    """Validate the compact download-policy block stored in design_settings."""
+    if not isinstance(value, dict):
+        raise serializers.ValidationError('downloads must be an object.')
+
+    allowed_sizes = value.get('allowed_sizes')
+    if not isinstance(allowed_sizes, list) or not allowed_sizes:
+        raise serializers.ValidationError({
+            'allowed_sizes': 'Choose at least one download size.'
+        })
+    if any(not isinstance(size, str) or size not in DOWNLOAD_SIZE_VALUES for size in allowed_sizes):
+        raise serializers.ValidationError({
+            'allowed_sizes': 'Each size must be "download" or "web".'
+        })
+    if len(set(allowed_sizes)) != len(allowed_sizes):
+        raise serializers.ValidationError({
+            'allowed_sizes': 'Each download size may only be selected once.'
+        })
+    if 'require_email' in value and not isinstance(value['require_email'], bool):
+        raise serializers.ValidationError({
+            'require_email': 'require_email must be true or false.'
+        })
+    return {
+        'allowed_sizes': allowed_sizes,
+        # Frictionless downloads must be saved explicitly, never inferred
+        # from a missing setting on an older gallery.
+        'require_email': value.get('require_email', True),
+    }
+
 class CoverPhotoSerializer(serializers.ModelSerializer):
     """Read-only. Returns highly compact cover photo metadata."""
     class Meta:
@@ -139,28 +171,15 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
         }
 
     def get_photos(self, obj):
-        try:
-            # 1. Try all common reverse relationship names from Gallery -> MediaAsset
-            for rel_name in ['assets', 'photos', 'media', 'media_assets', 'mediaasset_set']:
-                manager = getattr(obj, rel_name, None)
-                if manager and hasattr(manager, 'all'):
-                    qs = manager.all()
-                    if qs.exists():
-                        if hasattr(qs.model, 'is_active'):
-                            qs = qs.filter(is_active=True)
-                        return MediaAssetSimpleSerializer(qs[:20], many=True, context=self.context).data
-
-            # 2. Try direct filtering via MediaAsset model fields if they point to gallery
-            for fk_field in ['gallery', 'collection', 'folder']:
-                if hasattr(MediaAsset, fk_field):
-                    qs = MediaAsset.objects.filter(**{fk_field: obj})
-                    if qs.exists():
-                        if hasattr(MediaAsset, 'is_active'):
-                            qs = qs.filter(is_active=True)
-                        return MediaAssetSimpleSerializer(qs[:20], many=True, context=self.context).data
-        except Exception:
-            pass
-        return []
+        """
+        The first 20 assets (MediaAsset's own ordering) for the Design page's
+        preview strip. This used to probe several reverse-relation names and
+        run `.exists()` before fetching — two queries (plus a lazy gallery
+        lookup per asset) for what is one bounded read through `assets`.
+        """
+        return MediaAssetSimpleSerializer(
+            obj.assets.all()[:20], many=True, context=self.context
+        ).data
 
     def get_cover_url(self, obj):
         request = self.context.get('request')
@@ -341,6 +360,14 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         value = dict(value)
         existing = (self.instance.design_settings or {}) if self.instance else {}
         existing_block = existing.get('watermark') if isinstance(existing, dict) else None
+        existing_downloads = existing.get('downloads') if isinstance(existing, dict) else None
+
+        if 'downloads' in value:
+            value['downloads'] = normalize_download_settings(value['downloads'])
+        elif existing_downloads is not None:
+            # Design-page updates must not erase download rules saved on the
+            # Settings page.
+            value['downloads'] = existing_downloads
 
         if 'watermark' not in value:
             if existing_block is not None:

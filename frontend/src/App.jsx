@@ -1,6 +1,6 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/App.jsx
 import React, { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { ToastProvider } from "./components/ui/Toast";
 import ProtectedRoute from "./components/shared/ProtectedRoute";
@@ -29,12 +29,26 @@ import DownloadPage from "./pages/client/DownloadPage";
 import PricingPage from "./pages/subscription/PricingPage";
 import LandingPage from "./pages/LandingPage";
 
-export default function App() {
+/**
+ * Restores the photographer's session on page load — except on the public
+ * client-gallery routes (/g/...). Those visitors are guests by definition and
+ * never need a session; asking anyway cost every client two requests that
+ * always failed (GET /auth/me/ -> 401, then a token refresh -> 401) and a pair
+ * of console errors. init() is idempotent, so if the visitor later navigates
+ * (in-app) to a page that does need the session, it simply runs then.
+ */
+function AuthBootstrap() {
   const init = useAuthStore((s) => s.init);
+  const isGuestGalleryRoute = useLocation().pathname.startsWith("/g/");
 
   useEffect(() => {
-    init();
-  }, [init]);
+    if (!isGuestGalleryRoute) init();
+  }, [init, isGuestGalleryRoute]);
+
+  return null;
+}
+
+export default function App() {
 
   return (
     <ToastProvider>
@@ -44,6 +58,7 @@ export default function App() {
           v7_relativeSplatPath: true,
         }}
       >
+        <AuthBootstrap />
         <Routes>
           {/* Public */}
           <Route path="/" element={<LandingPage />} />

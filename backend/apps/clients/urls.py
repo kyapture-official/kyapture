@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     PublicGalleryView,
     GalleryUnlockView,
+    PublicDownloadAccessView,
     PublicGalleryDownloadView,
     PublicGalleryDirectDownloadView,
     PublicPhotoDownloadView,
@@ -20,6 +21,15 @@ urlpatterns = [
         '<str:username>/<slug:slug>/unlock/',
         GalleryUnlockView.as_view(),
         name='gallery-unlock'
+    ),
+
+    # Route: POST /api/v1/public/{username}/{slug}/download-access/
+    # Explicit-download step one: verifies PIN/email, returns a short-lived
+    # download_token. Never called while merely browsing a gallery.
+    path(
+        '<str:username>/<slug:slug>/download-access/',
+        PublicDownloadAccessView.as_view(),
+        name='gallery-download-access'
     ),
 
     # Route: POST /api/v1/public/{username}/{slug}/download/

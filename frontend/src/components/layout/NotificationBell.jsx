@@ -10,6 +10,7 @@ import { timeAgo } from '../../utils/formatters'
 // failing/offline API is never hammered.
 const POLL_MS = 60 * 1000
 const MAX_BACKOFF_MS = 5 * 60 * 1000
+const FOCUS_REFETCH_GUARD_MS = 5 * 1000
 
 const KIND_ICON = {
   download: Download,
@@ -55,8 +56,10 @@ export default function NotificationBell() {
     let timer = null
     let delay = POLL_MS
     let stopped = false
+    let lastFetchAt = 0
 
     const refreshCount = async () => {
+      lastFetchAt = Date.now()
       try {
         const data = await notificationsApi.unreadCount()
         if (!stopped && isMountedRef.current) setUnread(data.unread_count)
@@ -73,8 +76,10 @@ export default function NotificationBell() {
         schedule()
       }, delay)
     }
+    // Returning to a tab fires BOTH `visibilitychange` and `focus`; one fetch
+    // is enough, so anything within a few seconds of the last fetch is skipped.
     const onVisible = () => {
-      if (document.visibilityState === 'visible') refreshCount()
+      if (document.visibilityState === 'visible' && Date.now() - lastFetchAt > FOCUS_REFETCH_GUARD_MS) refreshCount()
     }
 
     refreshCount()

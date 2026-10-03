@@ -1,0 +1,11 @@
+# KYAPTURE AGENT RULES (read before every task)
+- Branch: feature/landing-page-redesign. Never merge to main. Never touch cPanel/AWS/production unless the task says so.
+- Never touch benchmark/, benchmark-artifacts/, DB volumes, Docker volumes.
+- Trace existing code first. Reuse existing models/APIs/helpers. No duplicate endpoints, models or systems.
+- Backend is authoritative (auth, ownership, plan entitlement). Frontend only presents.
+- No fake UI: every button real; success toast only after real API success; no decorative toggles.
+- Preserve all earlier tasks. Smallest safe change set. No unrelated refactors.
+- Originals stay private and byte-preserved. Never expose private storage paths.
+- Claims need evidence (test output, measured numbers). Never write 'optimized' without numbers.
+- Always run relevant backend tests + frontend build. Browser-verify every UI change (desktop + 390px).
+- Final report max 25 lines: files changed, endpoints/models changed, tests run + result, browser QA, known gaps, git diff --stat. Then STOP.

@@ -13,11 +13,17 @@ from decimal import Decimal
 import piexif
 from PIL import Image as PILImage, ImageChops, ImageStat
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.core.utils import strip_exif_gps, process_image_pipeline
+from apps.core.utils import (
+    DOWNLOAD_MAX_EDGE,
+    _make_download_master,
+    process_image_pipeline,
+    strip_exif_gps,
+)
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
 from apps.photos.tasks import _auto_assign_cover_if_missing, process_photo_asset
@@ -129,6 +135,7 @@ class ProcessImagePipelineTestCase(APITestCase):
         self.assertEqual(download_file.content_type, "image/jpeg")
         download_file.seek(0)
         self.assertEqual(PILImage.open(download_file).size, (3000, 2000))
+        self.assertLess(download_file.size, len(raw))
 
     def test_jpeg_download_master_keeps_dimensions_and_reduces_size(self):
         raw = _build_photographic_jpeg()
@@ -149,6 +156,58 @@ class ProcessImagePipelineTestCase(APITestCase):
         mean_square_error = sum(value ** 2 for value in channel_rms) / len(channel_rms)
         psnr = 20 * math.log10(255 / math.sqrt(mean_square_error))
         self.assertGreater(psnr, 30, "Download Master must retain strong visual fidelity")
+
+    def test_jpeg_download_master_uses_lower_quality_when_psnr_allows(self):
+        raw = _build_photographic_jpeg(size=(6000, 4000))
+        download_file = process_image_pipeline(
+            SimpleUploadedFile("efficient-camera.jpg", raw, content_type="image/jpeg")
+        )[3]
+
+        download_file.seek(0)
+        optimized = PILImage.open(download_file)
+        source = PILImage.open(io.BytesIO(raw)).convert("RGB")
+        source.thumbnail((DOWNLOAD_MAX_EDGE, DOWNLOAD_MAX_EDGE), PILImage.Resampling.LANCZOS)
+        difference = ImageChops.difference(source, optimized.convert("RGB"))
+        channel_rms = ImageStat.Stat(difference).rms
+        mean_square_error = sum(value ** 2 for value in channel_rms) / len(channel_rms)
+        psnr = 20 * math.log10(255 / math.sqrt(mean_square_error))
+
+        self.assertEqual(optimized.size, (3600, 2400))
+        self.assertLess(download_file.size, len(raw))
+        self.assertGreaterEqual(psnr, 35.0)
+
+    def test_large_jpeg_download_master_is_bounded_to_3600px(self):
+        raw = _build_photographic_jpeg(size=(6000, 4000))
+        download_file = process_image_pipeline(
+            SimpleUploadedFile("large-camera.jpg", raw, content_type="image/jpeg")
+        )[3]
+
+        self.assertIsNotNone(download_file)
+        download_file.seek(0)
+        optimized = PILImage.open(download_file)
+        self.assertEqual(max(optimized.size), DOWNLOAD_MAX_EDGE)
+        self.assertLess(download_file.size, len(raw))
+
+    def test_download_master_does_not_upscale_source_at_or_below_limit(self):
+        raw = _build_photographic_jpeg(size=(3000, 2000))
+        download_file = process_image_pipeline(
+            SimpleUploadedFile("bounded-camera.jpg", raw, content_type="image/jpeg")
+        )[3]
+
+        self.assertIsNotNone(download_file)
+        download_file.seek(0)
+        self.assertEqual(PILImage.open(download_file).size, (3000, 2000))
+
+    def test_download_master_falls_back_when_no_candidate_beats_source_size(self):
+        image = PILImage.new("RGB", (80, 60), color=(20, 120, 200))
+        result = _make_download_master(
+            image,
+            "JPEG",
+            "tiny",
+            original_size=1,
+        )
+
+        self.assertIsNone(result)
 
     def test_png_download_master_is_lossless_and_retains_transparency(self):
         image = PILImage.new("RGBA", (120, 80), (10, 20, 30, 0))
@@ -177,23 +236,30 @@ class ProcessImagePipelineTestCase(APITestCase):
 
         f1 = SimpleUploadedFile("a.jpg", raw, content_type="image/jpeg")
         d1, m1, t1, download1, h1 = process_image_pipeline(f1)
-        d1.seek(0); m1.seek(0); t1.seek(0); download1.seek(0)
+        d1.seek(0); m1.seek(0); t1.seek(0)
+        if download1:
+            download1.seek(0)
 
         f2 = SimpleUploadedFile("a.jpg", raw, content_type="image/jpeg")
         d2, m2, t2, download2, h2 = process_image_pipeline(f2)
-        d2.seek(0); m2.seek(0); t2.seek(0); download2.seek(0)
+        d2.seek(0); m2.seek(0); t2.seek(0)
+        if download2:
+            download2.seek(0)
 
         self.assertEqual(d1.read(), d2.read())
         self.assertEqual(m1.read(), m2.read())
         self.assertEqual(t1.read(), t2.read())
-        self.assertEqual(download1.read(), download2.read())
+        self.assertEqual(
+            download1.read() if download1 else None,
+            download2.read() if download2 else None,
+        )
         self.assertEqual(h1, h2)
 
     def test_small_image_is_never_upscaled(self):
         raw = _build_plain_jpeg(size=(100, 80))
         f = SimpleUploadedFile("small.jpg", raw, content_type="image/jpeg")
         display_file, medium_file, thumb_file, download_file, _ = process_image_pipeline(f)
-        for derivative in (display_file, medium_file, thumb_file, download_file):
+        for derivative in (display_file, medium_file, thumb_file):
             derivative.seek(0)
             img = PILImage.open(derivative)
             # thumbnail() only ever shrinks — a 100x80 source must stay
@@ -201,6 +267,18 @@ class ProcessImagePipelineTestCase(APITestCase):
             # grow to fill the 640/1280/2048 ceiling.
             self.assertLessEqual(img.size[0], 100)
             self.assertLessEqual(img.size[1], 80)
+        if download_file:
+            download_file.seek(0)
+            self.assertLessEqual(max(PILImage.open(download_file).size), 100)
+
+    def test_pipeline_preserves_original_bytes(self):
+        raw = _build_photographic_jpeg(size=(2400, 1600))
+        source = SimpleUploadedFile("original.jpg", raw, content_type="image/jpeg")
+
+        process_image_pipeline(source)
+
+        source.seek(0)
+        self.assertEqual(source.read(), raw)
 
 
 class ImageUploadIntegrationTestCase(APITestCase):
@@ -250,7 +328,8 @@ class ImageUploadIntegrationTestCase(APITestCase):
         self.assertTrue(asset.display_file)
         self.assertTrue(asset.medium_file)
         self.assertTrue(asset.thumbnail_file)
-        self.assertTrue(asset.download_file)
+        if asset.download_file:
+            self.assertLessEqual(asset.download_file.size, asset.original_file.size)
         self.assertTrue(asset.blurhash)
         self.assertEqual(asset.width, 1600)
         self.assertEqual(asset.height, 1200)
@@ -373,6 +452,47 @@ class ImageUploadIntegrationTestCase(APITestCase):
         asset.refresh_from_db()
         self.assertTrue(asset.download_file)
         self.assertEqual(asset.display_file.name, display_name_before)
+
+    def test_download_master_backfill_preserves_original_and_web_tiers(self):
+        raw = _build_photographic_jpeg(size=(4000, 3000))
+        asset = MediaAsset.objects.create(
+            gallery=self.gallery,
+            media_type=MediaAsset.MediaType.IMAGE,
+            original_file=SimpleUploadedFile("backfill.jpg", raw, content_type="image/jpeg"),
+            original_name="backfill.jpg",
+            file_size=len(raw),
+            title="backfill",
+            processing_status=MediaAsset.ProcessingStatus.READY,
+            order=Decimal("1.0"),
+        )
+        asset.display_file.save("display.webp", SimpleUploadedFile("display.webp", b"display"), save=False)
+        asset.medium_file.save("medium.webp", SimpleUploadedFile("medium.webp", b"medium"), save=False)
+        asset.thumbnail_file.save("thumbnail.webp", SimpleUploadedFile("thumbnail.webp", b"thumbnail"), save=False)
+        old_download = io.BytesIO()
+        PILImage.open(io.BytesIO(raw)).save(old_download, format="JPEG", quality=95)
+        asset.download_file.save(
+            "old-download.jpg",
+            SimpleUploadedFile("old-download.jpg", old_download.getvalue(), content_type="image/jpeg"),
+            save=False,
+        )
+        asset.save()
+        original_name = asset.original_file.name
+        original_bytes = asset.original_file.read()
+        display_name = asset.display_file.name
+        medium_name = asset.medium_file.name
+        thumbnail_name = asset.thumbnail_file.name
+
+        call_command("backfill_download_masters", verbosity=0)
+
+        asset.refresh_from_db()
+        asset.download_file.open("rb")
+        regenerated = PILImage.open(asset.download_file)
+        self.assertLessEqual(max(regenerated.size), DOWNLOAD_MAX_EDGE)
+        self.assertEqual(asset.original_file.name, original_name)
+        self.assertEqual(asset.original_file.read(), original_bytes)
+        self.assertEqual(asset.display_file.name, display_name)
+        self.assertEqual(asset.medium_file.name, medium_name)
+        self.assertEqual(asset.thumbnail_file.name, thumbnail_name)
 
     def test_failed_processing_marks_asset_failed_and_is_retryable(self):
         """

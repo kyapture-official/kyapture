@@ -646,18 +646,65 @@ The client saves this access_token in sessionStorage. To query the private galle
   "has_download_access": true
 }
 
+Authorize a Download (explicit client action)
+
+POST /api/v1/public/{username}/{slug}/download-access/
+
+Opening or browsing a gallery never requires a download PIN or email. A client
+authorizes a download only when they choose Download. The gallery password and
+the download PIN are separate gates: a password-protected gallery still needs
+its unlock token (`Authorization: Bearer <access_token>` or `token` in the body).
+Throttled like the unlock endpoint (5/minute) because it is where a PIN can be
+guessed.
+
+Request Body — JSON
+
+{
+  "email": "guest@example.com",   // required unless the unlock session already has one
+  "pin": "4821"                   // required only when the gallery has a download PIN
+}
+
+Success Response — 200 OK
+
+{
+  "download_token": "<signed, short-lived>",
+  "expires_in": 7200,
+  "email": "guest@example.com",
+  "pin_verified": true
+}
+
+The `download_token` is a signed token bound to this gallery and to the current
+PIN (changing or clearing the PIN invalidates it), valid for
+`DOWNLOAD_ACCESS_TTL_SECONDS` (default 2 hours). Pass it as `download_token` to
+the download endpoints below so email/PIN are asked once per visit, not per
+photo. Errors use `{ "error": "...", "code": "..." }` with codes: `pin_required`,
+`invalid_pin`, `email_required`, `invalid_email`, `session_required`,
+`downloads_disabled`, `download_access_expired`.
+
+Download One Photo
+
+GET /api/v1/public/{username}/{slug}/photo/{photo_id}/download/?download_token=<token>&resolution=download|web|original
+
+Streams one file as an attachment. `resolution` defaults to `download` (the
+Download Master, shown to clients as "High Resolution"); `web` is the display
+derivative. A raw `?pin=` is still accepted for scripted callers but is held to
+the 5/minute PIN-guess throttle. The activity log records the email carried by
+the token.
+
 Download All Public Gallery Media
 
-GET /api/v1/public/{username}/{slug}/download-all/?token=<access_token>
+GET /api/v1/public/{username}/{slug}/download-all/?token=<unlock>&download_token=<token>&resolution=download|web|original&set=<photo_set_id>
 
-Streams a ZIP of READY media when downloads are enabled. JPEG and PNG images
-use the private, full-resolution Download Master; videos and legacy/special
-images without a master retain their original source. Pass `resolution=original`
-to the existing POST download endpoint for an authorized original archive.
-Password-protected galleries require the active unlock token. Galleries with a
-download PIN continue to use the existing POST download flow so the PIN can be
-verified before a browser download starts. The response is an attachment named
-`{gallery-slug}.zip` and creates a gallery `DownloadLog` entry.
+Streams a ZIP of READY media when downloads are enabled. `set` limits the
+archive to one photo set of this gallery (an unknown/foreign set id is a 404,
+never widened to the whole gallery). JPEG and PNG images use the private,
+full-resolution Download Master by default; videos and legacy/special images
+without a master retain their original source; `web` entries carry the
+derivative's real extension. Password-protected galleries require the active
+unlock token; galleries with a download PIN require a valid `download_token`.
+Entry names are sanitized and de-duplicated case-insensitively. The response is
+an attachment named `{gallery-slug}[-{set}].zip` and creates a gallery
+`DownloadLog` entry (email, set, resolution, pin_verified).
 
 Error Response — 401 Unauthorized
 
@@ -668,53 +715,6 @@ Error Response — 401 Unauthorized
   }
 }
 
-💳 5. Billing & Subscription App (apps/subscriptions)
-
-List Subscription Plans
-
-GET /api/v1/subscriptions/plans/
-
-Lists available platforms and billing rules.
-
-Authentication: None (authentication_classes = [])
-
-Success Response — 200 OK
-
-[
-  {
-    "id": "0190106a-ef1a-7b3c-b2f2-10e82f1217e9",
-    "name": "Basic",
-    "price": "19.99",
-    "max_galleries": 3,
-    "max_photos_per_gallery": 100,
-    "storage_gb": 5,
-    "storage_bytes": 5368709120
-  }
-]
-
-My Subscription
-
-GET /api/v1/subscriptions/my-subscription/
-
-Retrieves the authenticated photographer's subscription limits and usage metrics.
-
-Authentication: Required (IsAuthenticated)
-
-Success Response — 200 OK
-
-Identical structure to the /stats/ mapping.
-
-Submit Manual Payment
-
-POST /api/v1/subscriptions/payments/
-
-Submits bank, eSewa, or Khalti transaction screenshot receipts for review.
-
-Authentication: Required (IsAuthenticated)
-
-Important: The registered endpoint is /api/v1/subscriptions/payments/, not /api/v1/subscriptions/pay/.
-
-Request Body — multipart/form-data
 ⚙️ Settings, Security & Account (apps/users)
 
 GET / PATCH /api/v1/auth/settings/
@@ -1151,3 +1151,10 @@ The payments endpoint is also used for:
 GET /api/v1/subscriptions/payments/
 
 to list payment history.
+
+## Performance notes (Task 5)
+
+- **Public gallery cover tiers.** `GET /api/v1/public/{username}/{slug}/` now also returns `cover_medium_url` — the 1280px WebP of the same cover as `cover_url` (2048px) — or `null` when the cover is a video poster or has no medium derivative. The client page uses the pair as a `srcset` so phones/small windows don't download the 2048px file.
+- **Malformed `?set=`.** On both `GET /api/v1/public/{username}/{slug}/` and `.../photos/`, a `set` value that is not a UUID is treated like a set that doesn't exist: an empty page (HTTP 200), never a 500.
+- **JSON compression.** `application/json` responses are gzip-encoded when the client sends `Accept-Encoding: gzip` (`Vary: Accept-Encoding`). File downloads, ZIP streams and media are never content-encoded.
+- **Query behaviour (guarded by `apps/galleries/tests/test_query_efficiency.py`).** The dashboard gallery list/search, the public portfolio, the owner gallery detail and the public gallery page issue a constant number of queries regardless of how many galleries/photos exist.

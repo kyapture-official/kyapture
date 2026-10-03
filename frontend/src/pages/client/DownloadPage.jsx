@@ -1,153 +1,41 @@
 // File Location: frontend/src/pages/client/DownloadPage.jsx
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useParams, Link, useLocation } from "react-router-dom";
 import { useClientStore } from "../../store/clientStore";
 import ClientLayout from "../../components/layout/ClientLayout";
-import Button from "../../components/ui/Button";
-import Spinner from "../../components/ui/Spinner";
-import api from "../../api/axiosInstance";
+import DownloadForm from "../../components/client/DownloadForm";
 
-// ── STATUS MACHINE ────────────────────────────────────────────────────────────
-//  idle      → form shown, waiting for email input
-//  loading   → ZIP compile + binary stream in progress
-//  success   → file saved to browser, show confirmation
-//  forbidden → 401/403 from backend (downloads disabled or session expired)
-//  error     → network failure or unexpected server error
-// ─────────────────────────────────────────────────────────────────────────────
-
+/**
+ * Standalone download page for /g/:username/:slug/download — kept so deep
+ * links keep working. The in-gallery Download button uses DownloadModal;
+ * both render the same DownloadForm, so there is one download flow:
+ * authorize on the server (email, plus the PIN when the gallery needs one),
+ * then stream the file/ZIP via a plain download URL.
+ *
+ * It does not need router state to know whether a PIN exists: if the
+ * gallery has one and the form wasn't told, the server's pin_required
+ * answer makes the form reveal the PIN field.
+ */
 export default function DownloadPage() {
   const { username, slug } = useParams();
   const location = useLocation();
-  const selectedAssetIds = location.state?.selectedIds || [];
-  const hasDownloadPin = Boolean(location.state?.hasDownloadPin);
   const setId = location.state?.setId || null;
+  const hasDownloadPin = Boolean(location.state?.hasDownloadPin);
 
   // Unique session key prevents cross-tenant token collisions on identical gallery slugs
   const sessionKey = `${username}:${slug}`;
-  const { sessions } = useClientStore();
-  const galleryToken = sessions[sessionKey] ?? null;
-
-  const [email, setEmail] = useState("");
-  const [pin, setPin] = useState("");
-  const [resolution, setResolution] = useState("original");
-  const [status, setStatus] = useState("idle");
-  const [progressMsg, setProgressMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [pinError, setPinError] = useState("");
-
-  // Prevent double-scroll on mobile while the stream is loading
-  useEffect(() => {
-    if (status === "loading") {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.removeProperty("overflow");
-    }
-    return () => document.body.style.removeProperty("overflow");
-  }, [status]);
-
-  const handleRequest = async (e) => {
-    e.preventDefault();
-    if (!email.trim() || status === "loading") return;
-    if (hasDownloadPin && !pin.trim()) {
-      setPinError("A download PIN is required for this gallery.");
-      return;
-    }
-
-    setStatus("loading");
-    setProgressMsg("Connecting to download server…");
-    setErrorMsg("");
-    setPinError("");
-
-    try {
-      setProgressMsg("Compiling photos and generating ZIP archive…");
-
-      // Dispatches request directly to the binary download API endpoint.
-      const response = await api.post(
-        `/public/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/download/`,
-        {
-          email: email.trim(),
-          token: galleryToken || undefined,
-          asset_ids: selectedAssetIds,
-          set_id: setId || undefined,
-          resolution,
-          pin: hasDownloadPin ? pin.trim() : undefined,
-        },
-
-        {
-          responseType: "blob", // Forces Axios to process the incoming response as binary ZIP data
-          timeout: 120000, // 2-minute timeout boundary for large zip compilations
-          onDownloadProgress: (evt) => {
-            if (evt.total) {
-              const pct = Math.round((evt.loaded * 100) / evt.total);
-              setProgressMsg(`Downloading ZIP package (${pct}%)…`);
-            } else {
-              setProgressMsg("Downloading ZIP package…");
-            }
-          },
-        },
-      );
-
-      setProgressMsg("Saving file to your device…");
-
-      // Convert the binary stream response directly to a temporary Object URL download link
-      const blob = new Blob([response.data], { type: "application/zip" });
-      const downloadURL = window.URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-      link.href = downloadURL;
-      link.setAttribute("download", `${slug}-photos.zip`);
-      document.body.appendChild(link);
-      link.click();
-
-      // Meticulous layout and memory cleanup
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadURL);
-
-      setStatus("success");
-    } catch (err) {
-      // Decode error payloads safely since responseType is 'blob'
-      let parsedError = null;
-      if (err.response?.data instanceof Blob) {
-        try {
-          const text = await err.response.data.text();
-          parsedError = JSON.parse(text);
-        } catch {
-          parsedError = null;
-        }
-      }
-      const message =
-        parsedError?.error || parsedError?.detail || err.response?.data?.detail || "Something went wrong.";
-      const code = parsedError?.code;
-      const httpStatus = err.response?.status;
-
-      if (code === "pin_required" || code === "invalid_pin") {
-        // Wrong/missing PIN is a recoverable input error, not a dead end —
-        // stay on the form so the client can just try the PIN again.
-        setPinError(message);
-        setStatus("idle");
-      } else if (httpStatus === 401 || httpStatus === 403) {
-        setErrorMsg(message);
-        setStatus("forbidden");
-      } else {
-        setErrorMsg(message === "Something went wrong." ? "Failed to compile your download package." : message);
-        setStatus("error");
-      }
-    } finally {
-      setProgressMsg("");
-    }
-  };
+  const galleryToken = useClientStore((state) => state.sessions[sessionKey]) ?? null;
 
   return (
     <ClientLayout>
-      <div className="max-w-md mx-auto py-24 px-6 text-center animate-fade-up">
-        {/* Dynamic System Icon */}
+      <div className="mx-auto max-w-md animate-fade-up px-6 py-24 text-center">
         <div
-          className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-8 select-none"
+          className="mx-auto mb-8 flex h-20 w-20 select-none items-center justify-center rounded-full"
           style={{ background: "var(--cream2)" }}
         >
           <svg
-            className="w-9 h-9"
+            className="h-9 w-9"
             style={{ color: "var(--sand)" }}
             fill="none"
             stroke="currentColor"
@@ -163,278 +51,33 @@ export default function DownloadPage() {
           </svg>
         </div>
 
-        {/* ── IDLE: Email Lead Capture Form ──────────────────────────────── */}
-        {status === "idle" && (
-          <form
-            onSubmit={handleRequest}
-            className="space-y-6 text-left"
-            noValidate
-          >
-            <div className="text-center mb-8">
-              <h1
-                className="font-serif text-4xl"
-                style={{ color: "var(--ink)" }}
-              >
+        <>
+            <div className="mb-8">
+              <h1 className="font-serif text-4xl" style={{ color: "var(--ink)" }}>
                 Download Gallery
               </h1>
-              <p
-                className="text-sm leading-relaxed mt-3"
-                style={{ color: "var(--muted)" }}
-              >
-                Your photographer has enabled downloads for this collection.
-                Enter your email to receive your photos.
+              <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
+                Choose a size, then confirm your details to start the download.
               </p>
             </div>
-
-            <div className="space-y-1.5">
-              <label
-                htmlFor="download-email"
-                className="block text-xs uppercase tracking-wider font-medium select-none"
-                style={{ color: "var(--muted)" }}
-              >
-                Email Address
-              </label>
-              <input
-                type="email"
-                id="download-email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@email.com"
-                className="block w-full rounded-lg px-4 py-3 text-sm focus:outline-none transition-all duration-200"
-                style={{
-                  border: "1.5px solid var(--warm)",
-                  background: "var(--cream2)",
-                  color: "var(--ink)",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "var(--ink)";
-                  e.target.style.background = "#fff";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "var(--warm)";
-                  e.target.style.background = "var(--cream2)";
-                }}
-              />
-              <p
-                className="text-xs leading-relaxed mt-1"
-                style={{ color: "var(--muted)", fontSize: 10 }}
-              >
-                Your email is shared with the photographer to log this download.
-              </p>
-            </div>
-
-            {/* Web Size vs High Resolution (Phase 3) */}
-            <div className="space-y-1.5">
-              <label
-                className="block text-xs uppercase tracking-wider font-medium select-none"
-                style={{ color: "var(--muted)" }}
-              >
-                Download Quality
-              </label>
-              <div className="flex gap-2">
-                {[
-                  { value: "web", label: "Web Size", hint: "Optimized, smaller files" },
-                  { value: "original", label: "High Resolution", hint: "Full quality originals" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setResolution(opt.value)}
-                    className="flex-1 text-left rounded-lg px-3 py-2.5 transition-all duration-200"
-                    style={{
-                      border: `1.5px solid ${resolution === opt.value ? "var(--ink)" : "var(--warm)"}`,
-                      background: resolution === opt.value ? "#fff" : "var(--cream2)",
-                    }}
-                  >
-                    <span className="block text-xs font-medium" style={{ color: "var(--ink)" }}>
-                      {opt.label}
-                    </span>
-                    <span className="block text-[10px] mt-0.5" style={{ color: "var(--muted)" }}>
-                      {opt.hint}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Download PIN (Phase 3) — only shown when this gallery has one configured */}
-            {hasDownloadPin && (
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="download-pin"
-                  className="block text-xs uppercase tracking-wider font-medium select-none"
-                  style={{ color: "var(--muted)" }}
-                >
-                  Download PIN
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  id="download-pin"
-                  required
-                  maxLength={8}
-                  value={pin}
-                  onChange={(e) => {
-                    setPin(e.target.value.replace(/\D/g, ""));
-                    setPinError("");
-                  }}
-                  placeholder="Enter the PIN your photographer gave you"
-                  className="block w-full rounded-lg px-4 py-3 text-sm focus:outline-none transition-all duration-200"
-                  style={{
-                    border: `1.5px solid ${pinError ? "#dc2626" : "var(--warm)"}`,
-                    background: "var(--cream2)",
-                    color: "var(--ink)",
-                  }}
-                />
-                {pinError && (
-                  <p className="text-xs" style={{ color: "#dc2626" }}>
-                    {pinError}
-                  </p>
-                )}
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full justify-center"
-              disabled={!email.trim() || (hasDownloadPin && !pin.trim())}
-            >
-              Download Now
-            </Button>
-          </form>
-        )}
-
-        {/* ── LOADING: Streaming Progress States ─────────────────────────── */}
-        {status === "loading" && (
-          <div className="space-y-4 py-6" aria-live="polite">
-            <h1 className="font-serif text-4xl" style={{ color: "var(--ink)" }}>
-              Preparing package…
-            </h1>
-            <p
-              className="text-sm leading-relaxed max-w-xs mx-auto"
-              style={{ color: "var(--muted)" }}
-            >
-              We are compiling and packaging your photos. This may take a moment
-              for larger galleries — please keep this tab open.
-            </p>
-            <div className="flex flex-col items-center gap-4 pt-4">
-              <Spinner />
-              {progressMsg && (
-                <span
-                  className="text-xs tracking-wide"
-                  style={{ color: "var(--muted)" }}
-                >
-                  {progressMsg}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── SUCCESS: File Saved ────────────────────────────────────────── */}
-        {status === "success" && (
-          <div className="space-y-6">
-            <div
-              className="w-14 h-14 rounded-full flex items-center justify-center mx-auto"
-              style={{ background: "rgba(74,124,111,0.10)" }}
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--green)"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-
-            <h1 className="font-serif text-4xl" style={{ color: "var(--ink)" }}>
-              Ready!
-            </h1>
-            <p
-              className="text-sm leading-relaxed max-w-sm mx-auto"
-              style={{ color: "var(--muted)" }}
-            >
-              Your photos have been zipped and saved to your device. Check your
-              browser's download folder.
-            </p>
-
+            <DownloadForm
+              username={username}
+              slug={slug}
+              galleryToken={galleryToken}
+              hasDownloadPin={hasDownloadPin}
+              downloadPolicy={location.state?.downloadPolicy}
+              target={{ type: "gallery", setId }}
+              photoSets={location.state?.photoSets || []}
+              photoCount={location.state?.photoCount || 0}
+            />
             <Link
               to={`/g/${username}/${slug}`}
-              className="inline-flex items-center justify-center w-full px-8 py-3.5 rounded-xl text-sm font-medium transition-colors"
-              style={{
-                background: "var(--ink)",
-                color: "var(--cream)",
-                textDecoration: "none",
-              }}
-            >
-              Return to Gallery
-            </Link>
-          </div>
-        )}
-
-        {/* ── FORBIDDEN: 401/403 ────────────────────────────────────────── */}
-        {status === "forbidden" && (
-          <div className="space-y-6">
-            <h1 className="font-serif text-4xl" style={{ color: "var(--ink)" }}>
-              Not Available
-            </h1>
-            <p
-              className="text-sm leading-relaxed max-w-sm mx-auto"
-              style={{ color: "var(--muted)" }}
-            >
-              {errorMsg ||
-                "Downloads are not enabled for this gallery, or your session has expired."}
-            </p>
-            <Link
-              to={`/g/${username}/${slug}`}
-              className="block text-sm underline underline-offset-2"
+              className="mt-8 block text-sm underline underline-offset-2"
               style={{ color: "var(--ink)" }}
             >
               ← Back to gallery
             </Link>
-          </div>
-        )}
-
-        {/* ── ERROR: 5xx / Network Failures ─────────────────────────────── */}
-        {status === "error" && (
-          <div className="space-y-6">
-            <h1 className="font-serif text-4xl" style={{ color: "var(--ink)" }}>
-              Something went wrong
-            </h1>
-            <p
-              className="text-sm leading-relaxed max-w-sm mx-auto"
-              style={{ color: "var(--muted)" }}
-            >
-              {errorMsg ||
-                "We couldn't process your download request. Please try again or contact your photographer."}
-            </p>
-            <div className="flex gap-3 justify-center">
-              <Button onClick={() => setStatus("idle")} variant="secondary">
-                Try again
-              </Button>
-              <Link
-                to={`/g/${username}/${slug}`}
-                className="inline-flex items-center px-5 py-2.5 text-sm rounded-lg transition-colors"
-                style={{
-                  color: "var(--ink)",
-                  border: "1px solid var(--warm)",
-                  textDecoration: "none",
-                }}
-              >
-                Back to gallery
-              </Link>
-            </div>
-          </div>
-        )}
+        </>
       </div>
     </ClientLayout>
   );

@@ -16,7 +16,7 @@ from PIL import Image as PILImage
 
 from django.core.files.base import ContentFile
 from django.utils.text import slugify
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.core.files.uploadedfile import SimpleUploadedFile, InMemoryUploadedFile
 
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -98,6 +98,7 @@ def get_user_subscription_metrics(user):
         "max_photos_per_gallery": None,
         "storage_bytes_limit": 3 * 1024 * 1024 * 1024,  # 3 GB limit
         "allow_video": False,
+        "active_subscription": None,
         "current_galleries_count": 0,
         "current_total_storage_bytes": 0,
     }
@@ -110,6 +111,7 @@ def get_user_subscription_metrics(user):
         )
         plan = active_sub.plan
         limits = {
+            "active_subscription": active_sub,
             "plan_name": plan.name,
             "max_galleries": plan.max_galleries,
             "max_photos_per_gallery": plan.max_photos_per_gallery,
@@ -143,10 +145,17 @@ def get_user_subscription_metrics(user):
     # real storage until the purge task actually deletes them.
     asset_aggregation = MediaAsset.objects.filter(
         gallery__photographer=user,
-    ).aggregate(total_bytes=Sum('file_size'), total_count=Count('id'))
+    ).aggregate(
+        total_bytes=Sum('file_size'),
+        total_count=Count('id'),
+        # The dashboard also shows the count for ACTIVE (non-trashed)
+        # galleries only; folding it into this aggregate saves a second scan.
+        active_count=Count('id', filter=Q(gallery__is_active=True)),
+    )
 
     limits["current_total_storage_bytes"] = asset_aggregation['total_bytes'] or 0
     limits["current_photos_count"] = asset_aggregation['total_count'] or 0
+    limits["active_photos_count"] = asset_aggregation['active_count'] or 0
     return limits
 
 # Magic Byte Signatures for strict JPEG and PNG security verification

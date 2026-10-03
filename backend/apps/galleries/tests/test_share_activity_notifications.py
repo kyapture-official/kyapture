@@ -66,6 +66,32 @@ class Base(APITestCase):
         return self.client_class().get(url, **kwargs)
 
 
+class GalleryPasswordSettingsTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(user=self.owner)
+        self.url = f'/api/v1/galleries/{self.gallery.slug}/set-password/'
+
+    def test_owner_can_enable_then_remove_password_protection(self):
+        enabled = self.client.post(self.url, {'password': 'gallery-secret'}, format='json')
+        self.assertEqual(enabled.status_code, status.HTTP_200_OK, enabled.data)
+        self.assertEqual(enabled.data['has_password'], True)
+        self.gallery.refresh_from_db()
+        self.assertTrue(self.gallery.is_password_protected)
+        self.assertTrue(self.gallery.password_hash)
+
+        removed = self.client.post(self.url, {'password': None}, format='json')
+        self.assertEqual(removed.status_code, status.HTTP_200_OK, removed.data)
+        self.gallery.refresh_from_db()
+        self.assertFalse(self.gallery.is_password_protected)
+        self.assertIsNone(self.gallery.password_hash)
+
+    def test_malformed_password_is_a_clean_400(self):
+        response = self.client.post(self.url, {'password': ['not', 'a', 'string']}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['code'], 'invalid_password')
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SHARE
 # ═══════════════════════════════════════════════════════════════════════════

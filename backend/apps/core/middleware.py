@@ -9,9 +9,33 @@ consumers must always receive JSON, regardless of DEBUG.
 import logging
 
 from django.http import JsonResponse
+from django.middleware.gzip import GZipMiddleware
 
 
 logger = logging.getLogger(__name__)
+
+
+class JsonGZipMiddleware(GZipMiddleware):
+    """
+    Gzip for JSON API bodies ONLY.
+
+    Django's stock GZipMiddleware compresses any response over 200 bytes,
+    which includes streamed file downloads and ZIPs — wasted CPU on data that
+    is already compressed, and it would strip the Content-Length those
+    downloads rely on. The big wins are the JSON payloads (a 150-asset media
+    list or a 60-photo public page is ~40–110 KB of highly repetitive text),
+    so only application/json is compressed and everything else passes through
+    untouched. Django's implementation already varies on Accept-Encoding,
+    skips clients that don't ask for gzip, and randomizes the stream header
+    to blunt BREACH-style length probing.
+    """
+
+    def process_response(self, request, response):
+        if getattr(response, 'streaming', False):
+            return response
+        if not response.get('Content-Type', '').startswith('application/json'):
+            return response
+        return super().process_response(request, response)
 
 
 class ApiExceptionMiddleware:

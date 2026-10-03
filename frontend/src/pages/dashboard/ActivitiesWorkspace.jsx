@@ -124,13 +124,14 @@ function DownloadTable({ type, rows }) {
             {!isGallery && <th className={th}>Set</th>}
             <th className={th}>Resolution</th>
             <th className={th}>PIN</th>
+            <th className={th}>File</th>
             <th className={th}>Date</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-cream-200">
           {rows.map((row) => (
             <tr key={row.id} className="text-ink">
-              <td className={th}>{row.email || <span className="text-muted">Not provided</span>}</td>
+              <td className={th}>{row.email || <span className="text-muted">Email not required</span>}</td>
               <td className={`${th} max-w-[16rem] truncate`} title={isGallery ? row.scope : row.media_asset_name || ""}>
                 {isGallery ? row.scope : row.media_asset_name || <span className="text-muted">File removed</span>}
               </td>
@@ -139,6 +140,7 @@ function DownloadTable({ type, rows }) {
               )}
               <td className={th}>{RESOLUTION_LABELS[row.resolution] || row.resolution}</td>
               <td className={`${th} text-muted`}>{row.pin_state === "verified" ? "Verified" : "Not required"}</td>
+              <td className={`${th} max-w-[14rem] truncate`} title={row.filename || ""}>{row.filename || "File unavailable"}</td>
               <td className={`${th} whitespace-nowrap text-muted`}>{formatDateTime(row.created_at)}</td>
             </tr>
           ))}

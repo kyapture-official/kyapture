@@ -60,6 +60,24 @@ def get_feature_entitlements(user):
     return {BRANDING: included, WATERMARK: included, 'plan_name': plan.name if plan else None}
 
 
+def entitlements_for_subscription(user, subscription):
+    """
+    Same answer as get_feature_entitlements(), computed from a UserSubscription
+    row the caller ALREADY loaded (with its plan), so serializing a
+    subscription doesn't re-query the same row just to read its plan flag.
+    """
+    if user.is_superuser or user.is_staff:
+        return {BRANDING: True, WATERMARK: True, 'plan_name': 'Admin'}
+    live = (
+        subscription is not None
+        and subscription.status == 'active'
+        and subscription.expires_at > timezone.now()
+    )
+    plan = subscription.plan if live else None
+    included = bool(plan and plan.includes_branding_watermark)
+    return {BRANDING: included, WATERMARK: included, 'plan_name': plan.name if plan else None}
+
+
 def has_feature(user, feature):
     return get_feature_entitlements(user)[feature]
 
