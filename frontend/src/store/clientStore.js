@@ -39,6 +39,14 @@ export const useClientStore = create(
       // Map: { 'username:gallery-slug' → 'signed-access-token' }
       sessions: {},
 
+      // Phase 3 — favorites identity for OPEN (non-password-protected)
+      // galleries, which have no session/token concept at all. A random
+      // per-gallery id, generated once and persisted the same way (and in
+      // the same sessionStorage-backed store) as the unlock tokens above —
+      // "persists across refresh" is exactly what sessionStorage gives.
+      // Map: { 'username:gallery-slug' → 'client-uid' }
+      clientUids: {},
+
       hasHydrated: false,
       setHasHydrated: (value) => set({ hasHydrated: value }),
 
@@ -67,11 +75,29 @@ export const useClientStore = create(
         if (!sessionKey) return null
         return get().sessions[sessionKey] ?? null
       },
+
+      /**
+       * WHAT: Returns this gallery's client_uid, generating and persisting
+       *       one on first call if none exists yet.
+       */
+      getOrCreateClientUid: (sessionKey) => {
+        if (!sessionKey) return null
+        const existing = get().clientUids[sessionKey]
+        if (existing) return existing
+
+        const uid =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+        set((state) => ({ clientUids: { ...state.clientUids, [sessionKey]: uid } }))
+        return uid
+      },
     }),
     {
       name:    'client-session-storage',
       storage: createJSONStorage(getBrowserSessionStorage),
-      partialize: (state) => ({ sessions: state.sessions }),
+      partialize: (state) => ({ sessions: state.sessions, clientUids: state.clientUids }),
 
       onRehydrateStorage: () => (state, error) => {
         if (error) {

@@ -56,6 +56,7 @@ TEMPLATES = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # Must be placed at the top of middleware stack
+    "apps.core.middleware.ApiExceptionMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -94,11 +95,26 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/day",                  # Standard guest threshold
+        "anon": "100/day",                  # Standard guest threshold — fine for arbitrary/misc anon endpoints
         "user": "1000/hour",                # Standard authenticated photographer threshold
         "password_unlock": "5/minute",      # Tight brute-force security for private galleries
         "password_reset": "5/hour",
         "login": "5/minute",                # Tight brute-force security for photographer login
+        # Phase 4 (F-41 fix): ordinary public gallery browsing/streaming/
+        # single-file-download/portfolio traffic previously fell through
+        # to the blanket "anon: 100/day" above — fine for a rarely-hit
+        # misc endpoint, but a real client viewing one gallery already
+        # generates far more than 100 requests/day on its own (the
+        # gallery payload, several pagination pages, a handful of
+        # lightbox/video/download clicks) BEFORE counting that many
+        # visitors can share one IP behind CGNAT or an office network,
+        # all sharing the same throttle bucket. 120/minute is generous
+        # enough that no ordinary visitor — even several behind the same
+        # IP — ever notices it, while still bounding a genuine scraping/
+        # abuse burst. Distinct from password_unlock (5/minute), which
+        # stays tight on purpose: unlock attempts are a brute-force
+        # target this scope is not.
+        "public_gallery_browse": "120/minute",
     }
 }
 
@@ -131,13 +147,18 @@ SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN", None)
 SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "False") == "True"
 CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "False") == "True"
 
-# Media files (Uploaded assets like photographer avatars and receipts)
+# Media files (Uploaded assets like photographer avatars and receipts).
+# Resolve from the backend package directory rather than BASE_DIR: the
+# Windows checkout has an outer repository directory, while the Docker image
+# runs the backend directly at /app. This keeps both environments on the
+# same mounted /app/media path inside Compose.
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "backend" / "media"
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+MEDIA_ROOT = BACKEND_DIR / "media"
 
 # Static files (Django Admin panel CSS, JavaScript, and Icons)
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "backend" / "staticfiles"
+STATIC_ROOT = BACKEND_DIR / "staticfiles"
 
 
 # AWS S3 STATIC & MEDIA STORAGE (Self-Healing Hybrid Setup)
@@ -204,6 +225,43 @@ CELERY_TASK_ACKS_LATE = True
 
 # Limits active worker prefetching to prevent RAM spikes on large media transcodes
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# ─────────────────────────────────────────────────────────────
+# TRASH / PURGE RETENTION (Phase 4 — storage-leak fix, F-30)
+# ─────────────────────────────────────────────────────────────
+# How long a soft-deleted gallery (Gallery.is_active=False,
+# Gallery.trashed_at set) stays recoverable before the scheduled purge
+# task (apps/galleries/tasks.py::purge_trashed_galleries) hard-deletes
+# it and its media. Env-overridable so staging can use a short window
+# for testing without touching code.
+GALLERY_TRASH_RETENTION_DAYS = int(os.getenv("GALLERY_TRASH_RETENTION_DAYS", "30"))
+
+# How long a ClientSession stays valid after creation before the
+# scheduled cleanup task purges it (Phase 4 — auth hardening, ClientSession
+# lifecycle). A session this old is treated as expired even if never
+# explicitly revoked (e.g. by a password change) — see
+# apps/clients/views.py's session-validation gate, which checks this
+# expiry the same way it already checks token/gallery match.
+CLIENT_SESSION_TTL_DAYS = int(os.getenv("CLIENT_SESSION_TTL_DAYS", "30"))
+
+# DownloadLog retention (Phase 4 — DB cleanup). Purely an operational
+# cleanup of old lead-generation rows; not a security control.
+DOWNLOAD_LOG_RETENTION_DAYS = int(os.getenv("DOWNLOAD_LOG_RETENTION_DAYS", "365"))
+
+# ─────────────────────────────────────────────────────────────
+# SYNCHRONOUS ZIP DOWNLOAD LIMITS (Phase 4 — download hardening)
+# ─────────────────────────────────────────────────────────────
+# PublicGalleryDownloadView still compiles a gallery's ZIP synchronously
+# inside the request/response cycle (streamed to disk in 1MB chunks, not
+# held in RAM — see that view's own docstring). That's an acceptable MVP
+# tradeoff for a typical gallery, but with no cap at all a single request
+# for a pathologically large selection (thousands of assets, or many GB)
+# could tie up a gunicorn worker for an unbounded amount of time. These
+# are a deliberately generous technical ceiling — not a plan/business
+# limit — that reject only the genuinely extreme case with a clear 400,
+# rather than the smallest safe fix here being a full async-job rewrite.
+SYNC_ZIP_MAX_ASSET_COUNT = int(os.getenv("SYNC_ZIP_MAX_ASSET_COUNT", "500"))
+SYNC_ZIP_MAX_TOTAL_BYTES = int(os.getenv("SYNC_ZIP_MAX_TOTAL_BYTES", str(5 * 1024 ** 3)))  # 5 GB
 
 # ─────────────────────────────────────────────────────────────
 # SYSTEM LOGGING CONFIGURATION (Audit & Security Compliance)

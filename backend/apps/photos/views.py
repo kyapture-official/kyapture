@@ -1,10 +1,14 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/views.py
+import logging
 import os
 from decimal import Decimal
-from django.db import transaction
+from django.db import transaction, IntegrityError
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,14 +19,40 @@ from PIL.ImageOps import exif_transpose
 
 from apps.core.utils import get_user_subscription_metrics, get_insertion_order, strip_exif_gps
 from apps.galleries.models import Gallery
-from .models import MediaAsset
+from .models import MediaAsset, PhotoSet
 from .serializers import (
-    MediaAssetSerializer, 
+    MediaAssetSerializer,
     MediaAssetImageUploadSerializer,
     MediaAssetVideoUploadSerializer,
     PhotoBulkDeleteSerializer,
-    PhotoReorderSerializer
+    PhotoReorderSerializer,
+    PhotoSetSerializer,
+    PhotoSetWriteSerializer,
+    PhotoSetReorderSerializer,
+    PhotoSetAssignSerializer,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_text_field(value, max_length):
+    """
+    Phase 4 (upload hardening): the browser-supplied filename (and any
+    title derived from it) is untrusted free text with no length limit
+    of its own — MediaAsset.original_name/title do have DB-level
+    max_length constraints, and a name longer than that previously
+    reached Postgres as a raw INSERT, surfacing as an unhandled
+    DataError string via this view's existing broad exception handler
+    rather than a clean, predictable outcome. Strips embedded NUL bytes
+    (which Postgres' text/varchar columns reject outright with their own
+    raw driver error) and truncates to fit, rather than erroring the
+    whole upload over what is purely cosmetic display data.
+    """
+    if not value:
+        return value
+    cleaned = value.replace('\x00', '')
+    return cleaned[:max_length]
 
 
 class PhotoListUploadView(APIView):
@@ -55,8 +85,19 @@ class PhotoListUploadView(APIView):
         if not gallery:
             return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+        photo_set_id = request.query_params.get('set', '').strip()
+        if photo_set_id:
+            try:
+                photo_set = PhotoSet.objects.get(id=photo_set_id, gallery=gallery)
+            except (PhotoSet.DoesNotExist, ValueError, DjangoValidationError):
+                return Response({'error': 'Set not found in this gallery.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            photo_set = None
+
         # Fetches unified assets (both photos and videos) sorted by manual display sequence
         assets = MediaAsset.objects.filter(gallery=gallery).order_by('order', 'created_at')
+        if photo_set is not None:
+            assets = assets.filter(photo_set=photo_set)
         serializer = MediaAssetSerializer(assets, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -64,6 +105,20 @@ class PhotoListUploadView(APIView):
         gallery = self.get_gallery(gallery_slug, request.user)
         if not gallery:
             return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        raw_set_id = request.data.get('set_id', '').strip()
+        if raw_set_id:
+            try:
+                photo_set = PhotoSet.objects.get(id=raw_set_id, gallery=gallery)
+            except (PhotoSet.DoesNotExist, ValueError, DjangoValidationError):
+                return Response({'error': 'Set not found in this gallery.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            photo_set = PhotoSet.objects.filter(gallery=gallery).order_by('order', 'created_at').first()
+            if photo_set is None:
+                return Response(
+                    {'error': 'No default set is available for this gallery.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         image_files = request.FILES.getlist('image')
         video_files = request.FILES.getlist('video')
@@ -135,27 +190,28 @@ class PhotoListUploadView(APIView):
                     title = request.data.get('title', '').strip()
                     if not title:
                         title = os.path.splitext(file_data.name)[0]
-                        
+
                     clean_file = strip_exif_gps(file_data)
 
                     clean_file.seek(0)
                     with PILImage.open(clean_file) as img:
                         img = exif_transpose(img)
                         width, height = img.size
-                    clean_file.seek(0)    
+                    clean_file.seek(0)
 
                     # Create the raw asset under 'pending' status immediately
                     asset = MediaAsset.objects.create(
                         gallery=gallery,
                         media_type=MediaAsset.MediaType.IMAGE,
                         original_file=clean_file,
-                        original_name=file_data.name,
+                        original_name=_safe_text_field(file_data.name, 255),
                         file_size=clean_file.size,
-                        title=title,
+                        title=_safe_text_field(title, 200),
                         width=width,                
                         height=height,
                         processing_status=MediaAsset.ProcessingStatus.PENDING,
-                        order=get_insertion_order(gallery.id)
+                        order=get_insertion_order(gallery.id),
+                        photo_set=photo_set,
                     )
                     
                     # Dispatch Celery background task for WebP conversions and BlurHash encoding
@@ -178,19 +234,49 @@ class PhotoListUploadView(APIView):
                         gallery=gallery,
                         media_type=MediaAsset.MediaType.VIDEO,
                         original_file=file_data,
-                        original_name=file_data.name,
+                        original_name=_safe_text_field(file_data.name, 255),
                         file_size=file_data.size,
-                        title=title,
+                        title=_safe_text_field(title, 200),
                         processing_status=MediaAsset.ProcessingStatus.PENDING,
-                        order=get_insertion_order(gallery.id)
+                        order=get_insertion_order(gallery.id),
+                        photo_set=photo_set,
                     )
 
                     transaction.on_commit(lambda a_id=asset.id: process_video_asset.delay(str(a_id)))
                     uploaded_assets.append(asset)
                     
 
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except DRFValidationError as exc:
+            # Validation details are intentionally limited to serializer
+            # messages.  Never stringify an arbitrary exception here: file
+            # storage, database, and OS errors can contain credentials,
+            # absolute paths, or provider internals (F-29).
+            return Response(
+                {
+                    "error": "Upload validation failed.",
+                    "details": exc.detail,
+                    "code": "upload_validation_failed",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except IntegrityError:
+            logger.exception("Upload transaction failed due to a database integrity error.")
+            return Response(
+                {
+                    "error": "Upload could not be saved.",
+                    "code": "upload_save_failed",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception:
+            logger.exception("Unexpected upload processing failure for gallery %s.", gallery.slug)
+            return Response(
+                {
+                    "error": "Upload could not be processed.",
+                    "code": "upload_processing_error",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         # Return 202 Accepted immediately so David's frontend has the IDs to render skeleton loaders
         return Response(
@@ -364,4 +450,230 @@ class PhotoReorderView(APIView):
         return Response({
             'success': True,
             'ordered_ids': [str(a.id) for a in updated_assets],
+        }, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────────
+# PHOTO SETS (Phase 3 — client experience)
+# ─────────────────────────────────────────────────────────────
+
+class PhotoSetListCreateView(APIView):
+    """
+    GET  /api/v1/photos/{gallery_slug}/sets/  — list this gallery's sets,
+         each annotated with its live READY+unsorted-agnostic photo count
+         in the SAME query (no N+1: one Count() per set via GROUP BY, not
+         one query per set).
+    POST /api/v1/photos/{gallery_slug}/sets/  — create a new set, appended
+         to the end of the gallery's set order.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_gallery(self, slug, user):
+        try:
+            return Gallery.objects.get(slug=slug, photographer=user, is_active=True)
+        except Gallery.DoesNotExist:
+            return None
+
+    def get(self, request, gallery_slug):
+        gallery = self.get_gallery(gallery_slug, request.user)
+        if not gallery:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        sets = (
+            PhotoSet.objects
+            .filter(gallery=gallery)
+            .annotate(photo_count=Count('assets'))
+            .order_by('order', 'created_at')
+        )
+        serializer = PhotoSetSerializer(sets, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, gallery_slug):
+        gallery = self.get_gallery(gallery_slug, request.user)
+        if not gallery:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = PhotoSetWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        last_set = PhotoSet.objects.filter(gallery=gallery).order_by('-order').first()
+        next_order = (last_set.order + Decimal('1.0')) if last_set else Decimal('1.0')
+
+        try:
+            photo_set = PhotoSet.objects.create(
+                gallery=gallery,
+                order=next_order,
+                **serializer.validated_data
+            )
+        except IntegrityError:
+            return Response(
+                {'error': 'A set with this name already exists in this gallery.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        photo_set.photo_count = 0
+        return Response(PhotoSetSerializer(photo_set).data, status=status.HTTP_201_CREATED)
+
+
+class PhotoSetDetailView(APIView):
+    """
+    PATCH  /api/v1/photos/{gallery_slug}/sets/{set_id}/  — rename.
+    DELETE /api/v1/photos/{gallery_slug}/sets/{set_id}/  — delete the set.
+           Member photos are NOT deleted — MediaAsset.photo_set is
+           reassigned atomically to the first remaining set before the
+           set is removed.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_gallery(self, slug, user):
+        try:
+            return Gallery.objects.get(slug=slug, photographer=user, is_active=True)
+        except Gallery.DoesNotExist:
+            return None
+
+    def get_set(self, gallery, set_id):
+        try:
+            return PhotoSet.objects.get(id=set_id, gallery=gallery)
+        except PhotoSet.DoesNotExist:
+            return None
+
+    def patch(self, request, gallery_slug, set_id):
+        gallery = self.get_gallery(gallery_slug, request.user)
+        if not gallery:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        photo_set = self.get_set(gallery, set_id)
+        if not photo_set:
+            return Response({'error': 'Set not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = PhotoSetWriteSerializer(photo_set, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.save()
+        except IntegrityError:
+            return Response(
+                {'error': 'A set with this name already exists in this gallery.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        photo_set.photo_count = photo_set.assets.count()
+        return Response(PhotoSetSerializer(photo_set).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, gallery_slug, set_id):
+        gallery = self.get_gallery(gallery_slug, request.user)
+        if not gallery:
+            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            sets = list(
+                PhotoSet.objects.select_for_update()
+                .filter(gallery=gallery)
+                .order_by('order', 'created_at')
+            )
+            photo_set = next((item for item in sets if str(item.id) == str(set_id)), None)
+            if photo_set is None:
+                return Response({'error': 'Set not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if len(sets) == 1:
+                return Response(
+                    {'error': 'The final remaining set cannot be deleted.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            first_remaining_set = next(item for item in sets if item.id != photo_set.id)
+            MediaAsset.objects.filter(gallery=gallery, photo_set=photo_set).update(
+                photo_set=first_remaining_set
+            )
+            photo_set.delete()
+        return Response({'message': 'Set deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+class PhotoSetReorderView(APIView):
+    """
+    PATCH /api/v1/photos/{gallery_slug}/sets/reorder/
+
+    Same fractional-decimal renumbering pattern as PhotoReorderView, one
+    level up (sets instead of photos).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, gallery_slug):
+        gallery = get_object_or_404(
+            Gallery, slug=gallery_slug, photographer=request.user, is_active=True
+        )
+
+        serializer = PhotoSetReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ordered_ids = serializer.validated_data['ordered_ids']
+
+        sets_by_id = {
+            str(s.id): s
+            for s in PhotoSet.objects.filter(gallery=gallery, id__in=ordered_ids)
+        }
+        if not sets_by_id:
+            return Response(
+                {'error': 'None of the supplied set IDs belong to this gallery.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        updated_sets = []
+        position = Decimal('1.0')
+        for set_id in ordered_ids:
+            photo_set = sets_by_id.get(str(set_id))
+            if photo_set is None:
+                continue
+            photo_set.order = position
+            updated_sets.append(photo_set)
+            position += Decimal('1.0')
+
+        with transaction.atomic():
+            PhotoSet.objects.bulk_update(updated_sets, ['order'])
+
+        return Response({
+            'success': True,
+            'ordered_ids': [str(s.id) for s in updated_sets],
+        }, status=status.HTTP_200_OK)
+
+
+class PhotoSetAssignView(APIView):
+    """
+    PATCH /api/v1/photos/{gallery_slug}/move/
+    Body: { "set_id": "<uuid>" | null, "photo_ids": ["<uuid>", ...] }
+
+    Moves the given photos into the given set in one bulk write. set_id
+    of null moves them OUT of whatever set they're currently in (back to
+    "unsorted"). Both the set and every photo are scoped strictly to this
+    gallery — an id from another gallery/tenant is silently excluded, the
+    same "unknown ids ignored" convention PhotoBulkDeleteView/PhotoReorderView
+    already use.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, gallery_slug):
+        gallery = get_object_or_404(
+            Gallery, slug=gallery_slug, photographer=request.user, is_active=True
+        )
+
+        serializer = PhotoSetAssignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        set_id = serializer.validated_data['set_id']
+        photo_ids = serializer.validated_data['photo_ids']
+
+        target_set = None
+        if set_id is not None:
+            try:
+                target_set = PhotoSet.objects.get(id=set_id, gallery=gallery)
+            except PhotoSet.DoesNotExist:
+                return Response(
+                    {'error': 'Set not found in this gallery.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        updated_count = MediaAsset.objects.filter(
+            gallery=gallery, id__in=photo_ids
+        ).update(photo_set=target_set)
+
+        return Response({
+            'success': True,
+            'updated_count': updated_count,
+            'set_id': str(target_set.id) if target_set else None,
         }, status=status.HTTP_200_OK)

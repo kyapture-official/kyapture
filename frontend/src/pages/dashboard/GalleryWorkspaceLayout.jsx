@@ -1,7 +1,8 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GalleryWorkspaceLayout.jsx
-import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate, Outlet } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams, useNavigate, Outlet, useSearchParams } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
+import { photosApi } from "../../api/photosApi";
 import { mockGalleries } from "../../utils/mockGalleries";
 import Spinner from "../../components/ui/Spinner";
 import GallerySecondarySidebar from "../../components/layout/GallerySecondarySidebar";
@@ -15,8 +16,12 @@ function WorkspaceInner() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { dispatch } = usePixieset();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [gallery, setGallery] = useState(null);
+  const [sets, setSets] = useState([]);
+  const [setsLoading, setSetsLoading] = useState(true);
+  const [activeSetIdState, setActiveSetIdState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -24,10 +29,73 @@ function WorkspaceInner() {
   const isMountedRef = useRef(false);
   const skipNextLoadRef = useRef(false);
 
+  const refreshSets = useCallback(async (signal) => {
+    if (USE_MOCK_DATA) {
+      setSets([]);
+      setSetsLoading(false);
+      return [];
+    }
+
+    setSetsLoading(true);
+    try {
+      const data = await photosApi.listSets(id, signal);
+      const nextSets = Array.isArray(data) ? data : data?.results || [];
+      if (isMountedRef.current && !signal?.aborted) setSets(nextSets);
+      return nextSets;
+    } catch (err) {
+      // Keep the last known-good list during a background refresh. The gallery
+      // switch effect above explicitly clears it before loading a new gallery.
+      throw err;
+    } finally {
+      if (isMountedRef.current && !signal?.aborted) setSetsLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
   }, []);
+
+  useEffect(() => {
+    setSets([]);
+    setActiveSetIdState(null);
+    const controller = new AbortController();
+    refreshSets(controller.signal).catch(() => {});
+    return () => controller.abort();
+  }, [id, refreshSets]);
+
+  const requestedSetId = searchParams.get("set");
+
+  const setActiveSetId = useCallback((nextSetId) => {
+    if (nextSetId == null) return;
+
+    setActiveSetIdState(nextSetId);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("set", String(nextSetId));
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    if (setsLoading) return;
+
+    const firstSet = sets[0];
+    const requestedSet = sets.find((set) => String(set.id) === String(requestedSetId));
+    const nextSet = requestedSet || firstSet || null;
+
+    setActiveSetIdState((current) => current === nextSet?.id ? current : nextSet?.id ?? null);
+
+    const nextQueryValue = nextSet ? String(nextSet.id) : null;
+    if (requestedSetId !== nextQueryValue) {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        if (nextQueryValue) next.set("set", nextQueryValue);
+        else next.delete("set");
+        return next;
+      }, { replace: true });
+    }
+  }, [requestedSetId, setSearchParams, sets, setsLoading]);
 
   useEffect(() => {
     async function loadGallery() {
@@ -123,7 +191,17 @@ function WorkspaceInner() {
 
   return (
     <div className="min-h-screen flex bg-cream-100">
-      <GallerySecondarySidebar basePath={`/dashboard/galleries/${id}`} gallery={gallery} />
+      <GallerySecondarySidebar
+        basePath={`/dashboard/galleries/${id}`}
+        gallery={gallery}
+        slug={id}
+        sets={sets}
+        setsLoading={setsLoading}
+        setSets={setSets}
+        refreshSets={refreshSets}
+        activeSetId={activeSetIdState}
+        onSetSelect={setActiveSetId}
+      />
 
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <TopNavBar gallery={gallery} setGallery={setGallery} slug={id} />
@@ -140,7 +218,22 @@ function WorkspaceInner() {
         )}
 
         <div className="flex-1 max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-24 md:py-8 w-full">
-          <Outlet context={{ gallery, setGallery, slug: id, skipNextLoadRef, navigate, isMountedRef }} />
+          <Outlet
+            context={{
+              gallery,
+              setGallery,
+              slug: id,
+              skipNextLoadRef,
+              navigate,
+              isMountedRef,
+              sets,
+              setSets,
+              setsLoading,
+              refreshSets,
+              activeSetId: activeSetIdState,
+              setActiveSetId,
+            }}
+          />
         </div>
       </div>
 

@@ -6,8 +6,14 @@ from PIL.ImageOps import exif_transpose
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import serializers
 
-from apps.core.utils import validate_magic_bytes, strip_exif_gps, process_image_pipeline, validate_video_magic_bytes
-from .models import MediaAsset
+from apps.core.utils import (
+    validate_magic_bytes,
+    strip_exif_gps,
+    process_image_pipeline,
+    sanitize_text,
+    validate_video_magic_bytes,
+)
+from .models import MediaAsset, PhotoSet
 
 MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB Limit
 ALLOWED_IMAGE_FORMATS = {'JPEG', 'JPG', 'PNG', 'WEBP', 'TIFF'}
@@ -50,6 +56,7 @@ class MediaAssetSerializer(serializers.ModelSerializer):
             'original_name',
             'file_size',
             'order',
+            'photo_set',
             'original_url',
             'display_url',
             'medium_url',
@@ -223,10 +230,71 @@ class PhotoBulkDeleteSerializer(serializers.Serializer):
 
 class PhotoReorderSerializer(serializers.Serializer):
     """
-    Validates the complete reordered sequence of MediaAsset UUID primary keys 
+    Validates the complete reordered sequence of MediaAsset UUID primary keys
     associated with a single gallery.
     """
     ordered_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=False,
+        min_length=1
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# PHOTO SETS (Phase 3)
+# ─────────────────────────────────────────────────────────────
+
+class PhotoSetSerializer(serializers.ModelSerializer):
+    """
+    Photographer + public read shape for a PhotoSet. `photo_count` is
+    always populated via annotation by the view (Count('assets')) —
+    never computed here — so listing N sets costs one query total, not N.
+    """
+    photo_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = PhotoSet
+        fields = ['id', 'name', 'description', 'order', 'photo_count']
+        read_only_fields = ['id', 'order', 'photo_count']
+
+
+class PhotoSetWriteSerializer(serializers.ModelSerializer):
+    """Create/update. `gallery` is set by the view, never from the client."""
+    class Meta:
+        model = PhotoSet
+        fields = ['name', 'description']
+
+    def validate_name(self, value):
+        value = sanitize_text(value).strip()
+        if not value:
+            raise serializers.ValidationError("Set name cannot be empty.")
+        return value
+
+    def validate_description(self, value):
+        value = sanitize_text(value)
+        if len(value) > 500:
+            raise serializers.ValidationError("Description cannot exceed 500 characters.")
+        return value
+
+
+class PhotoSetReorderSerializer(serializers.Serializer):
+    """Full ordered sequence of a gallery's PhotoSet UUIDs."""
+    ordered_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=False,
+        min_length=1
+    )
+
+
+class PhotoSetAssignSerializer(serializers.Serializer):
+    """
+    Moves a batch of MediaAssets into (or out of) a set in one call.
+    `set_id: null` explicitly means "remove from any set" (unsorted) —
+    distinct from omitting the field, which DRF would treat as a missing
+    required key.
+    """
+    set_id = serializers.UUIDField(allow_null=True)
+    photo_ids = serializers.ListField(
         child=serializers.UUIDField(),
         allow_empty=False,
         min_length=1

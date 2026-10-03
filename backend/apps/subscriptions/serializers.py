@@ -211,7 +211,6 @@ class AdminPaymentListSerializer(serializers.ModelSerializer):
             'photographer_display_name',
             'plan',
             'amount',
-            'payment_method',
             'payment_proof_url',
             'notes',
             'status',
@@ -280,4 +279,4 @@ class AdminPaymentReviewSerializer(serializers.Serializer):
                 code="invalid_state_transition"
             )
             
-        return data        
+        return data

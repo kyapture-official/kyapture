@@ -1,6 +1,4 @@
 # C:/Users/LENOVO/Desktop/kyapture/docker-compose.yml
-version: "3.9"
-
 # ─────────────────────────────────────────────────────────────
 # LOCAL DEVELOPMENT STACK — not a production deployment manifest.
 #
@@ -43,12 +41,29 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"  # Exposed for local pgAdmin/psql debugging
+    # Lets backend/celery_worker/celery_beat's `depends_on: condition:
+    # service_healthy` below mean "Postgres is actually accepting
+    # connections," not just "the container process started" — compose's
+    # plain depends_on (no condition) only ever guarantees the latter.
+    # Each backend-image container's own docker-entrypoint.py still waits
+    # + retries independently on top of this; this is belt-and-suspenders
+    # at the orchestration level, not a replacement for it.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U photodelivery -d photodelivery"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # 2. MESSAGE BROKER SERVICE (Redis)
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"  # Exposed for Celery brokering and local diagnostics
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # 3. WEB API SERVICE (Django REST Framework)
   backend:
@@ -60,11 +75,29 @@ services:
       - media_data:/app/media  # Shared media directory
     env_file:
       - ./backend/.env
+    # backend/.env is also used by Windows development, where localhost is
+    # correct. Inside Compose, the database and broker are service names.
+    environment:
+      DB_HOST: db
+      DB_NAME: photodelivery
+      DB_USER: photodelivery
+      DB_PASSWORD: photodelivery
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   # 4. BACKGROUND TASK WORKER SERVICE (Celery)
   celery_worker:
@@ -81,9 +114,20 @@ services:
       - media_data:/app/media  # Shared media directory
     env_file:
       - ./backend/.env
+    environment:
+      DB_HOST: db
+      DB_NAME: photodelivery
+      DB_USER: photodelivery
+      DB_PASSWORD: photodelivery
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
       # 4b. PERIODIC TASK SCHEDULER (Celery Beat)
       # Ticks the schedule defined in config/celery.py's beat_schedule and
@@ -100,15 +144,36 @@ services:
       - ./backend:/app
     env_file:
       - ./backend/.env
+    environment:
+      DB_HOST: db
+      DB_NAME: photodelivery
+      DB_USER: photodelivery
+      DB_PASSWORD: photodelivery
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # 5. FRONTEND WEB SERVICE (React + Vite + Tailwind)
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # Browser-side URL of the API (the browser, not the container, calls
+        # it) — the canonical dev backend published by the `backend` service.
+        VITE_API_BASE_URL: http://localhost:8000/api/v1
     ports:
       - "3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
 # ─────────────────────────────────────────────────────────────
 # PERSISTENT SYSTEM VOLUMES (Prevents Data Loss)

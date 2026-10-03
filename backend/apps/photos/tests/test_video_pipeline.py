@@ -246,6 +246,24 @@ class VideoUploadIntegrationTestCase(APITestCase):
         self.assertEqual(asset.processing_status, MediaAsset.ProcessingStatus.READY)
         self.assertEqual(asset.playback_file.name, playback_name_before)
 
+    def test_ready_video_retry_backfills_a_missing_cover(self):
+        """The READY fast path must also restore a missing video cover."""
+        asset = MediaAsset.objects.create(
+            gallery=self.gallery,
+            media_type=MediaAsset.MediaType.VIDEO,
+            original_file=SimpleUploadedFile("already-ready.mp4", b"video", content_type="video/mp4"),
+            original_name="already-ready.mp4",
+            file_size=5,
+            title="already ready video",
+            processing_status=MediaAsset.ProcessingStatus.READY,
+            order=Decimal("1.0"),
+        )
+
+        process_video_asset(str(asset.id))
+
+        self.gallery.refresh_from_db()
+        self.assertEqual(self.gallery.cover_photo_id, asset.id)
+
     def test_failed_video_processing_marks_asset_failed_and_preserves_original(self):
         bogus = MediaAsset.objects.create(
             gallery=self.gallery,

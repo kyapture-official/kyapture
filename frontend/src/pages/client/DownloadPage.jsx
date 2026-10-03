@@ -20,6 +20,8 @@ export default function DownloadPage() {
   const { username, slug } = useParams();
   const location = useLocation();
   const selectedAssetIds = location.state?.selectedIds || [];
+  const hasDownloadPin = Boolean(location.state?.hasDownloadPin);
+  const setId = location.state?.setId || null;
 
   // Unique session key prevents cross-tenant token collisions on identical gallery slugs
   const sessionKey = `${username}:${slug}`;
@@ -27,9 +29,12 @@ export default function DownloadPage() {
   const galleryToken = sessions[sessionKey] ?? null;
 
   const [email, setEmail] = useState("");
+  const [pin, setPin] = useState("");
+  const [resolution, setResolution] = useState("original");
   const [status, setStatus] = useState("idle");
   const [progressMsg, setProgressMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [pinError, setPinError] = useState("");
 
   // Prevent double-scroll on mobile while the stream is loading
   useEffect(() => {
@@ -44,10 +49,15 @@ export default function DownloadPage() {
   const handleRequest = async (e) => {
     e.preventDefault();
     if (!email.trim() || status === "loading") return;
+    if (hasDownloadPin && !pin.trim()) {
+      setPinError("A download PIN is required for this gallery.");
+      return;
+    }
 
     setStatus("loading");
     setProgressMsg("Connecting to download server…");
     setErrorMsg("");
+    setPinError("");
 
     try {
       setProgressMsg("Compiling photos and generating ZIP archive…");
@@ -59,6 +69,9 @@ export default function DownloadPage() {
           email: email.trim(),
           token: galleryToken || undefined,
           asset_ids: selectedAssetIds,
+          set_id: setId || undefined,
+          resolution,
+          pin: hasDownloadPin ? pin.trim() : undefined,
         },
 
         {
@@ -94,24 +107,30 @@ export default function DownloadPage() {
       setStatus("success");
     } catch (err) {
       // Decode error payloads safely since responseType is 'blob'
+      let parsedError = null;
       if (err.response?.data instanceof Blob) {
         try {
           const text = await err.response.data.text();
-          const parsed = JSON.parse(text);
-          setErrorMsg(
-            parsed.error || parsed.detail || "Download request failed.",
-          );
+          parsedError = JSON.parse(text);
         } catch {
-          setErrorMsg("Failed to compile your download package.");
+          parsedError = null;
         }
-      } else {
-        setErrorMsg(err.response?.data?.detail || "Something went wrong.");
       }
-
+      const message =
+        parsedError?.error || parsedError?.detail || err.response?.data?.detail || "Something went wrong.";
+      const code = parsedError?.code;
       const httpStatus = err.response?.status;
-      if (httpStatus === 401 || httpStatus === 403) {
+
+      if (code === "pin_required" || code === "invalid_pin") {
+        // Wrong/missing PIN is a recoverable input error, not a dead end —
+        // stay on the form so the client can just try the PIN again.
+        setPinError(message);
+        setStatus("idle");
+      } else if (httpStatus === 401 || httpStatus === 403) {
+        setErrorMsg(message);
         setStatus("forbidden");
       } else {
+        setErrorMsg(message === "Something went wrong." ? "Failed to compile your download package." : message);
         setStatus("error");
       }
     } finally {
@@ -205,11 +224,83 @@ export default function DownloadPage() {
               </p>
             </div>
 
+            {/* Web Size vs High Resolution (Phase 3) */}
+            <div className="space-y-1.5">
+              <label
+                className="block text-xs uppercase tracking-wider font-medium select-none"
+                style={{ color: "var(--muted)" }}
+              >
+                Download Quality
+              </label>
+              <div className="flex gap-2">
+                {[
+                  { value: "web", label: "Web Size", hint: "Optimized, smaller files" },
+                  { value: "original", label: "High Resolution", hint: "Full quality originals" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setResolution(opt.value)}
+                    className="flex-1 text-left rounded-lg px-3 py-2.5 transition-all duration-200"
+                    style={{
+                      border: `1.5px solid ${resolution === opt.value ? "var(--ink)" : "var(--warm)"}`,
+                      background: resolution === opt.value ? "#fff" : "var(--cream2)",
+                    }}
+                  >
+                    <span className="block text-xs font-medium" style={{ color: "var(--ink)" }}>
+                      {opt.label}
+                    </span>
+                    <span className="block text-[10px] mt-0.5" style={{ color: "var(--muted)" }}>
+                      {opt.hint}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Download PIN (Phase 3) — only shown when this gallery has one configured */}
+            {hasDownloadPin && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="download-pin"
+                  className="block text-xs uppercase tracking-wider font-medium select-none"
+                  style={{ color: "var(--muted)" }}
+                >
+                  Download PIN
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  id="download-pin"
+                  required
+                  maxLength={8}
+                  value={pin}
+                  onChange={(e) => {
+                    setPin(e.target.value.replace(/\D/g, ""));
+                    setPinError("");
+                  }}
+                  placeholder="Enter the PIN your photographer gave you"
+                  className="block w-full rounded-lg px-4 py-3 text-sm focus:outline-none transition-all duration-200"
+                  style={{
+                    border: `1.5px solid ${pinError ? "#dc2626" : "var(--warm)"}`,
+                    background: "var(--cream2)",
+                    color: "var(--ink)",
+                  }}
+                />
+                {pinError && (
+                  <p className="text-xs" style={{ color: "#dc2626" }}>
+                    {pinError}
+                  </p>
+                )}
+              </div>
+            )}
+
             <Button
               type="submit"
               size="lg"
               className="w-full justify-center"
-              disabled={!email.trim()}
+              disabled={!email.trim() || (hasDownloadPin && !pin.trim())}
             >
               Download Now
             </Button>

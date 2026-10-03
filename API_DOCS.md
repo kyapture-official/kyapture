@@ -514,6 +514,60 @@ Success Response — 200 OK
   ]
 }
 
+Photo Sets
+
+Every new gallery has a `Highlights` set. All Photo Sets endpoints require authentication and return `404 Not Found` for galleries that are inactive or owned by another photographer.
+
+List sets
+
+GET /api/v1/photos/{gallery_slug}/sets/
+
+Returns ordered set metadata. `photo_count` is the current number of assets in each set.
+
+[
+  {
+    "id": "0190104f-124b-723a-a4f2-90ab12f127a4",
+    "name": "Highlights",
+    "description": "Featured moments",
+    "order": "1.0000000000",
+    "photo_count": 12
+  }
+]
+
+Create a set
+
+POST /api/v1/photos/{gallery_slug}/sets/
+
+Request body: `{ "name": "Ceremony", "description": "Optional, up to 500 characters" }`. Names are required, unique within their gallery, and limited to 100 characters.
+
+Update a set
+
+PATCH /api/v1/photos/{gallery_slug}/sets/{set_id}/
+
+Accepts either or both `name` and `description`.
+
+Delete a set
+
+DELETE /api/v1/photos/{gallery_slug}/sets/{set_id}/
+
+Assets are never deleted. Assets in the deleted set move atomically to the first remaining set. The final remaining set cannot be deleted (`400 Bad Request`).
+
+Reorder sets
+
+PATCH /api/v1/photos/{gallery_slug}/sets/reorder/
+
+Request body: `{ "ordered_ids": ["<set-uuid>", "<set-uuid>"] }`.
+
+Move assets to a set
+
+PATCH /api/v1/photos/{gallery_slug}/move/
+
+Request body: `{ "set_id": "<set-uuid>", "photo_ids": ["<asset-uuid>"] }`. Use `set_id: null` to remove an asset from its set.
+
+Upload and list integration
+
+`POST /api/v1/photos/{gallery_slug}/upload/` accepts optional multipart `set_id`; it must belong to the gallery. When omitted, uploaded assets are assigned to the first set. `GET /api/v1/photos/{gallery_slug}/?set=<set-uuid>` returns only assets in that gallery-owned set. Media asset payloads expose `photo_set` as its set UUID (or `null`).
+
 👥 4. Public Clients App (apps/clients)
 
 These endpoints are configured with empty authentication classes. They ignore stale user header tokens.
@@ -591,6 +645,19 @@ The client saves this access_token in sessionStorage. To query the private galle
   "access_token": "CSPRNG_high_entropy_session_token_hash",
   "has_download_access": true
 }
+
+Download All Public Gallery Media
+
+GET /api/v1/public/{username}/{slug}/download-all/?token=<access_token>
+
+Streams a ZIP of READY media when downloads are enabled. JPEG and PNG images
+use the private, full-resolution Download Master; videos and legacy/special
+images without a master retain their original source. Pass `resolution=original`
+to the existing POST download endpoint for an authorized original archive.
+Password-protected galleries require the active unlock token. Galleries with a
+download PIN continue to use the existing POST download flow so the PIN can be
+verified before a browser download starts. The response is an attachment named
+`{gallery-slug}.zip` and creates a gallery `DownloadLog` entry.
 
 Error Response — 401 Unauthorized
 

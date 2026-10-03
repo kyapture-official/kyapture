@@ -1,10 +1,22 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/signals.py
 import logging
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
-from .models import MediaAsset
+from apps.galleries.models import Gallery
+from .models import MediaAsset, PhotoSet
 
 logger = logging.getLogger(__name__)
+
+
+@receiver(post_save, sender=Gallery)
+def create_highlights_set_for_new_gallery(sender, instance, created, **kwargs):
+    """Every newly-created gallery starts with its required default set."""
+    if created:
+        PhotoSet.objects.get_or_create(
+            gallery=instance,
+            name='Highlights',
+            defaults={'order': 1},
+        )
 
 
 @receiver(post_delete, sender=MediaAsset)

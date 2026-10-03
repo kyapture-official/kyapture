@@ -1,13 +1,15 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/clients/urls.py
 from django.urls import path
 from .views import (
-    PublicGalleryView, 
-    GalleryUnlockView, 
+    PublicGalleryView,
+    GalleryUnlockView,
     PublicGalleryDownloadView,
+    PublicGalleryDirectDownloadView,
     PublicPhotoDownloadView,
     PublicPhotographerPortfolioView,
-    PublicVideoStreamView, 
+    PublicVideoStreamView,
     PublicGalleryPhotosView,
+    GalleryFavoritesView,
 )
 
 urlpatterns = [
@@ -25,6 +27,13 @@ urlpatterns = [
         '<str:username>/<slug:slug>/download/',
         PublicGalleryDownloadView.as_view(),
         name='gallery-download'
+    ),
+
+    # Route: GET /api/v1/public/{username}/{slug}/download-all/?token=...
+    path(
+        '<str:username>/<slug:slug>/download-all/',
+        PublicGalleryDirectDownloadView.as_view(),
+        name='gallery-download-all'
     ),
 
 path(
@@ -46,6 +55,13 @@ path(
         '<str:username>/<slug:slug>/photos/',
         PublicGalleryPhotosView.as_view(),
         name='public-gallery-photos'
+    ),
+
+    # Route: GET/POST/DELETE /api/v1/public/{username}/{slug}/favorites/
+    path(
+        '<str:username>/<slug:slug>/favorites/',
+        GalleryFavoritesView.as_view(),
+        name='public-gallery-favorites'
     ),
 
 

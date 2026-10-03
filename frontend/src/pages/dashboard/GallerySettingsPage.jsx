@@ -26,6 +26,12 @@ export default function GallerySettingsPage() {
   const [updating, setUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Phase 3 — download PIN, a second gate independent of the gallery
+  // access password above.
+  const [hasDownloadPin, setHasDownloadPin] = useState(gallery.has_download_pin ?? false);
+  const [downloadPin, setDownloadPin] = useState("");
+  const [pinUpdating, setPinUpdating] = useState(false);
+
   // Locked product decision: the MVP gallery URL is /g/:username/:slug —
   // stable, server-assigned, not photographer-editable (there is no
   // custom-URL/vanity-slug feature; the slug is generated once from the
@@ -79,6 +85,37 @@ export default function GallerySettingsPage() {
       }
     } finally {
       if (isMountedRef.current) setUpdating(false);
+    }
+  };
+
+  const handleSaveDownloadPin = async (e) => {
+    e.preventDefault();
+    if (pinUpdating) return;
+    if (!downloadPin && hasDownloadPin) {
+      if (!window.confirm("Remove the download PIN?")) return;
+    }
+    setPinUpdating(true);
+    try {
+      if (USE_MOCK_DATA) {
+        const newHasPin = Boolean(downloadPin);
+        setHasDownloadPin(newHasPin);
+        setGallery((prev) => ({ ...prev, has_download_pin: newHasPin }));
+        setDownloadPin("");
+        toast(downloadPin ? "Download PIN set" : "Download PIN removed", "success");
+      } else {
+        const response = await galleriesApi.setDownloadPin(slug, downloadPin || null);
+        setHasDownloadPin(response.has_download_pin);
+        setGallery((prev) => ({ ...prev, has_download_pin: response.has_download_pin }));
+        setDownloadPin("");
+        toast(downloadPin ? "Download PIN set" : "Download PIN removed", "success");
+      }
+    } catch (err) {
+      if (isMountedRef.current) {
+        setErrorMsg(err.response?.data?.error || "Failed to update download PIN.");
+        toast("Failed to update download PIN", "error");
+      }
+    } finally {
+      if (isMountedRef.current) setPinUpdating(false);
     }
   };
 
@@ -292,6 +329,48 @@ export default function GallerySettingsPage() {
                 </button>
               </div>
             </form>
+
+            {/* Phase 3 — Download PIN: a second, independent gate from the
+                gallery access password above. */}
+            <div className="mt-6 pt-6 border-t border-cream-200">
+              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200 mb-3">
+                <div>
+                  <p className="text-sm font-medium text-ink">Download PIN</p>
+                  <p className="text-xs text-muted mt-0.5">
+                    Require a 4–8 digit PIN before a client can trigger any download — independent of the gallery password.
+                  </p>
+                </div>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                    hasDownloadPin
+                      ? "bg-brand-green-50 text-brand-green-700 border-brand-green-200"
+                      : "bg-cream-200 text-muted border-cream-300"
+                  }`}
+                >
+                  {hasDownloadPin ? "Enabled" : "Off"}
+                </span>
+              </div>
+              <form onSubmit={handleSaveDownloadPin} className="flex gap-3">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={8}
+                  placeholder={hasDownloadPin ? "Enter new PIN (4-8 digits)" : "Set a PIN (4-8 digits)"}
+                  value={downloadPin}
+                  onChange={(e) => setDownloadPin(e.target.value.replace(/\D/g, ""))}
+                  disabled={pinUpdating}
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={pinUpdating}
+                  className="px-4 py-2 border border-cream-200 text-ink text-sm font-medium rounded-lg hover:bg-cream-100 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {downloadPin ? "Save" : hasDownloadPin ? "Clear" : "Set"}
+                </button>
+              </form>
+            </div>
           </div>
         )}
       </div>

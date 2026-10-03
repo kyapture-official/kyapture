@@ -10,6 +10,8 @@ import React, {
 import { createPortal } from "react-dom";
 import Spinner from "../ui/Spinner";
 
+const SLIDESHOW_INTERVAL_MS = 4000;
+
 export default function PhotoLightbox({
   photos,
   index,
@@ -18,9 +20,18 @@ export default function PhotoLightbox({
   onChange,
   videoAccessToken,
   onDownload,
+  // Phase 3 — favorites (client-facing gallery only; dashboard's own
+  // PhotoGrid usage never passes these, so the button simply doesn't render).
+  isFavorited,
+  onToggleFavorite,
+  // Phase 3 — slideshow. `slideshowMode` starts autoplay immediately on
+  // open (the "Slideshow" entry point); the play/pause button works
+  // either way once open.
+  slideshowMode = false,
 }) {
   const [imageLoading, setImageLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(slideshowMode);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const dialogRef = useRef(null);
@@ -83,6 +94,21 @@ export default function PhotoLightbox({
       onChange?.(index + 1);
     }
   }, [index, photos.length, onChange]);
+
+  // ── SLIDESHOW AUTOPLAY (Phase 3) ────────────────────────────────────────
+  // Loops back to the first photo at the end — a real "slideshow" rather
+  // than one that silently stops. Pauses itself (without clearing
+  // isPlaying — resumes automatically once past the video) while the
+  // current slide is a video: auto-advancing on a fixed timer while a
+  // video is trying to play would cut it off mid-playback.
+  useEffect(() => {
+    if (!isPlaying || isVideo) return;
+    const id = setInterval(() => {
+      onChange?.((index + 1) % photos.length);
+    }, SLIDESHOW_INTERVAL_MS);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, isVideo, index, photos.length]);
 
   const handlePrev = useCallback(() => {
     if (index > 0) {
@@ -152,6 +178,12 @@ export default function PhotoLightbox({
         handleNext();
       } else if (e.key === "ArrowLeft") {
         handlePrev();
+      } else if (e.key === " " && !isVideo) {
+        // Spacebar toggles slideshow play/pause — skipped for a video
+        // slide, where space is the natural "play/pause the video" key
+        // the native <video controls> element already owns.
+        e.preventDefault();
+        setIsPlaying((prev) => !prev);
       } else if (e.key === "Tab") {
         // Native modal focus trap to prevent keyboard leaks into background layout.
         const focusableElements = getFocusableElements();
@@ -180,7 +212,7 @@ export default function PhotoLightbox({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleNext, handlePrev, onClose, getFocusableElements]);
+  }, [handleNext, handlePrev, onClose, getFocusableElements, isVideo]);
 
   /**
    * Native Touch Gestures (Swipe to Navigate)
@@ -228,6 +260,54 @@ export default function PhotoLightbox({
         </span>
 
                 <div className="flex items-center gap-1 pointer-events-auto">
+          {!isVideo && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsPlaying((prev) => !prev);
+              }}
+              className="p-2 text-white/70 hover:text-white transition-colors duration-200 focus:outline-none"
+              aria-label={isPlaying ? "Pause slideshow" : "Play slideshow"}
+              title={isPlaying ? "Pause slideshow" : "Play slideshow"}
+            >
+              {isPlaying ? (
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="6" y="5" width="4" height="14" rx="1" />
+                  <rect x="14" y="5" width="4" height="14" rx="1" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
+            </button>
+          )}
+          {onToggleFavorite && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(activePhoto.id);
+              }}
+              className={`p-2 transition-colors duration-200 focus:outline-none ${
+                isFavorited ? "text-red-500" : "text-white/70 hover:text-white"
+              }`}
+              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+              title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+            >
+              <svg
+                className="w-6 h-6"
+                viewBox="0 0 24 24"
+                fill={isFavorited ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth={isFavorited ? 0 : 1.5}
+                aria-hidden="true"
+              >
+                <path d="M12 21s-6.716-4.35-9.428-8.06C.665 10.42 1.1 6.9 3.6 5.1c2.02-1.46 4.63-1.02 6.17.86L12 8.2l2.23-2.24c1.54-1.88 4.15-2.32 6.17-.86 2.5 1.8 2.935 5.32 1.028 7.84C18.716 16.65 12 21 12 21z" />
+              </svg>
+            </button>
+          )}
           {onDownload ? (
             <button
               type="button"

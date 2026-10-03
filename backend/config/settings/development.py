@@ -21,6 +21,8 @@ DATABASES = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Standard Vite development port
     "http://127.0.0.1:5173",
+    "http://localhost:3000",  # Compose nginx frontend
+    "http://127.0.0.1:3000",
 ]
 
 # CSRF trusts these origins for the Origin-header check on unsafe requests.
@@ -28,15 +30,18 @@ CORS_ALLOWED_ORIGINS = [
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 # ─── LOCAL DEVELOPMENT CELERY BYPASS ───────────────────────────────────────
-# Forces Celery to run all background tasks synchronously inside the main thread.
-# This eliminates the requirement to have a Redis server running in development.
-CELERY_TASK_ALWAYS_EAGER = True
+# Forces Celery to run all background tasks synchronously inside the main thread
+# by default, preserving the lightweight Windows workflow. Compose overrides
+# these two settings to use the real Redis-backed worker for parity validation.
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "true").lower() == "true"
 
-# Propagates task exceptions directly to the Django console for easy debugging
-CELERY_TASK_EAGER_PROPAGATES = True
+# Propagates task exceptions directly to the Django console for easy debugging.
+CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "true").lower() == "true"
 
 
 # ─── LOCAL EMAIL: console backend (C-10) ───────────────────────────────────

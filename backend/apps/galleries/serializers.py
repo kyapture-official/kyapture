@@ -10,6 +10,7 @@ RESERVED_GALLERY_SLUGS = {
     'search', 'dashboard', 'stats',
     'publish', 'set-password',
     'unlock', 'download', 'video', 'photo', 'stream',
+    'set-download-pin', 'favorites', 'download-logs', 'sets',
 }
 
 class CoverPhotoSerializer(serializers.ModelSerializer):
@@ -110,8 +111,9 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
     photo_count = serializers.IntegerField(read_only=True, default=0)
     is_downloadable = serializers.BooleanField(source='allow_download', read_only=True, default=False)
     has_password = serializers.SerializerMethodField()
+    has_download_pin = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
-    
+
     owner_username = serializers.CharField(source='photographer.username', read_only=True, default='')
     photographer_username = serializers.CharField(source='photographer.username', read_only=True, default='')
 
@@ -119,8 +121,9 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
         model = Gallery
         fields = [
             'id', 'title', 'slug', 'description', 'branding_color',
-            'cover_url', 'photo_count', 'is_downloadable', 
-            'is_active', 'event_date', 'expires_at', 'is_published', 'has_password', 
+            'cover_url', 'photo_count', 'is_downloadable',
+            'is_active', 'event_date', 'expires_at', 'is_published', 'has_password',
+            'has_download_pin',
             'owner_username', 'photographer_username',
             'watermark_enabled', 'design_settings', 'photos',
             'password_hash', 'created_at', 'updated_at'
@@ -168,6 +171,9 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
 
     def get_has_password(self, obj):
         return bool(obj.password_hash)
+
+    def get_has_download_pin(self, obj):
+        return bool(obj.download_pin_hash)
 
 class GalleryCreateSerializer(serializers.ModelSerializer):
     """POST /api/v1/galleries/"""

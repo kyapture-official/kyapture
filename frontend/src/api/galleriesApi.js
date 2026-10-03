@@ -213,6 +213,40 @@ export const galleriesApi = {
   },
 
   /**
+   * WHAT: Set, change, or clear the gallery's optional download PIN — a
+   *       second gate independent of the gallery access password above.
+   * URI:  POST /api/v1/galleries/{slug}/set-download-pin/
+   */
+  setDownloadPin: async (slug, pin) => {
+    const { data } = await api.post(`/galleries/${slug}/set-download-pin/`, {
+      pin: pin ?? '',
+    })
+    return data
+  },
+
+  /**
+   * WHAT: Paginated download activity for one gallery (Phase 3).
+   * URI:  GET /api/v1/galleries/{slug}/download-logs/?page=N
+   */
+  getDownloadLogs: async (slug, page = 1) => {
+    const { data } = await api.get(`/galleries/${slug}/download-logs/`, {
+      params: { page },
+    })
+    return data
+  },
+
+  /**
+   * WHAT: Paginated favorite activity for one gallery (Phase 3).
+   * URI:  GET /api/v1/galleries/{slug}/favorites/?page=N
+   */
+  getFavoriteActivity: async (slug, page = 1) => {
+    const { data } = await api.get(`/galleries/${slug}/favorites/`, {
+      params: { page },
+    })
+    return data
+  },
+
+  /**
    * WHAT: Toggle a gallery between published (visible to clients) and draft.
    * URI:  POST /api/v1/galleries/{slug}/publish/
    *

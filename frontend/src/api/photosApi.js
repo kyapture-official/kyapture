@@ -90,11 +90,16 @@ export const photosApi = {
    * URI:  GET /api/v1/photos/{gallery_slug}/
    *
    * @param   {string} gallerySlug
+   * @param   {string} [setId] - Photo set UUID used for server-side filtering
+   * @param   {AbortSignal} [signal]
    * @returns {Promise<MediaAsset[]>}
    */
-  list: async (gallerySlug) => {
+  list: async (gallerySlug, setId, signal) => {
     assertNonEmptyString(gallerySlug, 'photosApi.list: gallerySlug')
-    const { data } = await api.get(`/photos/${encodeURIComponent(gallerySlug)}/`)
+    const { data } = await api.get(`/photos/${encodeURIComponent(gallerySlug)}/`, {
+      params: setId ? { set: setId } : undefined,
+      signal,
+    })
     return data
   },
 
@@ -283,5 +288,119 @@ export const photosApi = {
   // Preserves existing UploadPage.jsx implementations during method migrations
   upload: function (gallerySlug, formData, onProgress, signal) {
     return photosApi.uploadBulk(gallerySlug, formData, onProgress, signal)
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PHOTO SETS (Phase 3)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * WHAT: List a gallery's photo sets, each with a live photo_count.
+   * URI:  GET /api/v1/photos/{gallery_slug}/sets/
+   */
+  listSets: async (gallerySlug, signal) => {
+    assertNonEmptyString(gallerySlug, 'photosApi.listSets: gallerySlug')
+    const { data } = await api.get(`/photos/${encodeURIComponent(gallerySlug)}/sets/`, { signal })
+    return data
+  },
+
+  /**
+   * WHAT: Create a new set in this gallery.
+   * URI:  POST /api/v1/photos/{gallery_slug}/sets/
+   */
+  createSet: async (gallerySlug, name, descriptionOrSignal = '', signal) => {
+    assertNonEmptyString(gallerySlug, 'photosApi.createSet: gallerySlug')
+    assertNonEmptyString(name, 'photosApi.createSet: name')
+    const isSignal = descriptionOrSignal && typeof descriptionOrSignal === 'object'
+      && typeof descriptionOrSignal.aborted === 'boolean'
+    const description = isSignal ? '' : descriptionOrSignal
+    if (isSignal) signal = descriptionOrSignal
+    if (typeof description !== 'string' || description.length > 500) {
+      throw new TypeError('photosApi.createSet: description must be a string of 500 characters or fewer')
+    }
+    const { data } = await api.post(
+      `/photos/${encodeURIComponent(gallerySlug)}/sets/`,
+      { name, description },
+      { signal }
+    )
+    return data
+  },
+
+  /**
+   * WHAT: Partially update a set name and/or description.
+   * URI:  PATCH /api/v1/photos/{gallery_slug}/sets/{set_id}/
+   */
+  updateSet: async (gallerySlug, setId, fields, signal) => {
+    assertNonEmptyString(gallerySlug, 'photosApi.updateSet: gallerySlug')
+    assertNonEmptyString(setId, 'photosApi.updateSet: setId')
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+      throw new TypeError('photosApi.updateSet: fields must be an object')
+    }
+    if ('name' in fields) assertNonEmptyString(fields.name, 'photosApi.updateSet: name')
+    if ('description' in fields && (typeof fields.description !== 'string' || fields.description.length > 500)) {
+      throw new TypeError('photosApi.updateSet: description must be a string of 500 characters or fewer')
+    }
+    const { data } = await api.patch(
+      `/photos/${encodeURIComponent(gallerySlug)}/sets/${encodeURIComponent(setId)}/`,
+      fields,
+      { signal }
+    )
+    return data
+  },
+
+  /**
+   * WHAT: Backward-compatible rename helper for existing Photos page callers.
+   */
+  renameSet: async (gallerySlug, setId, name, signal) => {
+    return photosApi.updateSet(gallerySlug, setId, { name }, signal)
+  },
+
+  /**
+   * WHAT: Delete a set. Member photos are NOT deleted — they fall back
+   *       to "unsorted" (see PhotoSetDetailView on the backend).
+   * URI:  DELETE /api/v1/photos/{gallery_slug}/sets/{set_id}/
+   */
+  deleteSet: async (gallerySlug, setId, signal) => {
+    assertNonEmptyString(gallerySlug, 'photosApi.deleteSet: gallerySlug')
+    assertNonEmptyString(setId, 'photosApi.deleteSet: setId')
+    const { data } = await api.delete(
+      `/photos/${encodeURIComponent(gallerySlug)}/sets/${encodeURIComponent(setId)}/`,
+      { signal }
+    )
+    return data
+  },
+
+  /**
+   * WHAT: Persist a new sort order for this gallery's sets.
+   * URI:  PATCH /api/v1/photos/{gallery_slug}/sets/reorder/
+   */
+  reorderSets: async (gallerySlug, orderedSetIds, signal) => {
+    assertNonEmptyString(gallerySlug, 'photosApi.reorderSets: gallerySlug')
+    assertStringIdArray(orderedSetIds, 'photosApi.reorderSets: orderedSetIds')
+    const { data } = await api.patch(
+      `/photos/${encodeURIComponent(gallerySlug)}/sets/reorder/`,
+      { ordered_ids: orderedSetIds },
+      { signal }
+    )
+    return data
+  },
+
+  /**
+   * WHAT: Move a batch of photos into (or out of, with setId=null) a set.
+   * URI:  PATCH /api/v1/photos/{gallery_slug}/move/
+   *
+   * @param {string}      gallerySlug
+   * @param {string|null} setId       - null moves photos OUT of any set
+   * @param {string[]}    photoIds
+   */
+  assignPhotosToSet: async (gallerySlug, setId, photoIds, signal) => {
+    assertNonEmptyString(gallerySlug, 'photosApi.assignPhotosToSet: gallerySlug')
+    assertStringIdArray(photoIds, 'photosApi.assignPhotosToSet: photoIds')
+    const { data } = await api.patch(
+      `/photos/${encodeURIComponent(gallerySlug)}/move/`,
+      { set_id: setId, photo_ids: photoIds },
+      { signal }
+    )
+    return data
   },
 }

@@ -1,5 +1,5 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GalleryDesignPage.jsx
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
 import CoverPreview from "../../components/shared/CoverPreview";
@@ -46,38 +46,60 @@ export default function GalleryDesignPage() {
   const toast = useToast();
 
   const saved = gallery?.design_settings || {};
-  const [design, setDesign] = useState({
+  const initialDesign = {
     layout: saved.layout || "center",
     typography: saved.typography || "serif",
     colorPalette: saved.colorPalette || "light",
     thumbSize: saved.thumbSize || "regular",
     gridSpacing: saved.gridSpacing ?? 16,
     gridStyle: saved.gridStyle || "vertical",
-    coverPhoto: saved.coverPhoto || null, 
-  });
+    coverPhoto: saved.coverPhoto || null,
+  };
+  const [design, setDesign] = useState(initialDesign);
+  const latestDesignRef = useRef(initialDesign);
+  const saveInFlightRef = useRef(false);
 
-  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("cover");
 
   const update = (key, value) => {
-    const next = { ...design, [key]: value };
+    const next = { ...latestDesignRef.current, [key]: value };
+    latestDesignRef.current = next;
     setDesign(next);
-    persistDesign(next);
+    persistLatestDesign();
   };
 
-  const persistDesign = async (settings) => {
-    if (saving) return;
-    setSaving(true);
+  // Keep one PATCH in flight. Changes that occur while it is pending replace
+  // the queued snapshot, then the loop saves that latest snapshot next.
+  const persistLatestDesign = async () => {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
     try {
-      const updated = await galleriesApi.updateGallery(slug, { design_settings: settings });
-      if (isMountedRef?.current !== false) {
-        setGallery((prev) => ({ ...prev, ...updated }));
-        toast("Design settings saved", "success");
+      while (true) {
+        const settings = latestDesignRef.current;
+        try {
+          const updated = await galleriesApi.updateGallery(slug, { design_settings: settings });
+
+          // Do not replace the parent gallery with an older response while a
+          // newer design is queued. The final response remains the source of truth.
+          if (settings === latestDesignRef.current) {
+            if (isMountedRef?.current !== false) {
+              setGallery((prev) => ({ ...prev, ...updated }));
+              toast("Design settings saved", "success");
+            }
+            return;
+          }
+        } catch {
+          // A newer change can still be persisted after an older request fails.
+          if (settings === latestDesignRef.current) {
+            if (isMountedRef?.current !== false) {
+              toast("Failed to save design settings", "error");
+            }
+            return;
+          }
+        }
       }
-    } catch {
-      toast("Failed to save design settings", "error");
     } finally {
-      setSaving(false);
+      saveInFlightRef.current = false;
     }
   };
 

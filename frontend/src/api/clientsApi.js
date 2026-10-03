@@ -44,6 +44,20 @@ function buildGalleryPath(username, slug) {
 }
 
 /**
+ * Builds an anchor-safe public API URL rather than an axios request. The API
+ * base matches axiosInstance so this works in local proxy and deployed API
+ * base-url configurations alike.
+ */
+function buildPublicApiUrl(path) {
+  const apiBaseUrl = (
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    '/api/v1'
+  ).replace(/\/+$/, '')
+  return `${apiBaseUrl}${path}`
+}
+
+/**
  * Builds the `/public/{username}/{slug}/unlock/` action path.
  */
 const buildVerifyPasswordPath = (username, slug) => {
@@ -252,21 +266,206 @@ export const clientsApi = {
   requestDownload: async (username, slug, email, token = null, assetIds = [], options = {}) => {
     const path = `${buildGalleryPath(username, slug)}download/`
     assertNonEmptyString(email, 'email')
-    const { signal } = options || {}
+    const { signal, resolution, pin, setId } = options || {}
 
     try {
       // ENFORCE: responseType: 'blob' is mandatory in Axios to process
       // binary ZIP streaming chunks safely without corrupting them into strings.
       const res = await api.post(
         path,
-        { email, token, asset_ids: assetIds },
+        {
+          email,
+          token,
+          asset_ids: assetIds,
+          resolution: resolution || undefined,
+          pin: pin || undefined,
+          set_id: setId || undefined,
+        },
         { signal, responseType: 'blob' }
       )
       return res.data
     } catch (error) {
+      // responseType: 'blob' means an error JSON body (e.g. pin_required/
+      // invalid_pin) arrives as a Blob, not parsed JSON — normalizeError()
+      // above only reads error?.response?.data as if it were already an
+      // object, so PIN errors need their own decode step here.
+      if (isCanceled(error)) throw error
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text()
+          const parsed = JSON.parse(text)
+          const normalized = new Error(parsed.error || parsed.detail || 'Download request failed.')
+          normalized.status = error.response.status
+          normalized.code = parsed.code ?? null
+          normalized.cause = error
+          throw normalized
+        } catch (parseErr) {
+          if (parseErr instanceof Error && parseErr.status !== undefined) throw parseErr
+          // Fall through to generic normalization if the blob wasn't JSON.
+        }
+      }
       handleRequestError(error, {
         authMessage: 'An active unlocked session is required to download this gallery.',
         notFoundMessage: 'This gallery could not be found.',
+      })
+    }
+  },
+
+  /**
+   * Builds the direct <a href> for a single photo/video download,
+   * appending the optional token/resolution/pin query params this
+   * gallery needs. Never fetches — PublicPhotoDownloadView is a plain
+   * GET meant to be used as a real anchor href (forces a "Save As").
+   *
+   * @param {string} downloadUrl - photo.download_url from the API (already token-less)
+   * @param {Object} [opts]
+   * @param {string} [opts.token]
+   * @param {string} [opts.resolution] - 'web' | 'original'
+   * @param {string} [opts.pin]
+   */
+  buildPhotoDownloadHref: (downloadUrl, opts = {}) => {
+    if (!downloadUrl) return null
+    const params = new URLSearchParams()
+    if (opts.token) params.set('token', opts.token)
+    if (opts.resolution) params.set('resolution', opts.resolution)
+    if (opts.pin) params.set('pin', opts.pin)
+    const qs = params.toString()
+    return qs ? `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}${qs}` : downloadUrl
+  },
+
+  /**
+   * Builds the direct streaming ZIP link for an entire gallery. This is kept
+   * as a URL helper so the browser, not axios, owns a potentially large file.
+   */
+  buildGalleryDownloadAllHref: (username, slug, opts = {}) => {
+    const params = new URLSearchParams()
+    if (opts.token) params.set('token', opts.token)
+    if (opts.pin) params.set('pin', opts.pin)
+    const query = params.toString()
+    const path = `${buildGalleryPath(username, slug)}download-all/`
+    return `${buildPublicApiUrl(path)}${query ? `?${query}` : ''}`
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PHOTO SETS (Phase 3) — client-facing set tabs
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Fetch a page of a gallery's READY photos, optionally scoped to one
+   * PhotoSet tab. Reuses getGalleryPhotos' pagination envelope.
+   *
+   * @param {string} username
+   * @param {string} slug
+   * @param {number} page
+   * @param {string|null} setId - PhotoSet id, or null/undefined for "All"
+   * @param {string} [token]
+   * @param {Object} [options]
+   */
+  getGalleryPhotosBySet: async (username, slug, page, setId = null, token = null, options = {}) => {
+    const path = `${buildGalleryPath(username, slug)}photos/`
+    const { signal } = options || {}
+    const params = { page }
+    if (setId) params.set = setId
+
+    const config = { signal, params }
+    if (token) config.headers = { Authorization: `Bearer ${token}` }
+
+    try {
+      const res = await api.get(path, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to view more photos.',
+        notFoundMessage: 'This gallery could not be found.',
+      })
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // FAVORITES (Phase 3)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Batch-fetch every media_asset id this client has favorited in this
+   * gallery — ONE request restores heart-icon state for the whole grid,
+   * instead of one request per photo.
+   *
+   * @param {string} username
+   * @param {string} slug
+   * @param {Object} identity - { clientUid } for open galleries, or { token } for protected ones
+   */
+  getFavorites: async (username, slug, identity = {}, options = {}) => {
+    const path = `${buildGalleryPath(username, slug)}favorites/`
+    const { signal } = options || {}
+    const params = {}
+    if (identity.clientUid) params.client_uid = identity.clientUid
+
+    const config = { signal, params }
+    if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
+
+    try {
+      const res = await api.get(path, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to view favorites.',
+        notFoundMessage: 'This gallery could not be found.',
+      })
+    }
+  },
+
+  /**
+   * Favorite one photo. Idempotent — favoriting twice is a harmless no-op.
+   *
+   * @param {string} username
+   * @param {string} slug
+   * @param {string} mediaAssetId
+   * @param {Object} identity - { clientUid } for open galleries, or { token } for protected ones
+   */
+  addFavorite: async (username, slug, mediaAssetId, identity = {}, options = {}) => {
+    const path = `${buildGalleryPath(username, slug)}favorites/`
+    assertNonEmptyString(mediaAssetId, 'mediaAssetId')
+    const { signal } = options || {}
+
+    const body = { media_asset_id: mediaAssetId }
+    if (identity.clientUid) body.client_uid = identity.clientUid
+
+    const config = { signal }
+    if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
+
+    try {
+      const res = await api.post(path, body, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to favorite photos.',
+        notFoundMessage: 'This photo could not be found.',
+      })
+    }
+  },
+
+  /**
+   * Unfavorite one photo. Idempotent — unfavoriting something never
+   * favorited is a harmless no-op.
+   */
+  removeFavorite: async (username, slug, mediaAssetId, identity = {}, options = {}) => {
+    const path = `${buildGalleryPath(username, slug)}favorites/`
+    assertNonEmptyString(mediaAssetId, 'mediaAssetId')
+    const { signal } = options || {}
+
+    const body = { media_asset_id: mediaAssetId }
+    if (identity.clientUid) body.client_uid = identity.clientUid
+
+    const config = { signal, data: body }
+    if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
+
+    try {
+      const res = await api.delete(path, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to favorite photos.',
+        notFoundMessage: 'This photo could not be found.',
       })
     }
   },

@@ -50,6 +50,14 @@ def get_thumbnail_photo_path(instance, filename):
     return f"photographers/{photographer_id}/galleries/{gallery_id}/thumbnails/{instance.id}_thumb.webp"
 
 
+def get_download_photo_path(instance, filename):
+    """Generates a private, full-resolution client download-master path."""
+    ext = os.path.splitext(filename)[1].lower() or '.jpg'
+    photographer_id = instance.gallery.photographer.id
+    gallery_id = instance.gallery.id
+    return f"photographers/{photographer_id}/galleries/{gallery_id}/photos/{instance.id}_download{ext}"
+
+
 def get_video_poster_path(instance, filename):
     """
     Generates paths for frame-captured video poster thumbnails (null for
@@ -90,6 +98,56 @@ def get_video_playback_path(instance, filename):
 
 
 # ─────────────────────────────────────────────────────────────
+# PHOTO SETS (Phase 3 — client experience)
+# ─────────────────────────────────────────────────────────────
+
+class PhotoSet(BaseModel):
+    """
+    A named, ordered sub-grouping of a gallery's media assets (e.g.
+    "Ceremony", "Reception", "Getting Ready"). Purely organizational —
+    assigning an asset to a set never removes it from the gallery's own
+    full-gallery ordering (MediaAsset.order / Gallery.assets), so the
+    existing dashboard grid and public "All" view keep working exactly
+    as before regardless of set membership.
+    """
+    gallery = models.ForeignKey(
+        'galleries.Gallery',
+        on_delete=models.CASCADE,
+        related_name='sets'
+    )
+    name = models.CharField(max_length=100)
+    description = models.TextField(max_length=500, blank=True)
+
+    # Same fractional-decimal insertion pattern as MediaAsset.order —
+    # lets a single set be dragged to a new position without renumbering
+    # every other set.
+    order = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        default=Decimal('1.0')
+    )
+
+    class Meta:
+        db_table = 'photo_sets'
+        ordering = ['order', 'created_at']
+        constraints = [
+            # A photographer cannot create two sets with the same name in
+            # the same gallery — prevents confusing duplicate tabs on the
+            # client-facing side.
+            models.UniqueConstraint(
+                fields=['gallery', 'name'],
+                name='unique_gallery_photoset_name'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['gallery', 'order'], name='idx_gallery_sets_order'),
+        ]
+
+    def __str__(self):
+        return f"{self.gallery.title} / {self.name}"
+
+
+# ─────────────────────────────────────────────────────────────
 # UNIFIED MEDIA ASSET MODEL (The Production Standard)
 # ─────────────────────────────────────────────────────────────
 
@@ -115,7 +173,16 @@ class MediaAsset(BaseModel):
         on_delete=models.CASCADE,
         related_name='assets'
     )
-    
+
+    # Optional membership in one of the gallery's PhotoSets.
+    photo_set = models.ForeignKey(
+        'photos.PhotoSet',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='assets'
+    )
+
     # ─── Core Discriminator Flag ───
     media_type = models.CharField(
         max_length=10,
@@ -156,6 +223,12 @@ class MediaAsset(BaseModel):
     thumbnail_file = models.ImageField(
         upload_to=get_thumbnail_photo_path, max_length=500, null=True, blank=True, storage=PublicMediaStorage()
     )
+    # Full-resolution, size-optimized download derivative. It stays private
+    # like original_file: clients only receive it through the existing
+    # authorization/PIN-gated download endpoints.
+    download_file = models.FileField(
+        upload_to=get_download_photo_path, max_length=500, null=True, blank=True, storage=PrivateMediaStorage()
+    )
     blurhash = models.CharField(max_length=100, blank=True, null=True)
     width = models.PositiveIntegerField(null=True, blank=True)   
     height = models.PositiveIntegerField(null=True, blank=True)  
@@ -190,6 +263,10 @@ class MediaAsset(BaseModel):
             models.Index(fields=['created_at'], name='idx_assets_created_at'),
             # NEW: Index for background worker processing sweeps
             models.Index(fields=['processing_status'], name='idx_assets_proc_status'),
+            # Phase 3: covers the public/dashboard "photos in this set,
+            # ordered" query (PhotoSet tabs) the same way idx_gallery_assets_order
+            # already covers the unfiltered gallery view.
+            models.Index(fields=['photo_set', 'order'], name='idx_set_assets_order'),
         ]
 
     def __str__(self):

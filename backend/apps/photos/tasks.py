@@ -3,7 +3,7 @@ from celery import shared_task
 import logging
 # Defer imports to task execution time to completely bypass circular imports
 from apps.photos.models import MediaAsset
-from apps.core.utils import process_image_pipeline
+from apps.core.utils import process_image_pipeline, process_download_master
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,22 @@ def process_photo_asset(self, asset_id):
         # 2. Guard: Skip processing if already ready (prevents redundant retries)
         if asset.processing_status == MediaAsset.ProcessingStatus.READY:
             logger.info(f"[Task] Photo {asset_id} is already processed. Skipping.")
+            # Assets created before the download-master field existed remain
+            # READY and must not have their working web tiers regenerated.
+            # Backfill just this missing private derivative instead.
+            if not asset.download_file and asset.original_file:
+                try:
+                    asset.download_file = process_download_master(asset.original_file)
+                    if asset.download_file:
+                        asset.save(update_fields=['download_file'])
+                except Exception:
+                    logger.exception("[Task] Download-master backfill failed for photo %s", asset_id)
+            # An eager/local retry, an import recovery, or a task replay can
+            # encounter an already-READY asset from a gallery that still has
+            # no cover. The processing work must remain a no-op, but the
+            # idempotent conditional update below is still safe and restores
+            # the gallery-level invariant without replacing a manual cover.
+            _auto_assign_cover_if_missing(asset)
             return
 
         # 3. Transition state to 'processing'
@@ -75,7 +91,7 @@ def process_photo_asset(self, asset_id):
             photographer = asset.gallery.photographer
             watermark_text = f"© {photographer.display_name or photographer.username}"
 
-        display_file, medium_file, thumbnail_file, blurhash_str = process_image_pipeline(
+        display_file, medium_file, thumbnail_file, download_file, blurhash_str = process_image_pipeline(
             asset.original_file, watermark_text=watermark_text
         )
 
@@ -83,6 +99,7 @@ def process_photo_asset(self, asset_id):
         asset.display_file = display_file
         asset.medium_file = medium_file
         asset.thumbnail_file = thumbnail_file
+        asset.download_file = download_file
         asset.blurhash = blurhash_str
         asset.processing_status = MediaAsset.ProcessingStatus.READY
         
@@ -91,6 +108,7 @@ def process_photo_asset(self, asset_id):
             'display_file', 
             'medium_file',
             'thumbnail_file', 
+            'download_file',
             'blurhash', 
             'processing_status'
         ])
@@ -140,6 +158,7 @@ def process_video_asset(self, asset_id):
         # 2. Guard: Skip processing if already ready (prevents duplicate triggers)
         if asset.processing_status == MediaAsset.ProcessingStatus.READY:
             logger.info(f"[Task] Video {asset_id} is already processed. Skipping.")
+            _auto_assign_cover_if_missing(asset)
             return
 
         # 3. Transition state to 'processing'
@@ -180,4 +199,4 @@ def process_video_asset(self, asset_id):
             asset.save(update_fields=['processing_status'])
             
         # Retry task if retry thresholds have not been exceeded
-        raise self.retry(exc=exc)    
+        raise self.retry(exc=exc)

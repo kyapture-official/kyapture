@@ -37,22 +37,41 @@ COPY . .
 # those runtime values override what's set here. Nothing below this line
 # is a credential — don't remove the guards in production.py to avoid
 # needing this; that would defeat the point of the fail-loud checks.
-ENV SECRET_KEY=build-time-placeholder-overridden-at-runtime \
-    AWS_ACCESS_KEY_ID=build-time-placeholder \
-    AWS_SECRET_ACCESS_KEY=build-time-placeholder \
-    AWS_STORAGE_BUCKET_NAME=build-time-placeholder \
-    DEFAULT_FROM_EMAIL=build-time-placeholder@example.com \
-    DB_NAME=build-time-placeholder \
-    DB_USER=build-time-placeholder \
-    DB_PASSWORD=build-time-placeholder \
-    DB_HOST=build-time-placeholder
+ARG BUILD_SECRET_KEY=build-time-placeholder
+ARG BUILD_AWS_ACCESS_KEY_ID=build-time-placeholder
+ARG BUILD_AWS_SECRET_ACCESS_KEY=build-time-placeholder
+ARG BUILD_AWS_STORAGE_BUCKET_NAME=build-time-placeholder
+ARG BUILD_DEFAULT_FROM_EMAIL=build-time-placeholder@example.com
+ARG BUILD_DB_NAME=build-time-placeholder
+ARG BUILD_DB_USER=build-time-placeholder
+ARG BUILD_DB_PASSWORD=build-time-placeholder
+ARG BUILD_DB_HOST=build-time-placeholder
 
 # Pre-compile and collect static assets during the image build phase.
 # This compiles, compresses, and generates cache-busting hashes for WhiteNoise static serving.
-RUN python manage.py collectstatic --noinput --settings=config.settings.production
+RUN SECRET_KEY="$BUILD_SECRET_KEY" \
+    AWS_ACCESS_KEY_ID="$BUILD_AWS_ACCESS_KEY_ID" \
+    AWS_SECRET_ACCESS_KEY="$BUILD_AWS_SECRET_ACCESS_KEY" \
+    AWS_STORAGE_BUCKET_NAME="$BUILD_AWS_STORAGE_BUCKET_NAME" \
+    DEFAULT_FROM_EMAIL="$BUILD_DEFAULT_FROM_EMAIL" \
+    DB_NAME="$BUILD_DB_NAME" \
+    DB_USER="$BUILD_DB_USER" \
+    DB_PASSWORD="$BUILD_DB_PASSWORD" \
+    DB_HOST="$BUILD_DB_HOST" \
+    python manage.py collectstatic --noinput --settings=config.settings.production
+
+RUN chmod +x docker-entrypoint.py
 
 # Instruct Docker to expose port 8000 programmatically
 EXPOSE 8000
+
+# Shared by every process this image runs (gunicorn here, and the Celery
+# worker/beat services in docker-compose.yml, which build this same image
+# and only override CMD below, never ENTRYPOINT) — guarantees
+# "database available -> migrations applied -> CMD starts" for all of
+# them. See docker-entrypoint.py's own docstring for the full rationale
+# (this is the fix for the Phase 3 migration-drift production incident).
+ENTRYPOINT ["python", "docker-entrypoint.py"]
 
 # Execute Gunicorn in production mode with 3 concurrent worker processes
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

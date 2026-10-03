@@ -2,6 +2,7 @@
 import bcrypt
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,6 +11,7 @@ from rest_framework.pagination import PageNumberPagination
 
 # Dynamic permission routing prevents the Storage Lockout Paradox
 from apps.core.utils import get_user_subscription_metrics
+from apps.core.pagination import StandardResultsSetPagination
 from .models import Gallery
 from .serializers import (
     GalleryListSerializer,
@@ -241,10 +243,17 @@ class GalleryDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Safe Soft-Delete: Never hard-delete client delivery assets [1.1.2]
+        # Safe Soft-Delete: Never hard-delete client delivery assets [1.1.2].
+        # trashed_at starts the retention-window clock for the scheduled
+        # purge task (apps/galleries/tasks.py::purge_trashed_galleries) —
+        # the gallery stays fully recoverable (files untouched) until that
+        # window passes, and still counts toward the owner's quota in the
+        # meantime (get_user_subscription_metrics no longer excludes it) —
+        # see Gallery.trashed_at's own docstring for why.
         gallery.is_active = False
-        gallery.save()
-        
+        gallery.trashed_at = timezone.now()
+        gallery.save(update_fields=['is_active', 'trashed_at'])
+
         return Response(
             {'message': 'Gallery deleted successfully.'},
             status=status.HTTP_200_OK
@@ -478,5 +487,127 @@ class GallerySetPasswordView(APIView):
             'status': 'success',
             'is_password_protected': gallery.is_password_protected,
             'has_password': True,
-            'revoked_sessions': revoked_count, 
+            'revoked_sessions': revoked_count,
         }, status=status.HTTP_200_OK)
+
+
+class GallerySetDownloadPinView(APIView):
+    """
+    POST /api/v1/galleries/{slug}/set-download-pin/
+
+    Sets, changes, or clears the gallery's optional download PIN — a
+    SECOND gate, independent of the gallery access password above. A
+    photographer can leave a gallery completely open to view but still
+    require a PIN before a client can trigger an actual download (ZIP or
+    single file). Never stores the plaintext PIN — bcrypt hash only,
+    exactly like GallerySetPasswordView above.
+
+    Body: { "pin": "1234" } to set/change, { "pin": "" } (or omitted) to
+    remove the PIN gate entirely.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, slug):
+        gallery = get_object_or_404(
+            Gallery,
+            slug=slug,
+            photographer=request.user,
+            is_active=True
+        )
+
+        pin = request.data.get('pin')
+        pin = pin.strip() if pin else ''
+
+        if not pin:
+            gallery.download_pin_hash = None
+            gallery.save(update_fields=['download_pin_hash'])
+            return Response({
+                'status': 'success',
+                'has_download_pin': False,
+            }, status=status.HTTP_200_OK)
+
+        if not (pin.isdigit() and 4 <= len(pin) <= 8):
+            return Response(
+                {'error': 'PIN must be 4 to 8 digits.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        gallery.download_pin_hash = bcrypt.hashpw(
+            pin.encode('utf-8'), bcrypt.gensalt()
+        ).decode('utf-8')
+        gallery.save(update_fields=['download_pin_hash'])
+
+        return Response({
+            'status': 'success',
+            'has_download_pin': True,
+        }, status=status.HTTP_200_OK)
+
+
+class GalleryFavoriteActivityView(APIView):
+    """
+    GET /api/v1/galleries/{slug}/favorites/
+
+    Paginated, photographer-facing favorite activity for one gallery:
+    which photo, by whom (email when known), and when. Powers
+    ActivitiesWorkspace.jsx's "Favorite Activity" tab.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, slug):
+        gallery = get_object_or_404(
+            Gallery, slug=slug, photographer=request.user, is_active=True
+        )
+
+        # Deferred import: same circular-dependency reason as
+        # GallerySetPasswordView's ClientSession import above — apps.clients
+        # imports apps.galleries.models at module load time, so the reverse
+        # import must happen inside the view, not at module scope.
+        from apps.clients.models import Favorite
+        from apps.clients.serializers import PhotographerFavoriteSerializer
+
+        favorites = (
+            Favorite.objects
+            .filter(gallery=gallery)
+            .select_related('media_asset')
+            .order_by('-created_at')
+        )
+
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(favorites, request, view=self)
+        serializer = PhotographerFavoriteSerializer(
+            page, many=True, context={'request': request}
+        )
+        return paginator.get_paginated_response(serializer.data)
+
+
+class GalleryDownloadLogsView(APIView):
+    """
+    GET /api/v1/galleries/{slug}/download-logs/
+
+    Paginated, photographer-facing download activity for one gallery —
+    completes the existing DownloadLog workflow, which previously had no
+    read-side API at all. Powers ActivitiesWorkspace.jsx's "Download
+    Activity" tab. Bounded page size (StandardResultsSetPagination) so a
+    heavily-downloaded gallery never returns one giant unbounded array.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, slug):
+        gallery = get_object_or_404(
+            Gallery, slug=slug, photographer=request.user, is_active=True
+        )
+
+        from apps.clients.models import DownloadLog
+        from apps.clients.serializers import DownloadLogSerializer
+
+        logs = (
+            DownloadLog.objects
+            .filter(gallery=gallery)
+            .select_related('media_asset', 'photo_set')
+            .order_by('-created_at')
+        )
+
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(logs, request, view=self)
+        serializer = DownloadLogSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)

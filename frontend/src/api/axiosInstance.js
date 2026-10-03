@@ -61,16 +61,39 @@ const processQueue = (error) => {
   failedQueue = []
 }
 
+const isHtmlErrorResponse = (response) => {
+  const contentType = String(response?.headers?.['content-type'] || '')
+  const body = response?.data
+  return typeof body === 'string' && (
+    contentType.includes('text/html') ||
+    /^\s*<!doctype html/i.test(body) ||
+    /^\s*<html[\s>]/i.test(body)
+  )
+}
+
+// A development Django debug page is never a useful application error. Keep
+// callers on the normal API-error path even if an upstream server misbehaves.
+const normalizeUnexpectedErrorPayload = (error) => {
+  if (isHtmlErrorResponse(error?.response)) {
+    error.response.data = {
+      error: 'The server could not complete that request. Please try again.',
+      code: 'unexpected_server_error',
+    }
+  }
+  return error
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    normalizeUnexpectedErrorPayload(error)
     // ── CONNECTION REFUSED: backend not reachable ──────────────────────────
     // Axios sets code === 'ERR_NETWORK' and message includes
     // 'ERR_CONNECTION_REFUSED' when the proxy target (localhost:8000) is down.
     if (!error.response && error.code === 'ERR_NETWORK') {
       console.error(
-        '[kyapture] Backend unreachable. Ensure the Django server is running on port 8000.\n' +
-        '  Start it with: cd backend && python manage.py runserver\n' +
+        '[kyapture] Backend unreachable. Ensure the Django server is running at the configured API URL.\n' +
+        '  Start it with: python backend/manage.py runserver\n' +
         '  Current API base URL:', cleanBaseURL,
       )
     }

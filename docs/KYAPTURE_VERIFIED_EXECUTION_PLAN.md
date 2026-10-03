@@ -109,10 +109,10 @@ All confirmed by direct code read; grouped by area.
 
 1. **Currency (F-39):** ship in USD (matches seeded plan prices and SES/Stripe defaults) or NPR (matches the frontend formatter)? This is a product decision, not something to infer from code.
 2. **Payment processor (F-53):** manual-payment-only (current state, functional) is acceptable for MVP, but confirm whether the US client requires card payments (Stripe) at launch or can follow in a fast-follow.
-3. **Client-gallery URL scheme (F-14):** `frontend/src/utils/formatters.js`'s `buildClientGalleryUrl()` builds a **subdomain** URL in production (`https://{username}.{domain}/{slug}`), but `App.jsx`'s router only has path-based routes (`/g/:username/:slug`) with no subdomain handling anywhere (no wildcard DNS assumption in settings, no subdomain-based CORS/session logic). Recommend collapsing to the path-based scheme everywhere for MVP (subdomains are a real infra project: wildcard TLS, cookie-domain scoping, CORS regex) — confirm you agree before this becomes a "which three URL builders do we delete" cleanup task.
-4. **Free-tier gallery cap (F-31):** `max_galleries=None` on the free tier today (unlimited galleries, 3GB total storage only). Decide the actual number before launch, since it interacts directly with the storage-leak fix in P1 (F-30).
+3. **Client-gallery URL scheme (F-14):** resolved: the canonical MVP route is `/g/:username/:slug` everywhere. Wildcard subdomains remain post-MVP.
+4. **Free-tier gallery cap (F-31):** resolved: free tier is 3 GB total storage and a maximum of 10 galleries.
 5. **Design settings scope (P0-1):** is "Design" (cover/typography/color/grid) an MVP-required feature, or should `design_settings` ship as a minimal JSON blob (just enough to stop the 500) with the full design UI deferred? This changes the size of Phase 0/1 meaningfully.
-6. **Subdomain vs. path-based tenancy long-term:** related to #3 — worth a one-line confirmation that subdomains are explicitly post-MVP, so nobody re-introduces the subdomain URL builder while fixing F-14.
+6. **Subdomain vs. path-based tenancy long-term:** resolved: subdomains are explicitly post-MVP; do not re-introduce subdomain URL building for MVP.
 
 ---
 

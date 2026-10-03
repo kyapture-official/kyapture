@@ -3,10 +3,25 @@ import bcrypt
 from rest_framework import serializers
 
 from apps.galleries.models import Gallery
-from apps.photos.models import MediaAsset
+from apps.photos.models import MediaAsset, PhotoSet
 from apps.core.utils import generate_secure_token
-from .models import ClientSession
+from .models import ClientSession, Favorite, DownloadLog
 from django.urls import reverse
+
+
+class PublicPhotoSetSerializer(serializers.ModelSerializer):
+    """
+    Client-facing set tab metadata: id, name, and how many READY assets
+    it contains. `photo_count` is annotated by the view (Count of READY
+    assets only — a set showing "12" that's actually still processing
+    would be a confusing tab label), never computed here.
+    """
+    photo_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = PhotoSet
+        fields = ['id', 'name', 'photo_count']
+        read_only_fields = fields
 
 
 class PublicMediaAssetSerializer(serializers.ModelSerializer):
@@ -161,6 +176,8 @@ class PublicGallerySerializer(serializers.ModelSerializer):
     photos_count = serializers.SerializerMethodField()
     photos_has_more = serializers.SerializerMethodField()
     photos_page_size = serializers.SerializerMethodField()
+    photo_sets = serializers.SerializerMethodField()
+    has_download_pin = serializers.SerializerMethodField()
 
     class Meta:
         model = Gallery
@@ -168,10 +185,28 @@ class PublicGallerySerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'slug', 'branding_color',
             'cover_url', 'event_date', 'design_settings',
             'photographer_name', 'photographer_logo', 'allow_download', 'watermark_enabled',
-            'is_password_protected',
+            'is_password_protected', 'has_download_pin',
             'photos', 'photos_count', 'photos_has_more', 'photos_page_size',
+            'photo_sets',
         ]
         read_only_fields = fields
+
+    def get_photo_sets(self, obj):
+        """
+        Reads context['photo_sets'] the same way get_photos() reads
+        context['photos_page'] — the view queries+annotates this ONCE
+        (Count of READY assets per set) and hands it in, so this
+        serializer never issues its own query. Falls back to an empty
+        list if a caller ever instantiates this serializer without that
+        context, same defensive convention as get_photos().
+        """
+        photo_sets = self.context.get('photo_sets')
+        if photo_sets is None:
+            return []
+        return PublicPhotoSetSerializer(photo_sets, many=True, context=self.context).data
+
+    def get_has_download_pin(self, obj):
+        return bool(obj.download_pin_hash)
 
     def get_photos(self, obj):
         """
@@ -303,3 +338,81 @@ class GalleryUnlockSerializer(serializers.Serializer):
             'access_token': instance.access_token,
             'has_download_access': instance.has_download_access
         }
+
+
+# ─────────────────────────────────────────────────────────────
+# FAVORITES (Phase 3)
+# ─────────────────────────────────────────────────────────────
+
+class FavoriteToggleSerializer(serializers.Serializer):
+    """
+    Input validation for POST/DELETE favorite requests. `client_uid` is
+    only required for OPEN (non-password-protected) galleries — for a
+    protected gallery the view derives client identity from the already-
+    verified session token instead, so a client can't fabricate an
+    arbitrary identity for a gallery it would otherwise need a password
+    to enter. See Favorite's docstring (apps/clients/models.py) for the
+    full identity model.
+    """
+    media_asset_id = serializers.UUIDField()
+    client_uid = serializers.CharField(
+        required=False, allow_blank=True, max_length=128, default=''
+    )
+
+
+class PhotographerFavoriteSerializer(serializers.ModelSerializer):
+    """
+    Photographer-facing favorite activity row: which photo, by whom
+    (email when known — never the raw client_key/token), and when.
+    """
+    media_asset_id = serializers.UUIDField(source='media_asset.id', read_only=True)
+    thumbnail_url = serializers.SerializerMethodField()
+    title = serializers.CharField(source='media_asset.title', read_only=True)
+
+    class Meta:
+        model = Favorite
+        fields = ['id', 'media_asset_id', 'title', 'thumbnail_url', 'email', 'created_at']
+        read_only_fields = fields
+
+    def get_thumbnail_url(self, obj):
+        request = self.context.get('request')
+        asset = obj.media_asset
+        image_field = getattr(asset, 'thumbnail_file', None) or getattr(asset, 'poster_image', None)
+        if not image_field or not request:
+            return None
+        return request.build_absolute_uri(image_field.url) if hasattr(image_field, 'url') else None
+
+
+# ─────────────────────────────────────────────────────────────
+# DOWNLOAD ACTIVITY (Phase 3)
+# ─────────────────────────────────────────────────────────────
+
+class DownloadLogSerializer(serializers.ModelSerializer):
+    """
+    Photographer-facing download activity row. media_asset/photo_set are
+    nullable FKs (a full-gallery ZIP download has neither) — plain
+    SerializerMethodFields rather than dotted `source=` traversal, since
+    DRF's dotted-attribute lookup raises AttributeError (not a clean
+    None) when an intermediate relation is null.
+    """
+    media_asset_id = serializers.SerializerMethodField()
+    media_asset_title = serializers.SerializerMethodField()
+    photo_set_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DownloadLog
+        fields = [
+            'id', 'email', 'download_type', 'resolution', 'pin_verified',
+            'media_asset_id', 'media_asset_title', 'photo_set_name',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_media_asset_id(self, obj):
+        return str(obj.media_asset_id) if obj.media_asset_id else None
+
+    def get_media_asset_title(self, obj):
+        return obj.media_asset.title if obj.media_asset_id and obj.media_asset else None
+
+    def get_photo_set_name(self, obj):
+        return obj.photo_set.name if obj.photo_set_id and obj.photo_set else None

@@ -47,8 +47,8 @@ export const toDateInputValue = (value) => {
 
 /**
  * WHAT: Isomorphic Absolute URL Generator
- * WHY:  Dynamic link generator that converts your gallery share links depending
- *       on whether you are running locally (localhost paths) or in production (subdomains).
+ * WHY:  Dynamic link generator that returns the canonical same-origin gallery
+ *       path in every environment.
  */
 // Locked product decision: the MVP client gallery URL is path-based only —
 // /g/:username/:slug — everywhere, including production. Wildcard subdomain

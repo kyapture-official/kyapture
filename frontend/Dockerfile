@@ -7,6 +7,11 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+# The API base URL is baked into the bundle at build time, so it is an explicit
+# build input (passed by docker-compose.yml for local dev, by the deploy
+# pipeline for production) rather than whatever .env file is in the context.
+# Left unset, the app falls back to the relative '/api/v1'.
+ARG VITE_API_BASE_URL
 RUN npm run build
 
 # Runtime stage

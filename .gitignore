@@ -58,3 +58,7 @@ backend/logs/
 temp_tree.py
 temp_black_format.py
 directory_structure.txt
+backend/celerybeat-schedule*
+.aider*
+.aider.chat.history.md
+.aider.input.history

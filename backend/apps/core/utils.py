@@ -3,9 +3,10 @@ import io
 import logging
 import piexif
 import os
+import re
 import secrets
-import subprocess  
-import tempfile 
+import subprocess
+import tempfile
 from decimal import Decimal
 
 from PIL import Image, ImageDraw, ImageFont, ImageCms
@@ -87,10 +88,12 @@ def get_user_subscription_metrics(user):
     with apps.subscriptions, apps.galleries, and apps.photos.
     """
 
-    # Fallback default limits if no active plan is found (SaaS safety net)
+    # Fallback default limits if no active plan is found (SaaS safety net).
+    # Locked product decision (docs/KYAPTURE_PRODUCT_DECISIONS.md #5):
+    # free tier is 3 GB storage AND a maximum of 10 galleries.
     default_limits = {
         "plan_name": "Free (Trial)",
-        "max_galleries": None,
+        "max_galleries": 10,
         "max_photos_per_gallery": None,
         "storage_bytes_limit": 3 * 1024 * 1024 * 1024,  # 3 GB limit
         "allow_video": False,
@@ -117,16 +120,28 @@ def get_user_subscription_metrics(user):
         limits = default_limits
 
     # 2. Single-pass Aggregation for Current Usage
-    # Count only soft-deleted (is_active=True) galleries for accurate billing metrics
+    #
+    # Phase 4 (F-30 storage-leak fix): deliberately counts EVERY gallery
+    # row that still exists for this user — active AND trashed
+    # (is_active=False, pending purge) alike — not just is_active=True.
+    # A soft-deleted gallery's files are still sitting in storage during
+    # its retention window (see Gallery.trashed_at's docstring); if
+    # quota stopped counting it the instant it was trashed, a user could
+    # delete+reupload indefinitely at zero counted cost while real S3
+    # usage grew unbounded, which is exactly the leak this fixes. Once
+    # the scheduled purge task actually hard-deletes a gallery past its
+    # retention window, its row (and its MediaAssets, cascade-deleted)
+    # stops existing at all and naturally drops out of this count —
+    # quota only frees up when the data is actually gone, not when it's
+    # merely hidden.
     limits["current_galleries_count"] = Gallery.objects.filter(
-        photographer=user, 
-        is_active=True
+        photographer=user,
     ).count()
 
-    # Calculate total database storage footprints and photo count across active collections
+    # Same rationale as above — a trashed gallery's assets still occupy
+    # real storage until the purge task actually deletes them.
     asset_aggregation = MediaAsset.objects.filter(
         gallery__photographer=user,
-        gallery__is_active=True
     ).aggregate(total_bytes=Sum('file_size'), total_count=Count('id'))
 
     limits["current_total_storage_bytes"] = asset_aggregation['total_bytes'] or 0
@@ -277,9 +292,56 @@ def get_insertion_order(gallery_id, insert_after_id=None):
     
 
 
+# Phase 4 (download hardening): every format this pipeline's own upload
+# validators accept or its own derivative pipeline produces is already
+# entropy-dense compressed media — DEFLATE-compressing it again inside a
+# ZIP archive burns CPU for essentially zero size benefit (sometimes a
+# net loss, once the DEFLATE stream overhead is counted). Used to pick
+# ZIP_STORED instead of ZIP_DEFLATED per-entry in the gallery ZIP download.
+ALREADY_COMPRESSED_EXTS = {
+    '.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif',
+    '.mp4', '.mov', '.m4v', '.webm',
+}
+
+
+# Phase 4 (download hardening): strips anything that could turn an
+# untrusted, user-supplied filename (MediaAsset.original_name — set
+# directly from the uploaded file's own name, never validated as "safe")
+# into an attack when it's later placed into an HTTP response header or
+# a ZIP archive entry.
+_UNSAFE_FILENAME_CHARS = re.compile(r'[\r\n"\\\x00-\x1f]')
+
+
+def sanitize_download_filename(name, fallback='download'):
+    """
+    Produces a filename safe to use BOTH as a Content-Disposition header
+    value and as a ZIP archive entry name:
+
+    - Strips any directory path component (os.path.basename, after
+      normalizing backslashes to forward slashes first) — defends
+      against "zip slip" (a crafted `original_name` like
+      `../../../etc/cron.d/evil` extracting outside the target directory
+      when a client unzips the archive) and against the same traversal
+      applying to a single-file download's saved filename.
+    - Strips CR/LF and other control characters — defends against HTTP
+      response header injection.
+    - Strips embedded double quotes and backslashes — defends against
+      breaking out of a quoted `filename="..."` header value.
+
+    Never returns an empty string (falls back to `fallback`), since an
+    empty ZIP entry name or Content-Disposition filename is its own kind
+    of malformed-response edge case.
+    """
+    if not name:
+        return fallback
+    base = os.path.basename(name.replace('\\', '/'))
+    cleaned = _UNSAFE_FILENAME_CHARS.sub('_', base).strip()
+    return cleaned or fallback
+
+
 def raise_gating_violation(message, code):
     """
-    Standardized validation exception raiser designed to match 
+    Standardized validation exception raiser designed to match
     the core/exceptions.py standardized output format.
     """
     raise PermissionDenied(
@@ -376,6 +438,51 @@ def _normalize_to_srgb(img):
     return img.convert('RGB') if img.mode != 'RGB' else img
 
 
+def _make_download_master(image, source_format, base_name):
+    """Encode one full-resolution, private client-download derivative."""
+    stream = io.BytesIO()
+    if source_format in ('JPEG', 'JPG'):
+        # Quality 90 plus optimized progressive encoding is a conservative
+        # photographic-download tradeoff: materially smaller camera exports
+        # without downsampling or introducing normal-viewing artifacts.
+        # JPEG cannot carry an arbitrary camera working profile safely once
+        # re-encoded without retaining extra metadata. Convert through its
+        # embedded profile to sRGB first so color appearance remains stable.
+        _normalize_to_srgb(image).save(
+            stream,
+            format='JPEG',
+            quality=90,
+            optimize=True,
+            progressive=True,
+        )
+        filename = f"{base_name}_download.jpg"
+        content_type = 'image/jpeg'
+    elif source_format == 'PNG':
+        png_kwargs = {'format': 'PNG', 'optimize': True}
+        if image.info.get('icc_profile'):
+            png_kwargs['icc_profile'] = image.info['icc_profile']
+        image.save(stream, **png_kwargs)
+        filename = f"{base_name}_download.png"
+        content_type = 'image/png'
+    else:
+        return None
+
+    return SimpleUploadedFile(filename, stream.getvalue(), content_type=content_type)
+
+
+def process_download_master(image_file):
+    """Create only a missing download master without regenerating web tiers."""
+    image_file.seek(0)
+    source_image = Image.open(image_file)
+    source_format = (source_image.format or '').upper()
+    source_image = exif_transpose(source_image)
+    base_name = os.path.splitext(image_file.name)[0]
+    try:
+        return _make_download_master(source_image, source_format, base_name)
+    finally:
+        image_file.seek(0)
+
+
 def process_image_pipeline(image_file, watermark_text=None):
     """
     Unified image-derivative pipeline: PRESERVED ORIGINAL (handled
@@ -407,11 +514,17 @@ def process_image_pipeline(image_file, watermark_text=None):
     overwrite-on-write keys (apps/photos/models.py, apps/core/storage.py)
     that makes retries idempotent and orphan-free.
 
-    Returns tuple: (display_file, medium_file, thumbnail_file, blurhash_str)
+    Returns tuple: (display_file, medium_file, thumbnail_file,
+    download_file, blurhash_str)
     """
     image_file.seek(0)
     img = Image.open(image_file)
+    source_format = (img.format or '').upper()
     img = exif_transpose(img)       # Correct rotation from DSLR/phone orientation metadata
+    # Keep a separate oriented PNG source for the download master. The
+    # display tiers are intentionally normalized to opaque sRGB WebP, but a
+    # PNG download must retain alpha and its lossless semantics.
+    download_source = img.copy()
     img = _normalize_to_srgb(img)   # Correct wide-gamut color profiles to browser-standard sRGB
 
     base_name = os.path.splitext(image_file.name)[0]
@@ -442,7 +555,14 @@ def process_image_pipeline(image_file, watermark_text=None):
     # ─── 3. Thumbnail WebP (640px — grid thumbnails, incl. high-DPI phones) ───
     thumbnail_file = _make_derivative(640, 75, "thumb")
 
-    # ─── 4. Generate BlurHash String ───
+    # ─── 4. Full-resolution client Download Master ────────────────────────
+    # This deliberately does not resize. JPEGs are high-quality progressive
+    # JPEGs with optimized Huffman tables; PNGs stay lossless and retain
+    # transparency. Unknown/special source types get no derivative and the
+    # download views safely fall back to the preserved original.
+    download_file = _make_download_master(download_source, source_format, base_name)
+
+    # ─── 5. Generate BlurHash String ───
     # Previously this ALWAYS fell back to one single hardcoded placeholder
     # string for every image ever uploaded, for two independent reasons:
     #   (a) the `blurhash` package was never listed in requirements.txt,
@@ -477,7 +597,7 @@ def process_image_pipeline(image_file, watermark_text=None):
     # Reset stream pointer for S3 upload preservation
     image_file.seek(0)
 
-    return display_file, medium_file, thumbnail_file, blurhash_str
+    return display_file, medium_file, thumbnail_file, download_file, blurhash_str
 
 def process_video_pipeline(video_file):
     """

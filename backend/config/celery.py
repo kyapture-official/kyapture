@@ -37,6 +37,33 @@ app.conf.beat_schedule = {
         'task': 'apps.subscriptions.tasks.sweep_expired_subscriptions',
         'schedule': crontab(minute='*/15'),  # every 15 minutes
     },
+    # Phase 4 (F-30 storage-leak fix) — hard-deletes galleries past their
+    # trash retention window (see Gallery.trashed_at / GALLERY_TRASH_RETENTION_DAYS).
+    # Daily is plenty: this is a retention-window sweep, not a
+    # time-sensitive gate like the subscription check above.
+    'purge-trashed-galleries': {
+        'task': 'apps.galleries.tasks.purge_trashed_galleries',
+        'schedule': crontab(hour=3, minute=0),  # once daily, off-peak
+    },
+    # Phase 4 (auth hardening) — purges expired ClientSession rows past
+    # CLIENT_SESSION_TTL_DAYS. See apps/clients/tasks.py.
+    'purge-expired-client-sessions': {
+        'task': 'apps.clients.tasks.purge_expired_client_sessions',
+        'schedule': crontab(hour=3, minute=15),  # staggered after the gallery purge above
+    },
+    # Phase 4 (DB cleanup) — trims DownloadLog rows past
+    # DOWNLOAD_LOG_RETENTION_DAYS. Purely operational housekeeping.
+    'purge-old-download-logs': {
+        'task': 'apps.clients.tasks.purge_old_download_logs',
+        'schedule': crontab(hour=3, minute=30, day_of_week='sunday'),  # weekly
+    },
+    # Phase 4 (DB cleanup, "token blacklist growth") — flushes expired
+    # rows from simplejwt's OutstandingToken/BlacklistedToken tables,
+    # which otherwise grow forever. See apps/users/tasks.py.
+    'flush-expired-jwt-tokens': {
+        'task': 'apps.users.tasks.flush_expired_jwt_tokens',
+        'schedule': crontab(hour=4, minute=0, day_of_week='sunday'),  # weekly
+    },
 }
 
 

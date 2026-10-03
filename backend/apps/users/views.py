@@ -28,6 +28,7 @@ from .serializers import (
     UserProfileSerializer,
     ChangePasswordSerializer,
 )
+from .utils import blacklist_all_outstanding_tokens_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -183,9 +184,53 @@ class CookieTokenRefreshView(APIView):
         if not refresh_token:
             return Response({'error': 'Session expired. Please log in again.'}, status=status.HTTP_401_UNAUTHORIZED)
 
+        jwt_settings = getattr(settings, 'SIMPLE_JWT', {})
+
         try:
             refresh = RefreshToken(refresh_token)
-            new_access_token = str(refresh.access_token)
+
+            # Phase 4 (F-36 fix): this previously did `new_refresh_token =
+            # str(refresh)` — re-serializing the SAME RefreshToken object,
+            # which has the SAME jti as the one just presented. That mints
+            # nothing new and blacklists nothing, despite
+            # ROTATE_REFRESH_TOKENS/BLACKLIST_AFTER_ROTATION both being
+            # True in settings — a stolen refresh cookie stayed valid for
+            # its full 7-day life regardless of how many times it (or a
+            # copy of it) was used to refresh. Real rotation requires
+            # minting a genuinely NEW token, which needs the user — not
+            # available from `request.user` here (this view is
+            # AllowAny/unauthenticated by design, since all it has is the
+            # refresh cookie), so it's read from the token's own verified
+            # payload instead.
+            if jwt_settings.get('ROTATE_REFRESH_TOKENS', False):
+                user_id_claim = jwt_settings.get('USER_ID_CLAIM', 'user_id')
+                user_id = refresh.payload.get(user_id_claim)
+                try:
+                    user = User.objects.get(pk=user_id, is_active=True)
+                except User.DoesNotExist:
+                    return Response(
+                        {'error': 'Invalid or expired session.'}, status=status.HTTP_401_UNAUTHORIZED
+                    )
+
+                new_refresh = RefreshToken.for_user(user)
+                new_access_token = str(new_refresh.access_token)
+                new_refresh_token = str(new_refresh)
+
+                if jwt_settings.get('BLACKLIST_AFTER_ROTATION', False):
+                    try:
+                        refresh.blacklist()
+                    except AttributeError:
+                        # token_blacklist app not installed — rotation
+                        # still mints a new token above; the old one just
+                        # isn't explicitly revoked (it still expires
+                        # naturally at its own REFRESH_TOKEN_LIFETIME).
+                        pass
+            else:
+                # Rotation disabled: same non-rotating behavior as before
+                # — reuse the presented refresh token, only the access
+                # token is renewed.
+                new_access_token = str(refresh.access_token)
+                new_refresh_token = None
 
             response = Response({'message': 'Session refreshed successfully.'}, status=status.HTTP_200_OK)
 
@@ -203,9 +248,7 @@ class CookieTokenRefreshView(APIView):
                 max_age=15 * 60
             )
 
-            # Optional: Rotate refresh token if enabled in settings
-            if getattr(settings, 'SIMPLE_JWT', {}).get('ROTATE_REFRESH_TOKENS', False):
-                new_refresh_token = str(refresh)
+            if new_refresh_token is not None:
                 response.set_cookie(
                     key='refresh_token',
                     value=new_refresh_token,
@@ -257,10 +300,23 @@ class ChangePasswordView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class PublicMetricsRateThrottle(AnonRateThrottle):
+    """
+    Phase 4 (F-41 fix) — shares the same 'public_gallery_browse' scope as
+    apps.clients.views.PublicGalleryBrowseThrottle (same rate, defined
+    once in settings.DEFAULT_THROTTLE_RATES) rather than the blanket
+    'anon: 100/day' — a busy landing page can legitimately call this on
+    every load, easily exceeding 100/day across a handful of visitors
+    sharing one IP.
+    """
+    scope = 'public_gallery_browse'
+
+
 class TotalUsersView(APIView):
     """GET /api/total-users - Public count metrics and recent user avatars"""
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [PublicMetricsRateThrottle]
 
     def get(self, request):
         queryset = User.objects.filter(is_superuser=False, is_staff=False)
@@ -436,6 +492,13 @@ class PasswordResetConfirmView(APIView):
 
         user.set_password(new_password)
         user.save()
+
+        # Phase 4 (auth hardening): invalidate every outstanding refresh
+        # token for this user — see blacklist_all_outstanding_tokens_for_user's
+        # own docstring for why this matters specifically for a password
+        # reset (anyone with a still-valid session before the reset must
+        # not keep it afterward).
+        blacklist_all_outstanding_tokens_for_user(user)
 
         return Response({
             'message': 'Password changed successfully. Please log in with your new credentials.'

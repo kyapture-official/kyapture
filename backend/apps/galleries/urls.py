@@ -1,12 +1,15 @@
 #C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\urls.py
 from django.urls import path
 from .views import (
-    GalleryListCreateView, 
+    GalleryListCreateView,
     GalleryDetailView,
-    GallerySearchView, 
+    GallerySearchView,
     DashboardStatsView,
-    GalleryPublishView,      
-    GallerySetPasswordView   
+    GalleryPublishView,
+    GallerySetPasswordView,
+    GallerySetDownloadPinView,
+    GalleryFavoriteActivityView,
+    GalleryDownloadLogsView,
 )
 
 urlpatterns = [
@@ -41,6 +44,21 @@ urlpatterns = [
         '<slug:slug>/set-password/',
         GallerySetPasswordView.as_view(),
         name='gallery-set-password'
+    ),
+    path(
+        '<slug:slug>/set-download-pin/',
+        GallerySetDownloadPinView.as_view(),
+        name='gallery-set-download-pin'
+    ),
+    path(
+        '<slug:slug>/favorites/',
+        GalleryFavoriteActivityView.as_view(),
+        name='gallery-favorite-activity'
+    ),
+    path(
+        '<slug:slug>/download-logs/',
+        GalleryDownloadLogsView.as_view(),
+        name='gallery-download-logs'
     ),
 
     # Route: GET/PUT/DELETE /api/v1/galleries/{slug}/

@@ -55,14 +55,39 @@ class Gallery(BaseModel):
     is_password_protected = models.BooleanField(default=False)
     password_hash = models.CharField(max_length=255, null=True, blank=True)
 
+    # Phase 3: optional SECOND gate, independent of the gallery password
+    # above — a photographer can leave a gallery open (no password) but
+    # still require a PIN before a client can trigger an actual download
+    # (ZIP or single-file). Presence of a hash IS the "protected" flag;
+    # no separate boolean, mirroring how has_password is derived from
+    # password_hash elsewhere (GalleryListSerializer.get_has_password).
+    # Never stores the plaintext PIN — bcrypt hash only, same as the
+    # gallery password above.
+    download_pin_hash = models.CharField(max_length=255, null=True, blank=True)
+
     # Performance & Download Toggles
     allow_download = models.BooleanField(default=False)
     watermark_enabled = models.BooleanField(default=False)
 
     # Deployment Status
     is_published = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True) 
+    is_active = models.BooleanField(default=True)
     expires_at = models.DateTimeField(null=True, blank=True)
+
+    # Phase 4 — trash/purge lifecycle (fixes the soft-delete storage leak,
+    # F-30: a soft-deleted gallery previously stayed invisible AND
+    # zero-cost forever — no purge task existed anywhere, so a user could
+    # delete+reupload indefinitely at no counted storage/gallery-count
+    # cost). `is_active=False` still means "trashed, hidden from normal
+    # use" exactly as before; `trashed_at` records WHEN, so a scheduled
+    # purge task (apps/galleries/tasks.py::purge_trashed_galleries) can
+    # hard-delete anything past the retention window
+    # (settings.GALLERY_TRASH_RETENTION_DAYS). Until purged, the gallery
+    # and its storage still count toward the owner's quota
+    # (get_user_subscription_metrics no longer filters by is_active) —
+    # that's the actual fix for the leak: deleting no longer frees quota
+    # until the data is actually gone.
+    trashed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'galleries'
@@ -83,7 +108,14 @@ class Gallery(BaseModel):
             models.Index(
                 fields=['photographer', 'is_published'],
                 name='idx_photog_published'
-            )
+            ),
+            # Covers the scheduled purge task's "find everything past its
+            # retention window" sweep (is_active=False AND trashed_at <=
+            # cutoff) without a full table scan.
+            models.Index(
+                fields=['is_active', 'trashed_at'],
+                name='idx_gallery_trash_purge'
+            ),
         ]
 
     def __str__(self):

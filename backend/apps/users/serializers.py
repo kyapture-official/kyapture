@@ -178,4 +178,19 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = self.context['request'].user
         user.set_password(self.validated_data['new_password'])
         user.save()
+
+        # Phase 4 (auth hardening): invalidate every other outstanding
+        # session on a self-service password change too — see
+        # blacklist_all_outstanding_tokens_for_user's own docstring
+        # (apps/users/utils.py) for the full rationale. Deliberately
+        # blacklists ALL outstanding tokens, including the one behind the
+        # request making this very call — the frontend already holds a
+        # short-lived (15 min) access token and will naturally need to
+        # re-authenticate/refresh soon regardless, and there is no
+        # reliable way from here to distinguish "this device" from "any
+        # other device" among refresh tokens without adding new state
+        # this app doesn't otherwise track.
+        from .utils import blacklist_all_outstanding_tokens_for_user
+        blacklist_all_outstanding_tokens_for_user(user)
+
         return user

@@ -1,0 +1,38 @@
+# backend/apps/users/tasks.py
+import logging
+from celery import shared_task
+
+logger = logging.getLogger(__name__)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def flush_expired_jwt_tokens(self):
+    """
+    Periodic Celery Beat task — see config/celery.py's beat_schedule.
+
+    Phase 4 (DB cleanup, "token blacklist growth"): rest_framework_simplejwt's
+    token_blacklist app (INSTALLED_APPS) records one OutstandingToken row
+    per refresh token ever issued — every login, every refresh (Phase 4's
+    F-36 fix now actually mints a new one on every rotation instead of
+    reusing the same row) — and one BlacklistedToken row per token
+    that's ever been explicitly revoked (logout, password change/reset —
+    see apps/users/utils.py). Neither table had any cleanup before this,
+    so both grow forever.
+
+    `flushexpiredtokens` is simplejwt's own built-in management command
+    for exactly this: it deletes OutstandingToken rows (and their
+    matching BlacklistedToken row, via the DB cascade) once their
+    `expires_at` has passed — safe by construction, since an expired
+    token is already rejected by TokenError regardless of whether its
+    row still exists. Wrapping it in a Celery task (rather than a cron
+    entry calling manage.py directly) keeps every scheduled job in this
+    project going through the same Celery Beat mechanism.
+    """
+    from django.core.management import call_command
+
+    try:
+        call_command('flushexpiredtokens')
+        logger.info("[flush_expired_jwt_tokens] Completed.")
+    except Exception as exc:
+        logger.error(f"[flush_expired_jwt_tokens] Failed: {exc}")
+        raise self.retry(exc=exc)

@@ -20,7 +20,7 @@ Canonical, and only, client gallery URL scheme for MVP:
 /g/:username/:slug
 ```
 
-This matches `frontend/src/App.jsx`'s existing router already. `frontend/src/utils/formatters.js`'s `buildClientGalleryUrl()` currently builds a **subdomain** URL in production (`https://{username}.{domain}/{slug}`), which does not match any route the app actually serves — that function (and any other URL builder that disagrees with it, e.g. in `TopNavBar.jsx`/`GalleriesPage.jsx`/`ClientHomePage.jsx`) should be consolidated onto the path-based scheme as part of the F-14 cleanup. Not done in Phase 0; recorded here so it isn't re-broken later.
+This matches `frontend/src/App.jsx`'s router. `frontend/src/utils/formatters.js`'s `buildClientGalleryUrl()` and all current gallery-link call sites use this same path-based scheme.
 
 ## 4. Subdomain gallery URLs: post-MVP
 
@@ -29,10 +29,10 @@ Wildcard-subdomain tenancy (`{username}.kyapture.com`) is explicitly out of scop
 ## 5. Free tier: 3 GB storage, 10 galleries maximum
 
 - `storage_bytes_limit`: 3 GB (unchanged from current default).
-- `max_galleries`: **10** (currently `None`/unlimited in `get_user_subscription_metrics()`'s `default_limits` — this must be changed to `10` when free-tier limits are implemented).
+- `max_galleries`: **10**.
 - `max_photos_per_gallery`: not specified by this decision; left at existing behavior (`None`/unlimited) unless a future decision sets it.
 
-Not implemented in Phase 0 (it lives in Phase 4 of the verified execution plan, alongside the soft-delete/storage-leak fix it interacts with). Recorded here as the target value for that work.
+Implemented in `get_user_subscription_metrics()`.
 
 ## 6. Design is a real MVP feature — persisted and applied, kept simple
 

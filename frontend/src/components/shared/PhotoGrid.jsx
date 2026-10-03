@@ -316,7 +316,6 @@ export default function PhotoGrid({
                   )}
                 </div>
               )}
-              {/* NEW: set-as-cover action, top-left so it doesn't collide with delete (top-right) */}
               {showActions && onSetCover && (
                 <button
                   type="button"
