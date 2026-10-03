@@ -13,50 +13,42 @@ is about: error codes from the gates come back unchanged, and a successful
 call returns the streaming ZIP response with its Content-Disposition.
 
 InlineDownloadJobsMixin runs the Celery task inline (no broker/worker needed,
-independent of CELERY_TASK_ALWAYS_EAGER) and removes the ZIPs it stored.
+independent of CELERY_TASK_ALWAYS_EAGER) inside a throwaway MEDIA_ROOT.
 """
-import os
+import shutil
+import tempfile
 from unittest import mock
 
+from django.test import override_settings
+
 from apps.clients.download_jobs import run_download_job
-from apps.core.storage import PrivateMediaStorage
-
-
-def _job_dirs():
-    try:
-        return set(PrivateMediaStorage().listdir('download_jobs')[0])
-    except (FileNotFoundError, NotImplementedError):
-        return set()
 
 
 class InlineDownloadJobsMixin:
-    """Runs prepare jobs inline and deletes every ZIP the class stored."""
+    """
+    Runs prepare jobs inline (no broker/worker needed, independent of
+    CELERY_TASK_ALWAYS_EAGER) inside a THROWAWAY MEDIA_ROOT.
+
+    Everything a test class stores - uploaded originals, prepared ZIPs - lands
+    in a temp directory that is deleted when the class finishes. The tests
+    therefore never read, write or delete anything in the real media volume,
+    even while a developer is using the running stack: an earlier version of
+    this mixin deleted "new" files under the shared media directory and ate
+    real users' prepared downloads.
+    """
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        existing_dirs = _job_dirs()
+        media_root = tempfile.mkdtemp(prefix='kyapture-test-media-')
+        cls.addClassCleanup(shutil.rmtree, media_root, True)
+        cls.enterClassContext(override_settings(MEDIA_ROOT=media_root))
 
-        def run_inline(job_id):
-            return run_download_job(job_id)
-
-        patcher = mock.patch('apps.clients.views.prepare_download_job.delay', side_effect=run_inline)
+        patcher = mock.patch(
+            'apps.clients.views.prepare_download_job.delay', side_effect=lambda job_id: run_download_job(job_id)
+        )
         patcher.start()
         cls.addClassCleanup(patcher.stop)
-
-        def remove_files():
-            # Jobs may also be run directly by a test; anything new under
-            # download_jobs/ was created by this class.
-            storage = PrivateMediaStorage()
-            for directory in _job_dirs() - existing_dirs:
-                try:
-                    for name in storage.listdir(f'download_jobs/{directory}')[1]:
-                        storage.delete(f'download_jobs/{directory}/{name}')
-                    os.rmdir(storage.path(f'download_jobs/{directory}'))
-                except OSError:
-                    pass
-
-        cls.addClassCleanup(remove_files)
 
 
 def follow_prepared(client, base, prepared, *, download_token=None, unlock_token=None):

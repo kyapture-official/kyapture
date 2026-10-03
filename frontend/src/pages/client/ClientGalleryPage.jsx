@@ -9,6 +9,9 @@ import PhotoLightbox from "../../components/shared/PhotoLightbox";
 import PasswordModal from "../../components/shared/PasswordModal";
 import GallerySkeleton from "../../components/client/GallerySkeleton";
 import DownloadModal from "../../components/client/DownloadModal";
+import FavoriteEmailModal from "../../components/client/FavoriteEmailModal";
+import FavoritesPanel from "../../components/client/FavoritesPanel";
+import { useVisitorStore } from "../../store/visitorStore";
 import ShareMenu from "../../components/shared/ShareMenu";
 import { resolveShareUrl } from "../../utils/share";
 import Spinner from "../../components/ui/Spinner";
@@ -61,6 +64,14 @@ export default function ClientGalleryPage() {
   const [photoSets, setPhotoSets] = useState([]);
   const [activeSetId, setActiveSetId] = useState(null);
   const [favoritedIds, setFavoritedIds] = useState(new Set());
+  // Favorites carry the visitor's email: asked ONCE (first heart), remembered in
+  // this browser, and also learned from the server when it already holds one.
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [emailPromptOpen, setEmailPromptOpen] = useState(false);
+  const [serverEmail, setServerEmail] = useState(null);
+  const pendingFavoriteRef = useRef(null);
+  const visitorProfile = useVisitorStore((state) => state.profiles[sessionKey]);
+  const setVisitorProfile = useVisitorStore((state) => state.setProfile);
   const [hasDownloadPin, setHasDownloadPin] = useState(false);
   const [downloadPolicy, setDownloadPolicy] = useState({
     allowed_sizes: ["download", "web"],
@@ -211,6 +222,11 @@ export default function ClientGalleryPage() {
       try {
         const data = await clientsApi.getFavorites(username, slug, identity);
         setFavoritedIds(new Set(data.favorited_ids || []));
+        if (data.email) {
+          setServerEmail(data.email);
+          const known = useVisitorStore.getState().getProfile(`${username}:${slug}`);
+          if (!known?.email) useVisitorStore.getState().setProfile(`${username}:${slug}`, { email: data.email, name: known?.name || "" });
+        }
       } catch {
         // Non-fatal — see comment above.
       }
@@ -481,11 +497,11 @@ export default function ClientGalleryPage() {
   );
 
   /**
-   * Optimistic favorite toggle with rollback on failure — the heart
-   * updates instantly, and reverts if the server call actually fails.
+   * Adds/removes one favorite: the heart updates instantly and reverts if the
+   * server call fails. Adding sends the visitor's email (and optional name) so
+   * the favorite lands in their "My Favorites" list under their email.
    */
-  const handleToggleFavorite = async (photoId) => {
-    const wasFavorited = favoritedIds.has(photoId);
+  const applyFavorite = async (photoId, wasFavorited, profileOverride = null) => {
     setFavoritedIds((prev) => {
       const next = new Set(prev);
       if (wasFavorited) next.delete(photoId);
@@ -498,9 +514,10 @@ export default function ClientGalleryPage() {
       if (wasFavorited) {
         await clientsApi.removeFavorite(username, slug, photoId, identity);
       } else {
-        await clientsApi.addFavorite(username, slug, photoId, identity);
+        const profile = profileOverride || useVisitorStore.getState().getProfile(sessionKey);
+        await clientsApi.addFavorite(username, slug, photoId, identity, { email: profile?.email, name: profile?.name });
       }
-    } catch {
+    } catch (err) {
       // Rollback — the optimistic update didn't actually stick server-side.
       setFavoritedIds((prev) => {
         const next = new Set(prev);
@@ -508,7 +525,35 @@ export default function ClientGalleryPage() {
         else next.delete(photoId);
         return next;
       });
+      throw err;
     }
+  };
+
+  const handleToggleFavorite = async (photoId) => {
+    const wasFavorited = favoritedIds.has(photoId);
+    if (!wasFavorited) {
+      const profile = useVisitorStore.getState().getProfile(sessionKey);
+      if (!profile?.email && !serverEmail) {
+        // First heart: ask for the email once, then save this photo.
+        pendingFavoriteRef.current = photoId;
+        setEmailPromptOpen(true);
+        return;
+      }
+    }
+    try {
+      await applyFavorite(photoId, wasFavorited);
+    } catch {
+      toast("We couldn't update your favorite. Please try again.", "error");
+    }
+  };
+
+  const handleFavoriteEmailSubmit = async ({ email, name }) => {
+    const photoId = pendingFavoriteRef.current;
+    if (photoId) await applyFavorite(photoId, false, { email, name }); // a bad email surfaces inside the prompt
+    setVisitorProfile(sessionKey, { email, name }); // remembered only once the server accepted it
+    pendingFavoriteRef.current = null;
+    setEmailPromptOpen(false);
+    toast("Saved to My Favorites", "success");
   };
 
   // ── Render Path: Loading State ─────────────────────────────────────────────
@@ -718,7 +763,7 @@ export default function ClientGalleryPage() {
             <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
-                onClick={() => toast("Favorites are available on each photo.", "info")}
+                onClick={() => setFavoritesOpen(true)}
                 className="rounded p-2 text-slate-600 transition hover:bg-slate-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                 aria-label="View favorites"
                 title="Favorites"
@@ -842,12 +887,36 @@ export default function ClientGalleryPage() {
           />
         )}
 
+        <FavoriteEmailModal
+          open={emailPromptOpen}
+          onClose={() => { pendingFavoriteRef.current = null; setEmailPromptOpen(false); }}
+          onSubmit={handleFavoriteEmailSubmit}
+          galleryTitle={galleryTitle}
+          photographerName={photographerName}
+          initialEmail={visitorProfile?.email || ""}
+          initialName={visitorProfile?.name || ""}
+        />
+
+        <FavoritesPanel
+          open={favoritesOpen}
+          onClose={() => setFavoritesOpen(false)}
+          username={username}
+          slug={slug}
+          identity={getClientIdentity()}
+          galleryTitle={galleryTitle}
+          photographerName={photographerName}
+          profile={visitorProfile}
+          onChanged={() => loadFavorites(token, getClientIdentity())}
+        />
+
         <DownloadModal
           open={downloadTarget !== null}
           onClose={() => setDownloadTarget(null)}
           username={username}
           slug={slug}
           galleryToken={token}
+          galleryTitle={galleryTitle}
+          photographerName={photographerName}
           hasDownloadPin={hasDownloadPin}
           downloadPolicy={downloadPolicy}
           target={downloadTarget}

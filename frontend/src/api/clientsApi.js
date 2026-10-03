@@ -467,10 +467,16 @@ export const clientsApi = {
   addFavorite: async (username, slug, mediaAssetId, identity = {}, options = {}) => {
     const path = `${buildGalleryPath(username, slug)}favorites/`
     assertNonEmptyString(mediaAssetId, 'mediaAssetId')
-    const { signal } = options || {}
+    const { signal, email, name, listId } = options || {}
 
     const body = { media_asset_id: mediaAssetId }
     if (identity.clientUid) body.client_uid = identity.clientUid
+    // The visitor's email (and optional name) is stored with the favorite so
+    // the photographer sees who saved what; the server remembers it, so it only
+    // needs to be sent the first time.
+    if (email) body.email = email
+    if (name) body.name = name
+    if (listId) body.list_id = listId
 
     const config = { signal }
     if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
@@ -493,10 +499,12 @@ export const clientsApi = {
   removeFavorite: async (username, slug, mediaAssetId, identity = {}, options = {}) => {
     const path = `${buildGalleryPath(username, slug)}favorites/`
     assertNonEmptyString(mediaAssetId, 'mediaAssetId')
-    const { signal } = options || {}
+    const { signal, listId } = options || {}
 
     const body = { media_asset_id: mediaAssetId }
     if (identity.clientUid) body.client_uid = identity.clientUid
+    // With a list id the photo leaves only that list; without one, all of the visitor's lists.
+    if (listId) body.list_id = listId
 
     const config = { signal, data: body }
     if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
@@ -508,6 +516,98 @@ export const clientsApi = {
       handleRequestError(error, {
         authMessage: 'An active unlocked session is required to favorite photos.',
         notFoundMessage: 'This photo could not be found.',
+      })
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // FAVORITE LISTS — the visitor's OWN lists (Pixieset-style "My Favorites")
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** GET .../favorites/lists/?sort=newest|oldest  ->  { results: [{id, name, is_default, photo_count, thumbnail_url, created_at, updated_at}] } */
+  getFavoriteLists: async (username, slug, identity = {}, options = {}) => {
+    const { signal, sort } = options || {}
+    const params = { sort: sort || 'newest' }
+    if (identity.clientUid) params.client_uid = identity.clientUid
+    const config = { signal, params }
+    if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
+    try {
+      const res = await api.get(`${buildGalleryPath(username, slug)}favorites/lists/`, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, { authMessage: 'An active unlocked session is required to view favorites.' })
+    }
+  },
+
+  /** POST .../favorites/lists/  { name } -> the new list. */
+  createFavoriteList: async (username, slug, name, identity = {}, options = {}) => {
+    const { signal, email, visitorName } = options || {}
+    const body = { name }
+    if (identity.clientUid) body.client_uid = identity.clientUid
+    if (email) body.email = email
+    if (visitorName) body.visitor_name = visitorName
+    const config = { signal }
+    if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
+    try {
+      const res = await api.post(`${buildGalleryPath(username, slug)}favorites/lists/`, body, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, { authMessage: 'An active unlocked session is required to create a list.' })
+    }
+  },
+
+  /** GET .../favorites/lists/{id}/?sort=&page=  ->  { results: [photo], next, list: {...} } */
+  getFavoriteListPhotos: async (username, slug, listId, identity = {}, options = {}) => {
+    assertNonEmptyString(listId, 'listId')
+    const { signal, sort, page } = options || {}
+    const params = { sort: sort || 'newest' }
+    if (page) params.page = page
+    if (identity.clientUid) params.client_uid = identity.clientUid
+    const config = { signal, params }
+    if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
+    try {
+      const res = await api.get(`${buildGalleryPath(username, slug)}favorites/lists/${encodeURIComponent(listId)}/`, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to view favorites.',
+        notFoundMessage: 'This list could not be found.',
+      })
+    }
+  },
+
+  /** PATCH .../favorites/lists/{id}/  { name } */
+  renameFavoriteList: async (username, slug, listId, name, identity = {}, options = {}) => {
+    assertNonEmptyString(listId, 'listId')
+    const body = { name }
+    if (identity.clientUid) body.client_uid = identity.clientUid
+    const config = { signal: options?.signal }
+    if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
+    try {
+      const res = await api.patch(`${buildGalleryPath(username, slug)}favorites/lists/${encodeURIComponent(listId)}/`, body, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to rename a list.',
+        notFoundMessage: 'This list could not be found.',
+      })
+    }
+  },
+
+  /** DELETE .../favorites/lists/{id}/ — deletes the list (the photos stay in the gallery). */
+  deleteFavoriteList: async (username, slug, listId, identity = {}, options = {}) => {
+    assertNonEmptyString(listId, 'listId')
+    const body = {}
+    if (identity.clientUid) body.client_uid = identity.clientUid
+    const config = { signal: options?.signal, data: body }
+    if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
+    try {
+      const res = await api.delete(`${buildGalleryPath(username, slug)}favorites/lists/${encodeURIComponent(listId)}/`, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'An active unlocked session is required to delete a list.',
+        notFoundMessage: 'This list could not be found.',
       })
     }
   },

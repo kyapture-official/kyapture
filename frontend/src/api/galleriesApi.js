@@ -261,6 +261,18 @@ export const galleriesApi = {
   },
 
   /**
+   * WHAT: Favorite lists GROUPED BY VISITOR (email, or Guest), each with its
+   *       lists (name, photo count, created / updated, thumbnail).
+   * URI:  GET /api/v1/galleries/{slug}/favorites/?group=visitor&email=&sort=&page=N
+   */
+  getFavoriteVisitors: async (slug, page = 1, { email, sort } = {}) => {
+    const { data } = await api.get(`/galleries/${slug}/favorites/`, {
+      params: { group: 'visitor', page, ...(email ? { email } : {}), ...(sort ? { sort } : {}) },
+    })
+    return data
+  },
+
+  /**
    * WHAT: The photos inside ONE favorite list (paginated).
    * URI:  GET /api/v1/galleries/{slug}/favorites/?list=<id>&page=N
    */

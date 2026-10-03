@@ -1,7 +1,7 @@
 // frontend/src/pages/dashboard/ActivitiesWorkspace.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useOutletContext } from "react-router-dom";
-import { ArrowLeft, Download, Heart } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Download, Heart } from "lucide-react";
 import { formatDateTime } from "../../utils/formatters";
 import { galleriesApi } from "../../api/galleriesApi";
 import Spinner from "../../components/ui/Spinner";
@@ -120,68 +120,132 @@ function DownloadTable({ type, rows }) {
         <thead>
           <tr className={headRow}>
             <th className={th}>Email</th>
-            <th className={th}>{isGallery ? "Scope" : type === "video" ? "Video" : "Photo"}</th>
+            <th className={th}>{isGallery ? "Download" : type === "video" ? "Video" : "Photo"}</th>
             {!isGallery && <th className={th}>Set</th>}
-            <th className={th}>Resolution</th>
+            <th className={th}>Size</th>
+            {isGallery && <th className={th}>Photos</th>}
             <th className={th}>PIN</th>
-            <th className={th}>File</th>
             <th className={th}>Date</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-cream-200">
-          {rows.map((row) => (
-            <tr key={row.id} className="text-ink">
-              <td className={th}>{row.email || <span className="text-muted">Email not required</span>}</td>
-              <td className={`${th} max-w-[16rem] truncate`} title={isGallery ? row.scope : row.media_asset_name || ""}>
-                {isGallery ? row.scope : row.media_asset_name || <span className="text-muted">File removed</span>}
-              </td>
-              {!isGallery && (
-                <td className={`${th} text-muted`}>{row.photo_set_name || "All photos"}</td>
-              )}
-              <td className={th}>{RESOLUTION_LABELS[row.resolution] || row.resolution}</td>
-              <td className={`${th} text-muted`}>{row.pin_state === "verified" ? "Verified" : "Not required"}</td>
-              <td className={`${th} max-w-[14rem] truncate`} title={row.filename || ""}>{row.filename || "File unavailable"}</td>
-              <td className={`${th} whitespace-nowrap text-muted`}>{formatDateTime(row.created_at)}</td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const filename = row.filename || row.media_asset_name || "";
+            return (
+              <tr key={row.id} className="text-ink">
+                <td className={th}>{row.email || <span className="text-muted">Email not required</span>}</td>
+                {isGallery ? (
+                  <td className={`${th} max-w-[18rem]`}>
+                    <span className="block truncate" title={row.scope}>{row.scope}</span>
+                    <span className="block truncate text-xs text-muted" title={filename}>{filename || "File unavailable"}</span>
+                  </td>
+                ) : (
+                  <td className={`${th} max-w-[18rem]`}>
+                    <span className="flex items-center gap-3">
+                      <span className="h-10 w-10 flex-none overflow-hidden rounded bg-cream-100">
+                        {row.thumbnail_url && <img src={row.thumbnail_url} alt="" className="h-full w-full object-cover" />}
+                      </span>
+                      <span className="min-w-0 truncate" title={filename}>
+                        {filename || <span className="text-muted">File removed</span>}
+                      </span>
+                    </span>
+                  </td>
+                )}
+                {!isGallery && (
+                  <td className={`${th} text-muted`}>{row.photo_set_name || "All photos"}</td>
+                )}
+                <td className={th}>{RESOLUTION_LABELS[row.resolution] || row.resolution}</td>
+                {isGallery && <td className={`${th} text-muted`}>{row.photo_count ?? "—"}</td>}
+                <td className={`${th} text-muted`}>{row.pin_state === "verified" ? "Verified" : "Not required"}</td>
+                <td className={`${th} whitespace-nowrap text-muted`}>{formatDateTime(row.created_at)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-/** rows shape: grouped favorite lists — see apps/clients/favorite_lists.py */
-function FavoriteListTable({ rows, onOpen }) {
+/** rows shape: favorite lists grouped by visitor — see apps/clients/favorite_lists.py */
+function FavoriteVisitorTable({ rows, onOpen }) {
+  const [expanded, setExpanded] = useState(() => new Set());
+  const toggle = (id) =>
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className={headRow}>
-            <th className={th}>Email</th>
+            <th className={th}>Visitor</th>
+            <th className={th}>Lists</th>
             <th className={th}>Photos</th>
             <th className={th}>Created</th>
             <th className={th}>Updated</th>
-            <th className={th}><span className="sr-only">Open</span></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-cream-200">
-          {rows.map((row) => (
-            <tr key={row.id} className="text-ink">
-              <td className={th}>{row.email || <span className="text-muted">Anonymous visitor</span>}</td>
-              <td className={th}>{row.photo_count}</td>
-              <td className={`${th} whitespace-nowrap text-muted`}>{formatDateTime(row.created_at)}</td>
-              <td className={`${th} whitespace-nowrap text-muted`}>{formatDateTime(row.updated_at)}</td>
-              <td className={`${th} text-right`}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(row)}
-                  className="cursor-pointer rounded-lg border border-cream-200 px-3 py-1.5 text-xs text-ink hover:bg-cream-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500"
-                >
-                  View list
-                </button>
-              </td>
-            </tr>
-          ))}
+          {rows.map((visitor) => {
+            const isOpen = expanded.has(visitor.id);
+            const Chevron = isOpen ? ChevronDown : ChevronRight;
+            return [
+              <tr key={visitor.id} className="text-ink">
+                <td className={th}>
+                  <button
+                    type="button"
+                    onClick={() => toggle(visitor.id)}
+                    aria-expanded={isOpen}
+                    aria-label={`${isOpen ? "Hide" : "Show"} favorite lists of ${visitor.email || "Guest"}`}
+                    className="flex cursor-pointer items-center gap-2 rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500"
+                  >
+                    <Chevron className="h-4 w-4 flex-none text-muted" aria-hidden="true" />
+                    <span>
+                      <span className="block">{visitor.email || <span className="text-muted">Guest</span>}</span>
+                      {visitor.name && <span className="block text-xs text-muted">{visitor.name}</span>}
+                    </span>
+                  </button>
+                </td>
+                <td className={th}>{visitor.list_count}</td>
+                <td className={th}>{visitor.total_photos}</td>
+                <td className={`${th} whitespace-nowrap text-muted`}>{formatDateTime(visitor.created_at)}</td>
+                <td className={`${th} whitespace-nowrap text-muted`}>{formatDateTime(visitor.updated_at)}</td>
+              </tr>,
+              isOpen && (
+                <tr key={`${visitor.id}-lists`} className="bg-cream-50">
+                  <td colSpan={5} className="px-4 pb-4 pt-1">
+                    <ul className="divide-y divide-cream-200 rounded-xl border border-cream-200 bg-surface-light">
+                      {visitor.lists.map((list) => (
+                        <li key={list.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                          <span className="h-12 w-12 flex-none overflow-hidden rounded bg-cream-100">
+                            {list.thumbnail_url && <img src={list.thumbnail_url} alt="" className="h-full w-full object-cover" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-ink">{list.name}</span>
+                            <span className="block text-xs text-muted">
+                              {list.photo_count} photo{list.photo_count === 1 ? "" : "s"} · created {formatDateTime(list.created_at)} · updated {formatDateTime(list.updated_at)}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onOpen(list, visitor)}
+                            className="cursor-pointer rounded-lg border border-cream-200 px-3 py-1.5 text-xs text-ink hover:bg-cream-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500"
+                          >
+                            View photos
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                </tr>
+              ),
+            ];
+          })}
         </tbody>
       </table>
     </div>
@@ -267,6 +331,9 @@ export default function ActivitiesWorkspace() {
 
   // ── Favorite Activity (lists, then one list's photos) ────────────────────
   const [lists, setLists] = useState([]);
+  const [emailFilter, setEmailFilter] = useState("");
+  const [appliedEmail, setAppliedEmail] = useState("");
+  const [favSort, setFavSort] = useState("newest");
   const [listPage, setListPage] = useState(1);
   const [listHasNext, setListHasNext] = useState(false);
   const [listLoading, setListLoading] = useState(false);
@@ -284,7 +351,7 @@ export default function ActivitiesWorkspace() {
     setListLoading(true);
     setListError("");
     try {
-      const data = await galleriesApi.getFavoriteLists(slug, page);
+      const data = await galleriesApi.getFavoriteVisitors(slug, page, { email: appliedEmail, sort: favSort });
       if (!isMountedRef.current) return;
       setLists(data.results || []);
       setListHasNext(Boolean(data.next));
@@ -294,7 +361,7 @@ export default function ActivitiesWorkspace() {
     } finally {
       if (isMountedRef.current) setListLoading(false);
     }
-  }, [slug]);
+  }, [slug, appliedEmail, favSort]);
 
   const loadListPhotos = useCallback(async (listId, page) => {
     setPhotoLoading(true);
@@ -320,9 +387,16 @@ export default function ActivitiesWorkspace() {
   useEffect(() => {
     if (activeId === "favorites") loadLists(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, slug]);
+  }, [activeId, slug, appliedEmail, favSort]);
 
-  const handleOpenList = (row) => {
+  // The email filter applies shortly after typing stops, not on every keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedEmail(emailFilter.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [emailFilter]);
+
+  const handleOpenList = (list, visitor) => {
+    const row = { ...list, email: visitor?.email || null };
     setOpenList(row);
     setListPhotos([]);
     loadListPhotos(row.id, 1);
@@ -374,6 +448,35 @@ export default function ActivitiesWorkspace() {
         )}
 
         {activeId === "favorites" && !openList && (
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <h2 className="font-serif text-xl text-ink">Favorite Activity</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="search"
+                value={emailFilter}
+                onChange={(event) => setEmailFilter(event.target.value)}
+                placeholder="Filter by email"
+                aria-label="Filter favorites by email"
+                className="w-48 rounded-lg border border-cream-200 bg-white px-3 py-1.5 text-xs text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500"
+              />
+              <label className="flex items-center gap-2 text-xs text-muted">
+                Sort
+                <select
+                  value={favSort}
+                  onChange={(event) => setFavSort(event.target.value)}
+                  aria-label="Sort favorite activity"
+                  className="rounded-lg border border-cream-200 bg-white px-2 py-1.5 text-xs text-ink"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="email">Email</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        )}
+
+        {activeId === "favorites" && !openList && (
           listError ? (
             <ErrorState message={listError} onRetry={() => loadLists(listPage)} />
           ) : listLoading && lists.length === 0 ? (
@@ -381,12 +484,12 @@ export default function ActivitiesWorkspace() {
           ) : lists.length === 0 ? (
             <EmptyState
               Icon={Heart}
-              title="No favorite activity"
-              desc="When a client favorites photos in this collection, their list will appear here."
+              title={appliedEmail ? "No favorites match that email" : "No favorite activity"}
+              desc={appliedEmail ? "Try a different email, or clear the filter." : "When a client favorites photos in this collection, their list will appear here."}
             />
           ) : (
             <>
-              <FavoriteListTable rows={lists} onOpen={handleOpenList} />
+              <FavoriteVisitorTable rows={lists} onOpen={handleOpenList} />
               <PaginationControls
                 page={listPage}
                 hasNext={listHasNext}
@@ -410,7 +513,7 @@ export default function ActivitiesWorkspace() {
                 All favorite lists
               </button>
               <p className="text-sm text-ink">
-                {openList.email || "Anonymous visitor"}
+                {openList.email || "Guest"} · {openList.name}
                 <span className="ml-2 text-xs text-muted">
                   {openList.photo_count} photo{openList.photo_count === 1 ? "" : "s"} · updated {formatDateTime(openList.updated_at)}
                 </span>

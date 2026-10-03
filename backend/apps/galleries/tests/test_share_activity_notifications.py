@@ -373,7 +373,8 @@ class FavoriteActivityTests(Base):
         for row in rows:
             self.assertTrue(row['created_at'] and row['updated_at'])
             self.assertLessEqual(row['created_at'], row['updated_at'])
-            self.assertEqual(set(row), {'id', 'email', 'photo_count', 'created_at', 'updated_at'})
+            self.assertEqual(set(row), {'id', 'name', 'email', 'visitor_name', 'photo_count', 'thumbnail_url', 'created_at', 'updated_at'})
+            self.assertEqual(row['name'], 'My Favorites')
 
     def test_favoriting_more_updates_the_list_and_unfavoriting_shrinks_it(self):
         self.favorite('client-one', self.photos[0])

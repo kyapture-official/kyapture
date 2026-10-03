@@ -307,7 +307,7 @@ class SignedFileUrlTests(JobBase):
         other_job = DownloadJob.objects.create(
             gallery=self.gallery, resolution="web", email="client@example.com", state="ready",
             files=DownloadJob.objects.get(pk=job_id).files, expires_at=timezone.now() + timedelta(hours=1))
-        self.assertEqual(self.client.get(f"{self.base}download-jobs/{other_job.id}/files/0/?file_token={file_token}").status_code, 403)
+        self.assertEqual(self.client.get(f"{self.base}download-jobs/{other_job.id}/files/0/?file_token={file_token}").status_code, 404)
         # a file index that doesn't exist
         self.assertEqual(self.client.get(f"{self.base}download-jobs/{job_id}/files/1/?file_token={file_token}").status_code, 404)
         # the same token on another gallery
@@ -344,6 +344,106 @@ class SignedFileUrlTests(JobBase):
         _, job_id, url = self.ready()
         DownloadJob.objects.filter(pk=job_id).update(expires_at=timezone.now() - timedelta(seconds=1))
         self.assertEqual(self.client.get(url).status_code, 410)
+
+
+class ReadyLinkLifetimeTests(JobBase):
+    """A ready download keeps working until it expires (24h) - the 1R.3 regression."""
+
+    def ready(self):
+        token = self.token()
+        job_id = self.prepare(token).data["job_id"]
+        job = DownloadJob.objects.get(pk=job_id)
+        return token, job, self.status_of(job_id, token).data["files"][0]["url"]
+
+    def test_a_ready_job_lives_for_24_hours_and_its_stored_file_exists(self):
+        _, job, _ = self.ready()
+        lifetime = (job.expires_at - job.created_at).total_seconds()
+        self.assertAlmostEqual(lifetime, 24 * 3600, delta=120)
+        self.assertTrue(PrivateMediaStorage().exists(job.files[0]["storage_path"]))
+
+    def test_the_link_downloads_repeatedly_not_just_once(self):
+        _, _, url = self.ready()
+        for _ in range(3):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertGreater(len(b"".join(response.streaming_content)), 100)
+
+    def test_the_signed_link_is_still_good_23_hours_later_and_dead_after_the_job_expires(self):
+        _, job, url = self.ready()
+        import time as _time
+        now = _time.time()
+        with mock.patch("django.core.signing.time.time", return_value=now + 23 * 3600):
+            self.assertEqual(self.client.get(url).status_code, 200)
+        DownloadJob.objects.filter(pk=job.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
+        self.assertEqual(self.client.get(url).status_code, 410)
+
+    def test_a_token_for_another_job_is_a_404_never_a_download(self):
+        token, job, url = self.ready()
+        other = DownloadJob.objects.create(
+            gallery=self.gallery, resolution="web", email="client@example.com", state="ready",
+            files=job.files, expires_at=timezone.now() + timedelta(hours=1))
+        file_token = url.split("file_token=")[1]
+        response = self.client.get(f"{self.base}download-jobs/{other.id}/files/0/?file_token={file_token}")
+        self.assertEqual((response.status_code, response.data["code"]), (404, "download_not_found"))
+
+    def test_expired_link_opened_in_a_browser_goes_to_a_friendly_page_not_raw_json(self):
+        _, job, url = self.ready()
+        DownloadJob.objects.filter(pk=job.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
+        response = self.client.get(url, HTTP_ACCEPT="text/html,application/xhtml+xml")
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].endswith(f"/g/{self.owner.username}/{self.gallery.slug}/download?link=expired"))
+        self.assertFalse(DownloadLog.objects.exists())
+        # API callers still get the machine-readable error
+        api = self.client.get(url)
+        self.assertEqual((api.status_code, api.data["code"]), (410, "download_expired"))
+
+    def test_an_expired_signed_link_is_friendly_in_a_browser_too(self):
+        _, _, url = self.ready()
+        with override_settings(DOWNLOAD_FILE_URL_TTL_SECONDS=-1):
+            response = self.client.get(url, HTTP_ACCEPT="text/html")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("link=expired", response["Location"])
+
+    def test_a_tampered_or_missing_token_is_still_refused_with_no_file(self):
+        _, _, url = self.ready()
+        for bad in (url.split("?")[0], url[:-3] + "AAA"):
+            response = self.client.get(bad)
+            self.assertEqual(response.status_code, 403)
+            self.assertFalse(hasattr(response, "streaming_content"))
+
+    def test_a_vanished_file_is_reported_as_unavailable_not_as_ready(self):
+        token, job, url = self.ready()
+        PrivateMediaStorage().delete(job.files[0]["storage_path"])
+        listed = self.status_of(job.id, token)
+        self.assertEqual((listed.data["state"], listed.data["code"]), ("failed", "file_missing"))
+        self.assertEqual(listed.data["files"], [])
+        self.assertIn("prepare it again", listed.data["error"])
+
+    def test_the_file_endpoint_notices_a_vanished_file_and_stops_claiming_ready(self):
+        _, job, url = self.ready()
+        PrivateMediaStorage().delete(job.files[0]["storage_path"])
+        response = self.client.get(url)
+        self.assertEqual((response.status_code, response.data["code"]), (404, "file_unavailable"))
+        self.assertEqual(DownloadJob.objects.get(pk=job.pk).state, "failed")
+        browser = self.client.get(url, HTTP_ACCEPT="text/html")
+        self.assertEqual(browser.status_code, 302)             # job is no longer ready -> friendly page, never a raw 404
+        self.assertIn("link=expired", browser["Location"])
+
+    def test_a_pin_change_after_the_link_was_issued_still_blocks_it(self):
+        _, _, url = self.ready()
+        self.gallery.download_pin_hash = bcrypt.hashpw(b"9999", bcrypt.gensalt()).decode()
+        self.gallery.save(update_fields=["download_pin_hash"])
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+
+class TestsNeverTouchDevMediaTests(JobBase):
+    def test_this_class_runs_in_a_throwaway_media_root(self):
+        from django.conf import settings as dj
+        self.assertIn("kyapture-test-media-", dj.MEDIA_ROOT)
+        token = self.token()
+        job = DownloadJob.objects.get(pk=self.prepare(token).data["job_id"])
+        stored = PrivateMediaStorage().path(job.files[0]["storage_path"])
+        self.assertIn("kyapture-test-media-", stored)
 
 
 class NoOtherRouteToTheFileTests(JobBase):

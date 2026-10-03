@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, Link, useLocation, useSearchParams } from "react-router-dom";
 import { clientsApi } from "../../api/clientsApi";
 import { useClientStore } from "../../store/clientStore";
-import ClientLayout from "../../components/layout/ClientLayout";
 import DownloadForm from "../../components/client/DownloadForm";
 import Spinner from "../../components/ui/Spinner";
 
@@ -24,6 +23,7 @@ export default function DownloadPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const resumeJobId = searchParams.get("job");
+  const linkExpired = searchParams.get("link") === "expired";
   const requestedSetId = searchParams.get("set") || location.state?.setId || null;
 
   // Unique session key prevents cross-tenant token collisions on identical gallery slugs
@@ -67,86 +67,68 @@ export default function DownloadPage() {
     error: "We couldn't load this gallery. Please try again.",
   }[view.status];
 
+  const title = gallery?.title || slug;
+  const photographerName = gallery?.photographer_name || username;
+
   return (
-    <ClientLayout>
-      <div className="mx-auto max-w-md animate-fade-up px-6 py-24 text-center">
-        <div
-          className="mx-auto mb-8 flex h-20 w-20 select-none items-center justify-center rounded-full"
-          style={{ background: "var(--cream2)" }}
-        >
-          <svg
-            className="h-9 w-9"
-            style={{ color: "var(--sand)" }}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-            />
-          </svg>
-        </div>
+    <div className="min-h-screen bg-[#FDFBF7]">
+      <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 pb-8 pt-8 sm:px-8">
+        {/* Pixieset-style header: the collection's name, then who shot it */}
+        <header className="mb-10 sm:mb-14">
+          <h1 className="font-serif text-2xl uppercase tracking-[0.14em] text-ink sm:text-3xl">{title}</h1>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-muted">{photographerName}</p>
+        </header>
 
-        <div className="mb-8">
-          <h1 className="font-serif text-4xl" style={{ color: "var(--ink)" }}>
-            {resumeJobId ? "Your Download" : "Download Gallery"}
-          </h1>
-          {view.status === "ready" && (
-            <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
-              {resumeJobId
-                ? "Confirm your details to get your photos."
-                : "Choose a size, then confirm your details to start the download."}
-            </p>
+        <main className="mx-auto w-full max-w-md flex-1 animate-fade-up text-center">
+          {view.status === "loading" && (
+            <div className="flex justify-center py-16" role="status" aria-label="Loading download options">
+              <Spinner className="h-6 w-6 text-ink" />
+            </div>
           )}
-        </div>
 
-        {view.status === "loading" && (
-          <div className="flex justify-center py-8" role="status" aria-label="Loading download options">
-            <Spinner className="h-6 w-6 text-ink" />
-          </div>
-        )}
+          {message && (
+            <div className="space-y-4 py-10">
+              <p role="alert" className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>{message}</p>
+              {view.status === "error" && (
+                <button
+                  type="button"
+                  onClick={retry}
+                  className="rounded-full border border-ink/30 px-4 py-2 text-xs uppercase tracking-widest text-ink transition hover:bg-ink/5"
+                >
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
 
-        {message && (
-          <div className="space-y-4">
-            <p role="alert" className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>{message}</p>
-            {view.status === "error" && (
-              <button
-                type="button"
-                onClick={retry}
-                className="rounded-full border border-ink/30 px-4 py-2 text-xs uppercase tracking-widest text-ink transition hover:bg-ink/5"
-              >
-                Try again
-              </button>
-            )}
-          </div>
-        )}
+          {view.status === "ready" && (
+            <DownloadForm
+              username={username}
+              slug={slug}
+              galleryToken={galleryToken}
+              hasDownloadPin={Boolean(gallery.has_download_pin)}
+              downloadPolicy={gallery.download_policy}
+              target={{ type: "gallery", setId }}
+              photoSets={photoSets}
+              photoCount={gallery.photos_count || 0}
+              resumeJobId={resumeJobId}
+              linkExpired={linkExpired}
+            />
+          )}
 
-        {view.status === "ready" && (
-          <DownloadForm
-            username={username}
-            slug={slug}
-            galleryToken={galleryToken}
-            hasDownloadPin={Boolean(gallery.has_download_pin)}
-            downloadPolicy={gallery.download_policy}
-            target={{ type: "gallery", setId }}
-            photoSets={photoSets}
-            photoCount={gallery.photos_count || 0}
-            resumeJobId={resumeJobId}
-          />
-        )}
+          <Link
+            to={`/g/${username}/${slug}`}
+            className="mt-10 block text-sm underline underline-offset-2"
+            style={{ color: "var(--ink)" }}
+          >
+            ← Back to gallery
+          </Link>
+        </main>
 
-        <Link
-          to={`/g/${username}/${slug}`}
-          className="mt-8 block text-sm underline underline-offset-2"
-          style={{ color: "var(--ink)" }}
-        >
-          ← Back to gallery
-        </Link>
+        <footer className="pt-10 text-center text-[10px] uppercase tracking-[0.2em] text-muted">
+          Powered by <span className="font-semibold text-ink">KYAPTURE</span>
+        </footer>
       </div>
-    </ClientLayout>
+    </div>
   );
 }

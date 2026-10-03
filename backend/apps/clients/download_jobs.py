@@ -105,6 +105,24 @@ def is_expired(job):
     return bool(job.state == DownloadJob.State.READY and job.expires_at and job.expires_at <= timezone.now())
 
 
+def job_files_exist(job):
+    """True when every stored ZIP of a READY job is still in private storage."""
+    storage = PrivateMediaStorage()
+    try:
+        return all(storage.exists(entry['storage_path']) for entry in (job.files or []))
+    except Exception:
+        # A storage hiccup must not flip a good job to "missing"; the file
+        # endpoint's own open() is the final judge.
+        logger.warning('Could not verify the stored files of download job %s', job.id)
+        return True
+
+
+def mark_file_missing(job):
+    """The stored ZIP vanished: the job can no longer be served, so it says so."""
+    logger.error('Download job %s is ready but its stored file is missing', job.id)
+    return _fail(job, 'file_missing')
+
+
 def _fail(job, code):
     job.state = DownloadJob.State.FAILED
     job.error_code = code
@@ -177,7 +195,10 @@ def run_download_job(job_id):
         with open(temp_path, 'rb') as handle:
             stored_name = storage.save(f'{STORAGE_PREFIX}/{job.id}/{name}', File(handle))
 
-        job.files = [{'name': name, 'size_bytes': os.path.getsize(temp_path), 'storage_path': stored_name}]
+        job.files = [{
+            'name': name, 'size_bytes': os.path.getsize(temp_path), 'storage_path': stored_name,
+            'photo_count': added,
+        }]
         job.state = DownloadJob.State.READY
         job.error_code = ''
         job.expires_at = timezone.now() + timedelta(seconds=settings.DOWNLOAD_JOB_TTL_SECONDS)

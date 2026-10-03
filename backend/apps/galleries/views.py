@@ -2,6 +2,7 @@
 import bcrypt
 from apps.users.notification_service import notify_published
 from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -587,6 +588,7 @@ class GallerySetDownloadPinView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+
 class GalleryFavoriteActivityView(APIView):
     """
     GET /api/v1/galleries/{slug}/favorites/
@@ -606,18 +608,50 @@ class GalleryFavoriteActivityView(APIView):
         # GallerySetPasswordView's ClientSession import above — apps.clients
         # imports apps.galleries.models at module load time, so the reverse
         # import must happen inside the view, not at module scope.
-        from apps.clients.favorite_lists import grouped_lists, resolve_favorite_list, serialize_lists
-        from apps.clients.models import Favorite
+        from apps.clients import favorite_lists as fav
+        from apps.clients.models import Favorite, FavoriteList
         from apps.clients.serializers import PhotographerFavoriteSerializer
 
         paginator = StandardResultsSetPagination()
+        email_filter = request.query_params.get('email', '').strip()[:254] or None
+        sort = request.query_params.get('sort', 'newest')
+        if sort not in ('newest', 'oldest', 'email'):
+            sort = 'newest'
 
-        # ?group=client -> one row per client's favorite LIST (email, photo
-        # count, created / last updated). The list's client_key is never
-        # returned; a list is addressed by an opaque id.
+        def list_row(favorite_list, thumbs):
+            return {
+                'id': str(favorite_list.id),
+                'name': favorite_list.name,
+                'photo_count': favorite_list.photo_count,
+                'thumbnail_url': thumbs.get(favorite_list.cover_asset_id),
+                'created_at': favorite_list.created_at,
+                'updated_at': favorite_list.last_added or favorite_list.updated_at,
+            }
+
+        # ?group=visitor -> favorite lists GROUPED BY VISITOR (their email, or
+        # "Guest" when they never gave one), each with its lists. The list's
+        # client_key is never returned. ?email= filters, ?sort=newest|oldest|email.
+        if request.query_params.get('group') == 'visitor':
+            groups = fav.visitor_groups(gallery, email=email_filter, sort=sort)
+            page = paginator.paginate_queryset(groups, request, view=self)
+            thumbs = fav.thumbnail_urls(request, [fl.cover_asset_id for g in page for fl in g['lists']])
+            return paginator.get_paginated_response([
+                {
+                    'id': g['id'], 'email': g['email'], 'name': g['name'], 'total_photos': g['total_photos'],
+                    'list_count': len(g['lists']), 'created_at': g['created_at'], 'updated_at': g['updated_at'],
+                    'lists': [list_row(fl, thumbs) for fl in g['lists']],
+                } for g in page
+            ])
+
+        # ?group=client -> one row per favorite LIST (email, name, photo count,
+        # created / last updated).
         if request.query_params.get('group') == 'client':
-            page = paginator.paginate_queryset(grouped_lists(gallery), request, view=self)
-            return paginator.get_paginated_response(serialize_lists(gallery, page))
+            rows = fav.photographer_list_rows(gallery, email=email_filter, sort=sort)
+            page = paginator.paginate_queryset(rows, request, view=self)
+            thumbs = fav.thumbnail_urls(request, [fl.cover_asset_id for fl in page])
+            return paginator.get_paginated_response([
+                {**list_row(fl, thumbs), 'email': fl.email, 'visitor_name': fl.visitor_name} for fl in page
+            ])
 
         favorites = (
             Favorite.objects
@@ -626,15 +660,18 @@ class GalleryFavoriteActivityView(APIView):
             .order_by('-created_at')
         )
 
-        # ?list=<id> -> the photos in ONE list. The id is resolved only against
-        # THIS gallery's own lists, so a foreign/random/malformed id is a 404.
+        # ?list=<id> -> the photos in ONE list. Resolved only among THIS gallery's
+        # own lists, so a foreign/unknown/malformed id is a 404.
         list_id = request.query_params.get('list')
         if list_id:
-            client_key = resolve_favorite_list(gallery, list_id)
-            if client_key is None:
+            try:
+                favorite_list = FavoriteList.objects.filter(gallery=gallery, pk=list_id).first()
+            except (ValueError, DjangoValidationError):
+                favorite_list = None
+            if favorite_list is None:
                 return Response({'error': 'Favorite list not found.', 'code': 'not_found'},
                                 status=status.HTTP_404_NOT_FOUND)
-            favorites = favorites.filter(client_key=client_key)
+            favorites = favorites.filter(favorite_list=favorite_list)
 
         page = paginator.paginate_queryset(favorites, request, view=self)
         serializer = PhotographerFavoriteSerializer(
@@ -684,7 +721,7 @@ class GalleryDownloadLogsView(APIView):
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(logs, request, view=self)
-        serializer = DownloadLogSerializer(page, many=True)
+        serializer = DownloadLogSerializer(page, many=True, context={'request': request})
         response = paginator.get_paginated_response(serializer.data)
 
         # Per-tab totals for the tab badges, independent of the active filter —

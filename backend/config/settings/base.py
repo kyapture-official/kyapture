@@ -263,10 +263,13 @@ CLIENT_SESSION_TTL_DAYS = int(os.getenv("CLIENT_SESSION_TTL_DAYS", "30"))
 DOWNLOAD_ACCESS_TTL_SECONDS = int(os.getenv("DOWNLOAD_ACCESS_TTL_SECONDS", str(2 * 60 * 60)))
 
 # Prepared (background) gallery/set ZIPs. A READY job — and the ZIP stored in
-# private storage for it — lives this long, then the purge task deletes both.
-DOWNLOAD_JOB_TTL_SECONDS = int(os.getenv("DOWNLOAD_JOB_TTL_SECONDS", str(2 * 60 * 60)))
+# private storage for it — lives this long ("Link valid for 24 hours"), then
+# the purge task deletes both. Its file link works, repeatedly, until then.
+DOWNLOAD_JOB_TTL_SECONDS = int(os.getenv("DOWNLOAD_JOB_TTL_SECONDS", str(24 * 60 * 60)))
 # How long one signed file URL (handed out by the job-status endpoint) works.
-DOWNLOAD_FILE_URL_TTL_SECONDS = int(os.getenv("DOWNLOAD_FILE_URL_TTL_SECONDS", "600"))
+# Defaults to the job's own lifetime; it is bound to ONE job, so it can never
+# outlive or reach beyond the download it was issued for.
+DOWNLOAD_FILE_URL_TTL_SECONDS = int(os.getenv("DOWNLOAD_FILE_URL_TTL_SECONDS", str(24 * 60 * 60)))
 # A job still PREPARING after this long is treated as failed (worker lost).
 DOWNLOAD_JOB_STALE_SECONDS = int(os.getenv("DOWNLOAD_JOB_STALE_SECONDS", str(30 * 60)))
 

@@ -718,13 +718,21 @@ Response — 202 Accepted
 
 The same download token that created the job is required, and its email must be
 the job's (another visitor's token, or another gallery's, reads as not found).
-Each `url` carries a freshly signed `file_token` that is only good for
-`DOWNLOAD_FILE_URL_TTL_SECONDS` (default 10 minutes) — poll again for a new one
-at the moment of download. The archive is always one part:
+Each `url` carries a signed `file_token` bound to this one job; it is good for
+`DOWNLOAD_FILE_URL_TTL_SECONDS` (default 24 hours, the job's own lifetime), so the
+link keeps working repeatedly until the download expires. A ready response also
+carries `expires_at`. The status endpoint checks the stored file still exists
+before it says `ready`; if it vanished the state is `failed` / `file_missing`. The archive is always one part:
 `{gallery-slug}-photo-download-1of1.zip` (ZIP_STORED; the backend does not split).
 A job that stays `preparing` longer than `DOWNLOAD_JOB_STALE_SECONDS` reads as failed.
 
 3. GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/files/{index}/?file_token=<signed>[&token=<unlock>]
+
+A file token issued for a different job/file answers 404 `download_not_found`; a
+missing/tampered one 403; an expired job 410 `download_expired`. When the caller
+is a browser navigating to the URL (`Accept: text/html`), those "prepare it again"
+failures redirect to `/g/{username}/{slug}/download?link=expired` (a friendly page
+with a Prepare again button) instead of showing JSON.
 
 Streams the ZIP from private storage as an attachment. The signed file token,
 the live gallery gates (published, `allow_download`, unlock session), the job's
@@ -733,7 +741,7 @@ The first request for a file writes the Download Activity row (email, set,
 resolution, pin_verified and the real attachment `filename`); a retry of the same
 file within 60 seconds from the same visitor is not a second download.
 Prepared files and their jobs expire after `DOWNLOAD_JOB_TTL_SECONDS` (default
-2 hours) and are purged hourly (Celery Beat: `purge-expired-download-jobs`).
+24 hours) and are purged hourly (Celery Beat: `purge-expired-download-jobs`).
 When an email was captured, the visitor is also emailed a link back to
 `/g/{username}/{slug}/download?job={job_id}` (it carries no credential).
 
@@ -1195,3 +1203,31 @@ to list payment history.
 - **Malformed `?set=`.** On both `GET /api/v1/public/{username}/{slug}/` and `.../photos/`, a `set` value that is not a UUID is treated like a set that doesn't exist: an empty page (HTTP 200), never a 500.
 - **JSON compression.** `application/json` responses are gzip-encoded when the client sends `Accept-Encoding: gzip` (`Vary: Accept-Encoding`). File downloads, ZIP streams and media are never content-encoded.
 - **Query behaviour (guarded by `apps/galleries/tests/test_query_efficiency.py`).** The dashboard gallery list/search, the public portfolio, the owner gallery detail and the public gallery page issue a constant number of queries regardless of how many galleries/photos exist.
+
+## Visitor favorites and Favorite Activity (Task 1R.3)
+
+Visitor side (no accounts; identity = the gallery unlock token for protected
+galleries, else the browser's `client_uid`; it is never returned by any endpoint):
+
+- `POST .../favorites/` `{ media_asset_id, client_uid, email?, name?, list_id? }` — adds the
+  photo to the visitor's default "My Favorites" list (created on first use) and stores
+  their email; a malformed email is 400 `invalid_email`. `GET .../favorites/` returns
+  `{ favorited_ids, email }` (the email the visitor already gave, so it is asked once).
+  `DELETE .../favorites/` removes the photo from one list (`list_id`) or from all of the
+  visitor's lists; the response says whether it is still favorited elsewhere.
+- `GET|POST .../favorites/lists/` — the visitor's own lists (`?sort=newest|oldest`) /
+  create one `{ name }` (1-80 chars, unique per visitor, max 20 lists).
+- `GET|PATCH|DELETE .../favorites/lists/{list_id}/` — photos of the list (paginated) /
+  rename / delete the list (the photos stay in the gallery). Another visitor's, another
+  gallery's, unknown or malformed ids are all a plain 404.
+
+Photographer side — `GET /api/v1/galleries/{slug}/favorites/`:
+
+- `?group=visitor[&email=][&sort=newest|oldest|email]` — lists grouped by visitor (real
+  email, or `null` = Guest), each with its lists (name, `photo_count`, `thumbnail_url`,
+  `created_at`, `updated_at`).
+- `?group=client` — one row per list; `?list=<uuid>` — the photos of one list (real file
+  names + thumbnails). Notifications read "<email> favorited N photos".
+
+Download Activity rows now also carry `photo_count` (gallery ZIPs), `thumbnail_url`
+(single photos) and the stored attachment `filename`.

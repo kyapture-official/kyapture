@@ -20,7 +20,8 @@ from rest_framework.views import APIView
 from rest_framework.throttling import AnonRateThrottle
 
 from apps.galleries.models import Gallery
-from .models import ClientSession, DownloadJob, DownloadLog, Favorite
+from .models import ClientSession, DownloadJob, DownloadLog, Favorite, FavoriteList
+from . import favorite_lists as fav
 from apps.photos.models import MediaAsset, PhotoSet
 from .serializers import (
     PublicGallerySerializer,
@@ -61,7 +62,7 @@ from .download_access import (
     authorize_download,
     download_access_ttl,
     error_response,
-    file_token_is_valid,
+    file_token_state,
     get_download_policy,
     issue_download_token,
     issue_file_token,
@@ -74,6 +75,8 @@ from .download_jobs import (
     find_reusable_job,
     is_expired,
     job_assets,
+    job_files_exist,
+    mark_file_missing,
     size_limit_error,
 )
 from .tasks import prepare_download_job
@@ -640,7 +643,12 @@ class GalleryFavoritesView(APIView):
             gallery=gallery, client_key=client_key
         ).values_list('media_asset_id', flat=True)
         return Response(
-            {'favorited_ids': [str(i) for i in favorited_ids]},
+            {
+                'favorited_ids': [str(i) for i in set(favorited_ids)],
+                # The email this visitor already gave (so the "enter your email"
+                # prompt is asked once), never the client_key.
+                'email': fav.visitor_email(gallery, client_key),
+            },
             status=status.HTTP_200_OK
         )
 
@@ -670,13 +678,32 @@ class GalleryFavoritesView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        Favorite.objects.get_or_create(
-            gallery=gallery,
+        given_email, email_error = fav.clean_email(request.data.get('email'))
+        if email_error:
+            return error_response('Please enter a valid email address.', 'invalid_email', status.HTTP_400_BAD_REQUEST)
+        email = given_email or email or fav.visitor_email(gallery, client_key)
+        visitor_name = fav.clean_visitor_name(request.data.get('name'))
+
+        list_id = request.data.get('list_id')
+        if list_id:
+            favorite_list = fav.get_visitor_list(gallery, client_key, list_id)
+            if favorite_list is None:
+                return error_response('Favorite list not found.', 'list_not_found', status.HTTP_404_NOT_FOUND)
+            fav.remember_visitor(gallery, client_key, email, visitor_name)
+        else:
+            favorite_list = fav.ensure_default_list(gallery, client_key, email, visitor_name)
+
+        favorite, created = Favorite.objects.get_or_create(
+            favorite_list=favorite_list,
             media_asset=asset,
-            client_key=client_key,
-            defaults={'client_session': client_session, 'email': email},
+            defaults={
+                'gallery': gallery, 'client_key': client_key, 'client_session': client_session,
+                'email': favorite_list.email or email,
+            },
         )
-        return Response({'favorited': True}, status=status.HTTP_200_OK)
+        if not created:
+            favorite_list.save(update_fields=['updated_at'])   # list "updated" = last touched
+        return Response({'favorited': True, 'list_id': str(favorite_list.id)}, status=status.HTTP_200_OK)
 
     def delete(self, request, username, slug):
         gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
@@ -690,12 +717,159 @@ class GalleryFavoritesView(APIView):
         if error:
             return error
 
-        Favorite.objects.filter(
+        removals = Favorite.objects.filter(
             gallery=gallery,
             media_asset_id=serializer.validated_data['media_asset_id'],
             client_key=client_key,
-        ).delete()
-        return Response({'favorited': False}, status=status.HTTP_200_OK)
+        )
+        list_id = request.data.get('list_id')
+        if list_id:
+            favorite_list = fav.get_visitor_list(gallery, client_key, list_id)
+            if favorite_list is None:
+                return error_response('Favorite list not found.', 'list_not_found', status.HTTP_404_NOT_FOUND)
+            removals = removals.filter(favorite_list=favorite_list)
+        touched = list(removals.exclude(favorite_list__isnull=True).values_list('favorite_list_id', flat=True))
+        removals.delete()
+        FavoriteList.objects.filter(pk__in=touched).update(updated_at=timezone.now())
+        return Response({
+            'favorited': Favorite.objects.filter(
+                gallery=gallery, media_asset_id=serializer.validated_data['media_asset_id'], client_key=client_key,
+            ).exists(),
+        }, status=status.HTTP_200_OK)
+
+
+def _list_payload(request, favorite_list):
+    """Visitor-facing summary of one list (never the client_key)."""
+    cover = fav.list_cover_asset(favorite_list)
+    thumbnail = None
+    if cover is not None:
+        thumbnail = PublicMediaAssetSerializer(cover, context={'request': request}).data.get('thumbnail_url')
+    return {
+        'id': str(favorite_list.id),
+        'name': favorite_list.name,
+        'is_default': favorite_list.is_default,
+        'photo_count': getattr(favorite_list, 'photo_count', favorite_list.favorites.count()),
+        'thumbnail_url': thumbnail,
+        'created_at': favorite_list.created_at,
+        'updated_at': favorite_list.updated_at,
+    }
+
+
+class FavoriteListsAccessMixin:
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [PublicGalleryBrowseThrottle]
+
+    def resolve(self, request, username, slug):
+        """(gallery, client_key, session, email, error)."""
+        try:
+            gallery = Gallery.objects.get(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
+                slug=slug.strip().lower(), photographer__username=username.strip().lower(),
+                is_published=True, is_active=True,
+            )
+        except Gallery.DoesNotExist:
+            return None, None, None, None, Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+        client_key, session, email, error = _resolve_client_identity(gallery, request)
+        return gallery, client_key, session, email, error
+
+
+class GalleryFavoriteListsView(FavoriteListsAccessMixin, APIView):
+    """
+    GET  /api/v1/public/{username}/{slug}/favorites/lists/?client_uid=&sort=newest|oldest
+    POST /api/v1/public/{username}/{slug}/favorites/lists/   { name, client_uid, email?, visitor_name? }
+
+    A visitor's OWN lists only: the lists are looked up by the caller's client
+    identity, so another visitor's lists are simply not there.
+    """
+
+    def get(self, request, username, slug):
+        gallery, client_key, _, _, error = self.resolve(request, username, slug)
+        if error:
+            return error
+        sort = 'oldest' if request.query_params.get('sort') == 'oldest' else 'newest'
+        return Response({'results': [_list_payload(request, fl) for fl in fav.annotated_lists(gallery, client_key, sort)]})
+
+    def post(self, request, username, slug):
+        gallery, client_key, _, session_email, error = self.resolve(request, username, slug)
+        if error:
+            return error
+        name = fav.clean_list_name(request.data.get('name'))
+        if name is None:
+            return error_response('Give your list a name (up to 80 characters).', 'invalid_list_name', status.HTTP_400_BAD_REQUEST)
+        given_email, email_error = fav.clean_email(request.data.get('email'))
+        if email_error:
+            return error_response('Please enter a valid email address.', 'invalid_email', status.HTTP_400_BAD_REQUEST)
+        email = given_email or session_email or fav.visitor_email(gallery, client_key)
+        if fav.visitor_lists(gallery, client_key).count() >= fav.MAX_LISTS_PER_VISITOR:
+            return error_response(f'You can have up to {fav.MAX_LISTS_PER_VISITOR} favorite lists.', 'too_many_lists', status.HTTP_400_BAD_REQUEST)
+        if fav.visitor_lists(gallery, client_key).filter(name__iexact=name).exists():
+            return error_response('You already have a list with that name.', 'list_name_taken', status.HTTP_409_CONFLICT)
+        # A visitor's first list is their default one.
+        has_default = fav.visitor_lists(gallery, client_key).filter(is_default=True).exists()
+        favorite_list = FavoriteList.objects.create(
+            gallery=gallery, client_key=client_key, name=name, email=email,
+            visitor_name=fav.clean_visitor_name(request.data.get('visitor_name')), is_default=not has_default,
+        )
+        favorite_list.photo_count = 0
+        return Response(_list_payload(request, favorite_list), status=status.HTTP_201_CREATED)
+
+
+class GalleryFavoriteListDetailView(FavoriteListsAccessMixin, APIView):
+    """
+    GET    .../favorites/lists/{list_id}/?client_uid=&sort=newest|oldest&page=   photos of the list
+    PATCH  .../favorites/lists/{list_id}/   { name, client_uid }                 rename
+    DELETE .../favorites/lists/{list_id}/   { client_uid }                       delete the list
+
+    The list is resolved among the CALLER's lists in THIS gallery, so another
+    visitor's (or another gallery's) list id is a plain 404.
+    """
+
+    def _list(self, request, username, slug, list_id):
+        gallery, client_key, _, _, error = self.resolve(request, username, slug)
+        if error:
+            return None, None, None, error
+        favorite_list = fav.get_visitor_list(gallery, client_key, list_id)
+        if favorite_list is None:
+            return None, None, None, error_response('Favorite list not found.', 'list_not_found', status.HTTP_404_NOT_FOUND)
+        return gallery, client_key, favorite_list, None
+
+    def get(self, request, username, slug, list_id):
+        gallery, _, favorite_list, error = self._list(request, username, slug, list_id)
+        if error:
+            return error
+        order = 'created_at' if request.query_params.get('sort') == 'oldest' else '-created_at'
+        favorites = favorite_list.favorites.select_related('media_asset').order_by(order)
+        paginator = GalleryMediaPagination()
+        page = paginator.paginate_queryset(favorites, request, view=self)
+        assets = PublicMediaAssetSerializer(
+            [f.media_asset for f in page], many=True,
+            context={'request': request, 'gallery': gallery, 'username': gallery.photographer.username, 'slug': gallery.slug},
+        ).data
+        response = paginator.get_paginated_response(assets)
+        favorite_list.photo_count = favorite_list.favorites.count()
+        response.data['list'] = _list_payload(request, favorite_list)
+        return response
+
+    def patch(self, request, username, slug, list_id):
+        gallery, client_key, favorite_list, error = self._list(request, username, slug, list_id)
+        if error:
+            return error
+        name = fav.clean_list_name(request.data.get('name'))
+        if name is None:
+            return error_response('Give your list a name (up to 80 characters).', 'invalid_list_name', status.HTTP_400_BAD_REQUEST)
+        if fav.visitor_lists(gallery, client_key).filter(name__iexact=name).exclude(pk=favorite_list.pk).exists():
+            return error_response('You already have a list with that name.', 'list_name_taken', status.HTTP_409_CONFLICT)
+        favorite_list.name = name
+        favorite_list.save(update_fields=['name', 'updated_at'])
+        return Response(_list_payload(request, favorite_list))
+
+    def delete(self, request, username, slug, list_id):
+        _, _, favorite_list, error = self._list(request, username, slug, list_id)
+        if error:
+            return error
+        favorite_list.delete()          # its favorites go with it; photos stay in the gallery
+        return Response({'deleted': True})
 
 
 class PublicDownloadAccessView(APIView):
@@ -1012,6 +1186,7 @@ JOB_ERROR_MESSAGES = {
     'no_media': 'No ready photos are available to download.',
     'download_too_large': 'This selection is too large to package in one download.',
     'download_expired': 'This download has expired. Please start it again.',
+    'file_missing': 'This download is no longer available. Please prepare it again.',
 }
 JOB_GENERIC_ERROR = "We couldn't prepare your photos. Please try again."
 
@@ -1093,6 +1268,10 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
             return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
 
         job = expire_if_stale(job)
+        if job.state == DownloadJob.State.READY and not is_expired(job) and not job_files_exist(job):
+            # The row says ready but the stored ZIP is gone: say so now, instead of
+            # handing out a link that can only 404.
+            mark_file_missing(job)
         if job.state == DownloadJob.State.FAILED:
             return Response({
                 'state': 'failed', 'code': job.error_code or 'prepare_failed', 'files': [],
@@ -1118,7 +1297,7 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
                 'size_bytes': entry['size_bytes'],
                 'url': f'{url}?{urlencode({"file_token": issue_file_token(job, gallery, index)})}',
             })
-        return Response({'state': 'ready', 'files': files})
+        return Response({'state': 'ready', 'files': files, 'expires_at': job.expires_at})
 
 
 class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
@@ -1134,7 +1313,22 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
     job's single Download Activity row, with the real attachment filename.
     """
 
+    # Failures a person can fix by preparing the download again. A browser
+    # that NAVIGATED to the file URL (an old link, a bookmark, the emailed
+    # link) is sent to the download page, which says "link expired" with a
+    # button; API/XHR callers keep getting the JSON error.
+    FRIENDLY_CODES = {'download_not_found', 'download_expired', 'download_link_expired', 'file_unavailable'}
+
     def get(self, request, username, slug, job_id, index):
+        response = self.serve(request, username, slug, job_id, index)
+        code = getattr(response, 'data', {}).get('code') if hasattr(response, 'data') and isinstance(response.data, dict) else None
+        if code in self.FRIENDLY_CODES and 'text/html' in request.META.get('HTTP_ACCEPT', ''):
+            return HttpResponseRedirect(
+                f'{settings.FRONTEND_URL}/g/{username.strip().lower()}/{slug.strip().lower()}/download?link=expired'
+            )
+        return response
+
+    def serve(self, request, username, slug, job_id, index):
         gallery, job, error = self.resolve_job(request, username, slug, job_id)
         if error:
             return error
@@ -1147,7 +1341,11 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
         files = job.files or []
         if index >= len(files):
             return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
-        if not file_token_is_valid(request.query_params.get('file_token'), job, gallery, index):
+        token_state = file_token_state(request.query_params.get('file_token'), job, gallery, index)
+        if token_state == 'mismatch':
+            # A genuine link, but for a different job/file: reads as "not found".
+            return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
+        if token_state != 'ok':
             return error_response(
                 'This download link has expired. Please try again.',
                 'download_link_expired', status.HTTP_403_FORBIDDEN,
@@ -1158,6 +1356,7 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
             stored = PrivateMediaStorage().open(entry['storage_path'], 'rb')
         except Exception:
             logger.warning('Stored file for download job %s is missing', job.id)
+            mark_file_missing(job)
             return error_response('File unavailable.', 'file_unavailable', status.HTTP_404_NOT_FOUND)
 
         filename = sanitize_download_filename(entry['name'], fallback='photo-download-1of1.zip')
@@ -1185,6 +1384,7 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
                 pin_verified=job.pin_verified,
                 photo_set=job.photo_set,
                 filename=filename,
+                photo_count=entry.get('photo_count'),
             )
             job.save(update_fields=['download_log', 'updated_at'])
 

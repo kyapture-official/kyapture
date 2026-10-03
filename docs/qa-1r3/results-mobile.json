@@ -1,0 +1,254 @@
+[
+  {
+    "name": "opening the gallery shows no dialog and makes no download request",
+    "ok": true
+  },
+  {
+    "name": "dialog header = gallery title + photographer name",
+    "ok": true
+  },
+  {
+    "name": "dialog footer = \"Powered by KYAPTURE\"",
+    "ok": true
+  },
+  {
+    "name": "step 1 lists Original / High Resolution / Web Size with size notes",
+    "ok": true
+  },
+  {
+    "name": "step 1 offers photo-set scope",
+    "ok": true
+  },
+  {
+    "name": "no horizontal scroll (dialog open)",
+    "ok": true
+  },
+  {
+    "name": "mobile: full-width bottom sheet",
+    "ok": true
+  },
+  {
+    "name": "step 2 is the PIN step with digit boxes",
+    "ok": true
+  },
+  {
+    "name": "wrong PIN: \"Incorrect PIN\" inline, still on the PIN step",
+    "ok": true
+  },
+  {
+    "name": "wrong PIN created no prepare request",
+    "ok": true
+  },
+  {
+    "name": "after the PIN is accepted the EMAIL step appears",
+    "ok": true
+  },
+  {
+    "name": "email: invalid address is caught inline",
+    "ok": true
+  },
+  {
+    "name": "preparing screen: spinner + \"Preparing your download...\"",
+    "ok": true
+  },
+  {
+    "name": "ready: big Download button, file name, size in MB, \"Link valid for 24 hours\"",
+    "ok": true
+  },
+  {
+    "name": "no horizontal scroll (ready)",
+    "ok": true
+  },
+  {
+    "name": "clicking Download saves the ZIP",
+    "ok": true
+  },
+  {
+    "name": "the ready link keeps working (3 more fetches of the same URL)",
+    "ok": true
+  },
+  {
+    "name": "download activity row exists after the first download only (1 row for this job)",
+    "ok": true
+  },
+  {
+    "name": "dialog can be closed while preparing",
+    "ok": true
+  },
+  {
+    "name": "closing never cancelled the job: asking again reuses the SAME prepared job (and no new email/PIN prompt)",
+    "ok": true
+  },
+  {
+    "name": "expired (in dialog): friendly \"Link expired\" + Prepare again button, no raw JSON",
+    "ok": true
+  },
+  {
+    "name": "Prepare again produces a fresh ready download",
+    "ok": true
+  },
+  {
+    "name": "opening an expired file link in the browser lands on the friendly download page",
+    "ok": true
+  },
+  {
+    "name": "single photo: same dialog, size choice, no scope/ZIP step",
+    "ok": true
+  },
+  {
+    "name": "single photo downloads directly with its ORIGINAL file name (not a UUID)",
+    "ok": true
+  },
+  {
+    "name": "single photo made no ZIP job",
+    "ok": true
+  },
+  {
+    "name": "no PIN + email not required: no PIN or email step at all",
+    "ok": true
+  },
+  {
+    "name": "open gallery: ZIP downloads, named {slug}-photo-download-1of1.zip",
+    "ok": true
+  },
+  {
+    "name": "standalone (direct-open): header = gallery title + photographer, footer Powered by KYAPTURE",
+    "ok": true
+  },
+  {
+    "name": "standalone (direct-open): options come from the API (no router state)",
+    "ok": true
+  },
+  {
+    "name": "standalone (direct-open): no horizontal scroll",
+    "ok": true
+  },
+  {
+    "name": "standalone (refresh): header = gallery title + photographer, footer Powered by KYAPTURE",
+    "ok": true
+  },
+  {
+    "name": "standalone (refresh): options come from the API (no router state)",
+    "ok": true
+  },
+  {
+    "name": "standalone (refresh): no horizontal scroll",
+    "ok": true
+  },
+  {
+    "name": "standalone: PIN step shown because the server says a PIN exists",
+    "ok": true
+  },
+  {
+    "name": "first heart asks \"Enter your email to save favorites\" (email + optional name)",
+    "ok": true
+  },
+  {
+    "name": "no favorite was saved before the email was given",
+    "ok": true
+  },
+  {
+    "name": "after the email the photo is hearted (red) in the grid",
+    "ok": true
+  },
+  {
+    "name": "email is remembered: second heart does NOT prompt again",
+    "ok": true
+  },
+  {
+    "name": "lightbox heart is red for a favorited photo (synced with the grid)",
+    "ok": true
+  },
+  {
+    "name": "panel lists \"My Favorites\" with count, created and updated dates",
+    "ok": true
+  },
+  {
+    "name": "panel has New Favorite List + sort",
+    "ok": true
+  },
+  {
+    "name": "create a new list",
+    "ok": true
+  },
+  {
+    "name": "sort oldest first puts \"My Favorites\" before \"Best of\"",
+    "ok": true
+  },
+  {
+    "name": "rename a list",
+    "ok": true
+  },
+  {
+    "name": "delete a list (photos stay in the gallery)",
+    "ok": true
+  },
+  {
+    "name": "remove a photo from the list",
+    "ok": true
+  },
+  {
+    "name": "heart state syncs after removing it from the panel (1 red heart left)",
+    "ok": true
+  },
+  {
+    "name": "no horizontal scroll (favorites)",
+    "ok": true
+  },
+  {
+    "name": "another visitor's panel is empty (visitors only see their own lists)",
+    "ok": true
+  },
+  {
+    "name": "dashboard gallery download rows: email, size, photo count, real zip filename, time",
+    "ok": true
+  },
+  {
+    "name": "repeat prepare/downloads of ONE job within 60s collapsed to one row (this run made 2 jobs -> 2 rows max)",
+    "ok": true
+  },
+  {
+    "name": "single photo rows: thumbnail + real filename (never a UUID) + email",
+    "ok": true
+  },
+  {
+    "name": "favorite activity: real email (no \"Anonymous visitor\"), grouped by visitor",
+    "ok": true
+  },
+  {
+    "name": "expanding a visitor shows their lists with count, created and updated",
+    "ok": true
+  },
+  {
+    "name": "list detail shows thumbnails with real filenames, the email, count and updated time",
+    "ok": true
+  },
+  {
+    "name": "filter by email: no match -> friendly empty state",
+    "ok": true
+  },
+  {
+    "name": "filter by email: partial match finds the visitor",
+    "ok": true
+  },
+  {
+    "name": "no horizontal scroll (activity)",
+    "ok": true
+  },
+  {
+    "name": "bell: \"Gallery downloaded by <email>\"",
+    "ok": true
+  },
+  {
+    "name": "bell: \"Photo downloaded by <email>\"",
+    "ok": true
+  },
+  {
+    "name": "bell: \"<email> favorited N photos\"",
+    "ok": true
+  },
+  {
+    "name": "no unexpected console / page errors",
+    "ok": true
+  }
+]

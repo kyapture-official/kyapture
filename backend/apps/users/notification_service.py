@@ -83,13 +83,33 @@ def notify_download_event(download_log):
 
 
 def notify_favorite_event(favorite):
+    """
+    "<email> favorited N photos". Bursts from the SAME visitor in the same
+    gallery roll into one unread notification whose N grows; another visitor's
+    favorites never merge into it (the text names who).
+    """
     gallery = favorite.gallery
-    who = favorite.email or 'A client'
-    record_notification(
-        gallery.photographer, Kind.FAVORITE, gallery,
-        message=f'{who} favorited a photo in "{gallery.title}"',
-        coalesced_message='{count} new favorites in "' + gallery.title.replace('{', '{{').replace('}', '}}') + '"',
-    )
+    who = favorite.email or 'A guest'
+    prefix = f'{who} favorited '
+    try:
+        with transaction.atomic():
+            existing = (
+                Notification.objects.select_for_update()
+                .filter(
+                    user=gallery.photographer, kind=Kind.FAVORITE, gallery=gallery, is_read=False,
+                    updated_at__gte=timezone.now() - COALESCE_WINDOW, message__startswith=prefix,
+                )
+                .first()
+            )
+            if existing:
+                existing.count += 1
+                existing.message = f'{prefix}{existing.count} photos'[:300]
+                existing.save(update_fields=['count', 'message', 'updated_at'])
+                return existing
+    except Exception:
+        logger.exception('Could not update favorite notification for gallery %s', gallery.pk)
+        return None
+    return record_notification(gallery.photographer, Kind.FAVORITE, gallery, message=f'{prefix}1 photo')
 
 
 def notify_payment_event(payment):

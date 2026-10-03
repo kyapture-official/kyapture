@@ -6,6 +6,7 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { useVisitorStore } from './visitorStore'
 
 // ── SSR & PRIVACY SANDBOX MOCK STORAGE ──────────────────────────────────────
 const noopStorage = {
@@ -121,15 +122,13 @@ export const useClientStore = create(
        */
       getOrCreateClientUid: (sessionKey) => {
         if (!sessionKey) return null
-        const existing = get().clientUids[sessionKey]
-        if (existing) return existing
-
-        const uid =
-          typeof crypto !== 'undefined' && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
-        set((state) => ({ clientUids: { ...state.clientUids, [sessionKey]: uid } }))
+        // The identity now lives in visitorStore (localStorage) so a visitor's
+        // favorite lists survive closing the tab; an id this tab already had in
+        // sessionStorage is adopted rather than orphaning its favorites.
+        const uid = useVisitorStore.getState().getOrCreateClientUid(sessionKey, get().clientUids[sessionKey])
+        if (get().clientUids[sessionKey] !== uid) {
+          set((state) => ({ clientUids: { ...state.clientUids, [sessionKey]: uid } }))
+        }
         return uid
       },
     }),

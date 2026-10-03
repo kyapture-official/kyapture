@@ -191,9 +191,8 @@ def issue_file_token(job, gallery, index):
     presented a valid download access token, so it is tied to that verified
     visitor: it carries the job, the gallery, the file index, the verified
     email and the PIN fingerprint, and the file endpoint re-checks all of
-    them. It expires in minutes (DOWNLOAD_FILE_URL_TTL_SECONDS) — long before
-    the access token itself — so a link copied out of the address bar or a
-    history entry stops working almost immediately.
+    them. It expires with the job (DOWNLOAD_FILE_URL_TTL_SECONDS, 24h by
+    default) and works for that one job only.
     """
     return signing.dumps(
         {
@@ -208,23 +207,39 @@ def issue_file_token(job, gallery, index):
     )
 
 
-def file_token_is_valid(token, job, gallery, index):
+def file_token_state(token, job, gallery, index):
+    """
+    'ok'        genuine, fresh and issued for exactly this job/gallery/file
+    'mismatch'  genuine but issued for ANOTHER job, gallery, file or visitor
+    'expired'   genuine but past DOWNLOAD_FILE_URL_TTL_SECONDS
+    'invalid'   missing, malformed or tampered
+    """
     token = as_clean_str(token)
     if not token:
-        return False
+        return 'invalid'
     try:
         payload = signing.loads(token, salt=FILE_TOKEN_SALT, max_age=download_file_url_ttl())
-    except signing.BadSignature:  # includes SignatureExpired
-        return False
-    return (
-        isinstance(payload, dict)
-        and payload.get('j') == str(job.id)
-        and payload.get('g') == str(gallery.id)
-        and payload.get('i') == int(index)
-        and payload.get('e') == (job.email or '')
-        # PIN changed or cleared since the grant was issued.
-        and payload.get('f') == _pin_fingerprint(gallery)
-    )
+    except signing.SignatureExpired:
+        return 'expired'
+    except signing.BadSignature:
+        return 'invalid'
+    if not isinstance(payload, dict):
+        return 'invalid'
+    if (
+        payload.get('j') != str(job.id)
+        or payload.get('g') != str(gallery.id)
+        or payload.get('i') != int(index)
+        or payload.get('e') != (job.email or '')
+    ):
+        return 'mismatch'
+    # PIN changed or cleared since the grant was issued.
+    if payload.get('f') != _pin_fingerprint(gallery):
+        return 'invalid'
+    return 'ok'
+
+
+def file_token_is_valid(token, job, gallery, index):
+    return file_token_state(token, job, gallery, index) == 'ok'
 
 
 class DownloadAuthorization:

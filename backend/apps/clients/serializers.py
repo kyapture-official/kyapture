@@ -455,15 +455,25 @@ class DownloadLogSerializer(serializers.ModelSerializer):
     scope = serializers.SerializerMethodField()
     pin_state = serializers.SerializerMethodField()
     filename = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
 
     class Meta:
         model = DownloadLog
         fields = [
             'id', 'email', 'download_type', 'resolution', 'pin_verified', 'pin_state',
             'media_asset_id', 'media_asset_title', 'media_asset_name', 'photo_set_name', 'scope', 'filename',
-            'created_at',
+            'photo_count', 'thumbnail_url', 'created_at',
         ]
         read_only_fields = fields
+
+    def get_thumbnail_url(self, obj):
+        """The downloaded photo's thumbnail (single-photo rows only; a ZIP has no single image)."""
+        request = self.context.get('request')
+        asset = obj.media_asset if obj.media_asset_id else None
+        if asset is None or request is None:
+            return None
+        image = asset.thumbnail_file or asset.poster_image
+        return request.build_absolute_uri(image.url) if image else None
 
     def get_media_asset_name(self, obj):
         """The uploaded filename of the downloaded photo/video (null for a whole-gallery ZIP)."""

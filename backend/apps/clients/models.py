@@ -184,6 +184,10 @@ class DownloadLog(BaseModel):
     # rows written before this field existed.
     filename = models.CharField(max_length=255, blank=True, default='')
 
+    # How many photos/videos were in a gallery/set ZIP (null for a single-file
+    # download and for rows written before this field existed).
+    photo_count = models.PositiveIntegerField(null=True, blank=True)
+
     class Meta:
         db_table = 'download_logs'
         ordering = ['-created_at']
@@ -197,6 +201,38 @@ class DownloadLog(BaseModel):
 
     def __str__(self):
         return f"Download: {self.gallery.title} — {self.email}"
+
+
+class FavoriteList(BaseModel):
+    """
+    One visitor's named list of favorites inside one gallery (Pixieset-style
+    "My Favorites"). There are no client accounts, so a list belongs to the same
+    identity a Favorite always did: `client_key` (the gallery unlock token for a
+    protected gallery, or the browser's anonymous client_uid for an open one).
+    `client_key` is a credential and is never exposed; the photographer sees
+    the visitor's `email` instead (null = a guest who never gave one).
+    """
+    gallery = models.ForeignKey(
+        'galleries.Gallery', on_delete=models.CASCADE, related_name='favorite_lists'
+    )
+    client_key = models.CharField(max_length=128)
+    email = models.EmailField(null=True, blank=True)
+    visitor_name = models.CharField(max_length=80, blank=True, default='')
+    name = models.CharField(max_length=80, default='My Favorites')
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'favorite_lists'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['gallery', 'client_key', 'name'], name='unique_favorite_list_name'),
+        ]
+        indexes = [
+            models.Index(fields=['gallery', 'client_key'], name='idx_favlist_gallery_client'),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.email or 'guest'})"
 
 
 class Favorite(BaseModel):
@@ -258,17 +294,29 @@ class Favorite(BaseModel):
         help_text="Copied from the client session's email when available, "
                   "for photographer-facing favorite activity.",
     )
+    # The visitor's list this favorite sits in. A photo may be in several of a
+    # visitor's lists. Null only on rows from before lists existed (the
+    # migration backfills those into a default "My Favorites" list).
+    favorite_list = models.ForeignKey(
+        FavoriteList, null=True, blank=True, on_delete=models.CASCADE, related_name='favorites'
+    )
 
     class Meta:
         db_table = 'favorites'
         ordering = ['-created_at']
         constraints = [
             # The idempotency guarantee: favoriting twice is a no-op, not
-            # a duplicate row.
+            # a duplicate row - per list, so a photo can live in several lists.
+            models.UniqueConstraint(
+                fields=['favorite_list', 'media_asset'],
+                condition=models.Q(favorite_list__isnull=False),
+                name='unique_favorite_per_list_asset',
+            ),
             models.UniqueConstraint(
                 fields=['gallery', 'media_asset', 'client_key'],
-                name='unique_favorite_per_client_asset'
-            )
+                condition=models.Q(favorite_list__isnull=True),
+                name='unique_favorite_per_client_asset',
+            ),
         ]
         indexes = [
             # Covers "does this client have any favorites in this

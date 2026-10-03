@@ -13,6 +13,8 @@ from .views import (
     PublicVideoStreamView,
     PublicGalleryPhotosView,
     GalleryFavoritesView,
+    GalleryFavoriteListsView,
+    GalleryFavoriteListDetailView,
 )
 
 urlpatterns = [
@@ -83,6 +85,18 @@ path(
         '<str:username>/<slug:slug>/photos/',
         PublicGalleryPhotosView.as_view(),
         name='public-gallery-photos'
+    ),
+
+    # Routes: the visitor's own favorite lists (listed BEFORE the plain favorites route)
+    path(
+        '<str:username>/<slug:slug>/favorites/lists/<uuid:list_id>/',
+        GalleryFavoriteListDetailView.as_view(),
+        name='public-gallery-favorite-list'
+    ),
+    path(
+        '<str:username>/<slug:slug>/favorites/lists/',
+        GalleryFavoriteListsView.as_view(),
+        name='public-gallery-favorite-lists'
     ),
 
     # Route: GET/POST/DELETE /api/v1/public/{username}/{slug}/favorites/
