@@ -92,6 +92,8 @@ class OriginalDeliveryProtectionTestCase(APITestCase):
             is_active=True,
             allow_download=True,
             is_password_protected=True,
+            # These tests are about the gallery-password gate, not the email rule.
+            design_settings={"downloads": {"require_email": False}},
         )
         self.gallery.password_hash = bcrypt.hashpw(b"secret123", bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=["password_hash"])
@@ -194,6 +196,8 @@ class OpenGalleryDerivativeAccessTestCase(APITestCase):
             is_published=True,
             is_active=True,
             allow_download=True,
+            # An open, frictionless gallery: no email/PIN rule.
+            design_settings={"downloads": {"require_email": False}},
         )
         self.asset = _make_ready_asset(self.gallery, 1)
 

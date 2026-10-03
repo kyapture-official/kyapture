@@ -25,6 +25,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.clients.models import ClientSession, DownloadLog, Favorite
+from apps.clients.tests.zip_flow import InlineDownloadJobsMixin, request_zip
 from apps.galleries.models import Gallery
 from apps.photos import tasks as photo_tasks
 from apps.photos.models import MediaAsset, PhotoSet
@@ -204,7 +205,7 @@ class SharedLinkDoesNotBypassProtectionTests(Base):
         self.assertTrue(opened.data['has_download_pin'])
         denied = self.public(f'{self.base}photo/{asset.id}/download/')   # ... downloading still needs the PIN
         self.assertEqual(denied.status_code, 401)
-        self.assertEqual(self.public(f'{self.base}download-all/').status_code, 403)
+        self.assertEqual(self.client_class().post(f'{self.base}download/', {}, format='json').status_code, 401)
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_a_shared_link_to_someone_elses_gallery_name_is_a_plain_404(self):
@@ -215,9 +216,11 @@ class SharedLinkDoesNotBypassProtectionTests(Base):
 # ═══════════════════════════════════════════════════════════════════════════
 # DOWNLOAD ACTIVITY
 # ═══════════════════════════════════════════════════════════════════════════
-class DownloadActivityTests(Base):
+class DownloadActivityTests(InlineDownloadJobsMixin, Base):
     def setUp(self):
         super().setUp()
+        self.gallery.design_settings = {'downloads': {'require_email': False}}
+        self.gallery.save(update_fields=['design_settings'])
         self.set_a = PhotoSet.objects.create(gallery=self.gallery, name='Ceremony', order=1)
         self.photo = _asset(self.gallery, 'ring.jpg', photo_set=self.set_a)
         self.video = _asset(self.gallery, 'vows.mp4', media_type='video')
@@ -247,8 +250,8 @@ class DownloadActivityTests(Base):
                          ('video', 'Single video', 'vows.mp4'))
 
     def test_successful_gallery_zip_is_logged_with_scope(self):
-        self.assertEqual(self.public(f'{self.base}download-all/').status_code, 200)
-        self.assertEqual(self.public(f'{self.base}download-all/', data={'set': str(self.set_a.id)}).status_code, 200)
+        self.assertEqual(request_zip(self.client_class(), self.base).status_code, 200)
+        self.assertEqual(request_zip(self.client_class(), self.base, {'set_id': str(self.set_a.id)}).status_code, 200)
         rows = {r['scope']: r for r in self.as_owner().get(self.logs).data['results']}
         self.assertEqual(set(rows), {'Entire gallery', 'Set: Ceremony'})
         self.assertIsNone(rows['Entire gallery']['media_asset_name'])
@@ -268,7 +271,7 @@ class DownloadActivityTests(Base):
         self.gallery.save(update_fields=['download_pin_hash'])
         self.public(f'{self.base}photo/{self.photo.id}/download/')                      # no PIN
         self.public(f'{self.base}photo/{self.photo.id}/download/', data={'pin': '0000'})  # wrong PIN
-        self.public(f'{self.base}download-all/')
+        request_zip(self.client_class(), self.base)
         self.public(f'{self.base}photo/{uuid.uuid4()}/download/', data={'pin': '4821'})  # unknown asset
         self.gallery.allow_download = False
         self.gallery.save(update_fields=['allow_download'])
@@ -471,6 +474,8 @@ class FavoriteActivityTests(Base):
 class NotificationEventTests(Base):
     def setUp(self):
         super().setUp()
+        self.gallery.design_settings = {'downloads': {'require_email': False}}
+        self.gallery.save(update_fields=['design_settings'])
         self.asset = _asset(self.gallery, 'one.jpg')
 
     def mine(self, user=None, **filters):
@@ -480,18 +485,19 @@ class NotificationEventTests(Base):
         self.public(f'{self.base}photo/{self.asset.id}/download/')
         note = self.mine().get()
         self.assertEqual(note.kind, 'download')
-        self.assertIn('Spring Wedding', note.message)
+        self.assertEqual(note.message, 'Photo downloaded by a client')
         self.assertFalse(note.is_read)
         self.assertEqual(self.mine(self.other).count(), 0)
         self.assertEqual(DownloadLog.objects.count(), 1)             # the durable record exists independently
 
-    def test_bursts_coalesce_into_one_unread_row_with_a_count(self):
+    def test_each_download_gets_its_own_notification_naming_who_downloaded(self):
+        # Download text names the client, so downloads are not rolled up into "N downloads".
         for _ in range(3):
-            DownloadLog.objects.create(gallery=self.gallery, download_type='photo', media_asset=self.asset)
-        note = self.mine().get()
-        self.assertEqual(note.count, 3)
-        self.assertEqual(note.message, '3 downloads from "Spring Wedding"')
-        self.assertEqual(DownloadLog.objects.count(), 3)             # activity keeps every row; the bell keeps one
+            DownloadLog.objects.create(gallery=self.gallery, download_type='photo', media_asset=self.asset, email='buyer@example.com')
+        notes = self.mine(kind='download')
+        self.assertEqual(notes.count(), 3)
+        self.assertEqual({n.message for n in notes}, {'Photo downloaded by buyer@example.com'})
+        self.assertEqual(DownloadLog.objects.count(), 3)
 
     def test_after_reading_a_new_event_creates_a_fresh_notification(self):
         DownloadLog.objects.create(gallery=self.gallery, download_type='photo', media_asset=self.asset)

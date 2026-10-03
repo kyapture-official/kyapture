@@ -27,6 +27,7 @@ from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
 from apps.clients.models import DownloadLog
 from apps.clients.models import ClientSession
+from apps.clients.tests.zip_flow import InlineDownloadJobsMixin, request_zip
 
 User = get_user_model()
 
@@ -44,7 +45,7 @@ def _ready_image(gallery, original_name, file_size=1024, content=b"BYTES"):
     return asset
 
 
-class MalformedAssetIdsTestCase(APITestCase):
+class MalformedAssetIdsTestCase(InlineDownloadJobsMixin, APITestCase):
     def setUp(self):
         cache.clear()
         self.photographer = User.objects.create_user(
@@ -59,42 +60,42 @@ class MalformedAssetIdsTestCase(APITestCase):
             allow_download=True,
         )
         _ready_image(self.gallery, "photo.jpg")
-        self.url = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/download/"
+        self.base = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/"
 
     def test_malformed_uuid_in_asset_ids_returns_400_not_500(self):
-        response = self.client.post(self.url, {
+        response = request_zip(self.client, self.base, {
             "email": "guest@example.com",
             "asset_ids": ["not-a-uuid", "also-bad"],
-        }, format="json")
+        })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_asset_ids_not_a_list_returns_400(self):
-        response = self.client.post(self.url, {
+        response = request_zip(self.client, self.base, {
             "email": "guest@example.com",
             "asset_ids": "not-a-list",
-        }, format="json")
+        })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_valid_uuid_but_nonexistent_asset_returns_400_no_log(self):
-        response = self.client.post(self.url, {
+        response = request_zip(self.client, self.base, {
             "email": "guest@example.com",
             "asset_ids": ["01a0f000-0000-7000-8000-000000000000"],
-        }, format="json")
+        })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_well_formed_asset_ids_still_work(self):
         asset = MediaAsset.objects.filter(gallery=self.gallery).first()
-        response = self.client.post(self.url, {
+        response = request_zip(self.client, self.base, {
             "email": "guest@example.com",
             "asset_ids": [str(asset.id)],
-        }, format="json")
+        })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(DownloadLog.objects.exists())
 
 
-class FilenameSanitizationTestCase(APITestCase):
+class FilenameSanitizationTestCase(InlineDownloadJobsMixin, APITestCase):
     def setUp(self):
         cache.clear()
         self.photographer = User.objects.create_user(
@@ -108,11 +109,11 @@ class FilenameSanitizationTestCase(APITestCase):
             is_active=True,
             allow_download=True,
         )
-        self.url = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/download/"
+        self.base = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/"
 
     def test_path_traversal_filename_cannot_escape_zip_entry(self):
         _ready_image(self.gallery, "../../../etc/passwd.jpg", content=b"EVIL")
-        response = self.client.post(self.url, {"email": "guest@example.com"}, format="json")
+        response = request_zip(self.client, self.base, {"email": "guest@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         zip_bytes = b"".join(response.streaming_content)
@@ -123,7 +124,7 @@ class FilenameSanitizationTestCase(APITestCase):
 
     def test_crlf_in_filename_does_not_break_response_headers(self):
         _ready_image(self.gallery, "evil\r\nX-Injected: true.jpg", content=b"EVIL")
-        response = self.client.post(self.url, {"email": "guest@example.com"}, format="json")
+        response = request_zip(self.client, self.base, {"email": "guest@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotIn("\r", response["Content-Disposition"])
         self.assertNotIn("\n", response["Content-Disposition"])
@@ -132,7 +133,7 @@ class FilenameSanitizationTestCase(APITestCase):
         _ready_image(self.gallery, "photo.jpg", content=b"FIRST")
         _ready_image(self.gallery, "photo.jpg", content=b"SECOND")
 
-        response = self.client.post(self.url, {"email": "guest@example.com"}, format="json")
+        response = request_zip(self.client, self.base, {"email": "guest@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         zip_bytes = b"".join(response.streaming_content)
@@ -145,7 +146,7 @@ class FilenameSanitizationTestCase(APITestCase):
             self.assertEqual(contents, {b"FIRST", b"SECOND"})
 
 
-class SyncZipSizeGuardTestCase(APITestCase):
+class SyncZipSizeGuardTestCase(InlineDownloadJobsMixin, APITestCase):
     def setUp(self):
         cache.clear()
         self.photographer = User.objects.create_user(
@@ -159,14 +160,14 @@ class SyncZipSizeGuardTestCase(APITestCase):
             is_active=True,
             allow_download=True,
         )
-        self.url = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/download/"
+        self.base = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/"
 
     @override_settings(SYNC_ZIP_MAX_ASSET_COUNT=2)
     def test_too_many_assets_rejected_with_clear_error(self):
         for i in range(3):
             _ready_image(self.gallery, f"photo{i}.jpg")
 
-        response = self.client.post(self.url, {"email": "guest@example.com"}, format="json")
+        response = request_zip(self.client, self.base, {"email": "guest@example.com"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data.get("code"), "download_too_large")
         self.assertFalse(DownloadLog.objects.exists())
@@ -174,18 +175,18 @@ class SyncZipSizeGuardTestCase(APITestCase):
     @override_settings(SYNC_ZIP_MAX_TOTAL_BYTES=1000)
     def test_too_many_total_bytes_rejected(self):
         _ready_image(self.gallery, "big.jpg", file_size=2000)
-        response = self.client.post(self.url, {"email": "guest@example.com"}, format="json")
+        response = request_zip(self.client, self.base, {"email": "guest@example.com"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data.get("code"), "download_too_large")
 
     def test_within_limits_still_succeeds(self):
         _ready_image(self.gallery, "small.jpg", file_size=100)
-        response = self.client.post(self.url, {"email": "guest@example.com"}, format="json")
+        response = request_zip(self.client, self.base, {"email": "guest@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
-class DirectGalleryDownloadTestCase(APITestCase):
-    """GET /api/v1/public/{username}/{slug}/download-all/"""
+class PreparedGalleryDownloadTestCase(InlineDownloadJobsMixin, APITestCase):
+    """The prepared gallery ZIP: POST .../download/ -> poll -> file."""
 
     def setUp(self):
         cache.clear()
@@ -200,17 +201,20 @@ class DirectGalleryDownloadTestCase(APITestCase):
             is_active=True,
             allow_download=True,
         )
-        self.url = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/download-all/"
+        self.base = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/"
+        self.guest = {"email": "guest@example.com"}
 
-    def test_streams_only_ready_media_and_writes_audit_log(self):
+    def test_packages_only_ready_media_and_writes_audit_log(self):
         _ready_image(self.gallery, "first.jpg", content=b"READY")
         pending = _ready_image(self.gallery, "pending.jpg", content=b"PENDING")
         pending.processing_status = MediaAsset.ProcessingStatus.PENDING
         pending.save(update_fields=["processing_status"])
 
-        response = self.client.get(self.url)
+        response = request_zip(self.client, self.base, self.guest)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response["Content-Disposition"], 'attachment; filename="direct-zip.zip"')
+        self.assertEqual(
+            response["Content-Disposition"], 'attachment; filename="direct-zip-photo-download-1of1.zip"'
+        )
         with zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content))) as archive:
             self.assertEqual(archive.namelist(), ["first.jpg"])
             self.assertEqual(archive.read("first.jpg"), b"READY")
@@ -218,7 +222,8 @@ class DirectGalleryDownloadTestCase(APITestCase):
         log = DownloadLog.objects.get()
         self.assertEqual(log.download_type, DownloadLog.DownloadType.GALLERY)
         self.assertEqual(log.resolution, DownloadLog.Resolution.DOWNLOAD)
-        self.assertIsNone(log.email)
+        self.assertEqual(log.email, "guest@example.com")
+        self.assertEqual(log.filename, "direct-zip-photo-download-1of1.zip")
 
     def test_requires_a_valid_unlock_token_for_protected_gallery(self):
         _ready_image(self.gallery, "first.jpg")
@@ -226,9 +231,10 @@ class DirectGalleryDownloadTestCase(APITestCase):
         self.gallery.save(update_fields=["is_password_protected"])
         session = ClientSession.objects.create(gallery=self.gallery)
 
-        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(request_zip(self.client, self.base, self.guest).status_code, status.HTTP_401_UNAUTHORIZED)
+        cache.clear()
         self.assertEqual(
-            self.client.get(self.url, {"token": session.access_token}).status_code,
+            request_zip(self.client, self.base, self.guest, unlock_token=session.access_token).status_code,
             status.HTTP_200_OK,
         )
 
@@ -236,20 +242,20 @@ class DirectGalleryDownloadTestCase(APITestCase):
         _ready_image(self.gallery, "first.jpg")
         self.gallery.allow_download = False
         self.gallery.save(update_fields=["allow_download"])
-        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(request_zip(self.client, self.base, self.guest).status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_unpublished_gallery_is_forbidden(self):
+    def test_unpublished_gallery_is_not_downloadable(self):
         _ready_image(self.gallery, "first.jpg")
         self.gallery.is_published = False
         self.gallery.save(update_fields=["is_published"])
-        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(request_zip(self.client, self.base, self.guest).status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_direct_zip_prefers_the_download_master(self):
+    def test_zip_prefers_the_download_master(self):
         asset = _ready_image(self.gallery, "first.jpg", content=b"ORIGINAL")
         asset.download_file.save("first_download.jpg", ContentFile(b"DOWNLOAD-MASTER"), save=False)
         asset.save(update_fields=["download_file"])
 
-        response = self.client.get(self.url)
+        response = request_zip(self.client, self.base, self.guest)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         with zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content))) as archive:
             self.assertEqual(archive.read("first.jpg"), b"DOWNLOAD-MASTER")

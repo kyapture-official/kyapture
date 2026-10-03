@@ -76,3 +76,23 @@ def purge_old_download_logs(self):
     else:
         logger.info("[purge_old_download_logs] No old download logs found.")
     return deleted_count
+
+
+@shared_task(bind=True, max_retries=1)
+def prepare_download_job(self, job_id):
+    """Builds the ZIP for one DownloadJob in the background. See download_jobs.run_download_job."""
+    from .download_jobs import run_download_job
+
+    return run_download_job(job_id)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def purge_expired_download_jobs(self):
+    """Hourly Beat task: removes expired/abandoned download jobs and their stored ZIPs."""
+    from .download_jobs import purge_expired_jobs
+
+    try:
+        return purge_expired_jobs()
+    except Exception as exc:
+        logger.error(f"[purge_expired_download_jobs] Sweep failed: {exc}")
+        raise self.retry(exc=exc)

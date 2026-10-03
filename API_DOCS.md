@@ -691,20 +691,57 @@ derivative. A raw `?pin=` is still accepted for scripted callers but is held to
 the 5/minute PIN-guess throttle. The activity log records the email carried by
 the token.
 
-Download All Public Gallery Media
+Download a Gallery or Set (prepared in the background)
 
-GET /api/v1/public/{username}/{slug}/download-all/?token=<unlock>&download_token=<token>&resolution=download|web|original&set=<photo_set_id>
+Gallery and set ZIPs are never streamed straight from a click. Three steps:
 
-Streams a ZIP of READY media when downloads are enabled. `set` limits the
-archive to one photo set of this gallery (an unknown/foreign set id is a 404,
-never widened to the whole gallery). JPEG and PNG images use the private,
-full-resolution Download Master by default; videos and legacy/special images
-without a master retain their original source; `web` entries carry the
-derivative's real extension. Password-protected galleries require the active
-unlock token; galleries with a download PIN require a valid `download_token`.
-Entry names are sanitized and de-duplicated case-insensitively. The response is
-an attachment named `{gallery-slug}[-{set}].zip` and creates a gallery
-`DownloadLog` entry (email, set, resolution, pin_verified).
+1. POST /api/v1/public/{username}/{slug}/download/
+
+Body: `{ "download_token": "...", "resolution": "download|web", "set_id": "<photo_set_id>", "token": "<unlock>" }`
+(`asset_ids` — a list of this gallery's asset ids — is also accepted.) Every
+gate runs here first — gallery published/active/unexpired, `allow_download`,
+the unlock session of a password-protected gallery, the download token (email
+and PIN), the size policy and the size limits — and only then is a job queued.
+Nothing is queued for a refused request. An identical request that is still
+preparing or ready is reused. An unknown/foreign/malformed `set_id` is a 404,
+never widened to the whole gallery. Throttled with the 5/minute PIN scope.
+
+Response — 202 Accepted
+
+{ "job_id": "<uuid>", "state": "preparing", "status_url": ".../download-jobs/<uuid>/" }
+
+2. GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/?download_token=<token>[&token=<unlock>]
+
+{ "state": "preparing", "files": [] }
+{ "state": "ready", "files": [ { "name": "my-gallery-photo-download-1of1.zip", "size_bytes": 5173859, "url": ".../files/0/?file_token=..." } ] }
+{ "state": "failed", "code": "no_media|download_too_large|prepare_failed|prepare_timeout|download_expired", "error": "...", "files": [] }
+
+The same download token that created the job is required, and its email must be
+the job's (another visitor's token, or another gallery's, reads as not found).
+Each `url` carries a freshly signed `file_token` that is only good for
+`DOWNLOAD_FILE_URL_TTL_SECONDS` (default 10 minutes) — poll again for a new one
+at the moment of download. The archive is always one part:
+`{gallery-slug}-photo-download-1of1.zip` (ZIP_STORED; the backend does not split).
+A job that stays `preparing` longer than `DOWNLOAD_JOB_STALE_SECONDS` reads as failed.
+
+3. GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/files/{index}/?file_token=<signed>[&token=<unlock>]
+
+Streams the ZIP from private storage as an attachment. The signed file token,
+the live gallery gates (published, `allow_download`, unlock session), the job's
+gallery binding, its expiry and the PIN fingerprint are checked on every request.
+The first request for a file writes the Download Activity row (email, set,
+resolution, pin_verified and the real attachment `filename`); a retry of the same
+file within 60 seconds from the same visitor is not a second download.
+Prepared files and their jobs expire after `DOWNLOAD_JOB_TTL_SECONDS` (default
+2 hours) and are purged hourly (Celery Beat: `purge-expired-download-jobs`).
+When an email was captured, the visitor is also emailed a link back to
+`/g/{username}/{slug}/download?job={job_id}` (it carries no credential).
+
+`GET .../download-all/` is retired and always answers 410
+`download_requires_preparation`.
+
+The photographer's bell reads "Gallery downloaded by <email>" /
+"Photo downloaded by <email>" (one notification per real download).
 
 Error Response — 401 Unauthorized
 

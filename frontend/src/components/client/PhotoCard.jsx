@@ -6,22 +6,15 @@ import { formatDuration } from "../../utils/formatters";
 import { buildClientGalleryUrl } from "../../utils/formatters";
 import { useToast } from "../ui/Toast";
 
-function buildDownloadHref(downloadUrl, token) {
-  if (!downloadUrl) return null;
-  return token
-    ? `${downloadUrl}?token=${encodeURIComponent(token)}`
-    : downloadUrl;
-}
-
 export default function PhotoCard({
   photo,
   index,
-  token,
   username,
   slug,
   onPhotoClick,
   isFavorited,
   onToggleFavorite,
+  onDownload,
 }) {
   const [loadedSrc, setLoadedSrc] = useState(null);
   const [errorSrc, setErrorSrc] = useState(null);
@@ -42,7 +35,10 @@ export default function PhotoCard({
     !imgSrc &&
     (photo.processing_status === "pending" || photo.processing_status === "processing");
 
-  const downloadHref = buildDownloadHref(photo.download_url, token);
+  // Download is always an explicit action that goes through the download
+  // dialog (size, then email/PIN when the gallery needs them) — never a bare
+  // link to the file, which the server would refuse anyway.
+  const canDownload = Boolean(photo.download_url && onDownload);
 
   const handleShare = (e) => {
     e.stopPropagation();
@@ -54,12 +50,7 @@ export default function PhotoCard({
 
   const handleDownload = (e) => {
     e.stopPropagation();
-    if (downloadHref) {
-      const a = document.createElement("a");
-      a.href = downloadHref;
-      a.download = photo.original_name || "photo";
-      a.click();
-    }
+    onDownload?.(photo);
   };
 
   const handleFavorite = (e) => {
@@ -149,7 +140,7 @@ export default function PhotoCard({
               <Heart className={`w-3.5 h-3.5 ${isFavorited ? "fill-current" : ""}`} />
             </button>
 
-            {downloadHref && (
+            {canDownload && (
               <button
                 onClick={handleDownload}
                 className="p-1.5 rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white backdrop-blur-sm transition-all duration-200"

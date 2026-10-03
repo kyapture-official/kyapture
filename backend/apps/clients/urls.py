@@ -6,6 +6,8 @@ from .views import (
     PublicDownloadAccessView,
     PublicGalleryDownloadView,
     PublicGalleryDirectDownloadView,
+    PublicDownloadJobStatusView,
+    PublicDownloadJobFileView,
     PublicPhotoDownloadView,
     PublicPhotographerPortfolioView,
     PublicVideoStreamView,
@@ -39,7 +41,23 @@ urlpatterns = [
         name='gallery-download'
     ),
 
-    # Route: GET /api/v1/public/{username}/{slug}/download-all/?token=...
+    # Route: GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/
+    # Status of a background-prepared gallery/set ZIP (+ signed file URLs when ready).
+    path(
+        '<str:username>/<slug:slug>/download-jobs/<uuid:job_id>/',
+        PublicDownloadJobStatusView.as_view(),
+        name='gallery-download-job-status'
+    ),
+
+    # Route: GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/files/{index}/?file_token=...
+    path(
+        '<str:username>/<slug:slug>/download-jobs/<uuid:job_id>/files/<int:index>/',
+        PublicDownloadJobFileView.as_view(),
+        name='gallery-download-job-file'
+    ),
+
+    # Route: GET /api/v1/public/{username}/{slug}/download-all/ — RETIRED (410):
+    # gallery downloads are prepared in the background now.
     path(
         '<str:username>/<slug:slug>/download-all/',
         PublicGalleryDirectDownloadView.as_view(),

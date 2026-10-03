@@ -177,6 +177,13 @@ class DownloadLog(BaseModel):
         help_text="Auditable IP address of the client device requesting the download."
     )
 
+    # The attachment name the server ACTUALLY sent in Content-Disposition for
+    # this download (e.g. "my-gallery-photo-download-1of1.zip" or the photo's
+    # name). Stored, not re-derived, so the activity row stays truthful even
+    # if the gallery slug, set name or asset name changes later. Blank only on
+    # rows written before this field existed.
+    filename = models.CharField(max_length=255, blank=True, default='')
+
     class Meta:
         db_table = 'download_logs'
         ordering = ['-created_at']
@@ -273,3 +280,63 @@ class Favorite(BaseModel):
 
     def __str__(self):
         return f"Favorite: {self.gallery.title} — asset {self.media_asset_id}"
+
+
+class DownloadJob(BaseModel):
+    """
+    A gallery / set ZIP that is prepared in the background (Celery) before the
+    client can download it — gallery downloads never stream straight off the
+    request that asked for them.
+
+    Lifecycle: the authorized POST creates the row (PREPARING) and queues the
+    task -> the task writes the ZIP into PRIVATE storage and marks it READY
+    (or FAILED) -> the client polls the status endpoint and, once READY,
+    downloads each file through a short-lived signed URL. Rows (and their
+    stored ZIPs) expire and are purged, see apps/clients/download_jobs.py.
+
+    A job is bound to the gallery it was created for and to the email that
+    passed the download gate, so another gallery, or another visitor's
+    token, can never read it.
+    """
+
+    class State(models.TextChoices):
+        PREPARING = 'preparing', 'Preparing'
+        READY = 'ready', 'Ready'
+        FAILED = 'failed', 'Failed'
+
+    gallery = models.ForeignKey(
+        'galleries.Gallery', on_delete=models.CASCADE, related_name='download_jobs'
+    )
+    photo_set = models.ForeignKey(
+        'photos.PhotoSet', null=True, blank=True, on_delete=models.SET_NULL, related_name='download_jobs'
+    )
+    resolution = models.CharField(max_length=10, default='download')
+    # Optional explicit selection (validated UUIDs); empty = the whole gallery/set.
+    asset_ids = models.JSONField(default=list, blank=True)
+
+    email = models.EmailField(null=True, blank=True)
+    pin_verified = models.BooleanField(default=False)
+
+    state = models.CharField(max_length=10, choices=State.choices, default=State.PREPARING)
+    error_code = models.CharField(max_length=40, blank=True, default='')
+    # [{"name": str, "size_bytes": int, "storage_path": str}] — storage_path is
+    # a PRIVATE storage key and is never serialized to a client.
+    files = models.JSONField(default=list, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    # Set when the first file of this job is actually served — one job is one
+    # row in the photographer's Download Activity, however often it is re-saved.
+    download_log = models.ForeignKey(
+        DownloadLog, null=True, blank=True, on_delete=models.SET_NULL, related_name='jobs'
+    )
+
+    class Meta:
+        db_table = 'download_jobs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['gallery', 'state'], name='idx_djob_gallery_state'),
+            models.Index(fields=['expires_at'], name='idx_djob_expires'),
+        ]
+
+    def __str__(self):
+        return f"DownloadJob {self.id} ({self.state})"

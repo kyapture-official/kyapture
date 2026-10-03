@@ -32,6 +32,7 @@ from rest_framework.response import Response
 logger = logging.getLogger(__name__)
 
 DOWNLOAD_TOKEN_SALT = 'kyapture.clients.download-access'
+FILE_TOKEN_SALT = 'kyapture.clients.download-job-file'
 DEFAULT_DOWNLOAD_ACCESS_TTL_SECONDS = 2 * 60 * 60
 DOWNLOAD_RESOLUTIONS = ('download', 'web')
 
@@ -176,6 +177,54 @@ def read_download_token(token, gallery):
     if get_download_policy(gallery)['require_email'] and not payload.get('e'):
         return None
     return payload
+
+
+def download_file_url_ttl():
+    return int(getattr(settings, 'DOWNLOAD_FILE_URL_TTL_SECONDS', 600))
+
+
+def issue_file_token(job, gallery, index):
+    """
+    Short-lived signed grant for ONE file of ONE prepared download job.
+
+    Minted only by the job-status endpoint, i.e. only for a caller that just
+    presented a valid download access token, so it is tied to that verified
+    visitor: it carries the job, the gallery, the file index, the verified
+    email and the PIN fingerprint, and the file endpoint re-checks all of
+    them. It expires in minutes (DOWNLOAD_FILE_URL_TTL_SECONDS) — long before
+    the access token itself — so a link copied out of the address bar or a
+    history entry stops working almost immediately.
+    """
+    return signing.dumps(
+        {
+            'j': str(job.id),
+            'g': str(gallery.id),
+            'i': int(index),
+            'e': job.email or '',
+            'f': _pin_fingerprint(gallery),
+        },
+        salt=FILE_TOKEN_SALT,
+        compress=True,
+    )
+
+
+def file_token_is_valid(token, job, gallery, index):
+    token = as_clean_str(token)
+    if not token:
+        return False
+    try:
+        payload = signing.loads(token, salt=FILE_TOKEN_SALT, max_age=download_file_url_ttl())
+    except signing.BadSignature:  # includes SignatureExpired
+        return False
+    return (
+        isinstance(payload, dict)
+        and payload.get('j') == str(job.id)
+        and payload.get('g') == str(gallery.id)
+        and payload.get('i') == int(index)
+        and payload.get('e') == (job.email or '')
+        # PIN changed or cleared since the grant was issued.
+        and payload.get('f') == _pin_fingerprint(gallery)
+    )
 
 
 class DownloadAuthorization:

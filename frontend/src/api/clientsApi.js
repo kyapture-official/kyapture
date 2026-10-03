@@ -44,20 +44,6 @@ function buildGalleryPath(username, slug) {
 }
 
 /**
- * Builds an anchor-safe public API URL rather than an axios request. The API
- * base matches axiosInstance so this works in local proxy and deployed API
- * base-url configurations alike.
- */
-function buildPublicApiUrl(path) {
-  const apiBaseUrl = (
-    import.meta.env.VITE_API_BASE_URL ||
-    import.meta.env.VITE_API_URL ||
-    '/api/v1'
-  ).replace(/\/+$/, '')
-  return `${apiBaseUrl}${path}`
-}
-
-/**
  * Builds the `/public/{username}/{slug}/unlock/` action path.
  */
 const buildVerifyPasswordPath = (username, slug) => {
@@ -252,63 +238,84 @@ export const clientsApi = {
   verifyPassword: (...args) => clientsApi.unlock(...args),
 
   /**
-   * Request a secure, memory-safe ZIP archive of the gallery's high-res original assets.
+   * Step two of a gallery / set Download: ask the server to PREPARE the ZIP.
    * URI: POST /api/v1/public/{username}/{slug}/download/
    *
-   * @param {string} username - Photographer/subdomain identifier.
-   * @param {string} slug - Unique gallery slug.
-   * @param {string} email - Guest client's email address (for auditing/lead capture).
-   * @param {string} [token] - Optional guest session access token (if password-protected).
-   * @param {Object} [options]
-   * @param {AbortSignal} [options.signal]
-   * @returns {Promise<Blob>}
+   * Nothing is streamed. The server re-checks every gate and answers 202 with
+   * a job id; poll getDownloadJob() until it is ready.
+   *
+   * @param {Object} opts
+   * @param {string} opts.downloadToken - from requestDownloadAccess() (omit only when the gallery needs none)
+   * @param {string} [opts.token] - gallery unlock token (protected galleries)
+   * @param {string} [opts.resolution] - 'web' | 'download'
+   * @param {string} [opts.setId] - limit the ZIP to this photo set
+   * @returns {Promise<{ job_id: string, state: string, status_url: string }>}
    */
-  requestDownload: async (username, slug, email, token = null, assetIds = [], options = {}) => {
+  prepareGalleryDownload: async (username, slug, opts = {}) => {
     const path = `${buildGalleryPath(username, slug)}download/`
-    assertNonEmptyString(email, 'email')
-    const { signal, resolution, pin, setId } = options || {}
+    const { downloadToken, token, resolution, setId, signal } = opts
+
+    const body = {}
+    if (downloadToken) body.download_token = downloadToken
+    if (resolution) body.resolution = resolution
+    if (setId) body.set_id = setId
+
+    const config = { signal }
+    if (token) config.headers = { Authorization: `Bearer ${token}` }
+    if (token) body.token = token
 
     try {
-      // ENFORCE: responseType: 'blob' is mandatory in Axios to process
-      // binary ZIP streaming chunks safely without corrupting them into strings.
-      const res = await api.post(
-        path,
-        {
-          email,
-          token,
-          asset_ids: assetIds,
-          resolution: resolution || undefined,
-          pin: pin || undefined,
-          set_id: setId || undefined,
-        },
-        { signal, responseType: 'blob' }
-      )
+      const res = await api.post(path, body, config)
       return res.data
     } catch (error) {
-      // responseType: 'blob' means an error JSON body (e.g. pin_required/
-      // invalid_pin) arrives as a Blob, not parsed JSON — normalizeError()
-      // above only reads error?.response?.data as if it were already an
-      // object, so PIN errors need their own decode step here.
-      if (isCanceled(error)) throw error
-      if (error?.response?.data instanceof Blob) {
-        try {
-          const text = await error.response.data.text()
-          const parsed = JSON.parse(text)
-          const normalized = new Error(parsed.error || parsed.detail || 'Download request failed.')
-          normalized.status = error.response.status
-          normalized.code = parsed.code ?? null
-          normalized.cause = error
-          throw normalized
-        } catch (parseErr) {
-          if (parseErr instanceof Error && parseErr.status !== undefined) throw parseErr
-          // Fall through to generic normalization if the blob wasn't JSON.
-        }
-      }
       handleRequestError(error, {
-        authMessage: 'An active unlocked session is required to download this gallery.',
+        authMessage: 'Unable to start this download.',
         notFoundMessage: 'This gallery could not be found.',
       })
     }
+  },
+
+  /**
+   * Status of a prepared download.
+   * URI: GET /api/v1/public/{username}/{slug}/download-jobs/{jobId}/
+   *
+   * Each ready file carries a signed URL that is only good for a few minutes,
+   * so fetch the status again right before starting the browser download
+   * instead of keeping an old URL around.
+   *
+   * @returns {Promise<{ state: 'preparing'|'ready'|'failed', files: Array<{name: string, size_bytes: number, url: string}>, error?: string, code?: string }>}
+   */
+  getDownloadJob: async (username, slug, jobId, opts = {}) => {
+    assertNonEmptyString(jobId, 'jobId')
+    const path = `${buildGalleryPath(username, slug)}download-jobs/${encodeURIComponent(jobId)}/`
+    const { downloadToken, token, signal } = opts
+
+    const params = {}
+    if (downloadToken) params.download_token = downloadToken
+    const config = { signal, params }
+    if (token) config.headers = { Authorization: `Bearer ${token}` }
+
+    try {
+      const res = await api.get(path, config)
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'Your download session has expired. Please try again.',
+        notFoundMessage: 'This download could not be found.',
+      })
+    }
+  },
+
+  /**
+   * The browser-download link for one ready file: the signed URL from
+   * getDownloadJob(), plus the gallery unlock token when the gallery has one
+   * (an anchor cannot send an Authorization header).
+   */
+  buildJobFileHref: (fileUrl, opts = {}) => {
+    if (!fileUrl) return null
+    return opts.token
+      ? `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(opts.token)}`
+      : fileUrl
   },
 
   /**
@@ -379,28 +386,6 @@ export const clientsApi = {
     if (opts.resolution) params.set('resolution', opts.resolution)
     const qs = params.toString()
     return qs ? `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}${qs}` : downloadUrl
-  },
-
-  /**
-   * Builds the direct streaming ZIP link for an entire gallery, or one
-   * photo set of it. This is kept as a URL helper so the browser, not
-   * axios, owns a potentially large file.
-   *
-   * @param {Object} [opts]
-   * @param {string} [opts.token] - gallery unlock token (protected galleries)
-   * @param {string} [opts.downloadToken] - from requestDownloadAccess()
-   * @param {string} [opts.resolution] - 'web' | 'download' | 'original'
-   * @param {string} [opts.setId] - limit the archive to this photo set
-   */
-  buildGalleryDownloadAllHref: (username, slug, opts = {}) => {
-    const params = new URLSearchParams()
-    if (opts.token) params.set('token', opts.token)
-    if (opts.downloadToken) params.set('download_token', opts.downloadToken)
-    if (opts.resolution) params.set('resolution', opts.resolution)
-    if (opts.setId) params.set('set', opts.setId)
-    const query = params.toString()
-    const path = `${buildGalleryPath(username, slug)}download-all/`
-    return `${buildPublicApiUrl(path)}${query ? `?${query}` : ''}`
   },
 
   // ─────────────────────────────────────────────────────────────────────────

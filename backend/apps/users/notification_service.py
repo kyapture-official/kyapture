@@ -65,16 +65,20 @@ def record_notification(user, kind, gallery=None, *, message, coalesced_message=
 # ─── per-event builders (each takes the already-persisted record) ────────────
 
 def notify_download_event(download_log):
+    """
+    One notification per real download, worded "<What> downloaded by <email>".
+    These are deliberately NOT coalesced: the text names who downloaded what,
+    which a "3 downloads" roll-up would lose (the bell's list is paginated and
+    purged, so one row per download is bounded).
+    """
     gallery = download_log.gallery
-    who = download_log.email or 'A client'
-    if download_log.download_type == 'gallery':
-        what = f'the "{download_log.photo_set.name}" set' if download_log.photo_set_id else 'the full collection'
-    else:
-        what = 'a video' if download_log.download_type == 'video' else 'a photo'
+    who = download_log.email or 'a client'
+    what = 'Gallery' if download_log.download_type == 'gallery' else (
+        'Video' if download_log.download_type == 'video' else 'Photo'
+    )
     record_notification(
         gallery.photographer, Kind.DOWNLOAD, gallery,
-        message=f'{who} downloaded {what} from "{gallery.title}"',
-        coalesced_message='{count} downloads from "' + gallery.title.replace('{', '{{').replace('}', '}}') + '"',
+        message=f'{what} downloaded by {who}',
     )
 
 

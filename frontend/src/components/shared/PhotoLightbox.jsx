@@ -64,12 +64,6 @@ export default function PhotoLightbox({
             : null)
     : null
 
-  const downloadHref = activePhoto?.download_url
-    ? token
-      ? `${activePhoto.download_url}?token=${encodeURIComponent(token)}`
-      : activePhoto.download_url
-    : null;
-
   // Synchronize loading and error state metrics with current image index values.
   // useLayoutEffect is utilized here to reset visual parameters synchronously before paint
   // to prevent transient single-frame leaks of prior images during unmount/remount commits.
@@ -308,7 +302,7 @@ export default function PhotoLightbox({
               </svg>
             </button>
           )}
-          {onDownload ? (
+          {onDownload && (
             <button
               type="button"
               onClick={(e) => {
@@ -334,31 +328,6 @@ export default function PhotoLightbox({
                 />
               </svg>
             </button>
-          ) : (
-            downloadHref && (
-              <a
-                href={downloadHref}
-                onClick={(e) => e.stopPropagation()}
-                className="p-2 text-white/70 hover:text-white transition-colors duration-200 focus:outline-none"
-                aria-label="Download this photo"
-                title="Download photo"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-              </a>
-            )
           )}
           <button
             onClick={(e) => {

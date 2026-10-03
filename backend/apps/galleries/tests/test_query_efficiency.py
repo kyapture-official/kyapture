@@ -249,7 +249,12 @@ class JsonCompressionTests(QueryBase):
         self.assertEqual(json.loads(response.content)['photos_count'], 40)
 
     def test_file_downloads_are_never_compressed(self):
-        gallery = self.make_gallery('dl', photos=0, allow_download=True)
+        gallery = self.make_gallery(
+            'dl', photos=0, allow_download=True,
+            # This test is about compression, not the email rule: the fixture
+            # gallery explicitly opts out of requiring an email.
+            design_settings={'downloads': {'require_email': False}},
+        )
         asset = _ready_asset(gallery, 0)
         asset.original_file.save('o.jpg', ContentFile(b'ORIGINAL' * 500), save=False)
         asset.download_file.save('m.jpg', ContentFile(b'MASTER' * 500), save=False)

@@ -472,7 +472,12 @@ class DownloadLogSerializer(serializers.ModelSerializer):
         return obj.media_asset.original_name or None
 
     def get_filename(self, obj):
-        """The attachment name produced by the public download endpoint."""
+        """
+        The attachment name the server actually sent, as stored on the row.
+        Rows written before that field existed fall back to the old derivation.
+        """
+        if obj.filename:
+            return obj.filename
         if obj.media_asset_id and obj.media_asset:
             return obj.media_asset.original_name or None
         stem = obj.gallery.slug

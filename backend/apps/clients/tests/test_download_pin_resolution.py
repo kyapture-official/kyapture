@@ -24,6 +24,7 @@ from rest_framework.test import APITestCase
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
 from apps.clients.models import DownloadLog
+from apps.clients.tests.zip_flow import InlineDownloadJobsMixin, request_zip
 
 User = get_user_model()
 
@@ -102,7 +103,7 @@ class DownloadPinSettingTestCase(APITestCase):
         self.assertIsNone(other_gallery.download_pin_hash)
 
 
-class GalleryZipDownloadPinAndResolutionTestCase(APITestCase):
+class GalleryZipDownloadPinAndResolutionTestCase(InlineDownloadJobsMixin, APITestCase):
     """POST /api/v1/public/{username}/{slug}/download/"""
 
     def setUp(self):
@@ -124,32 +125,26 @@ class GalleryZipDownloadPinAndResolutionTestCase(APITestCase):
         self.gallery.download_pin_hash = bcrypt.hashpw(b"9999", bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=["download_pin_hash"])
         self.asset = _make_ready_asset_with_display(self.gallery)
-        self.url = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/download/"
+        self.base = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/"
 
     def test_missing_pin_rejected(self):
-        response = self.client.post(self.url, {"email": "guest@example.com"}, format="json")
+        response = request_zip(self.client, self.base, {"email": "guest@example.com"})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data.get("code"), "pin_required")
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_wrong_pin_rejected(self):
-        response = self.client.post(
-            self.url, {"email": "guest@example.com", "pin": "0000"}, format="json"
-        )
+        response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": "0000"})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data.get("code"), "invalid_pin")
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_pin_cannot_be_bypassed_by_omitting_it_as_empty_string(self):
-        response = self.client.post(
-            self.url, {"email": "guest@example.com", "pin": ""}, format="json"
-        )
+        response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": ""})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_correct_pin_succeeds_and_logs_pin_verified(self):
-        response = self.client.post(
-            self.url, {"email": "guest@example.com", "pin": "9999"}, format="json"
-        )
+        response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": "9999"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         log = DownloadLog.objects.get()
         self.assertTrue(log.pin_verified)
@@ -159,15 +154,13 @@ class GalleryZipDownloadPinAndResolutionTestCase(APITestCase):
     def test_gallery_without_pin_does_not_require_one(self):
         self.gallery.download_pin_hash = None
         self.gallery.save(update_fields=["download_pin_hash"])
-        response = self.client.post(self.url, {"email": "guest@example.com"}, format="json")
+        response = request_zip(self.client, self.base, {"email": "guest@example.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         log = DownloadLog.objects.get()
         self.assertFalse(log.pin_verified)
 
     def test_default_resolution_is_download_master(self):
-        response = self.client.post(
-            self.url, {"email": "guest@example.com", "pin": "9999"}, format="json"
-        )
+        response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": "9999"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         with zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content))) as archive:
             self.assertEqual(archive.read("photo.jpg"), b"DOWNLOAD-MASTER-BYTES")
@@ -175,21 +168,13 @@ class GalleryZipDownloadPinAndResolutionTestCase(APITestCase):
         self.assertEqual(log.resolution, DownloadLog.Resolution.DOWNLOAD)
 
     def test_web_resolution_recorded(self):
-        response = self.client.post(
-            self.url,
-            {"email": "guest@example.com", "pin": "9999", "resolution": "web"},
-            format="json",
-        )
+        response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": "9999", "resolution": "web"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         log = DownloadLog.objects.get()
         self.assertEqual(log.resolution, DownloadLog.Resolution.WEB)
 
     def test_original_resolution_serves_original_bytes(self):
-        response = self.client.post(
-            self.url,
-            {"email": "guest@example.com", "pin": "9999", "resolution": "original"},
-            format="json",
-        )
+        response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": "9999", "resolution": "original"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         with zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content))) as archive:
             self.assertEqual(archive.read("photo.jpg"), b"ORIGINAL-BYTES-HERE")
@@ -197,11 +182,7 @@ class GalleryZipDownloadPinAndResolutionTestCase(APITestCase):
         self.assertEqual(log.resolution, DownloadLog.Resolution.ORIGINAL)
 
     def test_invalid_resolution_rejected(self):
-        response = self.client.post(
-            self.url,
-            {"email": "guest@example.com", "pin": "9999", "resolution": "ultra-hd"},
-            format="json",
-        )
+        response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": "9999", "resolution": "ultra-hd"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
@@ -223,14 +204,23 @@ class SinglePhotoDownloadPinAndResolutionTestCase(APITestCase):
             is_published=True,
             is_active=True,
             allow_download=True,
+            # PIN-only gallery: this class is about the PIN gate, not the email rule.
+            design_settings={"downloads": {"require_email": False}},
         )
         self.gallery.download_pin_hash = bcrypt.hashpw(b"5555", bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=["download_pin_hash"])
         self.asset = _make_ready_asset_with_display(self.gallery)
-        self.url = (
-            f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}"
-            f"/photo/{self.asset.id}/download/"
-        )
+        self.base = f"/api/v1/public/{self.photographer.username}/{self.gallery.slug}/"
+        self.url = f"{self.base}photo/{self.asset.id}/download/"
+
+    def download(self, pin=None, **params):
+        """The explicit flow: PIN -> download-access -> short-lived token -> file."""
+        if pin is not None:
+            access = self.client.post(f"{self.base}download-access/", {"pin": pin}, format="json")
+            if access.status_code != 200:
+                return access
+            params["download_token"] = access.data["download_token"]
+        return self.client.get(self.url, params)
 
     def test_missing_pin_rejected(self):
         response = self.client.get(self.url)
@@ -238,11 +228,11 @@ class SinglePhotoDownloadPinAndResolutionTestCase(APITestCase):
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_wrong_pin_rejected(self):
-        response = self.client.get(self.url, {"pin": "1111"})
+        response = self.download(pin="1111")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_correct_pin_succeeds_no_email_required(self):
-        response = self.client.get(self.url, {"pin": "5555"})
+        response = self.download(pin="5555")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         log = DownloadLog.objects.get()
         self.assertIsNone(log.email)
@@ -251,7 +241,7 @@ class SinglePhotoDownloadPinAndResolutionTestCase(APITestCase):
         self.assertEqual(log.media_asset_id, self.asset.id)
 
     def test_web_resolution_serves_display_derivative(self):
-        response = self.client.get(self.url, {"pin": "5555", "resolution": "web"})
+        response = self.download(pin="5555", resolution="web")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Phase 4: streamed via FileResponse (not loaded fully into
         # memory) — .content isn't available on a streaming response;
@@ -261,12 +251,12 @@ class SinglePhotoDownloadPinAndResolutionTestCase(APITestCase):
         self.assertEqual(log.resolution, DownloadLog.Resolution.WEB)
 
     def test_original_resolution_serves_original_bytes(self):
-        response = self.client.get(self.url, {"pin": "5555", "resolution": "original"})
+        response = self.download(pin="5555", resolution="original")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(b"".join(response.streaming_content), b"ORIGINAL-BYTES-HERE")
 
     def test_default_resolution_without_param_is_download_master(self):
-        response = self.client.get(self.url, {"pin": "5555"})
+        response = self.download(pin="5555")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(b"".join(response.streaming_content), b"DOWNLOAD-MASTER-BYTES")
         self.assertIn(self.asset.original_name, response["Content-Disposition"])
@@ -278,7 +268,7 @@ class SinglePhotoDownloadPinAndResolutionTestCase(APITestCase):
         self.asset.download_file = None
         self.asset.save(update_fields=["original_file", "download_file"])
 
-        response = self.client.get(self.url, {"pin": "5555"})
+        response = self.download(pin="5555")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.asset.refresh_from_db()
         self.assertTrue(self.asset.download_file)

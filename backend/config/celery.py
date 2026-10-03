@@ -57,6 +57,11 @@ app.conf.beat_schedule = {
         'task': 'apps.clients.tasks.purge_old_download_logs',
         'schedule': crontab(hour=3, minute=30, day_of_week='sunday'),  # weekly
     },
+    # Prepared gallery/set ZIPs: deletes expired jobs and their stored files.
+    'purge-expired-download-jobs': {
+        'task': 'apps.clients.tasks.purge_expired_download_jobs',
+        'schedule': crontab(minute=10),  # hourly
+    },
     # Dashboard-bell housekeeping: notifications are pointers, not history.
     'purge-old-notifications': {
         'task': 'apps.users.tasks.purge_old_notifications',

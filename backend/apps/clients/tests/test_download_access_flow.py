@@ -30,6 +30,7 @@ from rest_framework.test import APITestCase
 
 from apps.clients.models import ClientSession, DownloadLog
 from apps.galleries.models import Gallery
+from apps.clients.tests.zip_flow import InlineDownloadJobsMixin, request_zip
 from apps.photos.models import MediaAsset, PhotoSet
 
 User = get_user_model()
@@ -63,7 +64,7 @@ def _zip_entries(response):
         return {name: archive.read(name) for name in archive.namelist()}
 
 
-class DownloadFlowBase(APITestCase):
+class DownloadFlowBase(InlineDownloadJobsMixin, APITestCase):
     username = "flowphotog"
     slug = "flow-gallery"
     with_pin = True
@@ -89,6 +90,12 @@ class DownloadFlowBase(APITestCase):
         self.base = f"/api/v1/public/{self.username}/{self.slug}/"
         self.access_url = f"{self.base}download-access/"
         self.zip_url = f"{self.base}download-all/"
+
+    def zip(self, token=None, unlock_token=None, base=None, **body):
+        """Gallery/set download through the prepared flow (prepare -> poll -> file)."""
+        if token:
+            body["download_token"] = token
+        return request_zip(self.client, base or self.base, body, unlock_token=unlock_token)
 
     def photo_url(self, asset, gallery_base=None):
         return f"{gallery_base or self.base}photo/{asset.id}/download/"
@@ -152,9 +159,10 @@ class GalleryPasswordAndDownloadPinAreSeparateTests(DownloadFlowBase):
     def test_gallery_password_alone_does_not_grant_download(self):
         response = self.client.get(self.photo_url(self.a1), {"token": self.unlock_token})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response.data["code"], "pin_required")
-        zipped = self.client.get(self.zip_url, {"token": self.unlock_token})
-        self.assertEqual(zipped.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "download_access_required")
+        zipped = self.zip(unlock_token=self.unlock_token)
+        self.assertEqual(zipped.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(zipped.data["code"], "download_access_required")
 
     def test_correct_pin_alone_does_not_bypass_the_gallery_password(self):
         response = self.client.post(self.access_url, {"email": "c@example.com", "pin": PIN}, format="json")
@@ -340,7 +348,7 @@ class SinglePhotoDownloadWithTokenTests(DownloadFlowBase):
         for asset in (self.a1, self.a2, self.b1):
             response = self.client.get(self.photo_url(asset), {"download_token": token})
             self.assertEqual(response.status_code, status.HTTP_200_OK)
-        zipped = self.client.get(self.zip_url, {"download_token": token})
+        zipped = self.zip(token)
         self.assertEqual(zipped.status_code, status.HTTP_200_OK)
         logs = DownloadLog.objects.all()
         self.assertEqual(logs.count(), 4)
@@ -386,7 +394,7 @@ class SinglePhotoDownloadWithTokenTests(DownloadFlowBase):
 class FullGalleryDownloadWithTokenTests(DownloadFlowBase):
     def test_full_gallery_zip_contains_every_ready_asset_and_logs_scope(self):
         token = self.token()
-        response = self.client.get(self.zip_url, {"download_token": token})
+        response = self.zip(token)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/zip")
         entries = _zip_entries(response)
@@ -402,17 +410,14 @@ class FullGalleryDownloadWithTokenTests(DownloadFlowBase):
 
     def test_set_scoped_zip_contains_only_that_set_and_logs_it(self):
         token = self.token()
-        response = self.client.get(
-            self.zip_url, {"download_token": token, "set": str(self.ceremony.id)}
-        )
+        response = self.zip(token, set_id=str(self.ceremony.id))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(set(_zip_entries(response)), {"a1.jpg", "a2.jpg"})
-        self.assertIn("Ceremony", response["Content-Disposition"])
         self.assertEqual(DownloadLog.objects.get().photo_set_id, self.ceremony.id)
 
     def test_web_size_zip_uses_display_derivatives_with_matching_extension(self):
         token = self.token()
-        response = self.client.get(self.zip_url, {"download_token": token, "resolution": "web"})
+        response = self.zip(token, resolution="web")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         entries = _zip_entries(response)
         self.assertEqual(set(entries), {"a1.webp", "a2.webp", "b1.webp"})
@@ -421,12 +426,12 @@ class FullGalleryDownloadWithTokenTests(DownloadFlowBase):
 
     def test_high_resolution_zip_serves_the_download_master_not_the_original(self):
         token = self.token()
-        response = self.client.get(self.zip_url, {"download_token": token, "resolution": "download"})
+        response = self.zip(token, resolution="download")
         self.assertEqual(_zip_entries(response)["a1.jpg"], b"MASTER:a1.jpg")
 
     def test_invalid_resolution_is_a_400(self):
         token = self.token()
-        response = self.client.get(self.zip_url, {"download_token": token, "resolution": "ultra"})
+        response = self.zip(token, resolution="ultra")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(DownloadLog.objects.exists())
 
@@ -435,37 +440,34 @@ class FullGalleryDownloadWithTokenTests(DownloadFlowBase):
         pending.processing_status = MediaAsset.ProcessingStatus.PENDING
         pending.save(update_fields=["processing_status"])
         token = self.token()
-        self.assertNotIn("pending.jpg", _zip_entries(self.client.get(self.zip_url, {"download_token": token})))
+        self.assertNotIn("pending.jpg", _zip_entries(self.zip(token)))
 
     def test_duplicate_and_case_variant_filenames_never_collide(self):
         _asset(self.gallery, "A1.JPG", self.party, order=10)
         _asset(self.gallery, "a1.jpg", self.party, order=11)
         token = self.token()
-        names = list(_zip_entries(self.client.get(self.zip_url, {"download_token": token})))
+        names = list(_zip_entries(self.zip(token)))
         self.assertEqual(len(names), 5)
         self.assertEqual(len({n.lower() for n in names}), 5)
 
     def test_hostile_filename_cannot_escape_the_archive(self):
         _asset(self.gallery, "../../etc/passwd.jpg", self.party, order=10)
         token = self.token()
-        for name in _zip_entries(self.client.get(self.zip_url, {"download_token": token})):
+        for name in _zip_entries(self.zip(token)):
             self.assertNotIn("..", name)
             self.assertFalse(name.startswith("/"))
 
     @override_settings(SYNC_ZIP_MAX_ASSET_COUNT=2)
     def test_zip_size_guard_still_applies(self):
         token = self.token()
-        response = self.client.get(self.zip_url, {"download_token": token})
+        response = self.zip(token)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "download_too_large")
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_post_zip_accepts_a_download_token_and_takes_email_from_it(self):
         token = self.token(email="viaToken@example.com")
-        response = self.client.post(
-            f"{self.base}download/", {"download_token": token, "asset_ids": [str(self.a1.id)]},
-            format="json",
-        )
+        response = self.zip(token, asset_ids=[str(self.a1.id)])
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(set(_zip_entries(response)), {"a1.jpg"})
         self.assertEqual(DownloadLog.objects.get().email, "viaToken@example.com")
@@ -474,7 +476,7 @@ class FullGalleryDownloadWithTokenTests(DownloadFlowBase):
 class DirectEndpointCannotBypassTests(DownloadFlowBase):
     def test_no_credentials_on_a_pin_gallery_is_refused_everywhere(self):
         self.assertEqual(self.client.get(self.photo_url(self.a1)).status_code, 401)
-        self.assertEqual(self.client.get(self.zip_url).status_code, 403)
+        self.assertEqual(self.zip().status_code, 401)
         self.assertEqual(
             self.client.post(f"{self.base}download/", {"email": "c@example.com"}, format="json").status_code,
             401,
@@ -488,7 +490,7 @@ class DirectEndpointCannotBypassTests(DownloadFlowBase):
             response = self.client.get(self.photo_url(self.a1), {"download_token": bad})
             self.assertEqual(response.status_code, 401, bad)
             self.assertEqual(response.data["code"], "download_access_expired")
-            self.assertEqual(self.client.get(self.zip_url, {"download_token": bad}).status_code, 403)
+            self.assertEqual(self.zip(bad).status_code, 401)
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_expired_token_is_rejected_and_asks_the_client_to_reauthorize(self):
@@ -503,7 +505,7 @@ class DirectEndpointCannotBypassTests(DownloadFlowBase):
         self.gallery.download_pin_hash = bcrypt.hashpw(b"9999", bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=["download_pin_hash"])
         self.assertEqual(self.client.get(self.photo_url(self.a1), {"download_token": token}).status_code, 401)
-        self.assertEqual(self.client.get(self.zip_url, {"download_token": token}).status_code, 403)
+        self.assertEqual(self.zip(token).status_code, 401)
 
     def test_a_pin_added_after_an_ungated_token_was_issued_revokes_it(self):
         self.gallery.download_pin_hash = None
@@ -518,7 +520,7 @@ class DirectEndpointCannotBypassTests(DownloadFlowBase):
         self.gallery.allow_download = False
         self.gallery.save(update_fields=["allow_download"])
         self.assertEqual(self.client.get(self.photo_url(self.a1), {"download_token": token}).status_code, 403)
-        self.assertEqual(self.client.get(self.zip_url, {"download_token": token}).status_code, 403)
+        self.assertEqual(self.zip(token).status_code, 403)
         self.assertEqual(
             self.client.post(f"{self.base}download/", {"download_token": token}, format="json").status_code, 403
         )
@@ -528,7 +530,7 @@ class DirectEndpointCannotBypassTests(DownloadFlowBase):
         self.gallery.is_published = False
         self.gallery.save(update_fields=["is_published"])
         self.assertEqual(self.client.get(self.photo_url(self.a1), {"download_token": token}).status_code, 404)
-        self.assertEqual(self.client.get(self.zip_url, {"download_token": token}).status_code, 403)
+        self.assertEqual(self.zip(token).status_code, 404)
 
     def test_a_pin_in_the_wrong_place_is_not_accepted(self):
         # PIN in a header/cookie/body-on-GET must not authorize anything.
@@ -557,7 +559,7 @@ class ForeignGalleryAndAssetTests(DownloadFlowBase):
         photo = self.client.get(self.photo_url(self.other_asset, self.other_base), {"download_token": token})
         self.assertEqual(photo.status_code, 401)
         self.assertEqual(photo.data["code"], "download_access_expired")
-        self.assertEqual(self.client.get(f"{self.other_base}download-all/", {"download_token": token}).status_code, 403)
+        self.assertEqual(self.zip(token, base=self.other_base).status_code, 401)
 
     def test_another_galleries_asset_id_is_404_through_my_url_even_with_a_valid_token(self):
         token = self.token()
@@ -577,7 +579,7 @@ class ForeignGalleryAndAssetTests(DownloadFlowBase):
     def test_foreign_or_malformed_set_id_is_not_widened_to_the_whole_gallery(self):
         token = self.token()
         for bad in (str(self.other_set.id), "not-a-uuid", "01a0f000-0000-7000-8000-000000000000"):
-            response = self.client.get(self.zip_url, {"download_token": token, "set": bad})
+            response = self.zip(token, set_id=bad)
             self.assertEqual(response.status_code, 404, bad)
         self.assertFalse(DownloadLog.objects.exists())
 
@@ -606,25 +608,28 @@ class PostZipRobustnessAndErrorShapeTests(DownloadFlowBase):
 
     def test_non_string_email_is_a_clean_400(self):
         for bad in (None, 42, ["a@b.co"], {"x": 1}):
-            response = self.client.post(f"{self.base}download/", {"email": bad}, format="json")
+            response = self.client.post(self.access_url, {"email": bad}, format="json")
             self.assertEqual(response.status_code, 400, bad)
             self.assertIn(response.data["code"], ("email_required", "invalid_email"), bad)
 
     def test_malformed_email_on_post_zip_is_rejected(self):
-        response = self.client.post(f"{self.base}download/", {"email": "nope"}, format="json")
+        response = self.client.post(self.access_url, {"email": "nope"}, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["code"], "invalid_email")
 
     def test_zip_compile_failure_does_not_leak_the_exception(self):
         secret = "boom /srv/private-bucket/keys.txt"
+        _asset(self.gallery, "x.jpg", self.party, order=20)
+        token = self.token(email="c@example.com")
         with mock.patch("apps.clients.views._resolve_zip_source", side_effect=RuntimeError(secret)):
-            post = self.client.post(f"{self.base}download/", {"email": "c@example.com"}, format="json")
-            direct = self.client.get(self.zip_url)
-        for response in (post, direct):
-            self.assertEqual(response.status_code, 500)
-            self.assertNotIn("private-bucket", str(response.data))
-            self.assertNotIn("RuntimeError", str(response.data))
-            self.assertIn("error", response.data)
+            response = self.zip(token)
+        # The job fails in the background; the client only ever sees a generic,
+        # non-sensitive failure from the status endpoint.
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["state"], "failed")
+        self.assertNotIn("private-bucket", str(response.data))
+        self.assertNotIn("RuntimeError", str(response.data))
+        self.assertIn("error", response.data)
         self.assertFalse(DownloadLog.objects.exists())
 
     def test_error_bodies_use_error_and_code_keys(self):
@@ -636,7 +641,7 @@ class DownloadActivityEndToEndTests(DownloadFlowBase):
     def test_photographer_sees_the_real_rows_the_client_flow_created(self):
         token = self.token(email="buyer@example.com")
         self.client.get(self.photo_url(self.a1), {"download_token": token, "resolution": "web"})
-        self.client.get(self.zip_url, {"download_token": token, "set": str(self.ceremony.id)})
+        self.zip(token, set_id=str(self.ceremony.id))
 
         self.client.force_authenticate(user=self.photographer)
         response = self.client.get(f"/api/v1/galleries/{self.slug}/download-logs/")
@@ -655,11 +660,12 @@ class DownloadActivityEndToEndTests(DownloadFlowBase):
         self.assertEqual(gallery_row["email"], "buyer@example.com")
         self.assertEqual(gallery_row["resolution"], "download")
         self.assertEqual(gallery_row["photo_set_name"], "Ceremony")
+        self.assertEqual(gallery_row["filename"], f"{self.slug}-photo-download-1of1.zip")
         self.assertIsNone(gallery_row["media_asset_id"])
         self.assertTrue(gallery_row["created_at"])
 
     def test_failed_or_refused_attempts_leave_no_activity_rows(self):
         self.client.get(self.photo_url(self.a1))
-        self.client.get(self.zip_url)
+        self.zip()
         self.authorize(pin="0000")
         self.assertFalse(DownloadLog.objects.exists())

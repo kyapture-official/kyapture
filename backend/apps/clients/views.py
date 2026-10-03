@@ -5,6 +5,9 @@ import tempfile
 import zipfile
 from django.conf import settings
 from django.http import StreamingHttpResponse, HttpResponse, FileResponse, HttpResponseRedirect
+from datetime import timedelta
+from django.urls import reverse
+from urllib.parse import urlencode
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Q
@@ -17,7 +20,7 @@ from rest_framework.views import APIView
 from rest_framework.throttling import AnonRateThrottle
 
 from apps.galleries.models import Gallery
-from .models import ClientSession, DownloadLog, Favorite
+from .models import ClientSession, DownloadJob, DownloadLog, Favorite
 from apps.photos.models import MediaAsset, PhotoSet
 from .serializers import (
     PublicGallerySerializer,
@@ -28,6 +31,9 @@ from .serializers import (
 from apps.core.pagination import GalleryMediaPagination
 
 INVALID_SET = object()
+
+# Repeat requests for the same prepared file inside this window are one download.
+DOWNLOAD_RETRY_WINDOW_SECONDS = 60
 
 
 def parse_set_id(raw):
@@ -55,12 +61,23 @@ from .download_access import (
     authorize_download,
     download_access_ttl,
     error_response,
+    file_token_is_valid,
     get_download_policy,
     issue_download_token,
+    issue_file_token,
     resolution_is_allowed,
     validate_client_email,
     verify_pin,
 )
+from .download_jobs import (
+    expire_if_stale,
+    find_reusable_job,
+    is_expired,
+    job_assets,
+    size_limit_error,
+)
+from .tasks import prepare_download_job
+from apps.core.storage import PrivateMediaStorage
 
 import logging
 import uuid
@@ -797,12 +814,17 @@ class PublicGalleryDownloadView(APIView):
     """
     POST /api/v1/public/{username}/{slug}/download/
 
-    Compiles, audits, and streams a gallery's original high-res assets 
-    as a single compressed ZIP archive directly to the client's browser.
-    
-    Uses O(1) Memory Spooling: compiles the ZIP incrementally on the server's 
-    hard drive, and streams it back in small chunk-buffers (64KB) using Django's 
-    StreamingHttpResponse, completely eliminating RAM exhaustion risks.
+    Starts the background preparation of a gallery / set ZIP. It does NOT
+    stream anything: after the same gates as before (gallery, allow_download,
+    password session, download PIN / email token, size policy, selection
+    limits) it creates a DownloadJob, queues the Celery task that builds the
+    ZIP into private storage, and answers 202 with the job id.
+
+    The client then polls GET .../download-jobs/{job_id}/ and, once ready,
+    downloads through the signed file URL it returns (see
+    PublicDownloadJobStatusView / PublicDownloadJobFileView).
+
+    Body: { download_token | pin, email?, token?, resolution?, set_id?, asset_ids? }
     """
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -892,13 +914,17 @@ class PublicGalleryDownloadView(APIView):
         # supplied value can neither leak another gallery's set nor crash
         # the query with an invalid UUID.
         photo_set = _get_photo_set(gallery, request.data.get('set_id'))
+        # A set that was asked for but isn't one of THIS gallery's (foreign,
+        # unknown or malformed id) is refused, never widened to the whole
+        # gallery - the client must not receive a different download than
+        # the one it asked for.
+        if as_clean_str(request.data.get('set_id')) and photo_set is None:
+            return error_response('Photo set not found.', 'set_not_found', status.HTTP_404_NOT_FOUND)
 
-        # 5. Fetch media assets (Support Selective Download).
-        # asset_ids is validated through a real UUIDField list, exactly
-        # like PhotoBulkDeleteSerializer/PhotoReorderSerializer already
-        # validate similar id lists elsewhere — a malformed UUID here
-        # must 400, not reach `id__in=...` and raise an uncaught
-        # ValidationError/500 (the F-27 finding this closes).
+        # 5. Selection. asset_ids is validated through a real UUIDField list,
+        # exactly like PhotoBulkDeleteSerializer/PhotoReorderSerializer
+        # validate similar id lists elsewhere - a malformed UUID must 400, not
+        # reach `id__in=...` and raise an uncaught ValidationError/500.
         asset_ids_raw = request.data.get('asset_ids', [])
         if asset_ids_raw:
             if not isinstance(asset_ids_raw, list):
@@ -916,320 +942,253 @@ class PublicGalleryDownloadView(APIView):
         else:
             asset_ids = []
 
-        if asset_ids:
-            # Download specific assets
-            assets = MediaAsset.objects.filter(gallery=gallery, id__in=asset_ids)
-        elif photo_set:
-            assets = MediaAsset.objects.filter(gallery=gallery, photo_set=photo_set)
-        else:
-            # Download all gallery assets (fallback/default)
-            assets = MediaAsset.objects.filter(gallery=gallery)
-
-        # Materialize once: both the sync-work-size guard below and the
-        # compilation loop need the full list, and a QuerySet would
-        # otherwise re-query the database for each.
-        assets = list(assets)
-
+        # Same READY-only contract as the public gallery; scoped to THIS gallery.
+        assets = list(job_assets(gallery, photo_set, asset_ids))
         if not assets:
-            return Response(
-                {'error': 'Cannot compile download: No valid assets found.'},
-                status=status.HTTP_400_BAD_REQUEST
+            return error_response(
+                'No ready photos are available to download.', 'no_media', status.HTTP_400_BAD_REQUEST,
+            )
+        if size_limit_error(assets):
+            return error_response(
+                'This selection is too large to package in one download. Please choose a smaller set.',
+                'download_too_large', status.HTTP_400_BAD_REQUEST,
             )
 
-        # 5b. Guard against an unbounded synchronous compile — see
-        # SYNC_ZIP_MAX_ASSET_COUNT/SYNC_ZIP_MAX_TOTAL_BYTES's own comment
-        # in settings/base.py for why this exists and why these are
-        # deliberately generous technical ceilings, not a plan limit.
-        if len(assets) > settings.SYNC_ZIP_MAX_ASSET_COUNT:
-            return Response({
-                'error': f'Too many items requested in one download ({len(assets)}). '
-                         f'Please select {settings.SYNC_ZIP_MAX_ASSET_COUNT} or fewer at a time.',
-                'code': 'download_too_large',
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        total_bytes = sum(a.file_size or 0 for a in assets)
-        if total_bytes > settings.SYNC_ZIP_MAX_TOTAL_BYTES:
-            return Response({
-                'error': 'This selection is too large to package in one download. '
-                         'Please select a smaller batch.',
-                'code': 'download_too_large',
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # 6. O(1) Memory Compression Spooling
-        # Create a temporary secure file path on the hard drive rather than RAM
-        temp_zip_fd, temp_zip_path = tempfile.mkstemp(suffix=".zip")
-        os.close(temp_zip_fd)
-
-        try:
-            used_names = set()
-
-            # Open the zip archive writer
-            with zipfile.ZipFile(temp_zip_path, 'w') as zip_file:
-                for asset in assets:
-                    source_field = _resolve_zip_source(asset, resolution)
-
-                    if not source_field:
-                        continue
-
-                    # Sanitized against path traversal / zip-slip and
-                    # header-injection characters (original_name is
-                    # untrusted user input — see sanitize_download_filename's
-                    # own docstring), then de-duplicated: two assets
-                    # sharing a filename would otherwise silently produce
-                    # two same-named entries in the archive, which most
-                    # unzip tools resolve by keeping only one — a real,
-                    # silent data-loss bug for the client, not a cosmetic one.
-                    entry_name = _unique_zip_entry_name(
-                        _zip_entry_base_name(asset, source_field, resolution), used_names
-                    )
-
-                    # Already-compressed media (every format this pipeline
-                    # ever produces or accepts) gains nothing from DEFLATE
-                    # and just burns CPU re-compressing already-entropic
-                    # bytes — STORED for those, DEFLATE only for the rare
-                    # format that could actually benefit.
-                    zinfo = zipfile.ZipInfo(
-                        filename=entry_name,
-                        date_time=time.localtime(time.time())[:6],
-                    )
-                    zinfo.compress_type = (
-                        zipfile.ZIP_STORED
-                        if os.path.splitext(entry_name)[1].lower() in ALREADY_COMPRESSED_EXTS
-                        else zipfile.ZIP_DEFLATED
-                    )
-
-                    try:
-                        source_field.open('rb')
-                        with zip_file.open(zinfo, 'w') as dest:
-                            # Stream the file in 1MB chunks instead of loading entirely into RAM
-                            for chunk in source_field.chunks(chunk_size=1024 * 1024):
-                                dest.write(chunk)
-                    except Exception:
-                        # Log the failure so you know exactly which file dropped and why
-                        logger.exception(
-                            "Failed to add asset %s to ZIP for gallery %s", asset.id, gallery.id
-                        )
-                        used_names.discard(entry_name.lower())
-                    finally:
-                        source_field.close()
-
-            # 7. Audit: register the download log for lead tracking — only
-            # now, after the ZIP has actually compiled successfully. A
-            # compilation failure above raises out to the except block
-            # below and never reaches this line, so a failed download is
-            # never recorded as if it succeeded (the F-27 finding this closes).
-            DownloadLog.objects.create(
-                gallery=gallery,
-                email=email,
-                ip_address=_get_client_ip(request),
-                download_type=DownloadLog.DownloadType.GALLERY,
-                resolution=resolution,
-                pin_verified=pin_verified,
-                photo_set=photo_set,
+        # 6. Reuse an identical job already in flight, otherwise create + queue one.
+        normalized_ids = sorted(str(asset_id) for asset_id in asset_ids)
+        job = find_reusable_job(
+            gallery, photo_set=photo_set, resolution=resolution, asset_ids=normalized_ids, email=email,
+        )
+        if job is None:
+            job = DownloadJob.objects.create(
+                gallery=gallery, photo_set=photo_set, resolution=resolution, asset_ids=normalized_ids,
+                email=email, pin_verified=pin_verified,
             )
+            try:
+                prepare_download_job.delay(str(job.id))
+            except Exception:
+                logger.exception('Could not queue download job %s', job.id)
+                job.state = DownloadJob.State.FAILED
+                job.error_code = 'prepare_unavailable'
+                job.save(update_fields=['state', 'error_code', 'updated_at'])
+                return error_response(
+                    'We could not start preparing your photos. Please try again in a moment.',
+                    'prepare_unavailable', status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            job.refresh_from_db()   # eager mode (local dev/tests) has already finished it
 
-            # 8. Dynamic Chunked Stream Generator
-            def file_iterator(file_path, chunk_size=65536):
-                """Streams the compiled ZIP in 64KB chunks and unlinks it when finished."""
-                try:
-                    with open(file_path, 'rb') as f:
-                        while True:
-                            chunk = f.read(chunk_size)
-                            if not chunk:
-                                break
-                            yield chunk
-                finally:
-                    # Strict Filesystem Hygiene: Clean up the disk spool
-                    try:
-                        os.remove(file_path)
-                    except OSError:
-                        pass
-
-            # Serve the streaming attachment directly to David's frontend download handlers
-            response = StreamingHttpResponse(file_iterator(temp_zip_path), content_type="application/zip")
-            safe_zip_name = sanitize_download_filename(f"{gallery.slug}.zip", fallback="gallery.zip")
-            response['Content-Disposition'] = f'attachment; filename="{safe_zip_name}"'
-            return response
-
-        except Exception:
-            # If ZIP compilation completely crashes, clean up the temp file.
-            # The raw exception stays in the server log — it can carry
-            # storage paths/bucket names and must never reach the client.
-            logger.exception('Failed to compile ZIP for gallery %s', gallery.id)
-            if os.path.exists(temp_zip_path):
-                os.remove(temp_zip_path)
-            return Response(
-                {'error': 'Unable to prepare this download. Please try again.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response({
+            'job_id': str(job.id),
+            'state': job.state,
+            'status_url': request.build_absolute_uri(reverse(
+                'gallery-download-job-status',
+                kwargs={'username': gallery.photographer.username, 'slug': gallery.slug, 'job_id': job.id},
+            )),
+        }, status=status.HTTP_202_ACCEPTED)
 
 
-class PublicGalleryDirectDownloadView(PinGuessThrottledMixin, PublicGalleryDownloadView):
+class PublicGalleryDirectDownloadView(APIView):
     """
-    GET /api/v1/public/{username}/{slug}/download-all/
-        ?token=<gallery unlock token>            (password-protected galleries)
-        &download_token=<download access token>  (from POST .../download-access/)
-        &resolution=web|download|original        (default: download)
-        &set=<photo set id>                      (optional: that set only)
+    GET /api/v1/public/{username}/{slug}/download-all/  - RETIRED.
 
-    Anchor-friendly full-gallery (or single-set) download: the browser, not
-    axios, owns the potentially large streamed ZIP. Every gate is enforced
-    here, server-side — gallery published/active/unexpired, allow_download,
-    the gallery password session, and the download PIN (via a download
-    access token or a raw PIN). Hiding the button in the UI is never the
-    only protection.
-
-    A gallery with neither a password nor a PIN needs no token at all:
-    the download is then simply anonymous (email=None in the activity log).
+    Gallery and set downloads are never streamed straight from a request any
+    more: POST .../download/ prepares them in the background and the files are
+    served from the gated download-jobs endpoints. This route performs no
+    gallery lookup, no storage work and no logging; it only tells a stale
+    client where the flow went.
     """
+    permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_classes = [PublicGalleryBrowseThrottle]
 
-    def get_gallery(self, username, slug):
-        # Fetch first so an unpublished/inactive gallery can receive the same
-        # explicit forbidden response as a disabled download, rather than
-        # reaching any storage work.
-        return Gallery.objects.select_related('photographer').filter(
-            slug=slug,
-            photographer__username=username,
-        ).first()
-
     def get(self, request, username, slug):
-        gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
-        if not gallery:
-            return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return error_response(
+            'Gallery downloads are prepared first. Use the Download button to start one.',
+            'download_requires_preparation', status.HTTP_410_GONE,
+        )
 
-        is_expired = gallery.expires_at and gallery.expires_at <= timezone.now()
-        if not gallery.is_published or not gallery.is_active or is_expired or not gallery.allow_download:
-            return Response({'error': 'Downloads are unavailable for this gallery.'}, status=status.HTTP_403_FORBIDDEN)
+
+JOB_ERROR_MESSAGES = {
+    'no_media': 'No ready photos are available to download.',
+    'download_too_large': 'This selection is too large to package in one download.',
+    'download_expired': 'This download has expired. Please start it again.',
+}
+JOB_GENERIC_ERROR = "We couldn't prepare your photos. Please try again."
+
+
+class DownloadJobGateMixin:
+    """
+    The checks every download-job endpoint repeats on EVERY request, however
+    the caller got the job id: the gallery must be live and downloadable, a
+    password-protected gallery needs its unlock session, and the job must
+    belong to this gallery. Returns (gallery, job, error Response | None).
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [PublicGalleryBrowseThrottle]
+
+    def resolve_job(self, request, username, slug, job_id):
+        try:
+            gallery = Gallery.objects.select_related('photographer').get(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
+                slug=slug.strip().lower(),
+                photographer__username=username.strip().lower(),
+                is_published=True,
+                is_active=True,
+            )
+        except Gallery.DoesNotExist:
+            return None, None, Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not gallery.allow_download:
+            return None, None, error_response(
+                'Downloads are disabled for this gallery.', 'downloads_disabled', status.HTTP_403_FORBIDDEN,
+            )
 
         if gallery.is_password_protected:
-            token = request.query_params.get('token', '').strip()
-            if not ClientSession.objects.not_expired().filter(
-                access_token=token,
-                gallery=gallery,
-            ).exists():
-                return Response(
-                    {'error': 'An active unlocked session is required to download this gallery.'},
-                    status=status.HTTP_403_FORBIDDEN,
+            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+            token = (
+                auth_header[len('Bearer '):].strip()
+                if auth_header.startswith('Bearer ')
+                else request.query_params.get('token', '').strip()
+            )
+            if not (token and ClientSession.objects.not_expired().filter(
+                access_token=token, gallery=gallery
+            ).exists()):
+                return None, None, error_response(
+                    'An active unlocked session is required to download this gallery.',
+                    'session_required', status.HTTP_401_UNAUTHORIZED,
                 )
 
+        job = DownloadJob.objects.filter(id=job_id, gallery=gallery).select_related('photo_set').first()
+        if job is None:
+            return None, None, error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
+        return gallery, job, None
+
+
+class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
+    """
+    GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/
+        ?download_token=<from POST .../download-access/>  &token=<gallery unlock token>
+
+    -> { state: preparing | ready | failed, files: [{name, size_bytes, url}] }
+
+    Requires the same download access token as the POST that created the job,
+    and that token's email must be the job's: another visitor's token (or
+    another gallery's) reads as "not found". When ready, each file's `url` is
+    a freshly signed, minutes-long link - poll again for a new one rather
+    than keeping an old URL around.
+    """
+
+    def get(self, request, username, slug, job_id):
+        gallery, job, error = self.resolve_job(request, username, slug, job_id)
+        if error:
+            return error
+
         authorization, auth_error = authorize_download(
-            gallery,
-            pin=request.query_params.get('pin'),
-            download_token=request.query_params.get('download_token'),
-            denied_status=status.HTTP_403_FORBIDDEN,
+            gallery, pin=None, download_token=request.query_params.get('download_token'),
         )
         if auth_error:
             return auth_error
+        if (authorization.email or None) != (job.email or None):
+            return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
 
-        resolution = request.query_params.get('resolution', '').strip().lower() or 'download'
-        resolution_error = _validate_download_resolution(gallery, resolution)
-        if resolution_error:
-            return resolution_error
+        job = expire_if_stale(job)
+        if job.state == DownloadJob.State.FAILED:
+            return Response({
+                'state': 'failed', 'code': job.error_code or 'prepare_failed', 'files': [],
+                'error': JOB_ERROR_MESSAGES.get(job.error_code, JOB_GENERIC_ERROR),
+            })
+        if is_expired(job):
+            return Response({
+                'state': 'failed', 'code': 'download_expired', 'files': [],
+                'error': JOB_ERROR_MESSAGES['download_expired'],
+            })
+        if job.state == DownloadJob.State.PREPARING:
+            return Response({'state': 'preparing', 'files': []})
 
-        # A set scope must name a set of THIS gallery. An unknown/foreign/
-        # malformed id is rejected rather than silently widened to the whole
-        # gallery, so the client never gets a different download than the
-        # one they asked for.
-        photo_set = None
-        if request.query_params.get('set', '').strip():
-            photo_set = _get_photo_set(gallery, request.query_params.get('set'))
-            if photo_set is None:
-                return Response({'error': 'Photo set not found.'}, status=status.HTTP_404_NOT_FOUND)
+        files = []
+        for index, entry in enumerate(job.files or []):
+            url = request.build_absolute_uri(reverse(
+                'gallery-download-job-file',
+                kwargs={'username': gallery.photographer.username, 'slug': gallery.slug,
+                        'job_id': job.id, 'index': index},
+            ))
+            files.append({
+                'name': entry['name'],
+                'size_bytes': entry['size_bytes'],
+                'url': f'{url}?{urlencode({"file_token": issue_file_token(job, gallery, index)})}',
+            })
+        return Response({'state': 'ready', 'files': files})
 
-        # The public gallery only exposes READY media. Match that contract for
-        # a collection download so failed/pending uploads never become ZIP
-        # entries. PublicPhotoDownloadView supports both image and video
-        # originals, so both ready media types are included here too.
-        assets_qs = MediaAsset.objects.filter(
-            gallery=gallery,
-            processing_status=MediaAsset.ProcessingStatus.READY,
-            media_type__in=[MediaAsset.MediaType.IMAGE, MediaAsset.MediaType.VIDEO],
-        ).exclude(original_file='')
-        if photo_set:
-            assets_qs = assets_qs.filter(photo_set=photo_set)
-        assets = list(assets_qs)
-        if not assets:
-            return Response({'error': 'No ready media is available to download.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if len(assets) > settings.SYNC_ZIP_MAX_ASSET_COUNT:
-            return Response(
-                {'error': 'This gallery is too large to package in one download.', 'code': 'download_too_large'},
-                status=status.HTTP_400_BAD_REQUEST,
+class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
+    """
+    GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/files/{index}/
+        ?file_token=<signed, minutes-long>  [&token=<gallery unlock token>]
+
+    Streams one prepared ZIP from PRIVATE storage as an attachment. There is
+    no way to reach the stored file except through here: the signed file
+    token (issued only to a caller holding a valid download token), the live
+    gallery gates, the job's own gallery binding and its expiry are all
+    checked on every request. The first successful file response writes the
+    job's single Download Activity row, with the real attachment filename.
+    """
+
+    def get(self, request, username, slug, job_id, index):
+        gallery, job, error = self.resolve_job(request, username, slug, job_id)
+        if error:
+            return error
+
+        if job.state != DownloadJob.State.READY or is_expired(job):
+            return error_response(
+                'This download is no longer available. Please start it again.',
+                'download_expired', status.HTTP_410_GONE,
             )
-        if sum(asset.file_size or 0 for asset in assets) > settings.SYNC_ZIP_MAX_TOTAL_BYTES:
-            return Response(
-                {'error': 'This gallery is too large to package in one download.', 'code': 'download_too_large'},
-                status=status.HTTP_400_BAD_REQUEST,
+        files = job.files or []
+        if index >= len(files):
+            return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
+        if not file_token_is_valid(request.query_params.get('file_token'), job, gallery, index):
+            return error_response(
+                'This download link has expired. Please try again.',
+                'download_link_expired', status.HTTP_403_FORBIDDEN,
             )
 
-        temp_zip_fd, temp_zip_path = tempfile.mkstemp(suffix='.zip')
-        os.close(temp_zip_fd)
+        entry = files[index]
         try:
-            used_names = set()
-            added_asset_count = 0
-            with zipfile.ZipFile(temp_zip_path, 'w', compression=zipfile.ZIP_STORED) as zip_file:
-                for asset in assets:
-                    source_field = _resolve_zip_source(asset, resolution)
-                    if not source_field:
-                        continue
-                    entry_name = _unique_zip_entry_name(
-                        _zip_entry_base_name(asset, source_field, resolution), used_names
-                    )
-
-                    try:
-                        source_field.open('rb')
-                        with zip_file.open(entry_name, 'w', force_zip64=True) as destination:
-                            for chunk in source_field.chunks(chunk_size=1024 * 1024):
-                                destination.write(chunk)
-                        added_asset_count += 1
-                    except Exception:
-                        logger.exception('Failed to add asset %s to public ZIP for gallery %s', asset.id, gallery.id)
-                        used_names.discard(entry_name.lower())
-                    finally:
-                        source_field.close()
-
-            if not added_asset_count:
-                os.remove(temp_zip_path)
-                return Response({'error': 'No ready media is available to download.'}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Logged only now — after every gate passed and the archive was
-            # actually built — so a refused or failed attempt never appears
-            # in the photographer's Download Activity.
-            DownloadLog.objects.create(
-                gallery=gallery,
-                email=authorization.email,
-                ip_address=_get_client_ip(request),
-                download_type=DownloadLog.DownloadType.GALLERY,
-                resolution=resolution,
-                pin_verified=authorization.pin_verified,
-                photo_set=photo_set,
-            )
-
-            def file_iterator(file_path, chunk_size=65536):
-                try:
-                    with open(file_path, 'rb') as zip_file:
-                        while chunk := zip_file.read(chunk_size):
-                            yield chunk
-                finally:
-                    try:
-                        os.remove(file_path)
-                    except OSError:
-                        pass
-
-            response = StreamingHttpResponse(file_iterator(temp_zip_path), content_type='application/zip')
-            zip_stem = f'{gallery.slug}-{photo_set.name}' if photo_set else gallery.slug
-            safe_zip_name = sanitize_download_filename(f'{zip_stem}.zip', fallback='gallery.zip')
-            response['Content-Disposition'] = f'attachment; filename="{safe_zip_name}"'
-            return response
+            stored = PrivateMediaStorage().open(entry['storage_path'], 'rb')
         except Exception:
-            logger.exception('Failed to compile public ZIP for gallery %s', gallery.id)
-            if os.path.exists(temp_zip_path):
-                os.remove(temp_zip_path)
-            return Response(
-                {'error': 'Unable to prepare this download. Please try again.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            logger.warning('Stored file for download job %s is missing', job.id)
+            return error_response('File unavailable.', 'file_unavailable', status.HTTP_404_NOT_FOUND)
+
+        filename = sanitize_download_filename(entry['name'], fallback='photo-download-1of1.zip')
+
+        # One Download Activity row per genuine download. The ONLY thing collapsed
+        # is the browser retrying/resuming the very same prepared job's file
+        # moments after it was logged (this job's own latest log, same client
+        # address, within DOWNLOAD_RETRY_WINDOW_SECONDS). A different job
+        # (another email, set, size or file) is never matched, and a later
+        # "Download again" is its own row.
+        ip_address = _get_client_ip(request)
+        last_log = job.download_log
+        is_retry = bool(
+            last_log is not None
+            and last_log.ip_address == ip_address
+            and last_log.created_at >= timezone.now() - timedelta(seconds=DOWNLOAD_RETRY_WINDOW_SECONDS)
+        )
+        if not is_retry:
+            job.download_log = DownloadLog.objects.create(
+                gallery=gallery,
+                email=job.email,
+                ip_address=ip_address,
+                download_type=DownloadLog.DownloadType.GALLERY,
+                resolution=job.resolution,
+                pin_verified=job.pin_verified,
+                photo_set=job.photo_set,
+                filename=filename,
             )
+            job.save(update_fields=['download_log', 'updated_at'])
+
+        return FileResponse(stored, as_attachment=True, filename=filename, content_type='application/zip')
 
 
 class PublicVideoStreamView(APIView):
@@ -1486,6 +1445,7 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
             ),
             resolution=resolution,
             pin_verified=authorization.pin_verified,
+            filename=download_filename,
         )
 
         response = FileResponse(

@@ -2,12 +2,12 @@ import PhotoCard from "./PhotoCard";
 
 export default function MasonryPhotoGrid({
   photos,
-  token,
   username,
   slug,
   onPhotoClick,
   favorites,
   onToggleFavorite,
+  onDownload,
 }) {
   if (!photos || photos.length === 0) return null;
 
@@ -18,12 +18,12 @@ export default function MasonryPhotoGrid({
           key={photo.id ?? index}
           photo={photo}
           index={index}
-          token={token}
           username={username}
           slug={slug}
           onPhotoClick={onPhotoClick}
           isFavorited={favorites?.has(photo.id)}
           onToggleFavorite={onToggleFavorite}
+          onDownload={onDownload}
         />
       ))}
     </div>
