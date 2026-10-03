@@ -272,6 +272,14 @@ def delete_job_files(job):
             _delete_stored(storage, path)
 
 
+def job_storage_refs(jobs):
+    """Purge-task references for the stored ZIPs of the given jobs (private storage)."""
+    return [
+        {'s': 'private', 'n': entry['storage_path']}
+        for job in jobs for entry in (job.files or []) if entry.get('storage_path')
+    ]
+
+
 def purge_expired_jobs():
     """
     Removes jobs past their expiry (READY) or abandoned (never finished within

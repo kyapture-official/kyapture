@@ -1,0 +1,174 @@
+[
+  {
+    "name": "mobile: card 3-dot is ALWAYS visible (no hover needed)",
+    "ok": true
+  },
+  {
+    "name": "mobile: 3-dot hit area is touch-sized and on screen",
+    "ok": true
+  },
+  {
+    "name": "card menu = Share, Preview, Quick edit, Delete (no Duplicate: no backend)",
+    "ok": true
+  },
+  {
+    "name": "menu fits inside the viewport",
+    "ok": true
+  },
+  {
+    "name": "Escape closes the menu",
+    "ok": true
+  },
+  {
+    "name": "Quick edit opens the collection settings",
+    "ok": true
+  },
+  {
+    "name": "Preview opens the client preview of that collection",
+    "ok": true
+  },
+  {
+    "name": "Share copies the gallery link (toast shown)",
+    "ok": true
+  },
+  {
+    "name": "workspace shows the tiles of the active set",
+    "ok": true
+  },
+  {
+    "name": "old overlay buttons (star / download / red X) are gone",
+    "ok": true
+  },
+  {
+    "name": "mobile: tile 3-dot AND heart are visible without hover",
+    "ok": true
+  },
+  {
+    "name": "3-dot is top-right and heart is bottom-right of the tile",
+    "ok": true
+  },
+  {
+    "name": "tile menu = Open, Download, Set as cover, Move to <set>, Delete permanently",
+    "ok": true
+  },
+  {
+    "name": "tile menu fits inside the viewport",
+    "ok": true
+  },
+  {
+    "name": "collection cover starts as the first READY photo",
+    "ok": true
+  },
+  {
+    "name": "\"Set as cover\" changes the cover",
+    "ok": true
+  },
+  {
+    "name": "heart turns red/filled and is saved server-side",
+    "ok": true
+  },
+  {
+    "name": "the heart did NOT change the cover (still photo 2)",
+    "ok": true
+  },
+  {
+    "name": "Favorites page lists the hearted photo with its collection",
+    "ok": true
+  },
+  {
+    "name": "no horizontal scroll on the Favorites page",
+    "ok": true
+  },
+  {
+    "name": "un-hearting on the Favorites page removes it (server too)",
+    "ok": true
+  },
+  {
+    "name": "\"Move to Ceremony\" moves the photo",
+    "ok": true
+  },
+  {
+    "name": "a new upload that reaches READY does NOT overwrite the manually chosen cover",
+    "ok": true
+  },
+  {
+    "name": "before delete: the cover photo has files on disk",
+    "ok": true
+  },
+  {
+    "name": "delete asks for confirmation and says it is permanent",
+    "ok": true
+  },
+  {
+    "name": "Cancel deletes nothing",
+    "ok": true
+  },
+  {
+    "name": "confirmed delete: DB row gone",
+    "ok": true
+  },
+  {
+    "name": "confirmed delete: EVERY stored file gone (original, Download Master, display, medium, thumbnail)",
+    "ok": true
+  },
+  {
+    "name": "storage usage dropped",
+    "ok": true
+  },
+  {
+    "name": "deleted cover fell back to another READY photo (not none, not the deleted one)",
+    "ok": true
+  },
+  {
+    "name": "tile removed from the grid",
+    "ok": true
+  },
+  {
+    "name": "before delete: the collection has photos on disk and a prepared ZIP",
+    "ok": true
+  },
+  {
+    "name": "collection delete asks for confirmation (names it, says permanent / cannot be undone)",
+    "ok": true
+  },
+  {
+    "name": "confirm dialog fits the viewport",
+    "ok": true
+  },
+  {
+    "name": "Cancel keeps the collection",
+    "ok": true
+  },
+  {
+    "name": "card disappears after the server confirms",
+    "ok": true
+  },
+  {
+    "name": "DB: collection row gone",
+    "ok": true
+  },
+  {
+    "name": "DB: its photos, sets, jobs and activity are gone",
+    "ok": true
+  },
+  {
+    "name": "STORAGE: every file and the prepared ZIP are gone",
+    "ok": true
+  },
+  {
+    "name": "STORAGE: the collection's directory is gone",
+    "ok": true
+  },
+  {
+    "name": "another collection is untouched",
+    "ok": true
+  },
+  {
+    "name": "no horizontal scroll",
+    "ok": true
+  },
+  {
+    "name": "no unexpected console / page errors",
+    "ok": true
+  }
+]

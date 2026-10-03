@@ -13,6 +13,7 @@ import ResetPasswordConfirmPage from "./pages/auth/ResetPasswordConfirmPage";
 // Dashboard
 import HomePage from "./pages/dashboard/HomePage";
 import GalleriesPage from "./pages/dashboard/GalleriesPage";
+import FavoritesPage from "./pages/dashboard/FavoritesPage";
 import SettingsPage from "./pages/dashboard/SettingsPage";
 import BillingPage from "./pages/subscription/BillingPage";
 // Gallery workspace (own shell — no DashboardLayout)
@@ -77,6 +78,7 @@ export default function App() {
             <Route element={<DashboardLayout />}>
               <Route index element={<HomePage />} />
               <Route path="galleries" element={<GalleriesPage />} />
+              <Route path="favorites" element={<FavoritesPage />} />
               <Route path="settings/:section?" element={<SettingsPage />} />
               <Route path="billing" element={<BillingPage />} />
             </Route>

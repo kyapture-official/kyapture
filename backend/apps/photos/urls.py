@@ -10,6 +10,8 @@ from .views import (
     PhotoSetDetailView,
     PhotoSetReorderView,
     PhotoSetAssignView,
+    PhotoFavoriteView,
+    PhotographerFavoritesView,
 )
 
 urlpatterns = [
@@ -72,6 +74,20 @@ urlpatterns = [
         '<slug:gallery_slug>/',
         PhotoListUploadView.as_view(),
         name='photo-list'
+    ),
+
+    # Route: PUT the photographer's own favorite mark on one asset
+    path(
+        'photo/<uuid:photo_id>/favorite/',
+        PhotoFavoriteView.as_view(),
+        name='photo-favorite'
+    ),
+
+    # Route: GET every favorited photo of the signed-in photographer (Favorites page)
+    path(
+        'favorites/all/',
+        PhotographerFavoritesView.as_view(),
+        name='photographer-favorites'
     ),
 
     # Route: GET metadata / DELETE individual asset

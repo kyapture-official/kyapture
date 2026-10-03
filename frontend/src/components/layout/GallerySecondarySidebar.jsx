@@ -203,7 +203,11 @@ export default function GallerySecondarySidebar({
 
   const handleDeleteSet = async (set) => {
     setOpenMenuSetId(null);
-    if (deletingSetId || !window.confirm(`Delete "${set.name}"? Photos will move to the first remaining set.`)) {
+    const photoCount = Number(set.photo_count) || 0;
+    const consequence = photoCount > 0
+      ? `its ${photoCount} photo${photoCount === 1 ? "" : "s"} and every stored file will be PERMANENTLY deleted`
+      : "it will be deleted";
+    if (deletingSetId || !window.confirm(`Delete "${set.name}"? ${consequence}. This cannot be undone.`)) {
       return;
     }
 

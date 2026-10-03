@@ -71,6 +71,7 @@ class MediaAssetSerializer(serializers.ModelSerializer):
             'playback_url',
             'duration',
             'processing_status',
+            'is_favorite',
             'created_at',
         ]
         read_only_fields = fields

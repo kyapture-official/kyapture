@@ -314,3 +314,25 @@ def process_video_asset(self, asset_id):
 
         # Retry task if retry thresholds have not been exceeded
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=5, acks_late=True)
+def purge_storage_objects(self, refs, prefixes=None):
+    """
+    Deletes storage objects (and key prefixes) that no database row owns any more.
+    Idempotent - an object that is already gone counts as deleted - and retried
+    with backoff for just the objects that failed. Anything still failing after
+    the last retry is logged (with every name) and left for `purge_orphans`.
+    """
+    from .purge import run_purge
+
+    failed_refs, failed_prefixes = run_purge(refs or [], prefixes or [])
+    if not failed_refs and not failed_prefixes:
+        return 0
+    if self.request.retries >= self.max_retries:
+        logger.error(
+            '[purge] giving up with %s object(s) and %s prefix(es) left in storage: %s %s',
+            len(failed_refs), len(failed_prefixes), failed_refs, failed_prefixes,
+        )
+        return len(failed_refs) + len(failed_prefixes)
+    raise self.retry(args=[failed_refs, failed_prefixes], countdown=min(60 * 2 ** self.request.retries, 900))

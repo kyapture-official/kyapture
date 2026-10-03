@@ -1,6 +1,6 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GalleryWorkspaceLayout.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate, Outlet, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Outlet, useSearchParams } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
 import { photosApi } from "../../api/photosApi";
 import { mockGalleries } from "../../utils/mockGalleries";
@@ -15,6 +15,7 @@ const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 function WorkspaceInner() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { dispatch } = usePixieset();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -157,6 +158,17 @@ function WorkspaceInner() {
     }
     loadGallery();
   }, [id, dispatch]);
+
+  // "Preview" from a collection card's menu lands here with {openPreview: true}.
+  // The flag is read ONCE on arrival (the workspace rewrites the URL while it
+  // loads, which drops router state) and consumed when the collection is ready.
+  const openPreviewOnLoadRef = useRef(Boolean(location.state?.openPreview));
+  useEffect(() => {
+    if (!loading && openPreviewOnLoadRef.current) {
+      openPreviewOnLoadRef.current = false;
+      setPreviewOpen(true);
+    }
+  }, [loading]);
 
   // Listen for preview open event from TopNavBar
   useEffect(() => {

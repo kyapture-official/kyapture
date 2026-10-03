@@ -163,7 +163,7 @@ class PhotoSetTestCase(APITestCase):
         foreign_set.refresh_from_db()
         self.assertEqual(foreign_set.name, "Foreign")
 
-    def test_delete_set_moves_member_photos_to_first_remaining_set(self):
+    def test_delete_set_permanently_deletes_its_photos(self):
         photo_set = PhotoSet.objects.create(gallery=self.gallery, name="Doomed", order=Decimal("1.0"))
         self.asset1.photo_set = photo_set
         self.asset1.save(update_fields=["photo_set"])
@@ -171,11 +171,10 @@ class PhotoSetTestCase(APITestCase):
         url = f"{self.base_url}{photo_set.id}/"
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["deleted_photos"], 1)
 
         self.assertFalse(PhotoSet.objects.filter(id=photo_set.id).exists())
-        self.asset1.refresh_from_db()
-        self.assertEqual(self.asset1.photo_set_id, self.highlights.id)
-        self.assertTrue(MediaAsset.objects.filter(id=self.asset1.id, gallery=self.gallery).exists())
+        self.assertFalse(MediaAsset.objects.filter(id=self.asset1.id).exists())
 
     def test_cannot_delete_the_final_remaining_set(self):
         response = self.client.delete(f"{self.base_url}{self.highlights.id}/")

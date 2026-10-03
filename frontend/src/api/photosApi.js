@@ -393,6 +393,33 @@ export const photosApi = {
    * @param {string|null} setId       - null moves photos OUT of any set
    * @param {string[]}    photoIds
    */
+  /**
+   * WHAT: Mark / unmark one photo as the PHOTOGRAPHER's own favorite (the heart on
+   *       a workspace tile). Never touches the collection cover.
+   * URI:  PUT /api/v1/photos/photo/{photo_id}/favorite/   { is_favorite }
+   */
+  setFavorite: async (photoId, isFavorite, signal) => {
+    assertNonEmptyString(photoId, 'photosApi.setFavorite: photoId')
+    const { data } = await api.put(
+      `/photos/photo/${encodeURIComponent(photoId)}/favorite/`,
+      { is_favorite: Boolean(isFavorite) },
+      { signal }
+    )
+    return data
+  },
+
+  /**
+   * WHAT: Every photo the signed-in photographer has favorited, across their
+   *       collections, newest favorite first (the dashboard's Favorites page).
+   * URI:  GET /api/v1/photos/favorites/all/?page=N
+   *
+   * @returns {Promise<{ count: number, next: string|null, results: Array }>} each row also carries gallery_slug + gallery_title
+   */
+  listFavorites: async (page = 1, signal) => {
+    const { data } = await api.get('/photos/favorites/all/', { params: { page }, signal })
+    return data
+  },
+
   assignPhotosToSet: async (gallerySlug, setId, photoIds, signal) => {
     assertNonEmptyString(gallerySlug, 'photosApi.assignPhotosToSet: gallerySlug')
     assertStringIdArray(photoIds, 'photosApi.assignPhotosToSet: photoIds')

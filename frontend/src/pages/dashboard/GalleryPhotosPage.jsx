@@ -7,6 +7,7 @@ import { photosApi } from "../../api/photosApi";
 import Spinner from "../../components/ui/Spinner";
 import DropZone from "../../components/ui/DropZone";
 import PhotoGrid from "../../components/shared/PhotoGrid";
+import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useSubscription } from "../../hooks/useSubscription";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
@@ -53,6 +54,8 @@ export default function GalleryPhotosPage() {
   uploadQueueRef.current = uploadQueue;
   const [errorMsg, setErrorMsg] = useState("");
   const [isGridDragging, setIsGridDragging] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null); // photo awaiting the permanent-delete confirmation
+  const [deleting, setDeleting] = useState(false);
 
   const blobUrlsRef = useRef([]);
   const photosRef = useRef(photos);
@@ -444,6 +447,51 @@ export default function GalleryPhotosPage() {
     }
   };
 
+  // Permanent delete is always confirmed first; nothing is sent until the confirm button.
+  const confirmDeletePhoto = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await handleDeletePhoto(pendingDelete.id);
+    } finally {
+      if (isMountedRef.current) {
+        setDeleting(false);
+        setPendingDelete(null);
+      }
+    }
+  };
+
+  // The heart: the photographer's own favorite. Optimistic, rolled back on failure.
+  // It has nothing to do with the cover.
+  const handleToggleFavorite = async (photo) => {
+    const next = !photo.is_favorite;
+    const apply = (value) =>
+      setPhotos((previous) => previous.map((item) => (item.id === photo.id ? { ...item, is_favorite: value } : item)));
+    apply(next);
+    if (USE_MOCK_DATA) return;
+    try {
+      await photosApi.setFavorite(photo.id, next);
+    } catch {
+      if (isMountedRef.current) {
+        apply(!next);
+        setErrorMsg("Failed to update the favorite. Please try again.");
+      }
+    }
+  };
+
+  const handleMoveToSet = async (photo, targetSetId) => {
+    const setIdWhenMoving = activeSetId;
+    try {
+      await photosApi.assignPhotosToSet(slug, targetSetId, [photo.id]);
+      if (isMountedRef.current && String(activeSetIdRef.current) === String(setIdWhenMoving)) {
+        setPhotos((previous) => previous.filter((item) => item.id !== photo.id));
+      }
+      refreshSets().catch(() => {});
+    } catch {
+      if (isMountedRef.current) setErrorMsg("Failed to move the photo. Please try again.");
+    }
+  };
+
   const handleDownload = async (photo) => {
     const url = photo?.original_url;
     if (!url) {
@@ -677,15 +725,34 @@ export default function GalleryPhotosPage() {
           >
             <PhotoGrid
               photos={photos}
-              onDelete={handleDeletePhoto}
+              onDelete={setPendingDelete}
               onSetCover={handleSetCover}
               onReorder={handleReorder}
               onDownload={handleDownload}
+              onToggleFavorite={handleToggleFavorite}
+              onMoveToSet={handleMoveToSet}
+              sets={sets}
+              activeSetId={activeSetId}
               showActions
             />
           </div>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this photo permanently?"
+        confirmLabel="Delete permanently"
+        busy={deleting}
+        onConfirm={confirmDeletePhoto}
+        onCancel={() => setPendingDelete(null)}
+      >
+        <p>
+          <span className="font-medium text-ink">{pendingDelete?.original_name || "This photo"}</span> and every stored copy of it
+          (original, download and preview files) will be removed for good, and it will stop counting toward your storage.
+          This cannot be undone.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

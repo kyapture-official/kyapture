@@ -20,6 +20,7 @@ from PIL.ImageOps import exif_transpose
 from apps.core.utils import get_user_subscription_metrics, get_insertion_order, strip_exif_gps
 from apps.galleries.models import Gallery
 from .models import MediaAsset, PhotoSet
+from .purge import purge_assets, purge_photo_set
 from .serializers import (
     MediaAssetSerializer,
     MediaAssetImageUploadSerializer,
@@ -328,7 +329,9 @@ class PhotoBatchStatusView(APIView):
 class PhotoDetailView(APIView):
     """
     GET    /api/v1/photos/photo/{photo_id}/ - Retrieve metadata of a single media asset.
-    DELETE /api/v1/photos/photo/{photo_id}/ - Purge an asset. Calls signal for file cleanup.
+    DELETE /api/v1/photos/photo/{photo_id}/ - PERMANENTLY delete an asset: its row
+           and every stored file (original, Download Master, derivatives, video
+           files), purged after commit by an idempotent task. Not recoverable.
     
     NOTE: Enforces IsAuthenticated only. This ensures photographers with expired or
     frozen accounts can always call DELETE to clean up space and regain storage compliance.
@@ -359,8 +362,7 @@ class PhotoDetailView(APIView):
         if not asset:
             return Response({'error': 'Media asset not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Deleting the model row. Signals.py handles physical file/S3 purges automatically.
-        asset.delete()
+        purge_assets(asset.gallery, MediaAsset.objects.filter(pk=asset.pk))
         return Response({'message': 'Media asset deleted successfully.'}, status=status.HTTP_200_OK)
 
 
@@ -390,11 +392,9 @@ class PhotoBulkDeleteView(APIView):
         # Unknown or forged IDs belong to other users will be silently ignored.
         queryset = MediaAsset.objects.filter(gallery=gallery, id__in=photo_ids)
 
-        # NOTE: Django's bulk delete on QuerySets normally bypasses individual post_delete signals.
-        # However, because we registered post_delete hooks inside `apps/photos/signals.py`, Django
-        # automatically handles this by loading the objects and running individual model deletes,
-        # ensuring S3 and disk files are cleanly purged without leaving orphaned files.
-        deleted_count, _ = queryset.delete()
+        # Permanent delete: rows now, every stored file after commit (apps/photos/purge.py);
+        # the cover falls back to the next READY photo if it was among them.
+        deleted_count = purge_assets(gallery, queryset)
 
         return Response({'deleted_count': deleted_count}, status=status.HTTP_200_OK)
 
@@ -518,10 +518,9 @@ class PhotoSetListCreateView(APIView):
 class PhotoSetDetailView(APIView):
     """
     PATCH  /api/v1/photos/{gallery_slug}/sets/{set_id}/  — rename.
-    DELETE /api/v1/photos/{gallery_slug}/sets/{set_id}/  — delete the set.
-           Member photos are NOT deleted — MediaAsset.photo_set is
-           reassigned atomically to the first remaining set before the
-           set is removed.
+    DELETE /api/v1/photos/{gallery_slug}/sets/{set_id}/  — PERMANENTLY delete the
+           set AND the photos in it (rows + every stored file). The last
+           remaining set cannot be deleted.
     """
     permission_classes = [IsAuthenticated]
 
@@ -579,12 +578,11 @@ class PhotoSetDetailView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            first_remaining_set = next(item for item in sets if item.id != photo_set.id)
-            MediaAsset.objects.filter(gallery=gallery, photo_set=photo_set).update(
-                photo_set=first_remaining_set
-            )
-            photo_set.delete()
-        return Response({'message': 'Set deleted successfully.'}, status=status.HTTP_200_OK)
+            deleted_photos = purge_photo_set(gallery, photo_set)
+        return Response(
+            {'message': 'Set deleted successfully.', 'deleted_photos': deleted_photos},
+            status=status.HTTP_200_OK,
+        )
 
 
 class PhotoSetReorderView(APIView):
@@ -677,3 +675,62 @@ class PhotoSetAssignView(APIView):
             'updated_count': updated_count,
             'set_id': str(target_set.id) if target_set else None,
         }, status=status.HTTP_200_OK)
+
+
+class PhotoFavoriteView(APIView):
+    """
+    PUT /api/v1/photos/photo/{photo_id}/favorite/   { "is_favorite": true | false }
+
+    The PHOTOGRAPHER's own favorite mark (the heart on a workspace tile) - it
+    never touches the collection cover or visitors' favorites. Idempotent.
+    Owner-only: another photographer's (or a trashed gallery's) photo id is a 404.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, photo_id):
+        try:
+            asset = MediaAsset.objects.select_related('gallery').get(
+                id=photo_id, gallery__photographer=request.user, gallery__is_active=True,
+            )
+        except MediaAsset.DoesNotExist:
+            return Response({'error': 'Media asset not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        value = request.data.get('is_favorite')
+        if not isinstance(value, bool):
+            return Response(
+                {'error': 'is_favorite must be true or false.', 'code': 'invalid_is_favorite'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if asset.is_favorite != value:
+            asset.is_favorite = value
+            asset.favorited_at = timezone.now() if value else None
+            asset.save(update_fields=['is_favorite', 'favorited_at', 'updated_at'])
+        return Response(MediaAssetSerializer(asset, context={'request': request}).data, status=status.HTTP_200_OK)
+
+
+class PhotographerFavoritesView(APIView):
+    """
+    GET /api/v1/photos/favorites/all/?page=N
+
+    Every photo the signed-in photographer has marked as a favorite, across
+    their (non-trashed) collections, newest favorite first. Powers the
+    dashboard's Favorites page.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.core.pagination import StandardResultsSetPagination
+
+        favorites = (
+            MediaAsset.objects
+            .filter(gallery__photographer=request.user, gallery__is_active=True, is_favorite=True)
+            .select_related('gallery')
+            .order_by('-favorited_at', '-created_at')
+        )
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(favorites, request, view=self)
+        rows = MediaAssetSerializer(page, many=True, context={'request': request}).data
+        for row, asset in zip(rows, page):
+            row['gallery_slug'] = asset.gallery.slug
+            row['gallery_title'] = asset.gallery.title
+        return paginator.get_paginated_response(rows)

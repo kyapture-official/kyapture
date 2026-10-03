@@ -9,6 +9,9 @@ import { useToast } from "../../components/ui/Toast";
 import { getAlphaBrandingColor } from "../../utils/colorhelper";
 import CreateGalleryModal from "../../components/shared/CreateGalleryModal";
 import Spinner from "../../components/ui/Spinner";
+import ItemMenu from "../../components/shared/ItemMenu";
+import ConfirmDialog from "../../components/shared/ConfirmDialog";
+import { canNativeShare, copyText, isMobileDevice, resolveShareUrl } from "../../utils/share";
 
 export default function GalleriesPage() {
   const toast = useToast();
@@ -25,6 +28,8 @@ export default function GalleriesPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null); // collection awaiting the permanent-delete confirmation
+  const [deleting, setDeleting] = useState(false);
 
   const defaultBrandingColor =
     useAuthStore((s) => s.user?.branding_color) ?? "#111827";
@@ -153,6 +158,52 @@ export default function GalleriesPage() {
         "Could not copy link. Copy it manually from the address bar.",
         "error",
       );
+    }
+  };
+
+  // Share: the phone's share sheet on phones (as ShareMenu does), otherwise copy the canonical link.
+  const handleShare = async (gallery) => {
+    const url = resolveShareUrl(gallery.share_url, username, gallery.slug);
+    if (!url) {
+      toast("Unable to build link — profile not loaded yet.", "error");
+      return;
+    }
+    if (isMobileDevice() && canNativeShare()) {
+      try {
+        await navigator.share({ url, title: gallery.title });
+        return;
+      } catch (err) {
+        if (err?.name === "AbortError") return; // the person closed the sheet
+      }
+    }
+    const copied = await copyText(url);
+    toast(copied ? "Gallery link copied!" : "Could not copy link. Copy it manually from the address bar.", copied ? "success" : "error");
+  };
+
+  // Permanent delete — only after the confirm dialog; the card disappears only after the server says it is gone.
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    const loaderId = toast("Deleting collection…", "loading");
+    try {
+      await galleriesApi.deleteGallery(pendingDelete.slug);
+      toast.dismiss(loaderId);
+      setGalleries((previous) => previous.filter((item) => item.slug !== pendingDelete.slug));
+      setSearchTotal((previous) => Math.max(0, previous - 1));
+      toast("Collection permanently deleted.", "success");
+      setPendingDelete(null);
+    } catch (err) {
+      toast.dismiss(loaderId);
+      toast(
+        err?.response?.status === 404 ? "That collection no longer exists." : "Could not delete the collection. Please try again.",
+        "error",
+      );
+      if (err?.response?.status === 404) {
+        setGalleries((previous) => previous.filter((item) => item.slug !== pendingDelete.slug));
+        setPendingDelete(null);
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -295,6 +346,25 @@ export default function GalleriesPage() {
                     />
                   )}
 
+                  <ItemMenu
+                    className="absolute right-3 top-3 z-10"
+                    label={`More actions for ${gallery.title}`}
+                    items={[
+                      { key: "share", label: "Share", onSelect: () => handleShare(gallery) },
+                      {
+                        key: "preview",
+                        label: "Preview",
+                        onSelect: () => navigate(`/dashboard/galleries/${gallery.slug}`, { state: { openPreview: true } }),
+                      },
+                      {
+                        key: "edit",
+                        label: "Quick edit",
+                        onSelect: () => navigate(`/dashboard/galleries/${gallery.slug}/settings`),
+                      },
+                      { key: "delete", label: "Delete", danger: true, divider: true, onSelect: () => setPendingDelete(gallery) },
+                    ]}
+                  />
+
                   {/* Branding color bar */}
                   <div
                     className="absolute bottom-0 left-0 right-0 h-1"
@@ -303,7 +373,7 @@ export default function GalleriesPage() {
 
                   {/* Password badge */}
                   {gallery.has_password && (
-                    <div className="absolute top-3 right-3 bg-white/90 rounded-lg p-1.5 shadow-sm backdrop-blur-sm">
+                    <div className="absolute top-3 left-3 bg-white/90 rounded-lg p-1.5 shadow-sm backdrop-blur-sm">
                       <svg
                         className="w-4 h-4 text-muted"
                         fill="none"
@@ -384,6 +454,22 @@ export default function GalleriesPage() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this collection permanently?"
+        confirmLabel="Delete permanently"
+        busy={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      >
+        <p>
+          <span className="font-medium text-ink">{pendingDelete?.title}</span>
+          {" "}and its {pendingDelete?.photo_count || 0} photo{(pendingDelete?.photo_count || 0) === 1 ? "" : "s"}, sets,
+          client activity and every stored file will be removed for good, and the space is freed immediately.
+          The client link stops working. This cannot be undone.
+        </p>
+      </ConfirmDialog>
 
       {/* ── CREATE GALLERY MODAL ── */}
       <CreateGalleryModal

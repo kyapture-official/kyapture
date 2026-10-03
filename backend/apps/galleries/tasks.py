@@ -43,6 +43,7 @@ def purge_trashed_galleries(self):
     trashed AND has an explicit trash timestamp past the window. An
     active gallery is never touched: the query requires is_active=False.
     """
+    from apps.photos.purge import purge_gallery
     from .models import Gallery
 
     cutoff = timezone.now() - timezone.timedelta(days=settings.GALLERY_TRASH_RETENTION_DAYS)
@@ -71,10 +72,11 @@ def purge_trashed_galleries(self):
             # (not just re-using the id from the list above) so a gallery
             # that was somehow reactivated between the query and this
             # loop iteration is safely skipped rather than deleted anyway.
-            deleted, _ = Gallery.objects.filter(
+            gallery = Gallery.objects.filter(
                 id=gallery_id, is_active=False, trashed_at__isnull=False, trashed_at__lte=cutoff,
-            ).delete()
-            if deleted:
+            ).first()
+            if gallery is not None:
+                purge_gallery(gallery)      # rows + every stored file, same as an owner delete
                 purged_count += 1
         except Exception:
             # One bad row must never abort the batch — log it and let the

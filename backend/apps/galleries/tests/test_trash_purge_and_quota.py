@@ -62,33 +62,35 @@ class TrashQuotaAccountingTestCase(APITestCase):
         )
         self.client.force_authenticate(user=self.photographer)
 
-    def test_deleting_a_gallery_sets_trashed_at(self):
+    def test_deleting_a_gallery_is_permanent_not_a_trash_row(self):
         gallery = Gallery.objects.create(
             photographer=self.photographer, title="Doomed", slug="doomed",
         )
         response = self.client.delete(f"/api/v1/galleries/{gallery.slug}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
 
-        gallery.refresh_from_db()
-        self.assertFalse(gallery.is_active)
-        self.assertIsNotNone(gallery.trashed_at)
+        # The row is gone - no trashed_at/is_active=False leftover waiting for a sweep.
+        self.assertFalse(Gallery.objects.filter(pk=gallery.pk).exists())
 
-    def test_trashed_gallery_still_counts_toward_gallery_quota(self):
+    def test_deleting_a_gallery_frees_its_quota_slot_because_it_is_really_gone(self):
+        # The old soft-delete kept a trashed gallery counted so delete+reupload could not
+        # outrun storage that was still occupied. Deletion is now permanent (rows and every
+        # stored file), so the slot is genuinely free again.
         for i in range(10):
-            gallery = Gallery.objects.create(
+            Gallery.objects.create(
                 photographer=self.photographer, title=f"Gallery {i}", slug=f"quota-gallery-{i}",
             )
-        # Soft-delete one of the 10 — quota must NOT drop, closing the
-        # delete+reupload loophole.
-        self.client.delete(f"/api/v1/galleries/quota-gallery-0/")
+        blocked = self.client.post("/api/v1/galleries/", {"title": "Over the limit"}, format="json")
+        self.assertEqual(blocked.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.delete("/api/v1/galleries/quota-gallery-0/")
 
         metrics = get_user_subscription_metrics(self.photographer)
-        self.assertEqual(metrics["current_galleries_count"], 10)
+        self.assertEqual(metrics["current_galleries_count"], 9)
+        allowed = self.client.post("/api/v1/galleries/", {"title": "Fits now"}, format="json")
+        self.assertEqual(allowed.status_code, status.HTTP_201_CREATED, allowed.data)
 
-        response = self.client.post("/api/v1/galleries/", {"title": "Should still be blocked"}, format="json")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_trashed_gallery_storage_still_counts_toward_quota(self):
+    def test_deleting_a_gallery_frees_its_storage_quota(self):
         gallery = Gallery.objects.create(
             photographer=self.photographer, title="Heavy", slug="heavy-gallery",
         )
@@ -106,7 +108,7 @@ class TrashQuotaAccountingTestCase(APITestCase):
         self.client.delete(f"/api/v1/galleries/{gallery.slug}/")
 
         after = get_user_subscription_metrics(self.photographer)
-        self.assertEqual(after["current_total_storage_bytes"], 500 * 1024 * 1024)
+        self.assertEqual(after["current_total_storage_bytes"], 0)
 
 
 class PurgeTrashedGalleriesTestCase(APITestCase):

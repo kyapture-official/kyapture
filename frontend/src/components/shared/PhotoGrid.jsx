@@ -5,6 +5,7 @@ import PhotoLightbox from "./PhotoLightbox";
 import Spinner from "../ui/Spinner";
 import { getBlurhashDataUrl } from "../../utils/blurhashDataUrl";
 import { formatBytes, formatDuration } from "../../utils/formatters";
+import ItemMenu from "./ItemMenu";
 
 // ── KEYFRAME INJECTION ────────────────────────────────────────────────────
 // PhotoGrid gets its own dedicated keyframe rather than reusing Toast.jsx's
@@ -58,12 +59,28 @@ const PLAY_ICON = (
   </svg>
 );
 
+/**
+ * Workspace photo grid. Each tile has ONE overflow menu (top-right: Open,
+ * Download, Set as cover, Move to a set, Delete permanently) and ONE heart
+ * (bottom-right: the photographer's own favorite). The cover changes ONLY
+ * through "Set as cover" — the heart never touches it.
+ *
+ *   onDelete(photo)           permanent delete (the page confirms first)
+ *   onSetCover(photoId)       "Set as cover"
+ *   onToggleFavorite(photo)   heart on / off
+ *   onMoveToSet(photo, setId) move to another set
+ *   sets / activeSetId        the collection's sets, to build "Move to …"
+ */
 export default function PhotoGrid({
   photos = [],
   onDelete,
   onSetCover,
   onReorder,
   onDownload,
+  onToggleFavorite,
+  onMoveToSet,
+  sets = [],
+  activeSetId = null,
   showActions = false,
 }) {
   const [lightbox, setLightbox] = useState(null);
@@ -246,7 +263,7 @@ export default function PhotoGrid({
                     </div>
                   )}
                   {isVideo && photo.duration != null && (
-                    <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-medium tabular-nums pointer-events-none">
+                    <span className="absolute left-2 top-2 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-medium tabular-nums pointer-events-none">
                       {formatDuration(photo.duration)}
                     </span>
                   )}
@@ -255,100 +272,68 @@ export default function PhotoGrid({
 
               <div className="absolute inset-0 bg-ink/0 group-hover:bg-ink/30 transition-all duration-300 rounded-xl pointer-events-none" />
 
-                            {showActions && (onDownload || onDelete) && (
-                <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                  {onDownload && (
+              {showActions && (
+                <>
+                  <ItemMenu
+                    className="absolute right-2 top-2 z-20"
+                    label={`More actions for ${photo.title || photo.original_name || "photo"}`}
+                    items={[
+                      { key: "open", label: "Open", onSelect: () => setLightbox(idx) },
+                      ...(onDownload && photo.original_url
+                        ? [{ key: "download", label: "Download", onSelect: () => onDownload(photo) }]
+                        : []),
+                      ...(onSetCover && !isFailed && photo.processing_status === "ready"
+                        ? [{ key: "cover", label: "Set as cover", onSelect: () => onSetCover(photo.id) }]
+                        : []),
+                      ...(onMoveToSet
+                        ? sets
+                            .filter((set) => String(set.id) !== String(activeSetId))
+                            .map((set, position) => ({
+                              key: `move-${set.id}`,
+                              label: `Move to ${set.name}`,
+                              divider: position === 0,
+                              onSelect: () => onMoveToSet(photo, set.id),
+                            }))
+                        : []),
+                      ...(onDelete
+                        ? [{ key: "delete", label: "Delete permanently", danger: true, divider: true, onSelect: () => onDelete(photo) }]
+                        : []),
+                    ]}
+                  />
+                  {onToggleFavorite && !isFailed && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDownload(photo);
+                        onToggleFavorite(photo);
                       }}
-                      className="p-1.5 rounded-lg bg-white/95 text-ink
-                                opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                                hover:bg-cream-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 shadow-sm cursor-pointer"
-                      aria-label={`Download ${photo.title || photo.original_name || "photo"}`}
-                      title="Download"
+                      aria-pressed={Boolean(photo.is_favorite)}
+                      aria-label={photo.is_favorite ? `Remove ${photo.original_name || "photo"} from favorites` : `Add ${photo.original_name || "photo"} to favorites`}
+                      title={photo.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                      className={`absolute bottom-2 right-2 z-20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-all duration-150 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-green-500 ${
+                        photo.is_favorite
+                          ? "bg-white/95 text-red-500 opacity-100 shadow-sm"
+                          : "bg-black/35 text-white opacity-0 hover:bg-black/55 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                      }`}
                     >
                       <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
+                        className="h-[18px] w-[18px]"
                         viewBox="0 0 24 24"
+                        fill={photo.is_favorite ? "currentColor" : "none"}
+                        stroke="currentColor"
+                        strokeWidth={photo.is_favorite ? 0 : 1.8}
                         aria-hidden="true"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
+                        <path d="M12 21s-6.716-4.35-9.428-8.06C.665 10.42 1.1 6.9 3.6 5.1c2.02-1.46 4.63-1.02 6.17.86L12 8.2l2.23-2.24c1.54-1.88 4.15-2.32 6.17-.86 2.5 1.8 2.935 5.32 1.028 7.84C18.716 16.65 12 21 12 21z" />
                       </svg>
                     </button>
                   )}
-                  {onDelete && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(photo.id);
-                      }}
-                      className="p-1.5 rounded-lg bg-white/95 text-red-500
-                                opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                                hover:bg-red-50 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 shadow-sm cursor-pointer"
-                      aria-label={`Delete ${photo.title || photo.original_name || "photo"}`}
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              )}
-              {showActions && onSetCover && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSetCover(photo.id);
-                  }}
-                  className="absolute top-2 left-2 p-1.5 rounded-lg bg-white/95 text-ink
-                            opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                            hover:bg-cream-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 shadow-sm cursor-pointer"
-                  aria-label={`Set ${photo.title || photo.original_name || "photo"} as gallery cover`}
-                  title="Set as cover"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M11.48 3.5a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.563.563 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
-                    />
-                  </svg>
-                </button>
+                </>
               )}
 
               {!isBroken && (
                 <div
-                  className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-ink/70 to-transparent
+                  className="absolute bottom-0 left-0 right-0 p-3 pr-12 bg-gradient-to-t from-ink/70 to-transparent
                                 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-b-xl pointer-events-none"
                 >
                   <p className="text-white text-xs truncate font-medium">

@@ -15,6 +15,7 @@ from rest_framework.pagination import PageNumberPagination
 # Dynamic permission routing prevents the Storage Lockout Paradox
 from apps.core.utils import get_user_subscription_metrics
 from apps.core.pagination import StandardResultsSetPagination
+from apps.photos.purge import purge_gallery
 from .models import Gallery
 from .serializers import (
     GalleryListSerializer,
@@ -182,7 +183,7 @@ class GalleryDetailView(APIView):
     """
     GET    /api/v1/galleries/{slug}/  — View detailed settings of a specific gallery.
     PUT    /api/v1/galleries/{slug}/  — Update settings or cover photo parameters.
-    DELETE /api/v1/galleries/{slug}/  — Soft-delete gallery (mark is_active=False) [1.1.2].
+    DELETE /api/v1/galleries/{slug}/  — PERMANENTLY delete the gallery and all its files.
     
     NOTE: Left with IsAuthenticated permission to allow expired users to edit/delete 
     assets to cleanly manage their database footprint and resolve plan limit blocks.
@@ -267,16 +268,13 @@ class GalleryDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Safe Soft-Delete: Never hard-delete client delivery assets [1.1.2].
-        # trashed_at starts the retention-window clock for the scheduled
-        # purge task (apps/galleries/tasks.py::purge_trashed_galleries) —
-        # the gallery stays fully recoverable (files untouched) until that
-        # window passes, and still counts toward the owner's quota in the
-        # meantime (get_user_subscription_metrics no longer excludes it) —
-        # see Gallery.trashed_at's own docstring for why.
-        gallery.is_active = False
-        gallery.trashed_at = timezone.now()
-        gallery.save(update_fields=['is_active', 'trashed_at'])
+        # PERMANENT delete: every row (photos, sets, activity, prepared
+        # downloads...) goes now and every stored file is purged right after
+        # commit (apps/photos/purge.py). Quota is computed from live rows, so
+        # the owner's usage drops immediately. Not recoverable - the UI
+        # confirms first. (The old 30-day trash window is retired; galleries
+        # already in it are still swept by purge_trashed_galleries.)
+        purge_gallery(gallery)
 
         return Response(
             {'message': 'Gallery deleted successfully.'},

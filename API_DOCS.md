@@ -1231,3 +1231,30 @@ Photographer side — `GET /api/v1/galleries/{slug}/favorites/`:
 
 Download Activity rows now also carry `photo_count` (gallery ZIPs), `thumbnail_url`
 (single photos) and the stored attachment `filename`.
+
+## Permanent deletes, covers and photographer favorites (Task 5.1)
+
+**Delete is permanent.** `DELETE /api/v1/galleries/{slug}/` (collection),
+`DELETE /api/v1/photos/photo/{id}/` and `POST /api/v1/photos/{slug}/delete-bulk/` (photos) and
+`DELETE /api/v1/photos/{slug}/sets/{set_id}/` (a set **and its photos**; the last set cannot be deleted;
+the response carries `deleted_photos`) remove the database rows immediately and every stored object
+(original, Download Master, display/medium/thumbnail derivatives, video poster/preview/playback, prepared
+download ZIPs, and for a collection everything under its storage prefix) through ONE idempotent Celery task
+queued with `transaction.on_commit` (retried with backoff; a permanent failure is logged with the object
+names). Storage usage and quota drop at once because they are computed from live rows. `deleted_count`
+counts photos only. Activity: a deleted photo's download history is kept without the photo link; a deleted
+collection's activity is deleted with it. Owner-only; foreign or malformed ids are 404.
+`manage.py purge_orphans [--dry-run] [--delete] [--min-age-minutes N]` lists (default) or removes storage
+objects no row refers to; it only looks under `photographers/*/galleries/` and `download_jobs/` and skips
+recent files.
+
+**Cover.** The first photo to reach READY becomes the cover when there is none (one conditional UPDATE,
+safe under concurrent uploads and Celery retries; a manual cover is never overwritten). Deleting the cover
+falls back to the next READY photo by order, else none. The cover changes manually only via
+`PATCH /api/v1/galleries/{slug}/ {cover_photo}` ("Set as cover").
+
+**Photographer favorites** (the heart on a workspace tile; unrelated to the cover and to visitors' favorites):
+`PUT /api/v1/photos/photo/{id}/favorite/ {"is_favorite": true|false}` (booleans only, idempotent) and
+`GET /api/v1/photos/favorites/all/` (paginated, newest first, each row also has `gallery_slug`,
+`gallery_title`). Photo payloads include `is_favorite`.
+

@@ -255,6 +255,12 @@ class MediaAsset(BaseModel):
     )
     duration = models.PositiveIntegerField(null=True, blank=True)  
     
+    # The PHOTOGRAPHER's own favorite mark (the heart on a workspace tile; the
+    # dashboard's Favorites page lists these across collections). Unrelated to
+    # visitors' favorites (apps/clients Favorite) and to the collection cover.
+    is_favorite = models.BooleanField(default=False)
+    favorited_at = models.DateTimeField(null=True, blank=True)
+
     # OLD video_status is now a unified asset processing status
     processing_status = models.CharField(
         max_length=20,
@@ -275,6 +281,11 @@ class MediaAsset(BaseModel):
             # ordered" query (PhotoSet tabs) the same way idx_gallery_assets_order
             # already covers the unfiltered gallery view.
             models.Index(fields=['photo_set', 'order'], name='idx_set_assets_order'),
+            # The photographer's Favorites page: only the (few) favorited rows are indexed.
+            models.Index(
+                fields=['gallery', 'favorited_at'], name='idx_assets_favorites',
+                condition=models.Q(is_favorite=True),
+            ),
         ]
 
     def __str__(self):
