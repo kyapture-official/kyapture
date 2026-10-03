@@ -1,5 +1,6 @@
 #C:\Users\LENOVO\Desktop\kyapture\backend\apps\galleries\views.py
 import bcrypt
+from apps.users.notification_service import notify_published
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import Count, Q
@@ -236,8 +237,11 @@ class GalleryDetailView(APIView):
         )
         # Captured before save() mutates the instance, to detect a watermark change.
         watermark_before = _watermark_state(gallery)
+        was_published = gallery.is_published
         if serializer.is_valid():
             updated_gallery = serializer.save()
+            if updated_gallery.is_published and not was_published:
+                notify_published(updated_gallery)
             if _watermark_state(updated_gallery) != watermark_before:
                 # Existing READY images keep the derivatives they have until
                 # this background job re-applies the new settings; it never
@@ -414,11 +418,21 @@ class GalleryPublishView(APIView):
             is_active=True
         )
         
-        # Expects a boolean flag 'is_published' in the request payload
+        # Expects a boolean flag 'is_published' in the request payload. A
+        # non-boolean (e.g. the string "false", which is truthy) is rejected
+        # instead of being stored as if it were True.
         is_published = request.data.get('is_published', True)
+        if not isinstance(is_published, bool):
+            return Response(
+                {'error': 'is_published must be true or false.', 'code': 'invalid_is_published'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        was_published = gallery.is_published
         gallery.is_published = is_published
         gallery.save(update_fields=['is_published'])
-        
+        if is_published and not was_published:
+            notify_published(gallery)
+
         return Response({
             'status': 'success', 
             'is_published': gallery.is_published
@@ -579,8 +593,18 @@ class GalleryFavoriteActivityView(APIView):
         # GallerySetPasswordView's ClientSession import above — apps.clients
         # imports apps.galleries.models at module load time, so the reverse
         # import must happen inside the view, not at module scope.
+        from apps.clients.favorite_lists import grouped_lists, resolve_favorite_list, serialize_lists
         from apps.clients.models import Favorite
         from apps.clients.serializers import PhotographerFavoriteSerializer
+
+        paginator = StandardResultsSetPagination()
+
+        # ?group=client -> one row per client's favorite LIST (email, photo
+        # count, created / last updated). The list's client_key is never
+        # returned; a list is addressed by an opaque id.
+        if request.query_params.get('group') == 'client':
+            page = paginator.paginate_queryset(grouped_lists(gallery), request, view=self)
+            return paginator.get_paginated_response(serialize_lists(gallery, page))
 
         favorites = (
             Favorite.objects
@@ -589,7 +613,16 @@ class GalleryFavoriteActivityView(APIView):
             .order_by('-created_at')
         )
 
-        paginator = StandardResultsSetPagination()
+        # ?list=<id> -> the photos in ONE list. The id is resolved only against
+        # THIS gallery's own lists, so a foreign/random/malformed id is a 404.
+        list_id = request.query_params.get('list')
+        if list_id:
+            client_key = resolve_favorite_list(gallery, list_id)
+            if client_key is None:
+                return Response({'error': 'Favorite list not found.', 'code': 'not_found'},
+                                status=status.HTTP_404_NOT_FOUND)
+            favorites = favorites.filter(client_key=client_key)
+
         page = paginator.paginate_queryset(favorites, request, view=self)
         serializer = PhotographerFavoriteSerializer(
             page, many=True, context={'request': request}
@@ -614,17 +647,39 @@ class GalleryDownloadLogsView(APIView):
             Gallery, slug=slug, photographer=request.user, is_active=True
         )
 
+        from django.db.models import Count
         from apps.clients.models import DownloadLog
         from apps.clients.serializers import DownloadLogSerializer
 
         logs = (
             DownloadLog.objects
             .filter(gallery=gallery)
-            .select_related('media_asset', 'photo_set')
+            .select_related('media_asset__photo_set', 'photo_set')
             .order_by('-created_at')
         )
+
+        # Tab filter: ?type=gallery|photo|video. An unknown value is a clear 400,
+        # not silently "everything".
+        requested_type = request.query_params.get('type', '').strip().lower()
+        if requested_type:
+            if requested_type not in DownloadLog.DownloadType.values:
+                return Response(
+                    {'error': "type must be 'gallery', 'photo' or 'video'.", 'code': 'invalid_type'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            logs = logs.filter(download_type=requested_type)
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(logs, request, view=self)
         serializer = DownloadLogSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        response = paginator.get_paginated_response(serializer.data)
+
+        # Per-tab totals for the tab badges, independent of the active filter —
+        # one grouped COUNT over this gallery's logs.
+        counts = {value: 0 for value in DownloadLog.DownloadType.values}
+        for row in (
+            DownloadLog.objects.filter(gallery=gallery).values('download_type').annotate(total=Count('id')).order_by()
+        ):
+            counts[row['download_type']] = row['total']
+        response.data['counts'] = counts
+        return response

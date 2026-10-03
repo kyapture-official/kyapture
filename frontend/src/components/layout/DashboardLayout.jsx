@@ -1,5 +1,6 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/components/layout/DashboardLayout.jsx
 import { useState, useEffect, useRef, useCallback } from 'react'
+import NotificationBell from './NotificationBell'
 import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 
@@ -453,14 +454,8 @@ export default function DashboardLayout() {
             />
           </div>
 
-          {/* Notification Bell */}
-          <button
-            type="button"
-            className="relative p-2 rounded-xl text-muted hover:text-ink hover:bg-cream-100 transition-all cursor-pointer"
-            aria-label="Notifications"
-          >
-            {Icons.Bell}
-          </button>
+          {/* Notification Bell — real, server-backed (see NotificationBell) */}
+          <NotificationBell />
 
           {/* User Avatar Dropdown (Desktop) */}
           <div className="hidden md:block relative" ref={userMenuRef}>

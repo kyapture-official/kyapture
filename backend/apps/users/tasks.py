@@ -51,3 +51,30 @@ def send_notification_email(self, user_id, kind, subject, body):
     except Exception as exc:
         logger.exception("[send_notification_email] %s email for user %s failed", kind, user_id)
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def purge_old_notifications(self):
+    """
+    Keeps the dashboard-bell table small. Notifications are pointers, never the
+    record of anything (activity lives in DownloadLog/Favorite/...), so pruning
+    loses no history: read ones go after 30 days, unread ones after 90.
+    """
+    from datetime import timedelta
+
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from .models import Notification
+
+    now = timezone.now()
+    try:
+        deleted, _ = Notification.objects.filter(
+            Q(is_read=True, updated_at__lt=now - timedelta(days=30))
+            | Q(is_read=False, updated_at__lt=now - timedelta(days=90))
+        ).delete()
+    except Exception as exc:
+        logger.error("[purge_old_notifications] Failed: %s", exc)
+        raise self.retry(exc=exc)
+    logger.info("[purge_old_notifications] Removed %s old notification(s).", deleted)
+    return deleted

@@ -5,6 +5,7 @@ import logging
 from apps.photos.models import MediaAsset
 from apps.core.utils import process_image_pipeline, process_download_master, regenerate_display_derivatives
 from apps.core.watermark import build_watermark_spec, current_signature
+from apps.users.notification_service import notify_processing
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +222,7 @@ def process_photo_asset(self, asset_id):
 
         _auto_assign_cover_if_missing(asset)
         _reconcile_watermark_if_settings_changed(asset, used_signature)
+        notify_processing(asset, ok=True)
 
     except MediaAsset.DoesNotExist:
         logger.warning(f"[Task] MediaAsset {asset_id} not found in database. Aborting task.")
@@ -231,7 +233,11 @@ def process_photo_asset(self, asset_id):
         if asset is not None:
             asset.processing_status = MediaAsset.ProcessingStatus.FAILED
             asset.save(update_fields=['processing_status'])
-            
+            # Tell the photographer only once retries are exhausted — a transient
+            # failure that a retry fixes is not worth a notification.
+            if self.request.retries >= self.max_retries:
+                notify_processing(asset, ok=False)
+
         # Retry task if retry thresholds have not been exceeded
         raise self.retry(exc=exc)
 
@@ -292,6 +298,7 @@ def process_video_asset(self, asset_id):
         logger.info(f"[Task] Successfully transcoded Video {asset_id}: poster + H.264/AAC MP4 playback derivative.")
 
         _auto_assign_cover_if_missing(asset)
+        notify_processing(asset, ok=True)
 
     except MediaAsset.DoesNotExist:
         logger.warning(f"[Task] MediaAsset {asset_id} not found in database. Aborting task.")
@@ -302,6 +309,8 @@ def process_video_asset(self, asset_id):
         if asset is not None:
             asset.processing_status = MediaAsset.ProcessingStatus.FAILED
             asset.save(update_fields=['processing_status'])
-            
+            if self.request.retries >= self.max_retries:
+                notify_processing(asset, ok=False)
+
         # Retry task if retry thresholds have not been exceeded
         raise self.retry(exc=exc)

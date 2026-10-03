@@ -1,6 +1,7 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/galleries/serializers.py
 import bcrypt 
 from rest_framework import serializers
+from apps.core.share import build_gallery_share_url
 from apps.core.watermark import validate_watermark_config
 from apps.users.collection_defaults import apply_collection_defaults
 from apps.subscriptions.entitlements import WATERMARK, require_feature
@@ -115,6 +116,7 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
     is_downloadable = serializers.BooleanField(source='allow_download', read_only=True, default=False)
     has_password = serializers.SerializerMethodField()
     has_download_pin = serializers.SerializerMethodField()
+    share_url = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
 
     owner_username = serializers.CharField(source='photographer.username', read_only=True, default='')
@@ -126,7 +128,7 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
             'id', 'title', 'slug', 'description', 'branding_color',
             'cover_url', 'photo_count', 'is_downloadable',
             'is_active', 'event_date', 'expires_at', 'is_published', 'has_password',
-            'has_download_pin',
+            'has_download_pin', 'share_url',
             'owner_username', 'photographer_username',
             'watermark_enabled', 'design_settings', 'photos',
             'password_hash', 'created_at', 'updated_at'
@@ -177,6 +179,9 @@ class GalleryDetailSerializer(serializers.ModelSerializer):
 
     def get_has_download_pin(self, obj):
         return bool(obj.download_pin_hash)
+
+    def get_share_url(self, obj):
+        return build_gallery_share_url(obj)
 
 class GalleryCreateSerializer(serializers.ModelSerializer):
     """POST /api/v1/galleries/"""

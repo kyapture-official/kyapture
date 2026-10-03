@@ -757,6 +757,96 @@ POST /api/v1/auth/logout-all/ — blacklists every outstanding refresh token for
 account and clears this browser's cookies. Access tokens already issued live up to
 15 minutes.
 
+🔔 Share, Activity & Notifications
+
+Canonical share link — `share_url`
+
+Both the public gallery payload (after any unlock) and the owner's gallery detail
+include `share_url`: `{FRONTEND_URL}/g/{username}/{slug}`. It carries no credential
+of any kind (no unlock/session token, download token or PIN, signed or storage
+URL), so sharing it can never bypass a gallery's own gates — whoever opens it meets
+the normal published / expiry / password checks. A password-protected gallery's
+locked response does not include it.
+
+Download Activity — GET /api/v1/galleries/{slug}/download-logs/?type=gallery|photo|video&page=N
+
+Owner-only (404 for any other account or an unknown slug, 401 unauthenticated).
+`type` filters one tab (an unknown value is 400 `invalid_type`); the response adds
+`counts: { gallery, photo, video }` for every tab. Rows add `scope` ("Entire
+gallery", "Set: X", "Single photo", "Single video"), `media_asset_name`, the
+asset's set in `photo_set_name`, and `pin_state` ("verified" | "not_required").
+
+Favorite Activity — GET /api/v1/galleries/{slug}/favorites/
+
+- `?group=client` — one row per client's favorite LIST: `{ id, email, photo_count,
+  created_at, updated_at }`, most recently updated first. `id` is an opaque HMAC of
+  (gallery, client); the client's key / session token is never returned.
+- `?list=<id>` — the photos in that list. An unknown, foreign or malformed id is 404.
+- no params — the flat per-photo activity (unchanged).
+
+Notifications (the dashboard bell) — all owner-scoped, 401 unauthenticated
+
+- GET  /api/v1/notifications/?page=N&unread=1 → { results, unread_count, count, next, previous }
+- GET  /api/v1/notifications/unread-count/ → { unread_count } (one indexed COUNT; safe to poll)
+- POST /api/v1/notifications/{id}/read/ → { id, is_read, unread_count } (idempotent; a foreign
+  or random id is 404 `not_found`)
+- POST /api/v1/notifications/read-all/ → { marked, unread_count }
+
+A notification is a short pointer to a recent event — `{ id, kind, message, count,
+is_read, timestamp, link, gallery_slug }` — and never the source of truth: the
+durable record stays in Download/Favorite Activity, Billing, and asset status.
+Events: client download, client favorite, payment approved/rejected, gallery
+published, media processing complete / failed (after retries). Bursts coalesce into
+one unread row with a count. Read notifications are pruned after 30 days, unread
+after 90 (daily Celery task).
+
+💳 5. Billing & Subscription App (apps/subscriptions)
+
+List Subscription Plans
+
+GET /api/v1/subscriptions/plans/
+
+Lists available platforms and billing rules.
+
+Authentication: None (authentication_classes = [])
+
+Success Response — 200 OK
+
+[
+  {
+    "id": "0190106a-ef1a-7b3c-b2f2-10e82f1217e9",
+    "name": "Basic",
+    "price": "19.99",
+    "max_galleries": 3,
+    "max_photos_per_gallery": 100,
+    "storage_gb": 5,
+    "storage_bytes": 5368709120
+  }
+]
+
+My Subscription
+
+GET /api/v1/subscriptions/my-subscription/
+
+Retrieves the authenticated photographer's subscription limits and usage metrics.
+
+Authentication: Required (IsAuthenticated)
+
+Success Response — 200 OK
+
+Identical structure to the /stats/ mapping.
+
+Submit Manual Payment
+
+POST /api/v1/subscriptions/payments/
+
+Submits bank, eSewa, or Khalti transaction screenshot receipts for review.
+
+Authentication: Required (IsAuthenticated)
+
+Important: The registered endpoint is /api/v1/subscriptions/payments/, not /api/v1/subscriptions/pay/.
+
+Request Body — multipart/form-data
 
 plan: "0190106a-ef1a-7b3c-b2f2-10e82f1217e9"
 amount: "19.99"

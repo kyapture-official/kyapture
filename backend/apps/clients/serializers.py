@@ -1,6 +1,7 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/clients/serializers.py
 import bcrypt
 from rest_framework import serializers
+from apps.core.share import build_gallery_share_url
 from apps.core.watermark import versioned_url
 
 from apps.galleries.models import Gallery
@@ -181,11 +182,12 @@ class PublicGallerySerializer(serializers.ModelSerializer):
     photo_sets = serializers.SerializerMethodField()
     has_download_pin = serializers.SerializerMethodField()
     design_settings = serializers.SerializerMethodField()
+    share_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Gallery
         fields = [
-            'id', 'title', 'description', 'slug', 'branding_color',
+            'id', 'title', 'description', 'slug', 'branding_color', 'share_url',
             'cover_url', 'event_date', 'design_settings',
             'photographer_name', 'photographer_logo', 'allow_download', 'watermark_enabled',
             'is_password_protected', 'has_download_pin',
@@ -255,6 +257,9 @@ class PublicGallerySerializer(serializers.ModelSerializer):
         if not has_feature(obj.photographer, BRANDING):
             return None
         return request.build_absolute_uri(obj.photographer.logo.url)
+
+    def get_share_url(self, obj):
+        return build_gallery_share_url(obj)
 
     def get_design_settings(self, obj):
         """
@@ -395,10 +400,11 @@ class PhotographerFavoriteSerializer(serializers.ModelSerializer):
     media_asset_id = serializers.UUIDField(source='media_asset.id', read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
     title = serializers.CharField(source='media_asset.title', read_only=True)
+    original_name = serializers.CharField(source='media_asset.original_name', read_only=True)
 
     class Meta:
         model = Favorite
-        fields = ['id', 'media_asset_id', 'title', 'thumbnail_url', 'email', 'created_at']
+        fields = ['id', 'media_asset_id', 'title', 'original_name', 'thumbnail_url', 'email', 'created_at']
         read_only_fields = fields
 
     def get_thumbnail_url(self, obj):
@@ -424,22 +430,52 @@ class DownloadLogSerializer(serializers.ModelSerializer):
     """
     media_asset_id = serializers.SerializerMethodField()
     media_asset_title = serializers.SerializerMethodField()
+    media_asset_name = serializers.SerializerMethodField()
     photo_set_name = serializers.SerializerMethodField()
 
+    scope = serializers.SerializerMethodField()
+    pin_state = serializers.SerializerMethodField()
     class Meta:
         model = DownloadLog
         fields = [
-            'id', 'email', 'download_type', 'resolution', 'pin_verified',
-            'media_asset_id', 'media_asset_title', 'photo_set_name',
+            'id', 'email', 'download_type', 'resolution', 'pin_verified', 'pin_state',
+            'media_asset_id', 'media_asset_title', 'media_asset_name', 'photo_set_name', 'scope',
             'created_at',
         ]
         read_only_fields = fields
+
+    def get_media_asset_name(self, obj):
+        """The uploaded filename of the downloaded photo/video (null for a whole-gallery ZIP)."""
+        if not obj.media_asset_id or not obj.media_asset:
+            return None
+        return obj.media_asset.original_name or None
+
+    def get_scope(self, obj):
+        """What the client actually downloaded, in words."""
+        if obj.download_type == DownloadLog.DownloadType.GALLERY:
+            return f'Set: {obj.photo_set.name}' if obj.photo_set_id and obj.photo_set else 'Entire gallery'
+        return 'Single video' if obj.download_type == DownloadLog.DownloadType.VIDEO else 'Single photo'
+
+    def get_pin_state(self, obj):
+        """'verified' = the client passed the gallery's download PIN; 'not_required' = no PIN applied."""
+        return 'verified' if obj.pin_verified else 'not_required'
 
     def get_media_asset_id(self, obj):
         return str(obj.media_asset_id) if obj.media_asset_id else None
 
     def get_media_asset_title(self, obj):
-        return obj.media_asset.title if obj.media_asset_id and obj.media_asset else None
+        # `title` is optional on uploads and usually blank; the filename is
+        # what lets a photographer recognise which photo was downloaded.
+        if not obj.media_asset_id or not obj.media_asset:
+            return None
+        return obj.media_asset.title or obj.media_asset.original_name or None
 
     def get_photo_set_name(self, obj):
-        return obj.photo_set.name if obj.photo_set_id and obj.photo_set else None
+        # A set-scoped ZIP records its set; a single photo/video belongs to
+        # whichever set the downloaded asset sits in.
+        if obj.photo_set_id and obj.photo_set:
+            return obj.photo_set.name
+        asset = obj.media_asset if obj.media_asset_id else None
+        if asset is not None and asset.photo_set_id and asset.photo_set:
+            return asset.photo_set.name
+        return None

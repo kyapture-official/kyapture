@@ -8,6 +8,7 @@ swallows every error, so an email problem can never fail a client's request.
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from apps.users.notification_service import notify_download_event, notify_favorite_event
 from apps.users.notifications import notify_download, notify_favorite
 
 from .models import DownloadLog, Favorite
@@ -16,10 +17,12 @@ from .models import DownloadLog, Favorite
 @receiver(post_save, sender=DownloadLog)
 def alert_photographer_of_download(sender, instance, created, **kwargs):
     if created:
-        notify_download(instance)
+        notify_download(instance)              # opt-in email
+        notify_download_event(instance)        # dashboard bell
 
 
 @receiver(post_save, sender=Favorite)
 def alert_photographer_of_favorite(sender, instance, created, **kwargs):
     if created:
         notify_favorite(instance)
+        notify_favorite_event(instance)

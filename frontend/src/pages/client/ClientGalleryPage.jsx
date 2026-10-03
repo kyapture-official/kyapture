@@ -7,11 +7,13 @@ import { clientsApi } from "../../api/clientsApi";
 import PublicMasonryGrid from "../../components/shared/PublicMasonryGrid";
 import PhotoLightbox from "../../components/shared/PhotoLightbox";
 import PasswordModal from "../../components/shared/PasswordModal";
+import ShareMenu from "../../components/shared/ShareMenu";
+import { resolveShareUrl } from "../../utils/share";
 import Spinner from "../../components/ui/Spinner";
 import { useToast } from "../../components/ui/Toast";
-import { buildClientGalleryUrl, formatDate } from "../../utils/formatters";
+import { formatDate } from "../../utils/formatters";
 import { resolveDesignSettings } from "../../utils/designSettings";
-import { Download, Heart, Play, Share2 } from "lucide-react";
+import { Download, Heart, Play } from "lucide-react";
 
 /**
  * Safely parses, normalizes, and appends alpha-channel hex codes to custom branding colors.
@@ -62,7 +64,8 @@ export default function ClientGalleryPage() {
   const [isPasswordProtected, setIsPasswordProtected] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState(null);
   const [slideshowAutoplay, setSlideshowAutoplay] = useState(false);
-  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  // The gallery's canonical share link as sent by the server (credential-free).
+  const [shareUrl, setShareUrl] = useState(null);
 
   // The client's identity for favorites: the verified unlock token for a
   // protected gallery, or a per-browser generated id for an open one —
@@ -96,21 +99,6 @@ export default function ClientGalleryPage() {
         selectedIds: [],
       },
     });
-  };
-
-  const copyGalleryLink = async () => {
-    try {
-      await navigator.clipboard.writeText(buildClientGalleryUrl(username, slug));
-      toast("Link copied", "success");
-    } catch {
-      toast("Unable to copy the link.", "error");
-    }
-  };
-
-  const emailGalleryLink = () => {
-    const galleryUrl = buildClientGalleryUrl(username, slug);
-    window.location.href = `mailto:?subject=${encodeURIComponent(galleryTitle)}&body=${encodeURIComponent(galleryUrl)}`;
-    setShareMenuOpen(false);
   };
 
   const openSlideshow = () => {
@@ -182,6 +170,7 @@ export default function ClientGalleryPage() {
     setGalleryTitle(data.title || "");
     setPhotographerName(data.photographer_name || "");
     setPhotographerLogo(data.photographer_logo || null);
+    setShareUrl(data.share_url || null);
     setEventDate(data.event_date || null);
     setCoverUrl(data.cover_url || null);
     setAllowDownload(Boolean(data.allow_download));
@@ -608,16 +597,6 @@ export default function ClientGalleryPage() {
         {/* Background Image */}
         <div className="absolute inset-0">
           {coverSrc ? (
-          {/* The photographer's logo — the server only sends it while their
-              plan includes Branding, so no entitlement logic lives here. */}
-          {photographerLogo && !logoFailed && (
-            <img
-              src={photographerLogo}
-              alt={photographerName ? `${photographerName} logo` : "Photographer logo"}
-              onError={() => setLogoFailed(true)}
-              className="mb-6 max-h-20 max-w-[12rem] object-contain drop-shadow-[0_1px_6px_rgba(0,0,0,0.35)]"
-            />
-          )}
             <img
               src={coverSrc}
               alt=""
@@ -635,6 +614,16 @@ export default function ClientGalleryPage() {
 
         {/* Hero Content */}
         <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 text-center">
+          {/* The photographer's logo — the server only sends it while their
+              plan includes Branding, so no entitlement logic lives here. */}
+          {photographerLogo && !logoFailed && (
+            <img
+              src={photographerLogo}
+              alt={photographerName ? `${photographerName} logo` : "Photographer logo"}
+              onError={() => setLogoFailed(true)}
+              className="mb-6 max-h-20 max-w-[12rem] object-contain drop-shadow-[0_1px_6px_rgba(0,0,0,0.35)]"
+            />
+          )}
           {photographerName && (
             <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-white/50 font-light mb-5">
               {photographerName}
@@ -731,39 +720,7 @@ export default function ClientGalleryPage() {
                   <Download className="h-5 w-5" />
                 </button>
               )}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShareMenuOpen((open) => !open)}
-                  className="rounded p-2 text-slate-600 transition hover:bg-slate-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
-                  aria-label="Share gallery"
-                  title="Share"
-                  aria-expanded={shareMenuOpen}
-                >
-                  <Share2 className="h-5 w-5" />
-                </button>
-                {shareMenuOpen && (
-                  <div className="absolute right-0 top-full z-40 mt-2 w-36 border border-cream-200 bg-white py-1 shadow-card">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void copyGalleryLink();
-                        setShareMenuOpen(false);
-                      }}
-                      className="block w-full px-3 py-2 text-left text-xs text-ink transition hover:bg-slate-100"
-                    >
-                      Copy Link
-                    </button>
-                    <button
-                      type="button"
-                      onClick={emailGalleryLink}
-                      className="block w-full px-3 py-2 text-left text-xs text-ink transition hover:bg-slate-100"
-                    >
-                      Email
-                    </button>
-                  </div>
-                )}
-              </div>
+              <ShareMenu url={resolveShareUrl(shareUrl, username, slug)} title={galleryTitle} />
               {photos.length > 0 && (
                 <button
                   type="button"

@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/total-users', TotalUsersView.as_view(), name='total-users'),
     # Version 1.0 SaaS API Endpoints [1.1.2]
     path('api/v1/auth/', include('apps.users.urls')),
+    path('api/v1/notifications/', include('apps.users.notification_urls')),
     path('api/v1/galleries/', include('apps.galleries.urls')),
     path('api/v1/photos/', include('apps.photos.urls')),
     path('api/v1/public/', include('apps.clients.urls')),

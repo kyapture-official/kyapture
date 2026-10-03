@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.users.notification_service import notify_payment_event
 from apps.users.notifications import notify_payment_reviewed
 from .entitlements import get_feature_entitlements
 from .models import SubscriptionPlan, UserSubscription, ManualPayment
@@ -249,6 +250,7 @@ class AdminPaymentReviewView(APIView):
                     # Email the photographer (if they kept payment alerts on) once
                     # this transaction actually commits.
                     notify_payment_reviewed(payment)
+                    notify_payment_event(payment)
 
                     # Serialize the successful active state to match API specs
                     return Response({
@@ -265,6 +267,7 @@ class AdminPaymentReviewView(APIView):
                         payment.notes = admin_note
                     payment.save(update_fields=['status', 'verified_by', 'notes'])
                     notify_payment_reviewed(payment)
+                    notify_payment_event(payment)
 
                     return Response({
                         "message": "Payment rejected.",

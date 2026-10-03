@@ -89,3 +89,28 @@ export const formatDuration = (seconds) => {
   }
   return `${formattedMins}:${formattedSecs}`
 }
+
+/**
+ * WHAT: Short relative time ("just now", "5 min ago", "3 h ago", "2 d ago"),
+ *       falling back to a date for anything older than a week.
+ */
+export const timeAgo = (value) => {
+  const then = new Date(value).getTime()
+  if (!Number.isFinite(then)) return ''
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000))
+  if (seconds < 45) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours} h ago`
+  const days = Math.round(hours / 24)
+  if (days < 7) return `${days} d ago`
+  return new Date(then).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+/** WHAT: Date plus time, e.g. "Oct 3, 2026, 2:41 PM" — for activity rows where the time matters. */
+export const formatDateTime = (value) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}

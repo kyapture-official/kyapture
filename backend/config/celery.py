@@ -57,6 +57,11 @@ app.conf.beat_schedule = {
         'task': 'apps.clients.tasks.purge_old_download_logs',
         'schedule': crontab(hour=3, minute=30, day_of_week='sunday'),  # weekly
     },
+    # Dashboard-bell housekeeping: notifications are pointers, not history.
+    'purge-old-notifications': {
+        'task': 'apps.users.tasks.purge_old_notifications',
+        'schedule': crontab(hour=4, minute=30),  # daily, off-peak
+    },
     # Phase 4 (DB cleanup, "token blacklist growth") — flushes expired
     # rows from simplejwt's OutstandingToken/BlacklistedToken tables,
     # which otherwise grow forever. See apps/users/tasks.py.

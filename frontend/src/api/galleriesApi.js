@@ -228,9 +228,11 @@ export const galleriesApi = {
    * WHAT: Paginated download activity for one gallery (Phase 3).
    * URI:  GET /api/v1/galleries/{slug}/download-logs/?page=N
    */
-  getDownloadLogs: async (slug, page = 1) => {
+  getDownloadLogs: async (slug, page = 1, type = undefined) => {
+    // `type` = 'gallery' | 'photo' | 'video' filters one tab; the response also
+    // carries `counts` for every tab regardless of the filter.
     const { data } = await api.get(`/galleries/${slug}/download-logs/`, {
-      params: { page },
+      params: { page, ...(type ? { type } : {}) },
     })
     return data
   },
@@ -242,6 +244,29 @@ export const galleriesApi = {
   getFavoriteActivity: async (slug, page = 1) => {
     const { data } = await api.get(`/galleries/${slug}/favorites/`, {
       params: { page },
+    })
+    return data
+  },
+
+  /**
+   * WHAT: One row per client's favorite LIST (email, photo count, created,
+   *       last updated), most recently updated first.
+   * URI:  GET /api/v1/galleries/{slug}/favorites/?group=client&page=N
+   */
+  getFavoriteLists: async (slug, page = 1) => {
+    const { data } = await api.get(`/galleries/${slug}/favorites/`, {
+      params: { group: 'client', page },
+    })
+    return data
+  },
+
+  /**
+   * WHAT: The photos inside ONE favorite list (paginated).
+   * URI:  GET /api/v1/galleries/{slug}/favorites/?list=<id>&page=N
+   */
+  getFavoriteListPhotos: async (slug, listId, page = 1) => {
+    const { data } = await api.get(`/galleries/${slug}/favorites/`, {
+      params: { list: listId, page },
     })
     return data
   },

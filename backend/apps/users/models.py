@@ -4,6 +4,7 @@ import uuid
 import uuid6
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from apps.core.models import BaseModel
 from apps.core.storage import PublicMediaStorage
 from .managers import CustomUserManager
 from django.core.validators import RegexValidator
@@ -139,3 +140,50 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class Notification(BaseModel):
+    """
+    A short, recent event for the photographer's dashboard bell.
+
+    This is NOT the system of record for anything. The durable, inspectable
+    history lives where it always has (DownloadLog, Favorite, ManualPayment,
+    MediaAsset status ...); a Notification is a pointer to "something happened
+    worth a glance", created as a side effect of that event and safe to delete
+    (read ones are pruned by a scheduled task) without losing any history.
+
+    Repeated events of the same kind for the same gallery coalesce into one
+    unread row with a `count` (see apps/users/notification_service.py), so a
+    client downloading 200 photos is one bell entry, not 200.
+    """
+
+    class Kind(models.TextChoices):
+        DOWNLOAD = 'download', 'Download'
+        FAVORITE = 'favorite', 'Favorite'
+        PAYMENT = 'payment', 'Payment'
+        PUBLISHED = 'published', 'Gallery published'
+        PROCESSING_DONE = 'processing_done', 'Processing complete'
+        PROCESSING_FAILED = 'processing_failed', 'Processing failed'
+
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='notifications')
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    # Null for account-level events (payments). The destination link is derived
+    # from kind + this gallery when serialized, never stored.
+    gallery = models.ForeignKey(
+        'galleries.Gallery', null=True, blank=True, on_delete=models.CASCADE, related_name='notifications'
+    )
+    message = models.CharField(max_length=300)
+    count = models.PositiveIntegerField(default=1)
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'notifications'
+        ordering = ['-updated_at']
+        indexes = [
+            # The bell's two hot queries: "unread count" and "newest first".
+            models.Index(fields=['user', 'is_read', '-updated_at'], name='idx_notif_user_read_updated'),
+        ]
+
+    def __str__(self):
+        return f'{self.get_kind_display()} for {self.user_id}: {self.message}'

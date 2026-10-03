@@ -4,24 +4,23 @@ import { useNavigate, useParams } from "react-router-dom";
 import { usePixieset } from "../../context/PixiesetContext";
 import { useAuthStore } from "../../store/authStore";
 import { galleriesApi } from "../../api/galleriesApi";
+import ShareMenu from "../shared/ShareMenu";
+import { copyText, resolveShareUrl } from "../../utils/share";
 
-export default function TopNavBar() {
+export default function TopNavBar({ gallery = null }) {
   const navigate = useNavigate();
   const { id } = useParams();
   const { user } = useAuthStore();
   const { collection, publishCollection, unpublishCollection, addToast } = usePixieset();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [loading, setLoading] = useState(false); 
   const moreRef = useRef(null);
-  const shareRef = useRef(null);
   const statusRef = useRef(null);
 
   useEffect(() => {
     const close = (e) => {
       if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
-      if (shareRef.current && !shareRef.current.contains(e.target)) setShareOpen(false);
       if (statusRef.current && !statusRef.current.contains(e.target)) setStatusOpen(false);
     };
     document.addEventListener("mousedown", close);
@@ -55,25 +54,13 @@ export default function TopNavBar() {
     }
   };
 
-  const handleCopyLink = async () => {
-    try {
-      const publicUrl = `${window.location.origin}/g/${user.username}/${id}`;
-      await navigator.clipboard.writeText(publicUrl);
-      addToast({ message: "Link copied!", type: "success" });
-    } catch {
-      addToast({ message: "Failed to copy link", type: "error" });
-    }
-    setShareOpen(false);
-  };
+  // The canonical, credential-free client link for this collection (server-built).
+  const shareUrl = resolveShareUrl(gallery?.share_url, user?.username, id);
+  const isDraft = gallery ? gallery.is_published === false : collection?.status !== "PUBLISHED";
 
   const handleCopyDirectLink = async () => {
-    try {
-      const publicUrl = `${window.location.origin}/g/${user.username}/${id}`;
-      await navigator.clipboard.writeText(publicUrl);
-      addToast({ message: "Direct link copied!", type: "success" });
-    } catch {
-      addToast({ message: "Failed to copy link", type: "error" });
-    }
+    const ok = await copyText(shareUrl);
+    addToast({ message: ok ? "Direct link copied!" : "Failed to copy link", type: ok ? "success" : "error" });
     setMoreOpen(false);
   };
 
@@ -161,36 +148,18 @@ export default function TopNavBar() {
             Preview
           </button>
 
-          {/* Share Dropdown */}
-          <div className="relative" ref={shareRef}>
-            <button
-              onClick={() => { setShareOpen(!shareOpen); setMoreOpen(false); }}
-              className="flex items-center gap-1.5 px-3 py-2 border border-cream-200 text-ink/80 hover:text-ink bg-surface-light hover:bg-cream-100 text-xs font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
-              </svg>
-              Share
-            </button>
-            {shareOpen && (
-              <div className="absolute top-full mt-1 right-0 bg-surface-light border border-cream-200 rounded-xl shadow-lg py-1 w-48 animate-scale-in z-50">
-                <button
-                  onClick={handleCopyDirectLink}
-                  className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer flex items-center gap-2"
-                >
-                  <svg className="w-3.5 h-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-                  </svg>
-                  Get direct link
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Share: Copy Link / WhatsApp / Facebook / Messenger / Email / native share */}
+          <ShareMenu
+            url={shareUrl}
+            title={gallery?.title || collection?.title}
+            variant="button"
+            note={isDraft ? "This collection is a draft — clients can't open the link until you publish it." : null}
+          />
 
           {/* More Dropdown */}
           <div className="relative" ref={moreRef}>
             <button
-              onClick={() => { setMoreOpen(!moreOpen); setShareOpen(false); }}
+              onClick={() => { setMoreOpen(!moreOpen); }}
               className="p-2 border border-cream-200 text-ink/60 hover:text-ink bg-surface-light hover:bg-cream-100 rounded-xl transition-all cursor-pointer shadow-sm"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
