@@ -21,13 +21,14 @@ RESERVED_GALLERY_SLUGS = {
 }
 
 DOWNLOAD_SIZE_VALUES = {'download', 'web'}
-# The three derivative tiers this app actually generates for the public
-# gallery (apps/core/utils.py::_DISPLAY_TIERS: display/medium/thumbnail).
-# Pixieset's own Web Size picker labels its three options 2048/1024/640 —
-# we show our real numbers (2048/1280/640) instead of mislabeling the
-# 1280px "medium" tier as 1024px (docs/KYAPTURE_AGENT_RULES.md: never
-# invent measurements).
-WEB_PX_VALUES = {2048, 1280, 640}
+# Web Size choices, labelled like Pixieset's picker (2048/1024/640). The
+# pipeline (apps/core/utils.py::_DISPLAY_TIERS) generates display 2048 /
+# medium 1280 / thumbnail 640 WebP tiers, so "1024" is served from the
+# 1280px medium tier: never smaller than the label promises, but not a
+# literal 1024px file. 1280 was this setting's value before 1R.6-B; it is
+# still accepted on input and stored as 1024.
+WEB_PX_VALUES = {2048, 1024, 640}
+LEGACY_WEB_PX = {1280: 1024}
 HIGH_RES_MODES = {'3600', 'original'}
 MAX_ALLOWED_EMAILS = 500
 
@@ -106,8 +107,10 @@ def normalize_download_settings(value, *, instance=None, user=None):
         require_feature(user, ORIGINAL_DOWNLOAD)
 
     px = web_in.get('px', 2048)
-    if px not in WEB_PX_VALUES:
-        raise serializers.ValidationError({'web': {'px': 'px must be 2048, 1280 or 640.'}})
+    if not isinstance(px, bool) and isinstance(px, int):
+        px = LEGACY_WEB_PX.get(px, px)
+    if isinstance(px, bool) or px not in WEB_PX_VALUES:
+        raise serializers.ValidationError({'web': {'px': 'px must be 2048, 1024 or 640.'}})
 
     allowed_sizes = (['download'] if high_res_enabled else []) + (['web'] if web_enabled else [])
 

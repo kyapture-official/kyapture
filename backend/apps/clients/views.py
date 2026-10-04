@@ -138,16 +138,16 @@ def _studio_name(gallery):
 def _resolve_web_source(asset, px):
     """
     Which already-generated derivative backs a 'web' ("Web Size") download
-    at the gallery's configured px tier (2048/1280/640 -- the three real
-    tiers apps/core/utils.py's pipeline already produces; see
-    _DISPLAY_TIERS there). Video has no sized derivative, so 'web' serves
-    the H.264 playback file. Falls back down the chain, then to the
+    at the gallery's configured px tier (2048/1024/640). The pipeline's
+    real tiers are 2048/1280/640 (apps/core/utils.py::_DISPLAY_TIERS), so
+    1024 is served from the 1280px medium tier. Video has no sized
+    derivative, so 'web' serves the H.264 playback file. Falls back down the chain, then to the
     original, rather than ever returning nothing for an asset still
     processing.
     """
     if asset.media_type != MediaAsset.MediaType.IMAGE:
         return getattr(asset, 'playback_file', None) or asset.original_file
-    preferred = {2048: 'display_file', 1280: 'medium_file', 640: 'thumbnail_file'}.get(px, 'display_file')
+    preferred = {2048: 'display_file', 1024: 'medium_file', 640: 'thumbnail_file'}.get(px, 'display_file')
     ordered = [preferred] + [f for f in ('display_file', 'medium_file', 'thumbnail_file') if f != preferred]
     for field_name in ordered:
         field = getattr(asset, field_name, None)

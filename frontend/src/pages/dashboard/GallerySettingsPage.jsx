@@ -1,24 +1,22 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GallerySettingsPage.jsx
 import { useEffect, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
-import { photosApi } from "../../api/photosApi";
 import { useToast } from "../../components/ui/Toast";
 import { useSubscription } from "../../hooks/useSubscription";
-import UpgradePrompt from "../../components/shared/UpgradePrompt";
 import { toDateInputValue } from "../../utils/formatters";
 import WatermarkSettings from "../../components/shared/WatermarkSettings";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
-// The three real derivative tiers the processing pipeline generates
-// (apps/core/utils.py::_DISPLAY_TIERS on the backend) -- these are the
-// honest numbers for this app, not Pixieset's 2048/1024/640 labels.
+// Web Size choices. 1280 was this setting's value before 1R.6-B; the server
+// still reads it as 1024, so a gallery saved earlier loads with 1024 selected.
 const WEB_SIZE_OPTIONS = [
-  { value: 2048, label: "2048px", hint: "Full web resolution" },
-  { value: 1280, label: "1280px", hint: "Medium" },
-  { value: 640, label: "640px", hint: "Small" },
+  { value: 2048, label: "2048px" },
+  { value: 1024, label: "1024px" },
+  { value: 640, label: "640px" },
 ];
+const normalizeWebPx = (px) => (px === 1280 ? 1024 : px);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MIN_LENGTH = 4; // mirrors GallerySetPasswordView
@@ -39,7 +37,7 @@ function SaveIndicator({ state }) {
         state === "error" ? "text-red-600" : "text-muted"
       }`}
     >
-      {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Couldn't save"}
+      {state === "saving" ? "Saving…" : "Couldn't save"}
     </span>
   );
 }
@@ -126,7 +124,6 @@ export default function GallerySettingsPage() {
   const [pinUpdating, setPinUpdating] = useState(false);
   const [pinError, setPinError] = useState("");
   const pinCommitRef = useRef(false);
-  const pinToastRef = useRef(false);
 
   // ── Download tab ─────────────────────────────────────────────────────
   const legacySizes = Array.isArray(initialDownloads.allowed_sizes) ? initialDownloads.allowed_sizes : null;
@@ -143,13 +140,14 @@ export default function GallerySettingsPage() {
   const [webEnabled, setWebEnabled] = useState(
     initialDownloads.web?.enabled ?? (legacySizes ? legacySizes.includes("web") : true),
   );
-  const [webPx, setWebPx] = useState(initialDownloads.web?.px || 2048);
+  const [webPx, setWebPx] = useState(normalizeWebPx(initialDownloads.web?.px) || 2048);
   const [requireDownloadEmail, setRequireDownloadEmail] = useState(
     initialDownloads.require_email !== false,
   );
 
-  const [sets, setSets] = useState([]);
-  const [setsEnabled, setSetsEnabled] = useState(
+  // No control for this on the General tab any more; carried through every
+  // save so an existing "Photo Sets Available for Download" choice is kept.
+  const [setsEnabled] = useState(
     Array.isArray(initialDownloads.sets_enabled) ? initialDownloads.sets_enabled : null,
   );
 
@@ -163,18 +161,10 @@ export default function GallerySettingsPage() {
   const [newEmail, setNewEmail] = useState("");
   const [emailError, setEmailError] = useState("");
 
-  const [downloadSaveState, setDownloadSaveState] = useState("idle"); // idle | saving | saved | error
+  const [downloadSaveState, setDownloadSaveState] = useState("idle"); // idle | saving | error
   const [downloadSaveError, setDownloadSaveError] = useState("");
   const downloadTimerRef = useRef(null);
   const downloadSkipRef = useRef(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    photosApi.listSets(slug).then((data) => {
-      if (!cancelled) setSets(Array.isArray(data) ? data : data?.results || []);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [slug]);
 
   // Locked product decision: the MVP gallery URL is /g/:username/:slug —
   // stable, server-assigned, not photographer-editable (there is no
@@ -227,8 +217,8 @@ export default function GallerySettingsPage() {
   };
 
   // ── Download tab: one consistent autosave pattern. Every toggle/radio/
-  // checkbox/number field below lands here, debounced, with a small
-  // "Saved" indicator -- no more separate Save/Set buttons on this tab. ──
+  // checkbox/number field below lands here, debounced, with a
+  // "Collection updated" toast -- no separate Save/Set buttons. ──
   const saveDownloadSettings = async () => {
     setDownloadSaveState("saving");
     setDownloadSaveError("");
@@ -238,7 +228,7 @@ export default function GallerySettingsPage() {
         ...(gallery.design_settings || {}),
         downloads: {
           require_email: requireDownloadEmail,
-          high_res: { enabled: highResEnabled, mode: highResMode },
+          high_res: { enabled: highResEnabled, mode: effectiveHighResMode },
           web: { enabled: webEnabled, px: webPx },
           sets_enabled: setsEnabled,
           limit_total: clampPositiveIntOrNull(limitTotal),
@@ -252,12 +242,8 @@ export default function GallerySettingsPage() {
       const updated = USE_MOCK_DATA ? { ...gallery, ...payload } : await galleriesApi.updateGallery(slug, payload);
       if (!isMountedRef.current) return;
       setGallery(updated);
-      setDownloadSaveState("saved");
-      if (pinToastRef.current) { pinToastRef.current = false; toast("Collection updated", "success"); }
-      window.clearTimeout(saveDownloadSettings._fadeTimer);
-      saveDownloadSettings._fadeTimer = window.setTimeout(() => {
-        if (isMountedRef.current) setDownloadSaveState((s) => (s === "saved" ? "idle" : s));
-      }, 2000);
+      setDownloadSaveState("idle");
+      toast("Collection updated", "success");
     } catch (err) {
       if (!isMountedRef.current) return;
       const data = err.response?.data;
@@ -369,17 +355,6 @@ export default function GallerySettingsPage() {
     }
   };
 
-  const toggleSet = (setId) => {
-    setSetsEnabled((current) => {
-      const allIds = sets.map((s) => s.id);
-      const activeIds = current === null ? allIds : current;
-      const isOn = activeIds.includes(setId);
-      const next = isOn ? activeIds.filter((id) => id !== setId) : [...activeIds, setId];
-      return next.length === allIds.length ? null : next;
-    });
-  };
-  const isSetEnabled = (setId) => setsEnabled === null || setsEnabled.includes(setId);
-
   const addAllowedEmail = () => {
     const email = newEmail.trim().toLowerCase();
     if (!email) return;
@@ -391,6 +366,9 @@ export default function GallerySettingsPage() {
   const removeAllowedEmail = (email) => setAllowedEmails((prev) => prev.filter((e) => e !== email));
 
   const noSizeSelected = !highResEnabled && !webEnabled;
+  // A Free (or lapsed) account never sees or saves "original": the server
+  // would refuse it, and would serve the 3600px master anyway.
+  const effectiveHighResMode = originalLocked && highResMode === "original" ? "3600" : highResMode;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -591,96 +569,103 @@ export default function GallerySettingsPage() {
 
             {downloadSubTab === "general" && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
-                  <div>
-                    <p className="text-sm font-medium text-ink">Photo Download</p>
-                    <p className="text-xs text-muted mt-0.5">Let clients download photos from this gallery</p>
-                  </div>
-                  <label className="toggle-wrap">
-                    <input type="checkbox" checked={isDownloadable} onChange={(e) => setIsDownloadable(e.target.checked)} />
-                    <span className="toggle-slider" />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-ink">Photo Download</p>
+                  <label className="flex items-center gap-3 text-sm text-ink w-fit cursor-pointer">
+                    <span className="toggle-wrap">
+                      <input
+                        type="checkbox"
+                        aria-label="Photo Download"
+                        checked={isDownloadable}
+                        onChange={(e) => setIsDownloadable(e.target.checked)}
+                      />
+                      <span className="toggle-slider" />
+                    </span>
+                    {isDownloadable ? "On" : "Off"}
                   </label>
+                  <p className="text-xs text-muted">Allow visitors to download photos in your gallery</p>
                 </div>
 
-                <fieldset disabled={!isDownloadable} className="rounded-xl border border-cream-200 p-4 space-y-4 disabled:opacity-60">
-                  <legend className="px-1 text-sm font-medium text-ink">Photo Download Sizes</legend>
+                <div className={`pt-4 border-t border-cream-200 space-y-3 ${isDownloadable ? "" : "opacity-60"}`}>
+                  <p className="text-sm font-medium text-ink">Photo Download Sizes</p>
 
-                  <div className="space-y-2">
-                    <label className="flex cursor-pointer items-center gap-3 text-sm text-ink">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-x-6 gap-y-2">
+                    <label className="flex items-center gap-3 text-sm text-ink sm:w-44 flex-none cursor-pointer">
                       <input
                         type="checkbox"
                         checked={highResEnabled}
+                        disabled={!isDownloadable}
                         onChange={(e) => setHighResEnabled(e.target.checked)}
                         className="accent-brand-green-600"
                       />
-                      <span className="font-medium">High Resolution</span>
+                      High Resolution
                     </label>
-                    {highResEnabled && (
-                      <div className="ml-7 space-y-2">
-                        <label className="flex items-center gap-2 text-sm text-ink">
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pl-7 sm:pl-0">
+                      <span className="inline-flex items-center gap-2 text-sm">
+                        <label className={`inline-flex items-center gap-2 ${originalLocked ? "text-muted cursor-not-allowed" : "text-ink cursor-pointer"}`}>
                           <input
                             type="radio"
                             name="high-res-mode"
-                            checked={highResMode === "3600"}
-                            onChange={() => setHighResMode("3600")}
-                            className="accent-brand-green-600"
-                          />
-                          3600px (Download Master)
-                        </label>
-                        <label
-                          className={`flex items-center gap-2 text-sm ${originalLocked ? "text-muted cursor-not-allowed" : "text-ink cursor-pointer"}`}
-                        >
-                          <input
-                            type="radio"
-                            name="high-res-mode"
-                            checked={highResMode === "original"}
-                            disabled={originalLocked}
+                            checked={effectiveHighResMode === "original"}
+                            disabled={!isDownloadable || !highResEnabled || originalLocked}
                             onChange={() => setHighResMode("original")}
                             className="accent-brand-green-600 disabled:cursor-not-allowed"
                           />
-                          Original{originalLocked ? " — Upgrade required" : ""}
+                          {originalLocked ? "Original — Upgrade required." : "Original"}
                         </label>
                         {originalLocked && (
-                          <UpgradePrompt
-                            className="mt-2"
-                            title="Original downloads are a Pro feature"
-                            message="Offer clients the untouched, full-resolution original with the Pro plan or above."
-                          />
+                          <Link to="/dashboard/billing" className="text-brand-green-700 underline-offset-2 hover:underline">
+                            Upgrade
+                          </Link>
                         )}
-                      </div>
-                    )}
+                      </span>
+                      <label className="inline-flex items-center gap-2 text-sm text-ink cursor-pointer">
+                        <input
+                          type="radio"
+                          name="high-res-mode"
+                          checked={effectiveHighResMode === "3600"}
+                          disabled={!isDownloadable || !highResEnabled}
+                          onChange={() => setHighResMode("3600")}
+                          className="accent-brand-green-600"
+                        />
+                        3600px
+                      </label>
+                    </div>
                   </div>
 
-                  <div className="space-y-2 pt-2 border-t border-cream-200">
-                    <label className="flex cursor-pointer items-center gap-3 text-sm text-ink">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-x-6 gap-y-2">
+                    <label className="flex items-center gap-3 text-sm text-ink sm:w-44 flex-none cursor-pointer">
                       <input
                         type="checkbox"
                         checked={webEnabled}
+                        disabled={!isDownloadable}
                         onChange={(e) => setWebEnabled(e.target.checked)}
                         className="accent-brand-green-600"
                       />
-                      <span className="font-medium">Web Size</span>
+                      Web Size
                     </label>
-                    {webEnabled && (
-                      <div className="ml-7 flex flex-wrap gap-4">
-                        {WEB_SIZE_OPTIONS.map((opt) => (
-                          <label key={opt.value} className="flex items-center gap-2 text-sm text-ink cursor-pointer">
-                            <input
-                              type="radio"
-                              name="web-px"
-                              checked={webPx === opt.value}
-                              onChange={() => setWebPx(opt.value)}
-                              className="accent-brand-green-600"
-                            />
-                            {opt.label}
-                          </label>
-                        ))}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pl-7 sm:pl-0">
+                      {WEB_SIZE_OPTIONS.map((opt) => (
+                        <label key={opt.value} className="inline-flex items-center gap-2 text-sm text-ink cursor-pointer">
+                          <input
+                            type="radio"
+                            name="web-px"
+                            checked={webPx === opt.value}
+                            disabled={!isDownloadable || !webEnabled}
+                            onChange={() => setWebPx(opt.value)}
+                            className="accent-brand-green-600"
+                          />
+                          {opt.label}
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
-                  {noSizeSelected && <p className="text-xs text-red-600">Choose at least one download size.</p>}
-                </fieldset>
+                  {noSizeSelected && (
+                    <p role="alert" className="text-xs text-red-600">Choose at least one download size.</p>
+                  )}
+                  <p className="text-xs text-muted">Allow photos to be downloaded in select sizes.</p>
+                </div>
 
                 {/* Download PIN — independent of the collection password.
                     Off by default; the PIN is typed by the photographer,
@@ -696,7 +681,6 @@ export default function GallerySettingsPage() {
                         checked={pinEnabled}
                         disabled={!isDownloadable}
                         onChange={(e) => {
-                          pinToastRef.current = true;
                           setPinEnabled(e.target.checked);
                           setPinEditing(false); setDownloadPin(""); setPinError("");
                         }}
@@ -746,43 +730,22 @@ export default function GallerySettingsPage() {
                   </p>
                 </div>
 
-                <label className="flex cursor-pointer items-center justify-between rounded-xl border border-cream-200 p-4">
-                  <span>
-                    <span className="block text-sm font-medium text-ink">Require email</span>
-                    <span className="block text-xs text-muted mt-0.5">Record the downloader's email before any download.</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={requireDownloadEmail}
-                    disabled={!isDownloadable}
-                    onChange={(e) => setRequireDownloadEmail(e.target.checked)}
-                    className="h-4 w-4 accent-brand-green-600 disabled:cursor-not-allowed"
-                  />
-                </label>
-                {!requireDownloadEmail && !(pinEnabled && hasDownloadPin) && isDownloadable && (
-                  <p className="text-xs text-amber-700">Frictionless downloads are on: clients will not be asked for email or a PIN.</p>
-                )}
-
-                <fieldset disabled={!isDownloadable} className="rounded-xl border border-cream-200 p-4 space-y-2 disabled:opacity-60">
-                  <legend className="px-1 text-sm font-medium text-ink">Photo Sets Available for Download</legend>
-                  <p className="text-xs text-muted -mt-1 mb-2">Leave every set checked to allow the whole gallery to be downloaded.</p>
-                  {sets.length === 0 ? (
-                    <p className="text-xs text-muted">This gallery has no photo sets yet.</p>
-                  ) : (
-                    sets.map((set) => (
-                      <label key={set.id} className="flex cursor-pointer items-center gap-3 text-sm text-ink">
-                        <input
-                          type="checkbox"
-                          checked={isSetEnabled(set.id)}
-                          onChange={() => toggleSet(set.id)}
-                          className="accent-brand-green-600"
-                        />
-                        {set.name}
-                        <span className="text-xs text-muted">({set.photo_count ?? 0})</span>
-                      </label>
-                    ))
+                <div className="pt-4 border-t border-cream-200 space-y-2">
+                  <label className="flex items-center gap-3 text-sm font-medium text-ink w-fit cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={requireDownloadEmail}
+                      disabled={!isDownloadable}
+                      onChange={(e) => setRequireDownloadEmail(e.target.checked)}
+                      className="accent-brand-green-600 disabled:cursor-not-allowed"
+                    />
+                    Require email
+                  </label>
+                  <p className="text-xs text-muted pl-7">Record the downloader's email before any download.</p>
+                  {!requireDownloadEmail && !(pinEnabled && hasDownloadPin) && isDownloadable && (
+                    <p className="text-xs text-amber-700 pl-7">Frictionless downloads are on: clients will not be asked for email or a PIN.</p>
                   )}
-                </fieldset>
+                </div>
               </div>
             )}
 

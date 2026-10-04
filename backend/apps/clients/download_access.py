@@ -76,7 +76,9 @@ def _effective_downloads(gallery):
     if mode not in ('3600', 'original'):
         mode = '3600'
     px = web.get('px')
-    if px not in (2048, 1280, 640):
+    if px == 1280:  # pre-1R.6-B value for the same medium tier
+        px = 1024
+    if px not in (2048, 1024, 640):
         px = 2048
 
     sets_enabled = raw.get('sets_enabled')
