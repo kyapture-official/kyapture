@@ -90,6 +90,7 @@ from .download_jobs import (
     mark_file_missing,
     size_limit_error,
 )
+from .ready_email import requester_ip
 from .tasks import prepare_download_job
 from .web_size import derive_web_jpeg
 from apps.core.storage import PrivateMediaStorage
@@ -1270,7 +1271,7 @@ class PublicGalleryDownloadView(APIView):
         if job is None:
             job = DownloadJob.objects.create(
                 gallery=gallery, photo_set=photo_set, resolution=resolution, asset_ids=normalized_ids,
-                email=email, pin_verified=pin_verified,
+                email=email, pin_verified=pin_verified, requester_ip=requester_ip(request),
             )
             try:
                 prepare_download_job.delay(str(job.id))

@@ -96,3 +96,15 @@ def purge_expired_download_jobs(self):
     except Exception as exc:
         logger.error(f"[purge_expired_download_jobs] Sweep failed: {exc}")
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=0)
+def send_download_ready_email(self, job_id):
+    """
+    "Your photos are ready" email for one finished DownloadJob (sent at most
+    once per job, rate-limited). A mail problem is logged inside and never
+    raised: it must not touch the job, whose files are already ready.
+    """
+    from .ready_email import deliver_ready_email
+
+    return deliver_ready_email(job_id)

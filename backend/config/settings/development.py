@@ -53,4 +53,10 @@ CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "true")
 # never has to know or care which backend is active: swapping console for
 # django_ses.SESBackend in production.py is a settings-only change, zero
 # lines differ in apps/users/views.py between environments.
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+
+# docker-compose points the web/worker containers at its dev-only Mailpit
+# catcher (SMTP :1025, inbox UI http://localhost:8025) so emails can be read.
+# Nothing is delivered anywhere; production.py never reads these.
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "1025"))

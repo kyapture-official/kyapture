@@ -1,0 +1,17 @@
+{% autoescape off %}DOWNLOAD READY NOTIFICATION
+
+{{ studio|upper }}
+
+Download Ready
+
+Your photos for {{ gallery_title }} are ready for download. Click the link below to download:
+
+DOWNLOAD PHOTOS: {{ download_url }}
+
+You can use this link to download them again at anytime during the next {{ days }} days. After {{ days }} days, you can visit the gallery to request a new download.
+
+--
+{{ studio }}
+{{ gallery_url }}
+Questions? Reply to this email.
+{% endautoescape %}

@@ -274,6 +274,13 @@ DOWNLOAD_FILE_URL_TTL_SECONDS = int(os.getenv("DOWNLOAD_FILE_URL_TTL_SECONDS", s
 # part would pass this many bytes ("...-photo-download-1of3.zip"). A single
 # file bigger than the limit still gets a part of its own.
 DOWNLOAD_ZIP_PART_MAX_BYTES = int(os.getenv("DOWNLOAD_ZIP_PART_MAX_BYTES", str(2 * 1024 ** 3)))  # 2 GB
+# "Your photos are ready" emails: at most this many per hour for one recipient
+# address, one requesting IP and one gallery. Over a limit the email is skipped
+# silently (the visitor still sees the ready page); nothing tells them why.
+DOWNLOAD_READY_EMAIL_WINDOW_SECONDS = int(os.getenv("DOWNLOAD_READY_EMAIL_WINDOW_SECONDS", str(60 * 60)))
+DOWNLOAD_READY_EMAIL_LIMIT_PER_EMAIL = int(os.getenv("DOWNLOAD_READY_EMAIL_LIMIT_PER_EMAIL", "5"))
+DOWNLOAD_READY_EMAIL_LIMIT_PER_IP = int(os.getenv("DOWNLOAD_READY_EMAIL_LIMIT_PER_IP", "10"))
+DOWNLOAD_READY_EMAIL_LIMIT_PER_GALLERY = int(os.getenv("DOWNLOAD_READY_EMAIL_LIMIT_PER_GALLERY", "30"))
 # A job still PREPARING after this long is treated as failed (worker lost).
 DOWNLOAD_JOB_STALE_SECONDS = int(os.getenv("DOWNLOAD_JOB_STALE_SECONDS", str(30 * 60)))
 

@@ -372,6 +372,12 @@ class DownloadJob(BaseModel):
     files = models.JSONField(default=list, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
 
+    # "Your photos are ready" email (apps/clients/ready_email.py): stamped when it
+    # is claimed, so one job mails at most once; requester_ip is the visitor's
+    # address when the job was asked for, kept only to rate-limit those emails.
+    ready_email_sent_at = models.DateTimeField(null=True, blank=True)
+    requester_ip = models.GenericIPAddressField(null=True, blank=True)
+
     # Set when the first file of this job is actually served — one job is one
     # row in the photographer's Download Activity, however often it is re-saved.
     download_log = models.ForeignKey(

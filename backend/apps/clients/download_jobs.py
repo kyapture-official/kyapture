@@ -21,14 +21,13 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.files import File
-from django.core.mail import send_mail
 from django.utils import timezone
 
 from apps.core.storage import PrivateMediaStorage
 from apps.core.utils import sanitize_download_filename
 from apps.photos.models import MediaAsset
 
-from .download_access import issue_job_link_token, web_px_for_gallery
+from .download_access import web_px_for_gallery
 from .models import DownloadJob
 from .web_size import derive_web_jpeg
 
@@ -273,34 +272,16 @@ def run_download_job(job_id):
 
 
 def send_ready_email(job):
-    """
-    "Your photos are ready" mail to the visitor who asked for the download,
-    with the job's own link (a key bound to this one job: the ready page opens
-    without asking for the email or PIN again). Only when an email was captured; a mail problem
-    never affects the job.
-    """
+    """Queues the "photos are ready" email (its own Celery task); a queueing problem never affects the job."""
     if not job.email:
         return False
-    gallery = job.gallery
-    link = (
-        f'{settings.FRONTEND_URL}/g/{gallery.photographer.username}/{gallery.slug}/download/file/{job.id}'
-        f'?key={issue_job_link_token(job, gallery)}'
-    )
+    from .tasks import send_download_ready_email   # tasks imports this module lazily too
+
     try:
-        send_mail(
-            subject=f'Your photos from "{gallery.title}" are ready',
-            message=(
-                f'The download you requested from "{gallery.title}" is ready.\n\n'
-                f'Open this link to download it: {link}\n\n'
-                f'The files stay available for a limited time.'
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[job.email],
-            fail_silently=True,
-        )
+        send_download_ready_email.delay(str(job.id))
         return True
     except Exception:
-        logger.exception('Could not send the download-ready email for job %s', job.id)
+        logger.exception('Could not queue the download-ready email for job %s', job.id)
         return False
 
 

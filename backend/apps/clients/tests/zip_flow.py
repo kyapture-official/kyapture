@@ -50,6 +50,14 @@ class InlineDownloadJobsMixin:
         patcher.start()
         cls.addClassCleanup(patcher.stop)
 
+        # The ready email is its own task: run it inline too (never touches a broker).
+        from apps.clients.ready_email import deliver_ready_email
+        mail_patcher = mock.patch(
+            'apps.clients.tasks.send_download_ready_email.delay', side_effect=lambda job_id: deliver_ready_email(job_id)
+        )
+        mail_patcher.start()
+        cls.addClassCleanup(mail_patcher.stop)
+
 
 def follow_prepared(client, base, prepared, *, download_token=None, unlock_token=None):
     """Poll a 202 prepare response and fetch its first file; pass anything else through."""

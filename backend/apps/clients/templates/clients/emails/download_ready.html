@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>Your Photos for {{ gallery_title }} are ready for download</title>
+<style>
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  body { margin: 0; padding: 0; }
+  a { color: inherit; }
+  @media (prefers-color-scheme: dark) {
+    .em-bg { background-color: #0f0f10 !important; }
+    .em-card { background-color: #161617 !important; }
+    .em-bar { background-color: #232324 !important; }
+    .em-title, .em-studio { color: #f3f3f3 !important; }
+    .em-text { color: #c4c4c6 !important; }
+    .em-muted { color: #9a9a9e !important; }
+    .em-btn { background-color: #4a4a4c !important; }
+    .em-btn a { color: #ffffff !important; }
+  }
+  [data-ogsc] .em-title, [data-ogsc] .em-studio { color: #f3f3f3 !important; }
+  [data-ogsc] .em-text { color: #c4c4c6 !important; }
+  [data-ogsc] .em-muted { color: #9a9a9e !important; }
+  [data-ogsb] .em-bg { background-color: #0f0f10 !important; }
+  [data-ogsb] .em-card { background-color: #161617 !important; }
+  [data-ogsb] .em-bar { background-color: #232324 !important; }
+  [data-ogsb] .em-btn { background-color: #4a4a4c !important; }
+  @media only screen and (max-width: 520px) {
+    .em-pad { padding-left: 24px !important; padding-right: 24px !important; }
+    .em-h1 { font-size: 26px !important; }
+  }
+</style>
+</head>
+<body class="em-bg" style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your photos for {{ gallery_title }} are ready for download.</div>
+<table role="presentation" class="em-bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f4f5;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" class="em-card" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;">
+        <tr>
+          <td class="em-bar em-muted" align="center" style="background-color:#ececee;padding:20px 16px;font-family:Helvetica,Arial,sans-serif;font-size:12px;letter-spacing:.3px;color:#6b6b70;">Download Ready Notification</td>
+        </tr>
+        <tr>
+          <td class="em-pad" align="center" style="padding:40px 48px 0 48px;font-family:Helvetica,Arial,sans-serif;">
+            <div class="em-studio" style="font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#1f1f23;">{{ studio }}</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="em-pad" style="padding:36px 48px 0 48px;font-family:Helvetica,Arial,sans-serif;">
+            <h1 class="em-title em-h1" style="margin:0;font-size:32px;font-weight:300;line-height:1.2;color:#1f1f23;">Download Ready</h1>
+          </td>
+        </tr>
+        <tr>
+          <td class="em-pad em-text" style="padding:16px 48px 0 48px;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.7;color:#4a4a50;">
+            Your photos for {{ gallery_title }} are ready for download. Click the button below to download:
+          </td>
+        </tr>
+        <tr>
+          <td class="em-pad" align="center" style="padding:32px 48px 0 48px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td class="em-btn" align="center" bgcolor="#1f1f23" style="background-color:#1f1f23;">
+                  <a href="{{ download_url }}" target="_blank" style="display:inline-block;padding:16px 36px;font-family:Helvetica,Arial,sans-serif;font-size:14px;letter-spacing:2.5px;text-transform:uppercase;text-decoration:none;color:#ffffff;">Download Photos</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td class="em-pad em-text" style="padding:32px 48px 0 48px;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.7;color:#4a4a50;">
+            You can use this link to download them again at anytime during the next {{ days }} days. After {{ days }} days, you can visit the gallery to request a new download.
+          </td>
+        </tr>
+        <tr>
+          <td class="em-pad em-muted" align="center" style="padding:32px 48px 40px 48px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.8;color:#6b6b70;">
+            {{ studio }}<br>
+            <a href="{{ gallery_url }}" target="_blank" style="color:#6b6b70;text-decoration:none;">{{ gallery_url }}</a><br>
+            Questions? Reply to this email.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
