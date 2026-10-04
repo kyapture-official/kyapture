@@ -76,7 +76,7 @@ export default function DownloadPage() {
       const job = await clientsApi.prepareGalleryDownload(username, slug, {
         downloadToken: access?.token, token: galleryToken, ...choice,
       });
-      navigate(jobPagePath(username, slug, job.job_id, job.link_token), { replace: true });
+      navigate(jobPagePath(username, slug, job.job_id, job.link_token), { replace: true, state: { justPrepared: true } });
     } catch (err) {
       setStarting(false);
       if (err?.code === "download_access_expired") sessionExpired();

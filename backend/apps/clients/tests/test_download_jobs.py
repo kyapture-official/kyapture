@@ -190,7 +190,10 @@ class JobStatusTests(JobBase):
             job_id = self.prepare(token).data["job_id"]
         waiting = self.status_of(job_id, token)
         self.assertEqual(waiting.status_code, 200)
-        self.assertEqual(waiting.data, {"state": "preparing", "files": [], "will_email": True})
+        self.assertEqual(
+            waiting.data,
+            {"state": "preparing", "files": [], "will_email": True, "gallery_title": "Jobs", "studio": "jobowner"},
+        )
 
         run_download_job(job_id)
         ready = self.status_of(job_id, token)
@@ -326,7 +329,9 @@ class SignedFileUrlTests(JobBase):
         self.gallery.save(update_fields=["allow_download"])
         self.assertEqual(self.client.get(url).status_code, 403)
 
-    def test_protected_gallery_file_needs_the_unlock_session_too(self):
+    def test_protected_gallery_file_link_is_its_own_grant_but_a_bare_url_is_not(self):
+        # Task 1R.5-E: the signed file link (minted for a visitor who passed the gallery
+        # password + PIN) works without the unlock session; the file URL without it does not.
         self.gallery.is_password_protected = True
         self.gallery.password_hash = bcrypt.hashpw(b"pw", bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=["is_password_protected", "password_hash"])
@@ -337,7 +342,8 @@ class SignedFileUrlTests(JobBase):
         job_id = self.prepare(token, token=session.access_token).data["job_id"]
         listed = self.status_of(job_id, token, token=session.access_token)
         url = listed.data["files"][0]["url"]
-        self.assertEqual(self.client.get(url).status_code, 401)                       # link alone: no session
+        self.assertEqual(self.client.get(url).status_code, 200)                       # signed link alone
+        self.assertEqual(self.client.get(url.split("?")[0]).status_code, 401)         # bare URL: no grant, no session
         self.assertEqual(self.client.get(f"{url}&token={session.access_token}").status_code, 200)
 
     def test_expired_job_is_gone(self):

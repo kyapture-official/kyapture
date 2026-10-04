@@ -1333,10 +1333,27 @@ class DownloadJobGateMixin:
     the caller got the job id: the gallery must be live and downloadable, a
     password-protected gallery needs its unlock session, and the job must
     belong to this gallery. Returns (gallery, job, error Response | None).
+
+    The one exception to the unlock session is the job's own signed grant
+    (`holds_job_grant`): the emailed ready link and the file links minted from
+    it are bound to ONE job of ONE gallery and were only ever issued to a
+    visitor who had already passed the gallery password and the PIN/email
+    check when the job was created, so they open in a fresh browser or phone
+    without asking for the gallery password again. A grant that is forged,
+    expired or for another job/gallery is NOT an unlock: it reads as a
+    friendly "not found / expired" (see `grant_failure`).
     """
     permission_classes = [AllowAny]
     authentication_classes = []
     throttle_classes = [PublicGalleryBrowseThrottle]
+
+    def holds_job_grant(self, request, job, gallery):
+        """True when the request carries this job's own valid signed grant. Subclasses override."""
+        return False
+
+    def grant_failure(self, request, job, gallery):
+        """The error for a request that presented a grant but not a valid one, or None when none was presented."""
+        return None
 
     def resolve_job(self, request, username, slug, job_id):
         try:
@@ -1355,6 +1372,8 @@ class DownloadJobGateMixin:
                 'Downloads are disabled for this gallery.', 'downloads_disabled', status.HTTP_403_FORBIDDEN,
             )
 
+        job = DownloadJob.objects.filter(id=job_id, gallery=gallery).select_related('photo_set').first()
+
         if gallery.is_password_protected:
             auth_header = request.META.get('HTTP_AUTHORIZATION', '')
             token = (
@@ -1362,15 +1381,18 @@ class DownloadJobGateMixin:
                 if auth_header.startswith('Bearer ')
                 else request.query_params.get('token', '').strip()
             )
-            if not (token and ClientSession.objects.not_expired().filter(
+            unlocked = bool(token) and ClientSession.objects.not_expired().filter(
                 access_token=token, gallery=gallery
-            ).exists()):
+            ).exists()
+            if not unlocked and not (job is not None and self.holds_job_grant(request, job, gallery)):
+                failure = self.grant_failure(request, job, gallery)
+                if failure is not None:
+                    return None, None, failure
                 return None, None, error_response(
                     'An active unlocked session is required to download this gallery.',
                     'session_required', status.HTTP_401_UNAUTHORIZED,
                 )
 
-        job = DownloadJob.objects.filter(id=job_id, gallery=gallery).select_related('photo_set').first()
         if job is None:
             return None, None, error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
         return gallery, job, None
@@ -1393,6 +1415,16 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
     rather than keeping an old URL around.
     """
 
+    def holds_job_grant(self, request, job, gallery):
+        link_token = request.query_params.get('link_token')
+        return link_token is not None and job_link_token_is_valid(link_token, job, gallery)
+
+    def grant_failure(self, request, job, gallery):
+        # A key was presented but is forged / for another job or gallery: the friendly "expired" page.
+        if request.query_params.get('link_token') is None:
+            return None
+        return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
+
     def get(self, request, username, slug, job_id):
         gallery, job, error = self.resolve_job(request, username, slug, job_id)
         if error:
@@ -1411,6 +1443,10 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
             if (authorization.email or None) != (job.email or None):
                 return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
 
+        # Only what the job's own page needs for its header (the signed link may be opened
+        # on a password-protected gallery without the gallery payload): no photos, sets or contacts.
+        page_header = {'gallery_title': gallery.title, 'studio': _studio_name(gallery)}
+
         job = expire_if_stale(job)
         if job.state == DownloadJob.State.READY and not is_expired(job) and not job_files_exist(job):
             # The row says ready but the stored ZIP is gone: say so now, instead of
@@ -1419,7 +1455,7 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
         if job.state == DownloadJob.State.FAILED:
             return Response({
                 'state': 'failed', 'code': job.error_code or 'prepare_failed', 'files': [],
-                'error': JOB_ERROR_MESSAGES.get(job.error_code, JOB_GENERIC_ERROR),
+                'error': JOB_ERROR_MESSAGES.get(job.error_code, JOB_GENERIC_ERROR), **page_header,
             })
         if is_expired(job):
             return Response({
@@ -1427,7 +1463,7 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
                 'error': JOB_ERROR_MESSAGES['download_expired'],
             })
         if job.state == DownloadJob.State.PREPARING:
-            return Response({'state': 'preparing', 'files': [], 'will_email': bool(job.email)})
+            return Response({'state': 'preparing', 'files': [], 'will_email': bool(job.email), **page_header})
 
         files = []
         for index, entry in enumerate(job.files or []):
@@ -1443,6 +1479,7 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
             })
         return Response({
             'state': 'ready', 'files': files, 'expires_at': job.expires_at, 'will_email': bool(job.email),
+            **page_header,
         })
 
 
@@ -1464,6 +1501,22 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
     # link) is sent to the download page, which says "link expired" with a
     # button; API/XHR callers keep getting the JSON error.
     FRIENDLY_CODES = {'download_not_found', 'download_expired', 'download_link_expired', 'file_unavailable'}
+
+    def holds_job_grant(self, request, job, gallery):
+        # The signed file link was minted by the status endpoint for a visitor
+        # who had passed the gates (or held this job's key); it names one file
+        # of this one job and is checked in full again in `serve`.
+        index = self.kwargs.get('index')
+        return index is not None and file_token_state(request.query_params.get('file_token'), job, gallery, index) == 'ok'
+
+    def grant_failure(self, request, job, gallery):
+        if not request.query_params.get('file_token'):
+            return None
+        if job is not None and file_token_state(request.query_params.get('file_token'), job, gallery, self.kwargs.get('index')) == 'expired':
+            return error_response(
+                'This download link has expired. Please try again.', 'download_link_expired', status.HTTP_403_FORBIDDEN,
+            )
+        return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
 
     def get(self, request, username, slug, job_id, index):
         response = self.serve(request, username, slug, job_id, index)

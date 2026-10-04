@@ -142,6 +142,14 @@ export function pollDelay(attempt) {
   return delays[Math.min(Math.max(attempt, 0), delays.length - 1)]
 }
 
+/** A fast job must not flash past "We are preparing your photos": keep that page up at least this long. */
+export const PREPARING_MIN_MS = 1500
+
+/** How much longer the Preparing page should stay after `elapsedMs` on it (0 once the minimum has passed). */
+export function remainingPreparingMs(elapsedMs) {
+  return Math.max(0, PREPARING_MIN_MS - (Number(elapsedMs) || 0))
+}
+
 /** "89.6 MB", "1.9 GB" — never "0 MB" for a real file. */
 export function formatBytes(bytes) {
   const value = Number(bytes) || 0

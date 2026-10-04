@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   allSetIds, blockedMessage, defaultSize, formatBytes, gateIntro, gateNeeds, initialStep, isAllSelected, isBlockedCode,
-  jobPagePath, jobViewFor, photoLabel, pollDelay, scopeModel, selectionRequest, sizeOptions, toggleAll, toggleSet,
+  jobPagePath, jobViewFor, photoLabel, pollDelay, remainingPreparingMs, scopeModel, selectionRequest, sizeOptions, toggleAll, toggleSet,
 } from './downloadFlow.js'
 
 const sets = [
@@ -127,6 +127,14 @@ test('the prepared download lives at its own tokenised page', () => {
 
 test('status polling backs off 2s, 5s, then every 10s', () => {
   assert.deepEqual([0, 1, 2, 3, 40].map(pollDelay), [2000, 5000, 10000, 10000, 10000])
+})
+
+test('the Preparing page stays at least 1.5s so a fast job does not flash past it', () => {
+  assert.equal(remainingPreparingMs(0), 1500)
+  assert.equal(remainingPreparingMs(400), 1100)
+  assert.equal(remainingPreparingMs(1500), 0)
+  assert.equal(remainingPreparingMs(9000), 0)
+  assert.equal(remainingPreparingMs(undefined), 1500)
 })
 
 test('file sizes read like Pixieset: MB with one decimal, GB above 1024 MB', () => {

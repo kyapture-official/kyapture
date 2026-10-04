@@ -1,12 +1,12 @@
 // File Location: frontend/src/pages/client/DownloadFilePage.jsx
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { clientsApi } from "../../api/clientsApi";
 import DownloadExpired from "../../components/client/DownloadExpired";
-import DownloadShell, { LOCKED_MESSAGE, pageButtonClass, useDownloadGallery } from "../../components/client/DownloadShell";
+import DownloadShell, { pageButtonClass, useDownloadGallery } from "../../components/client/DownloadShell";
 import Spinner from "../../components/ui/Spinner";
-import { formatBytes, jobViewFor, pollDelay } from "../../utils/downloadFlow.js";
+import { formatBytes, jobViewFor, pollDelay, remainingPreparingMs } from "../../utils/downloadFlow.js";
 
 const heading = "font-serif text-xl font-bold uppercase tracking-[0.16em] text-ink";
 
@@ -32,17 +32,30 @@ function startBrowserDownload(href) {
  *   expired after the link's 7 days (or once the files were purged).
  *
  * The key in the URL is bound to this one job, so nothing is asked again — no
- * email, no PIN. Everything else (gallery password, limits) is still checked by
- * the server on every request.
+ * email, no PIN and, on a password-protected gallery, no gallery password either
+ * (the key was only ever issued to a visitor who passed it; the page works in a
+ * fresh browser or phone). Without a key the gallery password gate is shown first.
+ * Limits and expiry are still checked by the server on every request.
  */
 export default function DownloadFilePage() {
   const { username, slug, jobId } = useParams();
   const [searchParams] = useSearchParams();
   const linkToken = searchParams.get("key") || "";
+  // Set by Page 2 when it hands over a job it just created: only then does the
+  // Preparing page owe the visitor a minimum on-screen time (an emailed link
+  // opens straight on a finished job and should not pretend to prepare).
+  const justPrepared = Boolean(useLocation().state?.justPrepared);
   const gallery = useDownloadGallery(username, slug);
-  const { view, galleryToken, title } = gallery;
+  const { view, galleryToken } = gallery;
 
   const [job, setJob] = useState({ view: "preparing", files: [], willEmail: false, error: "" });
+  // Header text from the job's own answer, so the page reads right even when the
+  // gallery payload is locked behind the password.
+  const [header, setHeader] = useState({ title: "", studio: "" });
+  const title = header.title || gallery.title;
+  const shellGallery = { ...gallery, title, studio: header.studio || gallery.studio };
+  // The signed key is its own grant: a locked gallery does not stop the status poll.
+  const canPoll = view.status === "ready" || (Boolean(linkToken) && view.status === "locked");
   const [startingFile, setStartingFile] = useState(null);
   const [startedFile, setStartedFile] = useState(null);
   const [fileError, setFileError] = useState("");
@@ -59,9 +72,10 @@ export default function DownloadFilePage() {
 
   // Poll until the job is ready (or gone). A network hiccup just waits for the next round.
   useEffect(() => {
-    if (view.status !== "ready") return undefined;
+    if (!canPoll) return undefined;
     let cancelled = false;
     let attempt = 0;
+    const startedAt = Date.now();
     const check = async () => {
       let next = "retry";
       let data = null;
@@ -72,25 +86,32 @@ export default function DownloadFilePage() {
         next = jobViewFor({ error });
       }
       if (cancelled) return;
+      if (data?.gallery_title) setHeader({ title: data.gallery_title, studio: data.studio || "" });
       if (next === "retry" || next === "preparing") {
         if (next === "preparing" && data) setJob((current) => ({ ...current, view: "preparing", willEmail: Boolean(data.will_email) }));
         timer.current = window.setTimeout(check, pollDelay(attempt));
         attempt += 1;
         return;
       }
-      setJob({
-        view: next,
-        files: data?.files || [],
-        willEmail: Boolean(data?.will_email),
-        error: data?.error || "",
-      });
+      const show = () => {
+        if (cancelled) return;
+        setJob({
+          view: next,
+          files: data?.files || [],
+          willEmail: Boolean(data?.will_email),
+          error: data?.error || "",
+        });
+      };
+      const wait = justPrepared && next === "ready" ? remainingPreparingMs(Date.now() - startedAt) : 0;
+      if (wait > 0) timer.current = window.setTimeout(show, wait);
+      else show();
     };
     check();
     return () => {
       cancelled = true;
       if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [view.status, fetchStatus]);
+  }, [canPoll, fetchStatus, justPrepared]);
 
   // The signed file link is minted fresh at the moment of the click, so an old tab
   // never holds a dead URL; if the download expired meanwhile the page says so.
@@ -123,7 +144,7 @@ export default function DownloadFilePage() {
   };
 
   return (
-    <DownloadShell username={username} slug={slug} gallery={gallery} showBack={job.view !== "expired"}>
+    <DownloadShell username={username} slug={slug} gallery={shellGallery} showBack={job.view !== "expired"} allowLocked={Boolean(linkToken)}>
       {job.view === "preparing" && (
         <div className="space-y-5 pt-16 text-center sm:pt-24" role="status" aria-live="polite">
           <div className="flex justify-center">
@@ -171,7 +192,14 @@ export default function DownloadFilePage() {
       {job.view === "expired" && <DownloadExpired username={username} slug={slug} />}
 
       {job.view === "locked" && (
-        <p role="alert" className="py-10 text-center text-sm leading-relaxed text-muted">{LOCKED_MESSAGE}</p>
+        <div className="space-y-8 text-center" role="alert">
+          <p className="text-[15px] leading-8 text-muted">
+            This link is missing its key. Confirm your details on the download page to get your photos.
+          </p>
+          <div className="flex justify-center">
+            <Link to={`/g/${username}/${slug}/download`} className={pageButtonClass}>Go to download page</Link>
+          </div>
+        </div>
       )}
 
       {job.view === "failed" && (

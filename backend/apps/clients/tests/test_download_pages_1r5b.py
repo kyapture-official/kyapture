@@ -124,15 +124,20 @@ class JobLinkTokenTests(JobBase):
             denied = self.status_by_key(job, bad)
             self.assertEqual((denied.status_code, denied.data['code']), (404, 'download_not_found'), bad)
 
-    def test_the_gallery_password_gate_is_a_separate_gate_and_stays(self):
+    def test_the_gallery_password_gate_does_not_block_the_jobs_own_key(self):
+        # Task 1R.5-E: the key only ever exists for a visitor who already passed the gallery
+        # password (and the PIN/email) when the job was created, so it opens without an unlock
+        # session; without the key the unlock session is still required.
         job, response = self.prepare_job()
         Gallery.objects.filter(pk=self.gallery.pk).update(is_password_protected=True)
         key = response.data['link_token']
-        denied = self.status_by_key(job, key)
+        allowed = self.status_by_key(job, key)
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+        denied = self.client.get(f'{self.base}download-jobs/{job.id}/')
         self.assertEqual((denied.status_code, denied.data['code']), (401, 'session_required'))
         session = ClientSession.objects.create(gallery=self.gallery, email='client@example.com')
-        allowed = self.status_by_key(job, key, token=session.access_token)
-        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+        also_allowed = self.status_by_key(job, key, token=session.access_token)
+        self.assertEqual(also_allowed.status_code, status.HTTP_200_OK)
 
 
 class SevenDayLifetimeTests(JobBase):

@@ -274,14 +274,16 @@ def run_download_job(job_id):
 def send_ready_email(job):
     """Queues the "photos are ready" email (its own Celery task); a queueing problem never affects the job."""
     if not job.email:
+        logger.info('Download-ready email for job %s: skipped (no email)', job.id)
         return False
     from .tasks import send_download_ready_email   # tasks imports this module lazily too
 
     try:
         send_download_ready_email.delay(str(job.id))
+        logger.info('Download-ready email for job %s: queued', job.id)
         return True
     except Exception:
-        logger.exception('Could not queue the download-ready email for job %s', job.id)
+        logger.exception('Download-ready email for job %s: failed (could not queue)', job.id)
         return False
 
 

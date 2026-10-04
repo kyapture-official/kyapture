@@ -60,3 +60,10 @@ EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.Em
 # Nothing is delivered anywhere; production.py never reads these.
 EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "1025"))
+
+# Download-ready email abuse limits (apps/clients/ready_email.py): loosened here
+# so repeated local/QA downloads still produce an email. Production keeps the
+# base.py defaults (5 / 10 / 30 per hour); env vars still win.
+DOWNLOAD_READY_EMAIL_LIMIT_PER_EMAIL = int(os.getenv("DOWNLOAD_READY_EMAIL_LIMIT_PER_EMAIL", "50"))
+DOWNLOAD_READY_EMAIL_LIMIT_PER_IP = int(os.getenv("DOWNLOAD_READY_EMAIL_LIMIT_PER_IP", "100"))
+DOWNLOAD_READY_EMAIL_LIMIT_PER_GALLERY = int(os.getenv("DOWNLOAD_READY_EMAIL_LIMIT_PER_GALLERY", "300"))

@@ -1,0 +1,162 @@
+[
+  {
+    "name": "desktop: gallery asks for the Gallery Password on entry",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: header Download icon -> new tab keeps the unlock (no password prompt)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: Download PIN + email still asked at download",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: Preparing page visible at least ~1.5s",
+    "pass": true,
+    "extra": "(preparing seen at 320ms, ready at 1838ms)"
+  },
+  {
+    "name": "desktop: job page URL carries the signed key",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: ready email arrived in Mailpit with a job link",
+    "pass": true,
+    "extra": "Your Photos for QA 5E Wedding are ready for download"
+  },
+  {
+    "name": "desktop: emailed link is the same Page 4 URL the visitor saw",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop-fresh: signed link opens Page 4 with no gallery password",
+    "pass": true,
+    "extra": "\"QA 5E WEDDING\\n\\nQA5EPHOTOG\\n\\nYOUR PHOTOS ARE READY TO DOWNLOAD\\n\\nClick the link(s) below to start the download.\\n\\nqa-5e-phot\""
+  },
+  {
+    "name": "desktop-fresh: header shows gallery title + studio",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop-fresh: no gallery photos / sets exposed on the page",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop-fresh: ZIP part downloads from the signed link alone",
+    "pass": true,
+    "extra": "qa-5e-photo-download-1of1.zip 433848 bytes"
+  },
+  {
+    "name": "mobile-fresh: signed link opens Page 4 with no gallery password",
+    "pass": true,
+    "extra": "\"QA 5E WEDDING\\n\\nQA5EPHOTOG\\n\\nYOUR PHOTOS ARE READY TO DOWNLOAD\\n\\nClick the link(s) below to start the download.\\n\\nqa-5e-phot\""
+  },
+  {
+    "name": "mobile-fresh: header shows gallery title + studio",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile-fresh: no gallery photos / sets exposed on the page",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile-fresh: ZIP part downloads from the signed link alone",
+    "pass": true,
+    "extra": "qa-5e-photo-download-1of1.zip 433848 bytes"
+  },
+  {
+    "name": "desktop-forged: forged key shows the friendly expired page",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile-forged: forged key shows the friendly expired page",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop-newtab-no-session: no session -> gallery password gate (not a dead end)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop-newtab-no-session: wrong password is refused",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop-newtab-no-session: after the password, the page continues to the download page",
+    "pass": true,
+    "extra": "\"QA 5E WEDDING\\n\\nQA5EPHOTOG\\n\\nDOWNLOAD PHOTOS\\n\\nYour email will be used to notify you when the files are\""
+  },
+  {
+    "name": "mobile-newtab-no-session: no session -> gallery password gate (not a dead end)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile-newtab-no-session: wrong password is refused",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile-newtab-no-session: after the password, the page continues to the download page",
+    "pass": true,
+    "extra": "\"QA 5E WEDDING\\n\\nQA5EPHOTOG\\n\\nDOWNLOAD PHOTOS\\n\\nYour email will be used to notify you when the files are\""
+  },
+  {
+    "name": "desktop-keyless-job-page: no session -> gallery password gate (not a dead end)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop-keyless-job-page: wrong password is refused",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop-keyless-job-page: after the password, the page continues to the download page",
+    "pass": true,
+    "extra": "\"QA 5E WEDDING\\n\\nQA5EPHOTOG\\n\\nThis link is missing its key. Confirm your details on the download page t\""
+  },
+  {
+    "name": "mobile: gallery asks for the Gallery Password on entry",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: header Download icon -> new tab keeps the unlock (no password prompt)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: Download PIN + email still asked at download",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: Preparing page visible at least ~1.5s",
+    "pass": true,
+    "extra": "(preparing seen at 149ms, ready at 1649ms)"
+  },
+  {
+    "name": "mobile: job page URL carries the signed key",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: ready email arrived",
+    "pass": true,
+    "extra": ""
+  }
+]

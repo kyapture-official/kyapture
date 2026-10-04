@@ -105,23 +105,34 @@ def deliver_ready_email(job_id):
     """
     Task body. Returns True when an email was handed to the mail backend, False
     when it was skipped (no recipient, not ready, already sent, rate-limited) or
-    failed. Never raises.
+    failed. Never raises. Every outcome is one INFO line ("Download-ready email
+    for job <id>: sent | skipped (<reason>) | failed"); the "queued" line comes
+    from download_jobs.send_ready_email.
     """
     try:
         job = DownloadJob.objects.select_related('gallery__photographer').filter(pk=job_id).first()
-        if job is None or not job.email or job.state != DownloadJob.State.READY:
+        if job is None:
+            logger.info('Download-ready email for job %s: skipped (job not found)', job_id)
+            return False
+        if not job.email:
+            logger.info('Download-ready email for job %s: skipped (no email)', job.id)
+            return False
+        if job.state != DownloadJob.State.READY:
+            logger.info('Download-ready email for job %s: skipped (job not ready)', job.id)
             return False
         if job.ready_email_sent_at is not None:
+            logger.info('Download-ready email for job %s: skipped (already sent)', job.id)
             return False
         limit = over_limit(job)
         if limit:
-            logger.warning('Download-ready email for job %s skipped: %s rate limit reached', job.id, limit)
+            logger.info('Download-ready email for job %s: skipped (%s rate limit)', job.id, limit)
             return False
         # Claim the job first: of two racing runs only one updates a row.
         claimed = DownloadJob.objects.filter(pk=job.pk, ready_email_sent_at__isnull=True).update(
             ready_email_sent_at=timezone.now()
         )
         if not claimed:
+            logger.info('Download-ready email for job %s: skipped (already sent)', job.id)
             return False
         try:
             mail = build_ready_email(job)
@@ -136,7 +147,8 @@ def deliver_ready_email(job_id):
         except Exception:
             DownloadJob.objects.filter(pk=job.pk).update(ready_email_sent_at=None)
             raise
+        logger.info('Download-ready email for job %s: sent', job.id)
         return True
     except Exception:
-        logger.exception('Could not send the download-ready email for job %s', job_id)
+        logger.exception('Download-ready email for job %s: failed', job_id)
         return False

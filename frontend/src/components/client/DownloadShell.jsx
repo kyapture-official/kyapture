@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { clientsApi } from "../../api/clientsApi";
 import { useClientStore } from "../../store/clientStore";
+import PasswordModal from "../shared/PasswordModal";
 import Spinner from "../ui/Spinner";
 
 /**
@@ -51,6 +52,32 @@ export function useDownloadGallery(username, slug) {
   };
 }
 
+/**
+ * The gallery password gate for a download page opened without an unlock session
+ * (a fresh tab/browser): same unlock call and session as the gallery itself. On
+ * success the session is stored, useDownloadGallery reloads with it and the page
+ * carries on where it was -- never a dead end.
+ */
+function DownloadUnlockGate({ username, slug, sessionKey }) {
+  const setSession = useClientStore((state) => state.setSession);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleUnlock = async (password) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await clientsApi.unlock(username, slug, password);
+      setSession(sessionKey, data.access_token);
+    } catch (err) {
+      setError(err?.message || "Incorrect password. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  return <PasswordModal open onSubmit={handleUnlock} error={error} loading={loading} />;
+}
+
 export const LOCKED_MESSAGE =
   "This gallery is password protected. Open the gallery and enter its password first, then come back to download.";
 
@@ -70,9 +97,13 @@ export const pageButtonClass =
  * `gallery` is the object from useDownloadGallery(); while the gallery itself
  * is not usable (missing / locked / downloads off) its message replaces the page.
  */
-export default function DownloadShell({ username, slug, gallery, children, showBack = true }) {
-  const { view, retry, title, studio } = gallery;
-  const message = GALLERY_MESSAGES[view.status];
+export default function DownloadShell({ username, slug, gallery, children, showBack = true, allowLocked = false }) {
+  const { view, retry, title, studio, sessionKey } = gallery;
+  // A locked gallery shows the password gate -- unless the page holds its own signed
+  // grant (the emailed job link), which needs no gallery password.
+  const locked = view.status === "locked";
+  const showGate = locked && !allowLocked;
+  const message = locked ? null : GALLERY_MESSAGES[view.status];
 
   return (
     <div className="min-h-screen bg-[#FDFBF7]">
@@ -105,7 +136,9 @@ export default function DownloadShell({ username, slug, gallery, children, showB
             </div>
           )}
 
-          {view.status === "ready" && children}
+          {showGate && <DownloadUnlockGate username={username} slug={slug} sessionKey={sessionKey} />}
+
+          {(view.status === "ready" || (locked && allowLocked)) && children}
 
           {showBack && (
             <Link
