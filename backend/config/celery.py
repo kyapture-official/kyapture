@@ -57,10 +57,11 @@ app.conf.beat_schedule = {
         'task': 'apps.clients.tasks.purge_old_download_logs',
         'schedule': crontab(hour=3, minute=30, day_of_week='sunday'),  # weekly
     },
-    # Prepared gallery/set ZIPs: deletes expired jobs and their stored files.
+    # Prepared gallery/set ZIPs: deletes expired jobs (7-day links) and their
+    # stored files. Only download_jobs/ in private storage -- never originals.
     'purge-expired-download-jobs': {
         'task': 'apps.clients.tasks.purge_expired_download_jobs',
-        'schedule': crontab(minute=10),  # hourly
+        'schedule': crontab(hour=3, minute=45),  # once daily, off-peak
     },
     # Dashboard-bell housekeeping: notifications are pointers, not history.
     'purge-old-notifications': {

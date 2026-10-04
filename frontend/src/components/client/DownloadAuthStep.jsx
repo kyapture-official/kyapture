@@ -3,14 +3,12 @@ import { clientsApi } from "../../api/clientsApi";
 import { useClientStore } from "../../store/clientStore";
 import { useVisitorStore } from "../../store/visitorStore";
 import { EMAIL_PATTERN, blockedMessage, gateIntro } from "../../utils/downloadFlow.js";
+import { pageButtonClass } from "./DownloadShell";
 
 const EXPIRY_MARGIN_MS = 60 * 1000;
 
 const inputClass = (hasError) =>
   `block h-12 w-full border bg-white px-4 text-base text-ink placeholder:text-muted/70 focus:border-ink focus:outline-none ${hasError ? "border-red-500" : "border-cream-300"}`;
-
-export const pageButton =
-  "w-full bg-ink px-10 py-3.5 text-xs font-medium uppercase tracking-[0.25em] text-white transition hover:bg-ink/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[11rem]";
 
 /**
  * Download page 1 — "DOWNLOAD PHOTOS". Asks only for what this visitor still
@@ -141,7 +139,7 @@ export default function DownloadAuthStep({
       {errors.form && <p role="alert" className="bg-red-50 px-3 py-2 text-sm text-red-700">{errors.form}</p>}
 
       <div className="flex justify-center">
-        <button type="submit" disabled={submitting} className={pageButton}>{submitting ? "Checking…" : "Next"}</button>
+        <button type="submit" disabled={submitting} className={pageButtonClass}>{submitting ? "Checking…" : "Next"}</button>
       </div>
     </form>
   );

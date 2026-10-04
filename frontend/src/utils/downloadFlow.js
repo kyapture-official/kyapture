@@ -24,10 +24,9 @@ export function gateNeeds({ policy, hasPin, access }) {
   return { needsEmail, needsPin, needsGate: needsEmail || needsPin }
 }
 
-/** Which page comes first: Page 1 when something is owed, else straight to Page 2 (or the resumed job). */
-export function initialStep({ needsGate, resumeJobId }) {
-  if (needsGate) return 'auth'
-  return resumeJobId ? 'job' : 'choose'
+/** Which page comes first: Page 1 when something is owed, else straight to Page 2. */
+export function initialStep({ needsGate }) {
+  return needsGate ? 'auth' : 'choose'
 }
 
 /** Page 1 sentence — the PIN part appears only when a Download PIN is enabled. */
@@ -127,4 +126,46 @@ export function blockedMessage(code, studio, fallback = '') {
     default:
       return fallback
   }
+}
+
+// ── Pages 3 and 4: preparing / ready ────────────────────────────────────────
+
+/** The prepared download's own page. The key is bound to that one job (no email / PIN asked again). */
+export function jobPagePath(username, slug, jobId, key) {
+  const base = `/g/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/download/file/${encodeURIComponent(jobId)}`
+  return key ? `${base}?key=${encodeURIComponent(key)}` : base
+}
+
+/** Wait before status check number `attempt` (0-based, the first check itself is immediate): 2s, 5s, then every 10s. */
+export function pollDelay(attempt) {
+  const delays = [2000, 5000, 10000]
+  return delays[Math.min(Math.max(attempt, 0), delays.length - 1)]
+}
+
+/** "89.6 MB", "1.9 GB" — never "0 MB" for a real file. */
+export function formatBytes(bytes) {
+  const value = Number(bytes) || 0
+  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(value / 1024))} KB`
+}
+
+// A prepared download that is gone (7 days passed, purged, or never was) and one
+// that failed to build are different messages; everything else is a hiccup to retry.
+const EXPIRED_CODES = ['download_expired', 'download_not_found', 'file_missing', 'file_unavailable']
+
+/**
+ * What a status answer or a status error means for the page:
+ *   'preparing' | 'ready' | 'expired' | 'failed' | 'locked' | 'retry'
+ */
+export function jobViewFor({ data = null, error = null } = {}) {
+  if (error) {
+    if (EXPIRED_CODES.includes(error.code)) return 'expired'
+    if (error.status === 401 || error.code === 'session_required') return 'locked'
+    return 'retry'
+  }
+  if (data?.state === 'ready') return 'ready'
+  if (data?.state === 'preparing') return 'preparing'
+  if (data?.state === 'failed') return EXPIRED_CODES.includes(data.code) ? 'expired' : 'failed'
+  return 'retry'
 }

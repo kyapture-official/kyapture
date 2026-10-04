@@ -9,9 +9,8 @@ PRIVATE storage, and handed out through the gated status/file endpoints in
 views.py. Nothing in this module trusts the caller: every gate has already run
 in the view, and the file endpoints re-run them.
 
-Archives are always a single part named
-``{gallery-slug}-photo-download-1of1.zip`` — there is no multi-part splitting
-in the backend, so ``n of m`` is always ``1of1``.
+Archives are named ``{gallery-slug}-photo-download-{n}of{m}.zip``; a download
+whose photos pass DOWNLOAD_ZIP_PART_MAX_BYTES is split into several parts.
 """
 import logging
 import os
@@ -29,7 +28,9 @@ from apps.core.storage import PrivateMediaStorage
 from apps.core.utils import sanitize_download_filename
 from apps.photos.models import MediaAsset
 
+from .download_access import issue_job_link_token, web_px_for_gallery
 from .models import DownloadJob
+from .web_size import derive_web_jpeg
 
 logger = logging.getLogger(__name__)
 
@@ -131,17 +132,45 @@ def _fail(job, code):
     return job
 
 
-def run_download_job(job_id):
+def _source_size(field):
+    try:
+        return int(field.size or 0)
+    except Exception:
+        return 0
+
+
+def _prepare_entry(asset, job, gallery, used_names):
     """
-    Task body: compile the job's ZIP (ZIP_STORED — photos/videos are already
-    compressed), store it privately, mark the job READY. Safe to call twice:
-    only a PREPARING job is ever worked on.
+    What goes into the archive for `asset`: (entry_name, size, data, field).
+    'data' is set for a Web Size image derived at the exact chosen px (see
+    web_size.py); otherwise 'field' is the stored file to stream. None when
+    the asset has no usable source.
     """
-    # Same helpers the single-file endpoint uses, so a ZIP entry is exactly
-    # the bytes (and name) a one-photo download would give. Imported here to
-    # avoid a views <-> download_jobs import cycle.
+    # Imported here to avoid a views <-> download_jobs import cycle.
     from .views import _resolve_zip_source, _unique_zip_entry_name, _zip_entry_base_name
 
+    if job.resolution == 'web' and asset.media_type == MediaAsset.MediaType.IMAGE:
+        data = derive_web_jpeg(asset, web_px_for_gallery(gallery), gallery)
+        if data is not None:
+            stem = os.path.splitext(sanitize_download_filename(asset.original_name, fallback=str(asset.id)))[0]
+            return _unique_zip_entry_name(f'{stem}.jpg', used_names), len(data), data, None
+
+    source_field = _resolve_zip_source(asset, job.resolution, gallery)
+    if not source_field:
+        return None
+    entry_name = _unique_zip_entry_name(_zip_entry_base_name(asset, source_field, job.resolution), used_names)
+    return entry_name, _source_size(source_field), None, source_field
+
+
+def run_download_job(job_id):
+    """
+    Task body: compile the job's ZIP part(s) (ZIP_STORED -- photos/videos are
+    already compressed), store them privately, mark the job READY. A new part
+    starts once the next photo would push the current one past
+    DOWNLOAD_ZIP_PART_MAX_BYTES; the parts are named
+    ``{gallery-slug}-photo-download-{n}of{m}.zip``. Safe to call twice: only a
+    PREPARING job is ever worked on.
+    """
     try:
         job = DownloadJob.objects.select_related('gallery__photographer', 'photo_set').get(id=job_id)
     except DownloadJob.DoesNotExist:
@@ -158,62 +187,86 @@ def run_download_job(job_id):
         _fail(job, 'download_too_large')
         return job.state
 
-    temp_fd, temp_path = tempfile.mkstemp(suffix='.zip')
-    os.close(temp_fd)
-    stored_name = None
+    part_limit = max(1, int(settings.DOWNLOAD_ZIP_PART_MAX_BYTES))
+    parts = []          # {'path': temp file, 'count': photos, 'bytes': payload bytes}
+    stored_names = []
     storage = PrivateMediaStorage()
+    archive = None
     try:
         used_names = set()
-        added = 0
-        with zipfile.ZipFile(temp_path, 'w', compression=zipfile.ZIP_STORED) as archive:
-            for asset in assets:
-                source_field = _resolve_zip_source(asset, job.resolution, gallery)
-                if not source_field:
-                    continue
-                entry_name = _unique_zip_entry_name(
-                    _zip_entry_base_name(asset, source_field, job.resolution), used_names
-                )
-                try:
+
+        def start_part():
+            fd, path = tempfile.mkstemp(suffix='.zip')
+            os.close(fd)
+            parts.append({'path': path, 'count': 0, 'bytes': 0})
+            return zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_STORED)
+
+        for asset in assets:
+            prepared = _prepare_entry(asset, job, gallery, used_names)
+            if prepared is None:
+                continue
+            entry_name, size, data, source_field = prepared
+            if archive is None or (parts[-1]['count'] and parts[-1]['bytes'] + size > part_limit):
+                if archive is not None:
+                    archive.close()
+                archive = start_part()
+            zinfo = zipfile.ZipInfo(filename=entry_name, date_time=time.localtime(time.time())[:6])
+            zinfo.compress_type = zipfile.ZIP_STORED
+            try:
+                if data is not None:
+                    archive.writestr(zinfo, data)
+                else:
                     source_field.open('rb')
-                    zinfo = zipfile.ZipInfo(filename=entry_name, date_time=time.localtime(time.time())[:6])
-                    zinfo.compress_type = zipfile.ZIP_STORED
                     with archive.open(zinfo, 'w', force_zip64=True) as destination:
                         for chunk in source_field.chunks(chunk_size=1024 * 1024):
                             destination.write(chunk)
-                    added += 1
-                except Exception:
-                    logger.exception('Failed to add asset %s to download job %s', asset.id, job.id)
-                    used_names.discard(entry_name.lower())
-                finally:
+                parts[-1]['count'] += 1
+                parts[-1]['bytes'] += size
+            except Exception:
+                logger.exception('Failed to add asset %s to download job %s', asset.id, job.id)
+                used_names.discard(entry_name.lower())
+            finally:
+                if source_field is not None:
                     source_field.close()
+        if archive is not None:
+            archive.close()
+            archive = None
 
-        if not added:
+        parts = [part for part in parts if part['count']]
+        if not parts:
             _fail(job, 'no_media')
             return job.state
 
-        name = archive_filename(gallery)
-        with open(temp_path, 'rb') as handle:
-            stored_name = storage.save(f'{STORAGE_PREFIX}/{job.id}/{name}', File(handle))
+        files = []
+        for number, part in enumerate(parts, start=1):
+            name = archive_filename(gallery, number, len(parts))
+            with open(part['path'], 'rb') as handle:
+                stored_name = storage.save(f'{STORAGE_PREFIX}/{job.id}/{name}', File(handle))
+            stored_names.append(stored_name)
+            files.append({
+                'name': name, 'size_bytes': os.path.getsize(part['path']), 'storage_path': stored_name,
+                'photo_count': part['count'],
+            })
 
-        job.files = [{
-            'name': name, 'size_bytes': os.path.getsize(temp_path), 'storage_path': stored_name,
-            'photo_count': added,
-        }]
+        job.files = files
         job.state = DownloadJob.State.READY
         job.error_code = ''
         job.expires_at = timezone.now() + timedelta(seconds=settings.DOWNLOAD_JOB_TTL_SECONDS)
         job.save(update_fields=['files', 'state', 'error_code', 'expires_at', 'updated_at'])
     except Exception:
         logger.exception('Download job %s failed', job.id)
-        if stored_name:
+        for stored_name in stored_names:
             _delete_stored(storage, stored_name)
         _fail(job, 'prepare_failed')
         return job.state
     finally:
-        try:
-            os.remove(temp_path)
-        except OSError:
-            pass
+        if archive is not None:
+            archive.close()
+        for part in parts:
+            try:
+                os.remove(part['path'])
+            except OSError:
+                pass
 
     send_ready_email(job)
     return job.state
@@ -222,15 +275,16 @@ def run_download_job(job_id):
 def send_ready_email(job):
     """
     "Your photos are ready" mail to the visitor who asked for the download,
-    with a link back to the standalone download page (which re-verifies them
-    and resumes this job). Only when an email was captured; a mail problem
+    with the job's own link (a key bound to this one job: the ready page opens
+    without asking for the email or PIN again). Only when an email was captured; a mail problem
     never affects the job.
     """
     if not job.email:
         return False
     gallery = job.gallery
     link = (
-        f'{settings.FRONTEND_URL}/g/{gallery.photographer.username}/{gallery.slug}/download?job={job.id}'
+        f'{settings.FRONTEND_URL}/g/{gallery.photographer.username}/{gallery.slug}/download/file/{job.id}'
+        f'?key={issue_job_link_token(job, gallery)}'
     )
     try:
         send_mail(

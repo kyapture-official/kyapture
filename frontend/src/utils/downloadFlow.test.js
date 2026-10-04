@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  allSetIds, blockedMessage, defaultSize, gateIntro, gateNeeds, initialStep, isAllSelected, isBlockedCode, photoLabel,
-  scopeModel, selectionRequest, sizeOptions, toggleAll, toggleSet,
+  allSetIds, blockedMessage, defaultSize, formatBytes, gateIntro, gateNeeds, initialStep, isAllSelected, isBlockedCode,
+  jobPagePath, jobViewFor, photoLabel, pollDelay, scopeModel, selectionRequest, sizeOptions, toggleAll, toggleSet,
 } from './downloadFlow.js'
 
 const sets = [
@@ -26,16 +26,12 @@ test('skip logic: an email requirement, a PIN, or both put Page 1 first', () => 
     { needsEmail: false, needsPin: true, needsGate: true })
   assert.equal(gateNeeds({ policy: { require_email: true }, hasPin: true, access: null }).needsGate, true)
   assert.equal(initialStep({ needsGate: true }), 'auth')
+  assert.equal(initialStep({ needsGate: false }), 'choose')
 })
 
 test('skip logic: access already earned this session skips Page 1; an expired token does not', () => {
   assert.equal(gateNeeds({ policy: { require_email: true }, hasPin: true, access: fresh }).needsGate, false)
   assert.equal(gateNeeds({ policy: { require_email: true }, hasPin: true, access: stale }).needsGate, true)
-})
-
-test('an emailed ?job link skips Page 2 once nothing is owed', () => {
-  assert.equal(initialStep({ needsGate: false, resumeJobId: 'j1' }), 'job')
-  assert.equal(initialStep({ needsGate: true, resumeJobId: 'j1' }), 'auth')
 })
 
 test('Page 1 text: the PIN sentence appears only when a PIN is enabled and names the studio', () => {
@@ -122,4 +118,33 @@ test('photo counts read naturally', () => {
   assert.equal(photoLabel(1), '1 photo')
   assert.equal(photoLabel(6), '6 photos')
   assert.equal(photoLabel(0), '0 photos')
+})
+
+test('the prepared download lives at its own tokenised page', () => {
+  assert.equal(jobPagePath('kb789', 'hari-and-devi', 'j1', 'k.y'), '/g/kb789/hari-and-devi/download/file/j1?key=k.y')
+  assert.equal(jobPagePath('u', 's', 'j1'), '/g/u/s/download/file/j1')
+})
+
+test('status polling backs off 2s, 5s, then every 10s', () => {
+  assert.deepEqual([0, 1, 2, 3, 40].map(pollDelay), [2000, 5000, 10000, 10000, 10000])
+})
+
+test('file sizes read like Pixieset: MB with one decimal, GB above 1024 MB', () => {
+  assert.equal(formatBytes(89.6 * 1024 * 1024), '89.6 MB')
+  assert.equal(formatBytes(1.9 * 1024 ** 3), '1.9 GB')
+  assert.equal(formatBytes(2048), '2 KB')
+  assert.equal(formatBytes(10), '1 KB')
+})
+
+test('page 3/4 view: preparing, ready, expired (7 days / purged / unknown key), failed, locked, retry', () => {
+  assert.equal(jobViewFor({ data: { state: 'preparing' } }), 'preparing')
+  assert.equal(jobViewFor({ data: { state: 'ready', files: [] } }), 'ready')
+  assert.equal(jobViewFor({ data: { state: 'failed', code: 'download_expired' } }), 'expired')
+  assert.equal(jobViewFor({ data: { state: 'failed', code: 'file_missing' } }), 'expired')
+  assert.equal(jobViewFor({ data: { state: 'failed', code: 'prepare_failed' } }), 'failed')
+  assert.equal(jobViewFor({ error: { status: 404, code: 'download_not_found' } }), 'expired')
+  assert.equal(jobViewFor({ error: { status: 410, code: 'download_expired' } }), 'expired')
+  assert.equal(jobViewFor({ error: { status: 401, code: 'session_required' } }), 'locked')
+  assert.equal(jobViewFor({ error: { status: 503 } }), 'retry')
+  assert.equal(jobViewFor({ error: { name: 'Error' } }), 'retry')
 })

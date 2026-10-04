@@ -250,7 +250,8 @@ export const clientsApi = {
    * @param {string} [opts.resolution] - 'web' | 'download'
    * @param {string} [opts.setId] - limit the ZIP to this photo set
    * @param {string[]} [opts.setIds] - limit the ZIP to these photo sets (two or more)
-   * @returns {Promise<{ job_id: string, state: string, status_url: string }>}
+   * @returns {Promise<{ job_id: string, link_token: string, state: string, status_url: string }>}
+   *   link_token is the key for the job's own page (/download/file/{job_id}?key=...)
    */
   prepareGalleryDownload: async (username, slug, opts = {}) => {
     const path = `${buildGalleryPath(username, slug)}download/`
@@ -285,15 +286,18 @@ export const clientsApi = {
    * so fetch the status again right before starting the browser download
    * instead of keeping an old URL around.
    *
-   * @returns {Promise<{ state: 'preparing'|'ready'|'failed', files: Array<{name: string, size_bytes: number, url: string}>, error?: string, code?: string }>}
+   * Authorized by `linkToken` (the key in the job's page URL, bound to that one
+   * job: no email / PIN asked again).
+   *
+   * @returns {Promise<{ state: 'preparing'|'ready'|'failed', files: Array<{name: string, size_bytes: number, url: string}>, will_email?: boolean, error?: string, code?: string }>}
    */
   getDownloadJob: async (username, slug, jobId, opts = {}) => {
     assertNonEmptyString(jobId, 'jobId')
     const path = `${buildGalleryPath(username, slug)}download-jobs/${encodeURIComponent(jobId)}/`
-    const { downloadToken, token, signal } = opts
+    const { linkToken, token, signal } = opts
 
     const params = {}
-    if (downloadToken) params.download_token = downloadToken
+    if (linkToken) params.link_token = linkToken
     const config = { signal, params }
     if (token) config.headers = { Authorization: `Bearer ${token}` }
 

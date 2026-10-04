@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 DOWNLOAD_TOKEN_SALT = 'kyapture.clients.download-access'
 FILE_TOKEN_SALT = 'kyapture.clients.download-job-file'
+JOB_LINK_SALT = 'kyapture.clients.download-job-link'
 DEFAULT_DOWNLOAD_ACCESS_TTL_SECONDS = 2 * 60 * 60
 DOWNLOAD_RESOLUTIONS = ('download', 'web')
 
@@ -385,6 +386,32 @@ def read_download_token(token, gallery):
     return payload
 
 
+def issue_job_link_token(job, gallery):
+    """
+    The key in the "your photos are ready" link (/download/file/{job}?key=...).
+    Bound to ONE job of ONE gallery and nothing else: it carries no email and
+    no PIN, never authorizes another job, and is only ever handed out by the
+    authorized prepare POST (or the ready email built from that job). It does
+    not expire on its own -- the job does (job.expires_at, then the purge).
+    """
+    return signing.dumps({'j': str(job.id), 'g': str(gallery.id)}, salt=JOB_LINK_SALT, compress=True)
+
+
+def job_link_token_is_valid(token, job, gallery):
+    token = as_clean_str(token)
+    if not token:
+        return False
+    try:
+        payload = signing.loads(token, salt=JOB_LINK_SALT)
+    except signing.BadSignature:
+        return False
+    return (
+        isinstance(payload, dict)
+        and payload.get('j') == str(job.id)
+        and payload.get('g') == str(gallery.id)
+    )
+
+
 def download_file_url_ttl():
     return int(getattr(settings, 'DOWNLOAD_FILE_URL_TTL_SECONDS', 600))
 
@@ -397,8 +424,8 @@ def issue_file_token(job, gallery, index):
     presented a valid download access token, so it is tied to that verified
     visitor: it carries the job, the gallery, the file index, the verified
     email and the PIN fingerprint, and the file endpoint re-checks all of
-    them. It expires with the job (DOWNLOAD_FILE_URL_TTL_SECONDS, 24h by
-    default) and works for that one job only.
+    them. It expires with the job (DOWNLOAD_FILE_URL_TTL_SECONDS, 7 days
+    by default) and works for that one job only.
     """
     return signing.dumps(
         {

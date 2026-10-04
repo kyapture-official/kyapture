@@ -262,14 +262,18 @@ CLIENT_SESSION_TTL_DAYS = int(os.getenv("CLIENT_SESSION_TTL_DAYS", "30"))
 # is additionally invalidated the moment the gallery's PIN changes.
 DOWNLOAD_ACCESS_TTL_SECONDS = int(os.getenv("DOWNLOAD_ACCESS_TTL_SECONDS", str(2 * 60 * 60)))
 
-# Prepared (background) gallery/set ZIPs. A READY job — and the ZIP stored in
-# private storage for it — lives this long ("Link valid for 24 hours"), then
-# the purge task deletes both. Its file link works, repeatedly, until then.
-DOWNLOAD_JOB_TTL_SECONDS = int(os.getenv("DOWNLOAD_JOB_TTL_SECONDS", str(24 * 60 * 60)))
+# Prepared (background) gallery/set ZIPs. A READY job — and the ZIPs stored in
+# private storage for it — lives this long (7 days), then the daily purge task
+# deletes both. Its file links work, repeatedly, until then.
+DOWNLOAD_JOB_TTL_SECONDS = int(os.getenv("DOWNLOAD_JOB_TTL_SECONDS", str(7 * 24 * 60 * 60)))
 # How long one signed file URL (handed out by the job-status endpoint) works.
 # Defaults to the job's own lifetime; it is bound to ONE job, so it can never
 # outlive or reach beyond the download it was issued for.
-DOWNLOAD_FILE_URL_TTL_SECONDS = int(os.getenv("DOWNLOAD_FILE_URL_TTL_SECONDS", str(24 * 60 * 60)))
+DOWNLOAD_FILE_URL_TTL_SECONDS = int(os.getenv("DOWNLOAD_FILE_URL_TTL_SECONDS", str(7 * 24 * 60 * 60)))
+# A prepared download is split into several ZIP parts once the photos in one
+# part would pass this many bytes ("...-photo-download-1of3.zip"). A single
+# file bigger than the limit still gets a part of its own.
+DOWNLOAD_ZIP_PART_MAX_BYTES = int(os.getenv("DOWNLOAD_ZIP_PART_MAX_BYTES", str(2 * 1024 ** 3)))  # 2 GB
 # A job still PREPARING after this long is treated as failed (worker lost).
 DOWNLOAD_JOB_STALE_SECONDS = int(os.getenv("DOWNLOAD_JOB_STALE_SECONDS", str(30 * 60)))
 

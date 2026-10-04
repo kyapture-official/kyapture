@@ -26,6 +26,7 @@ import ActivitiesWorkspace from "./pages/dashboard/ActivitiesWorkspace";
 import ClientHomePage from "./pages/client/ClientHomePage";
 import ClientGalleryPage from "./pages/client/ClientGalleryPage";
 import DownloadPage from "./pages/client/DownloadPage";
+import DownloadFilePage from "./pages/client/DownloadFilePage";
 // Public
 import PricingPage from "./pages/subscription/PricingPage";
 import LandingPage from "./pages/LandingPage";
@@ -100,6 +101,10 @@ export default function App() {
           <Route
             path="/g/:username/:slug/download"
             element={<DownloadPage />}
+          />
+          <Route
+            path="/g/:username/:slug/download/file/:jobId"
+            element={<DownloadFilePage />}
           />
 
           {/* Catch-all */}

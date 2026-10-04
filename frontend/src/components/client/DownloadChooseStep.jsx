@@ -3,7 +3,7 @@ import {
   allSetIds, defaultSize, isAllSelected, photoLabel, scopeModel, selectionRequest, sizeOptions,
   toggleAll, toggleSet,
 } from "../../utils/downloadFlow.js";
-import { pageButton } from "./DownloadAuthStep";
+import { pageButtonClass } from "./DownloadShell";
 
 const sectionHeading = "mb-4 font-serif text-xl text-ink";
 const checkClass = "h-5 w-5 shrink-0 cursor-pointer accent-ink";
@@ -14,7 +14,7 @@ const checkClass = "h-5 w-5 shrink-0 cursor-pointer accent-ink";
  * enabled in Download > Advanced, only the enabled sizes. The only destination is
  * this device. START DOWNLOAD hands the choice up as { resolution, setId? | setIds? }.
  */
-export default function DownloadChooseStep({ policy, photoSets, photoCount, studio, notice = "", onStart }) {
+export default function DownloadChooseStep({ policy, photoSets, photoCount, studio, notice = "", starting = false, onStart }) {
   const uid = useId();
   const model = useMemo(() => scopeModel({ policy, photoSets, photoCount }), [policy, photoSets, photoCount]);
   const sizes = useMemo(() => sizeOptions(policy), [policy]);
@@ -101,7 +101,7 @@ export default function DownloadChooseStep({ policy, photoSets, photoCount, stud
       )}
 
       <div className="flex justify-center">
-        <button type="submit" disabled={!request || limitReached} className={pageButton}>Start Download</button>
+        <button type="submit" disabled={!request || limitReached || starting} className={pageButtonClass}>{starting ? "Starting…" : "Start Download"}</button>
       </div>
     </form>
   );

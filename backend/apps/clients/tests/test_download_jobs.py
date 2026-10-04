@@ -151,7 +151,7 @@ class JobCreatedOnlyAfterAuthorizationTests(JobBase):
         token = self.token()
         response = self.prepare(token)
         self.assertEqual(response.status_code, 202, response.data)
-        self.assertEqual(set(response.data), {"job_id", "state", "status_url"})
+        self.assertEqual(set(response.data), {"job_id", "link_token", "state", "status_url"})
         self.assertEqual(DownloadJob.objects.count(), 1)
         job = DownloadJob.objects.get()
         self.assertEqual((job.gallery_id, job.email, job.pin_verified), (self.gallery.id, "client@example.com", True))
@@ -190,7 +190,7 @@ class JobStatusTests(JobBase):
             job_id = self.prepare(token).data["job_id"]
         waiting = self.status_of(job_id, token)
         self.assertEqual(waiting.status_code, 200)
-        self.assertEqual(waiting.data, {"state": "preparing", "files": []})
+        self.assertEqual(waiting.data, {"state": "preparing", "files": [], "will_email": True})
 
         run_download_job(job_id)
         ready = self.status_of(job_id, token)
@@ -347,7 +347,7 @@ class SignedFileUrlTests(JobBase):
 
 
 class ReadyLinkLifetimeTests(JobBase):
-    """A ready download keeps working until it expires (24h) - the 1R.3 regression."""
+    """A ready download keeps working until it expires (7 days) - the 1R.3 regression."""
 
     def ready(self):
         token = self.token()
@@ -355,10 +355,10 @@ class ReadyLinkLifetimeTests(JobBase):
         job = DownloadJob.objects.get(pk=job_id)
         return token, job, self.status_of(job_id, token).data["files"][0]["url"]
 
-    def test_a_ready_job_lives_for_24_hours_and_its_stored_file_exists(self):
+    def test_a_ready_job_lives_for_7_days_and_its_stored_file_exists(self):
         _, job, _ = self.ready()
         lifetime = (job.expires_at - job.created_at).total_seconds()
-        self.assertAlmostEqual(lifetime, 24 * 3600, delta=120)
+        self.assertAlmostEqual(lifetime, 7 * 24 * 3600, delta=120)
         self.assertTrue(PrivateMediaStorage().exists(job.files[0]["storage_path"]))
 
     def test_the_link_downloads_repeatedly_not_just_once(self):
@@ -368,11 +368,11 @@ class ReadyLinkLifetimeTests(JobBase):
             self.assertEqual(response.status_code, 200)
             self.assertGreater(len(b"".join(response.streaming_content)), 100)
 
-    def test_the_signed_link_is_still_good_23_hours_later_and_dead_after_the_job_expires(self):
+    def test_the_signed_link_is_still_good_6_days_later_and_dead_after_the_job_expires(self):
         _, job, url = self.ready()
         import time as _time
         now = _time.time()
-        with mock.patch("django.core.signing.time.time", return_value=now + 23 * 3600):
+        with mock.patch("django.core.signing.time.time", return_value=now + 6 * 24 * 3600):
             self.assertEqual(self.client.get(url).status_code, 200)
         DownloadJob.objects.filter(pk=job.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
         self.assertEqual(self.client.get(url).status_code, 410)
@@ -593,10 +593,12 @@ class CleanupTests(JobBase):
         DownloadJob.objects.filter(pk=job_id).update(created_at=timezone.now() - timedelta(days=2))
         self.assertEqual(purge_expired_jobs(), 1)
 
-    def test_purge_task_is_scheduled_hourly(self):
+    def test_purge_task_is_scheduled_daily(self):
         from config.celery import app
         entry = app.conf.beat_schedule["purge-expired-download-jobs"]
         self.assertEqual(entry["task"], "apps.clients.tasks.purge_expired_download_jobs")
+        self.assertEqual((entry["schedule"]._orig_hour, entry["schedule"]._orig_minute), (3, 45))
+        self.assertEqual(entry["schedule"]._orig_day_of_week, "*")        # every day, not weekly/hourly
 
     def test_failed_run_leaves_no_temp_zip_behind(self):
         token = self.token()
@@ -623,7 +625,7 @@ class ReadyEmailTests(JobBase):
         message = mail.outbox[0]
         self.assertEqual(message.to, ["buyer@example.com"])
         job = DownloadJob.objects.get()
-        self.assertIn(f"/g/{self.owner.username}/{self.gallery.slug}/download?job={job.id}", message.body)
+        self.assertIn(f"/g/{self.owner.username}/{self.gallery.slug}/download/file/{job.id}?key=", message.body)
         self.assertNotIn("file_token", message.body)                 # the mail carries no credential
 
     def test_no_email_when_none_was_captured(self):

@@ -70,6 +70,8 @@ from .download_access import (
     get_download_policy,
     issue_download_token,
     issue_file_token,
+    issue_job_link_token,
+    job_link_token_is_valid,
     download_pin_enforced,
     pin_limit_reached,
     record_pin_use,
@@ -89,8 +91,10 @@ from .download_jobs import (
     size_limit_error,
 )
 from .tasks import prepare_download_job
+from .web_size import derive_web_jpeg
 from apps.core.storage import PrivateMediaStorage
 
+import io
 import logging
 import uuid
 
@@ -1283,6 +1287,7 @@ class PublicGalleryDownloadView(APIView):
 
         return Response({
             'job_id': str(job.id),
+            'link_token': issue_job_link_token(job, gallery),
             'state': job.state,
             'status_url': request.build_absolute_uri(reverse(
                 'gallery-download-job-status',
@@ -1373,15 +1378,18 @@ class DownloadJobGateMixin:
 class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
     """
     GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/
-        ?download_token=<from POST .../download-access/>  &token=<gallery unlock token>
+        ?link_token=<the job's own key>   |   ?download_token=<from POST .../download-access/>
+        [&token=<gallery unlock token>]
 
-    -> { state: preparing | ready | failed, files: [{name, size_bytes, url}] }
+    -> { state: preparing | ready | failed, files: [{name, size_bytes, url}], will_email }
 
-    Requires the same download access token as the POST that created the job,
-    and that token's email must be the job's: another visitor's token (or
-    another gallery's) reads as "not found". When ready, each file's `url` is
-    a freshly signed, minutes-long link - poll again for a new one rather
-    than keeping an old URL around.
+    Two ways in. `link_token` is the key in the ready page's URL / the ready
+    email: it is bound to THIS job only, so opening the link needs no email or
+    PIN again; any other job's key, or a forged one, reads as "not found".
+    Otherwise the caller must hold the download access token that created the
+    job (same email); another visitor's token reads as "not found". When ready,
+    each file's `url` is a freshly signed link - poll again for a new one
+    rather than keeping an old URL around.
     """
 
     def get(self, request, username, slug, job_id):
@@ -1389,13 +1397,18 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
         if error:
             return error
 
-        authorization, auth_error = authorize_download(
-            gallery, pin=None, download_token=request.query_params.get('download_token'),
-        )
-        if auth_error:
-            return auth_error
-        if (authorization.email or None) != (job.email or None):
-            return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
+        link_token = request.query_params.get('link_token')
+        if link_token is not None:
+            if not job_link_token_is_valid(link_token, job, gallery):
+                return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
+        else:
+            authorization, auth_error = authorize_download(
+                gallery, pin=None, download_token=request.query_params.get('download_token'),
+            )
+            if auth_error:
+                return auth_error
+            if (authorization.email or None) != (job.email or None):
+                return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
 
         job = expire_if_stale(job)
         if job.state == DownloadJob.State.READY and not is_expired(job) and not job_files_exist(job):
@@ -1413,7 +1426,7 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
                 'error': JOB_ERROR_MESSAGES['download_expired'],
             })
         if job.state == DownloadJob.State.PREPARING:
-            return Response({'state': 'preparing', 'files': []})
+            return Response({'state': 'preparing', 'files': [], 'will_email': bool(job.email)})
 
         files = []
         for index, entry in enumerate(job.files or []):
@@ -1427,7 +1440,9 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
                 'size_bytes': entry['size_bytes'],
                 'url': f'{url}?{urlencode({"file_token": issue_file_token(job, gallery, index)})}',
             })
-        return Response({'state': 'ready', 'files': files, 'expires_at': job.expires_at})
+        return Response({
+            'state': 'ready', 'files': files, 'expires_at': job.expires_at, 'will_email': bool(job.email),
+        })
 
 
 class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
@@ -1491,14 +1506,15 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
 
         filename = sanitize_download_filename(entry['name'], fallback='photo-download-1of1.zip')
 
-        # One Download Activity row per genuine download. The ONLY thing collapsed
-        # is the browser retrying/resuming the very same prepared job's file
-        # moments after it was logged (this job's own latest log, same client
-        # address, within DOWNLOAD_RETRY_WINDOW_SECONDS). A different job
-        # (another email, set, size or file) is never matched, and a later
-        # "Download again" is its own row.
+        # One Download Activity row per genuine download of a part. The ONLY
+        # thing collapsed is the browser retrying/resuming the very same part
+        # of the same prepared job moments after it was logged (that part's
+        # own latest log, same client address, within
+        # DOWNLOAD_RETRY_WINDOW_SECONDS). Another part, another job (email,
+        # set, size) is never matched, and a later "Download again" is its
+        # own row.
         ip_address = _get_client_ip(request)
-        last_log = job.download_log
+        last_log = DownloadLog.objects.filter(pk=entry.get('log_id')).first() if entry.get('log_id') else None
         is_retry = bool(
             last_log is not None
             and last_log.ip_address == ip_address
@@ -1514,7 +1530,7 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
             )
 
         if not is_retry:
-            job.download_log = DownloadLog.objects.create(
+            new_log = DownloadLog.objects.create(
                 gallery=gallery,
                 email=job.email,
                 ip_address=ip_address,
@@ -1525,7 +1541,10 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
                 filename=filename,
                 photo_count=entry.get('photo_count'),
             )
-            job.save(update_fields=['download_log', 'updated_at'])
+            files[index] = {**entry, 'log_id': str(new_log.pk)}
+            job.files = files
+            job.download_log = new_log
+            job.save(update_fields=['files', 'download_log', 'updated_at'])
 
         return FileResponse(stored, as_attachment=True, filename=filename, content_type='application/zip')
 
@@ -1751,14 +1770,20 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
         # re-serving the original. Falls back to the original when no
         # such derivative exists yet (still processing).
         source_field = asset.original_file
+        derived = None
         if resolution == 'web':
-            source_field = _resolve_web_source(asset, web_px_for_gallery(gallery))
-            if source_field is asset.original_file:
-                resolution = 'original'
+            if asset.media_type == MediaAsset.MediaType.IMAGE:
+                # Exact chosen px, standard JPEG (see web_size.py) -- never a
+                # neighbouring stored tier under the wrong label.
+                derived = derive_web_jpeg(asset, web_px_for_gallery(gallery), gallery)
+            if derived is None:
+                source_field = _resolve_web_source(asset, web_px_for_gallery(gallery))
+                if source_field is asset.original_file:
+                    resolution = 'original'
         elif resolution == 'download':
             source_field, resolution = _get_client_download_source(asset, gallery)
 
-        if not source_field:
+        if derived is None and not source_field:
             return Response({'error': 'File unavailable.'}, status=status.HTTP_404_NOT_FOUND)
 
         # Phase 4 (download hardening): opens and streams the file instead
@@ -1771,16 +1796,21 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
         # backend needs its entire content resident in RAM at once, which
         # matters a lot more for a multi-GB video original than it ever
         # did for a photo.
-        try:
-            source_field.open('rb')
-        except Exception:
-            return Response({'error': 'File unavailable.'}, status=status.HTTP_404_NOT_FOUND)
+        if derived is None:
+            try:
+                source_field.open('rb')
+            except Exception:
+                return Response({'error': 'File unavailable.'}, status=status.HTTP_404_NOT_FOUND)
 
         # A derivative has a different extension than the original
         # (.webp/.mp4 vs whatever the camera produced) — the download
         # filename must match the actual bytes being served, or the
         # saved file's extension would lie about its own format.
-        if source_field is asset.original_file or resolution == 'download':
+        if derived is not None:
+            raw_filename = os.path.splitext(
+                sanitize_download_filename(asset.original_name, fallback=str(asset.id))
+            )[0] + '.jpg'
+        elif source_field is asset.original_file or resolution == 'download':
             raw_filename = asset.original_name
         else:
             raw_filename = os.path.basename(source_field.name)
@@ -1805,10 +1835,10 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
         )
 
         response = FileResponse(
-            source_field,
+            io.BytesIO(derived) if derived is not None else source_field,
             as_attachment=True,
             filename=download_filename,
-            content_type='application/octet-stream',
+            content_type='image/jpeg' if derived is not None else 'application/octet-stream',
         )
         return response
 

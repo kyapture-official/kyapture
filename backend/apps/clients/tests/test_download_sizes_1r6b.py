@@ -4,7 +4,8 @@ Task 1R.6-B — Download > General sizes layout.
 
   - Web Size choices are 2048 / 1024 / 640; a stored/sent 1280 is the same
     (medium) tier and reads and saves as 1024, never an error
-  - 1024 is served from the real 1280px medium derivative
+  - a source that cannot be decoded falls back to the nearest stored tier (the exact-px
+    derivation for decodable images is covered in test_download_pages_1r5b)
   - at least one of High Resolution / Web Size must stay on
   - the Pro-only Original rule is unchanged (also covered in
     test_download_policy_1r6.OriginalDownloadEntitlementTests)
@@ -48,7 +49,7 @@ class WebSizeTierTests(DownloadFlowBase):
         entries = _zip_entries(self.zip(token, resolution="web"))
         self.assertEqual(entries["a1.webp"], b"MEDIUM:a1.jpg")
 
-    def test_1024_is_served_from_the_medium_tier_2048_and_640_unchanged(self):
+    def test_an_undecodable_source_falls_back_to_the_nearest_stored_tier(self):
         for px, expected in ((1024, b"MEDIUM:a1.jpg"), (2048, b"DISPLAY:a1.jpg"), (640, b"THUMB:a1.jpg")):
             cache.clear()  # download-access + ZIP prepare share a 5/min throttle
             self._store_px(px)
