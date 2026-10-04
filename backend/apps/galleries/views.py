@@ -472,6 +472,12 @@ class GallerySetPasswordView(APIView):
         else:
             password = raw_password.strip()
 
+        if password and len(password) < 4:
+            return Response(
+                {'error': 'Password must be at least 4 characters.', 'code': 'password_too_short'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # bcrypt only accepts the first 72 bytes. Reject longer values rather
         # than silently truncating a secret the photographer believes is used.
         if len(password.encode('utf-8')) > 72:

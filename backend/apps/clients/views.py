@@ -70,6 +70,7 @@ from .download_access import (
     get_download_policy,
     issue_download_token,
     issue_file_token,
+    download_pin_enforced,
     pin_limit_reached,
     record_pin_use,
     resolution_is_allowed,
@@ -992,7 +993,7 @@ class PublicDownloadAccessView(APIView):
                 )
 
         pin_verified = False
-        if gallery.download_pin_hash:
+        if download_pin_enforced(gallery):
             # 1R.6 "Limit PIN usage" (Privacy tab, Advanced) -- checked
             # before the PIN itself so a limit already hit can't be worked
             # around by guessing; the limit counts successful verifications

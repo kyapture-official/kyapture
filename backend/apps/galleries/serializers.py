@@ -157,6 +157,12 @@ def normalize_download_settings(value, *, instance=None, user=None):
             'allowed_emails': 'Add at least one email address to restrict downloads to.'
         })
 
+    # Omitted = keep what is stored (a block that never mentions the PIN
+    # toggle must not silently flip it); a fresh gallery defaults to On.
+    stored = instance.design_settings.get('downloads') if instance is not None and isinstance(instance.design_settings, dict) else None
+    stored_pin_enabled = stored.get('pin_enabled') if isinstance(stored, dict) else None
+    pin_enabled = _bool(value, 'pin_enabled', stored_pin_enabled if isinstance(stored_pin_enabled, bool) else True)
+
     return {
         'allowed_sizes': allowed_sizes,
         # Frictionless downloads must be saved explicitly, never inferred
@@ -168,6 +174,8 @@ def normalize_download_settings(value, *, instance=None, user=None):
         'limit_total': limit_total,
         'restrict_contacts': restrict_contacts,
         'allowed_emails': allowed_emails,
+        # Download-tab PIN toggle; the hash itself lives on Gallery.
+        'pin_enabled': pin_enabled,
     }
 
 

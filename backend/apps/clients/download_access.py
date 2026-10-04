@@ -104,7 +104,20 @@ def _effective_downloads(gallery):
         'limit_total': limit_total,
         'restrict_contacts': bool(raw.get('restrict_contacts', False)),
         'allowed_emails': allowed_emails,
+        # 1R.6-A: the Download tab's PIN toggle. Missing = on, so a gallery
+        # that already has a PIN keeps enforcing it. Off never deletes the
+        # stored hash -- it only stops enforcement.
+        'pin_enabled': raw.get('pin_enabled') is not False,
     }
+
+
+def download_pin_enforced(gallery):
+    """
+    The ONE definition of "this gallery's download PIN is active": a PIN
+    hash is saved AND the Download-tab toggle is not Off. Turning the toggle
+    On without saving a PIN enforces nothing.
+    """
+    return bool(gallery.download_pin_hash) and _effective_downloads(gallery)['pin_enabled']
 
 
 def get_download_policy(gallery):
@@ -138,7 +151,7 @@ def get_download_policy(gallery):
 def download_access_required(gallery):
     """Whether a browser must earn a short-lived download token first."""
     eff = _effective_downloads(gallery)
-    return eff['require_email'] or bool(gallery.download_pin_hash) or eff['restrict_contacts']
+    return eff['require_email'] or download_pin_enforced(gallery) or eff['restrict_contacts']
 
 
 def resolution_is_allowed(gallery, resolution):
@@ -303,7 +316,7 @@ def validate_client_email(raw_email):
 def verify_pin(gallery, raw_pin):
     """Constant-time bcrypt check of a client-supplied PIN against the gallery's hash."""
     pin = as_clean_str(raw_pin)
-    if not pin or not gallery.download_pin_hash:
+    if not pin or not download_pin_enforced(gallery):
         return False
     try:
         return bcrypt.checkpw(pin.encode('utf-8'), gallery.download_pin_hash.encode('utf-8'))
@@ -312,7 +325,9 @@ def verify_pin(gallery, raw_pin):
 
 
 def _pin_fingerprint(gallery):
-    if not gallery.download_pin_hash:
+    # Not enforced (no PIN, or toggled Off) fingerprints as '' so flipping
+    # the toggle invalidates every outstanding token, like changing the PIN.
+    if not download_pin_enforced(gallery):
         return ''
     return hashlib.sha256(gallery.download_pin_hash.encode('utf-8')).hexdigest()[:16]
 
@@ -347,7 +362,7 @@ def read_download_token(token, gallery):
     if payload.get('f') != _pin_fingerprint(gallery):
         return None
     # A gallery that now has a PIN only honors tokens that actually passed it.
-    if gallery.download_pin_hash and not payload.get('p'):
+    if download_pin_enforced(gallery) and not payload.get('p'):
         return None
     if get_download_policy(gallery)['require_email'] and not payload.get('e'):
         return None

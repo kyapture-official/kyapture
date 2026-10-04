@@ -9,7 +9,7 @@ from apps.photos.models import MediaAsset, PhotoSet
 from apps.core.utils import generate_secure_token
 from apps.subscriptions.entitlements import BRANDING, has_feature
 from .models import ClientSession, Favorite, DownloadLog
-from .download_access import get_download_policy
+from .download_access import download_pin_enforced, get_download_policy
 from django.urls import reverse
 
 
@@ -214,7 +214,7 @@ class PublicGallerySerializer(serializers.ModelSerializer):
         return PublicPhotoSetSerializer(photo_sets, many=True, context=self.context).data
 
     def get_has_download_pin(self, obj):
-        return bool(obj.download_pin_hash)
+        return download_pin_enforced(obj)
 
     def get_download_policy(self, obj):
         return get_download_policy(obj)

@@ -21,6 +21,7 @@ const WEB_SIZE_OPTIONS = [
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_MIN_LENGTH = 4; // mirrors GallerySetPasswordView
 
 function clampPositiveIntOrNull(raw) {
   const trimmed = String(raw ?? "").trim();
@@ -43,6 +44,50 @@ function SaveIndicator({ state }) {
   );
 }
 
+/**
+ * Masked secret input with a show/hide eye. Commits on Enter and on blur
+ * (no Save button); the eye keeps focus in the input so clicking it does not
+ * count as a blur.
+ */
+function SecretField({ id, value, onChange, onCommit, label, invalid, ...inputProps }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div
+      className={`flex items-center rounded-lg border bg-white transition-all focus-within:ring-2 ${
+        invalid
+          ? "border-red-300 focus-within:border-red-400 focus-within:ring-red-200"
+          : "border-cream-200 focus-within:border-brand-green-500 focus-within:ring-brand-green-500/10"
+      }`}
+    >
+      <input
+        id={id}
+        type={shown ? "text" : "password"}
+        autoComplete="new-password"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onCommit(); } }}
+        onBlur={onCommit}
+        className="flex-1 min-w-0 bg-transparent px-3 py-2 text-sm text-ink focus:outline-none disabled:opacity-50"
+        {...inputProps}
+      />
+      <button
+        type="button"
+        aria-label={shown ? `Hide ${label}` : `Show ${label}`}
+        aria-pressed={shown}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setShown((v) => !v)}
+        className="px-3 py-2 text-muted hover:text-ink cursor-pointer"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" />
+          <circle cx="12" cy="12" r="3" />
+          {shown && <path d="M3 3l18 18" />}
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export default function GallerySettingsPage() {
   const { gallery, setGallery, slug, navigate, isMountedRef } = useOutletContext();
   const toast = useToast();
@@ -55,33 +100,35 @@ export default function GallerySettingsPage() {
   const [brandingColor, setBrandingColor] = useState(gallery.branding_color);
   const [eventDate, setEventDate] = useState(toDateInputValue(gallery.event_date));
   const [expiresAt, setExpiresAt] = useState(toDateInputValue(gallery.expires_at));
+  // ── Privacy tab: Collection Password only. The server never returns it,
+  // only has_password. Empty = off. ────────────────────────────────────────
   const [hasPassword, setHasPassword] = useState(gallery.has_password);
-  const passwordInputRef = useRef(null);
   const [password, setPassword] = useState("");
+  const [pwEditing, setPwEditing] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState("");
+  const pwCommitRef = useRef(false);
   const [updating, setUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // ── Privacy tab: Download PIN -- the ONLY other gate secret, independent
-  // of the gallery password above. Never shown in plaintext; the server
-  // never returns it, only has_download_pin. ──────────────────────────────
+  // ── Download tab: Download PIN. Never shown in plaintext; the server
+  // never returns it, only has_download_pin (a stored hash exists). The
+  // toggle is separate from the hash: Off stops enforcement but keeps it. ──
+  const initialDownloads = gallery.design_settings?.downloads || {};
   const [hasDownloadPin, setHasDownloadPin] = useState(gallery.has_download_pin ?? false);
+  const [pinEnabled, setPinEnabled] = useState(
+    (gallery.has_download_pin ?? false)
+      ? initialDownloads.pin_enabled !== false
+      : initialDownloads.pin_enabled === true,
+  );
   const [pinEditing, setPinEditing] = useState(false);
   const [downloadPin, setDownloadPin] = useState("");
   const [pinUpdating, setPinUpdating] = useState(false);
   const [pinError, setPinError] = useState("");
-
-  // "Limit PIN usage" (Privacy tab, Advanced) -- a non-secret cap, so it
-  // autosaves like the Download tab's own limits.
-  const initialPrivacy = gallery.design_settings?.privacy || {};
-  const [pinLimit, setPinLimit] = useState(
-    initialPrivacy.pin_limit != null ? String(initialPrivacy.pin_limit) : "",
-  );
-  const [pinLimitSaveState, setPinLimitSaveState] = useState("idle");
-  const pinLimitTimerRef = useRef(null);
-  const pinLimitSkipRef = useRef(true);
+  const pinCommitRef = useRef(false);
+  const pinToastRef = useRef(false);
 
   // ── Download tab ─────────────────────────────────────────────────────
-  const initialDownloads = gallery.design_settings?.downloads || {};
   const legacySizes = Array.isArray(initialDownloads.allowed_sizes) ? initialDownloads.allowed_sizes : null;
 
   const [isDownloadable, setIsDownloadable] = useState(
@@ -197,6 +244,7 @@ export default function GallerySettingsPage() {
           limit_total: clampPositiveIntOrNull(limitTotal),
           restrict_contacts: restrictContacts,
           allowed_emails: allowedEmails,
+          pin_enabled: pinEnabled,
         },
       },
     };
@@ -205,6 +253,7 @@ export default function GallerySettingsPage() {
       if (!isMountedRef.current) return;
       setGallery(updated);
       setDownloadSaveState("saved");
+      if (pinToastRef.current) { pinToastRef.current = false; toast("Collection updated", "success"); }
       window.clearTimeout(saveDownloadSettings._fadeTimer);
       saveDownloadSettings._fadeTimer = window.setTimeout(() => {
         if (isMountedRef.current) setDownloadSaveState((s) => (s === "saved" ? "idle" : s));
@@ -227,108 +276,96 @@ export default function GallerySettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isDownloadable, highResEnabled, highResMode, webEnabled, webPx, requireDownloadEmail,
-    setsEnabled, limitTotal, restrictContacts, allowedEmails,
+    setsEnabled, limitTotal, restrictContacts, allowedEmails, pinEnabled,
   ]);
 
-  // ── Privacy tab: "Limit PIN usage" autosave (non-secret). ───────────────
-  const savePinLimit = async () => {
-    setPinLimitSaveState("saving");
-    const payload = {
-      design_settings: {
-        ...(gallery.design_settings || {}),
-        privacy: { ...(gallery.design_settings?.privacy || {}), pin_limit: clampPositiveIntOrNull(pinLimit) },
-      },
-    };
-    try {
-      const updated = USE_MOCK_DATA ? { ...gallery, ...payload } : await galleriesApi.updateGallery(slug, payload);
-      if (!isMountedRef.current) return;
-      setGallery(updated);
-      setPinLimitSaveState("saved");
-      window.setTimeout(() => { if (isMountedRef.current) setPinLimitSaveState((s) => (s === "saved" ? "idle" : s)); }, 2000);
-    } catch {
-      if (isMountedRef.current) setPinLimitSaveState("error");
+  // ── Download PIN (Download tab). Typed by the photographer, hashed
+  // server-side, never returned -- only has_download_pin. ──────────────────
+  const commitDownloadPin = async () => {
+    if (pinUpdating || pinCommitRef.current) return;
+    if (!downloadPin) {
+      if (pinEditing) { setPinEditing(false); setPinError(""); } // blur on an untouched Change
+      return;
     }
-  };
-
-  useEffect(() => {
-    if (pinLimitSkipRef.current) { pinLimitSkipRef.current = false; return; }
-    if (pinLimitTimerRef.current) window.clearTimeout(pinLimitTimerRef.current);
-    pinLimitTimerRef.current = window.setTimeout(savePinLimit, 700);
-    return () => window.clearTimeout(pinLimitTimerRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pinLimit]);
-
-  const handleSaveDownloadPin = async (nextPin) => {
-    if (pinUpdating) return;
-    if (!nextPin && hasDownloadPin) {
-      if (!window.confirm("Remove the download PIN? Downloads will no longer require one.")) return;
+    if (!/^\d{4,8}$/.test(downloadPin)) {
+      setPinError("PIN must be 4 to 8 digits.");
+      return;
     }
+    pinCommitRef.current = true;
     setPinUpdating(true);
     setPinError("");
     try {
-      let response;
-      if (USE_MOCK_DATA) {
-        response = { has_download_pin: Boolean(nextPin) };
-      } else {
-        response = await galleriesApi.setDownloadPin(slug, nextPin || null);
-      }
+      const response = USE_MOCK_DATA
+        ? { has_download_pin: true }
+        : await galleriesApi.setDownloadPin(slug, downloadPin);
       if (!isMountedRef.current) return;
       setHasDownloadPin(response.has_download_pin);
       setGallery((prev) => ({ ...prev, has_download_pin: response.has_download_pin }));
       setDownloadPin("");
       setPinEditing(false);
-      toast(nextPin ? "Download PIN set" : "Download PIN removed", "success");
+      toast("Collection updated", "success");
     } catch (err) {
-      if (isMountedRef.current) {
-        setPinError(err.response?.data?.error || "Failed to update download PIN.");
-        toast("Failed to update download PIN", "error");
-      }
+      if (isMountedRef.current) setPinError(err.response?.data?.error || "Failed to update download PIN.");
     } finally {
+      pinCommitRef.current = false;
       if (isMountedRef.current) setPinUpdating(false);
     }
   };
 
-  const handleSavePassword = async (e) => {
-    e.preventDefault();
-    if (updating) return;
-    if (!password && !hasPassword) {
-      setErrorMsg("Enter a password before enabling password protection.");
-      passwordInputRef.current?.focus();
+  // ── Privacy tab: Collection Password. Autosaves on Enter/blur. ──────────
+  const applyPasswordState = (response) => {
+    setHasPassword(response.has_password);
+    setGallery((prev) => ({
+      ...prev,
+      has_password: response.has_password,
+      is_password_protected: response.is_password_protected,
+    }));
+    setPassword("");
+    setPwEditing(false);
+    toast("Collection updated", "success");
+  };
+
+  const commitPassword = async () => {
+    if (pwSaving || pwCommitRef.current) return;
+    const next = password.trim();
+    if (!next) {
+      if (pwEditing) { setPwEditing(false); setPwError(""); } // blur on an untouched Change
       return;
     }
-    if (!password && hasPassword) {
-      if (!window.confirm("Remove password protection?")) return;
+    if (next.length < PASSWORD_MIN_LENGTH) {
+      setPwError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
+      return;
     }
-    setUpdating(true);
+    pwCommitRef.current = true;
+    setPwSaving(true);
+    setPwError("");
     try {
-      if (USE_MOCK_DATA) {
-        const newHasPassword = Boolean(password);
-        setHasPassword(newHasPassword);
-        setGallery((prev) => ({
-          ...prev,
-          has_password: newHasPassword,
-          is_password_protected: newHasPassword,
-        }));
-        setPassword("");
-        toast(password ? "Password set" : "Password removed", "success");
-      } else {
-        const response = await galleriesApi.setGalleryPassword(slug, password || null);
-        setHasPassword(response.has_password);
-        setGallery((prev) => ({
-          ...prev,
-          has_password: response.has_password,
-          is_password_protected: response.is_password_protected,
-        }));
-        setPassword("");
-        toast(password ? "Password set" : "Password removed", "success");
-      }
+      const response = USE_MOCK_DATA
+        ? { has_password: true, is_password_protected: true }
+        : await galleriesApi.setGalleryPassword(slug, next);
+      if (isMountedRef.current) applyPasswordState(response);
     } catch (err) {
-      if (isMountedRef.current) {
-        setErrorMsg(err.response?.data?.detail || "Failed to update password.");
-        toast("Failed to update password", "error");
-      }
+      if (isMountedRef.current) setPwError(err.response?.data?.error || "Failed to update password.");
     } finally {
-      if (isMountedRef.current) setUpdating(false);
+      pwCommitRef.current = false;
+      if (isMountedRef.current) setPwSaving(false);
+    }
+  };
+
+  const handleRemovePassword = async () => {
+    if (pwSaving) return;
+    if (!window.confirm("Remove the collection password? Anyone with the link will be able to view the gallery.")) return;
+    setPwSaving(true);
+    setPwError("");
+    try {
+      const response = USE_MOCK_DATA
+        ? { has_password: false, is_password_protected: false }
+        : await galleriesApi.setGalleryPassword(slug, null);
+      if (isMountedRef.current) applyPasswordState(response);
+    } catch (err) {
+      if (isMountedRef.current) setPwError(err.response?.data?.error || "Failed to remove password.");
+    } finally {
+      if (isMountedRef.current) setPwSaving(false);
     }
   };
 
@@ -456,165 +493,59 @@ export default function GallerySettingsPage() {
           />
         )}
 
-        {/* Privacy Tab — the ONLY place gate secrets live: gallery password
-            and download PIN, plus the non-secret "Limit PIN usage" cap. */}
+        {/* Privacy Tab — Collection Password only (Pixieset "Collection
+            Password"). Empty = off. The download PIN lives on the Download tab. */}
         {activeTab === "privacy" && (
           <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
-            <h2 className="font-serif text-lg text-ink mb-2">Privacy & Security</h2>
-            <p className="text-xs text-muted mb-6">
-              Nothing is asked when a visitor opens this gallery unless you turn on a password or PIN below.
-            </p>
+            <h2 className="font-serif text-lg text-ink mb-6">Privacy Settings</h2>
 
-            <div className="space-y-5">
-              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
-                <div>
-                  <p className="text-sm font-medium text-ink">Gallery Password</p>
-                  <p className="text-xs text-muted mt-0.5">Require a password just to view the gallery</p>
-                </div>
-                <label className="toggle-wrap">
-                  <input
-                    type="checkbox"
-                    checked={hasPassword}
-                    disabled={updating}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        // The server intentionally refuses an enabled state
-                        // without a password. Move the user to the real
-                        // action rather than showing a false-on toggle.
-                        setErrorMsg("Enter a password below, then select Set to enable protection.");
-                        passwordInputRef.current?.focus();
-                      } else {
-                        handleSavePassword({ preventDefault: () => {} });
-                      }
-                    }}
-                  />
-                  <span className="toggle-slider" />
-                </label>
-              </div>
-
-              <form onSubmit={handleSavePassword} className="flex gap-3">
-                <input
-                  ref={passwordInputRef}
-                  type="password"
-                  placeholder={hasPassword ? "Enter new password" : "Set a password"}
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setErrorMsg("");
-                  }}
-                  disabled={updating}
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="px-4 py-2 border border-cream-200 text-ink text-sm font-medium rounded-lg hover:bg-cream-100 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {password ? "Save" : hasPassword ? "Clear" : "Set"}
-                </button>
-              </form>
-
-              {/* Download PIN — a second, independent gate from the gallery
-                  password above. The photographer always types their own
-                  PIN; there is no auto-generated default and no reset button. */}
-              <div className="pt-5 border-t border-cream-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-sm font-medium text-ink">Download PIN</p>
-                    <p className="text-xs text-muted mt-0.5">
-                      Require a 4–8 digit PIN before a visitor can download anything — view access stays open.
-                    </p>
-                  </div>
+            <div className="space-y-2 max-w-xl">
+              <label htmlFor="collection-password" className="block text-sm font-medium text-ink">
+                Collection Password
+              </label>
+              {hasPassword && !pwEditing ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-cream-200 bg-cream-50">
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                      hasDownloadPin
-                        ? "bg-brand-green-50 text-brand-green-700 border-brand-green-200"
-                        : "bg-cream-200 text-muted border-cream-300"
-                    }`}
+                    id="collection-password"
+                    aria-label="Password is set"
+                    className="flex-1 text-sm text-ink tracking-[0.3em]"
                   >
-                    {hasDownloadPin ? "Enabled" : "Off"}
+                    ••••••••
                   </span>
-                </div>
-
-                {pinError && <p className="text-xs text-red-600 mb-2">{pinError}</p>}
-
-                {!pinEditing ? (
-                  <div className="flex items-center gap-3 p-4 bg-cream-100 rounded-xl border border-cream-200">
-                    <span className="flex-1 font-mono text-sm text-ink tracking-[0.3em]">
-                      {hasDownloadPin ? "••••" : "No PIN set"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => { setPinEditing(true); setDownloadPin(""); }}
-                      className="px-3 py-1.5 border border-cream-200 bg-white text-ink text-xs font-medium rounded-lg hover:bg-cream-50 transition-colors cursor-pointer"
-                    >
-                      {hasDownloadPin ? "Change PIN" : "Set PIN"}
-                    </button>
-                    {hasDownloadPin && (
-                      <button
-                        type="button"
-                        disabled={pinUpdating}
-                        onClick={() => handleSaveDownloadPin("")}
-                        className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        Remove PIN
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <form
-                    onSubmit={(e) => { e.preventDefault(); if (downloadPin) handleSaveDownloadPin(downloadPin); }}
-                    className="flex gap-3"
+                  <button
+                    type="button"
+                    disabled={pwSaving}
+                    onClick={() => { setPwEditing(true); setPassword(""); setPwError(""); }}
+                    className="px-2 py-1 text-xs font-medium text-brand-green-700 hover:underline underline-offset-2 cursor-pointer disabled:opacity-50"
                   >
-                    <input
-                      type="text"
-                      autoFocus
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={8}
-                      placeholder="4–8 digits"
-                      value={downloadPin}
-                      onChange={(e) => setDownloadPin(e.target.value.replace(/\D/g, ""))}
-                      disabled={pinUpdating}
-                      className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
-                    />
-                    <button
-                      type="submit"
-                      disabled={pinUpdating || downloadPin.length < 4}
-                      className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setPinEditing(false); setDownloadPin(""); setPinError(""); }}
-                      className="px-4 py-2 border border-cream-200 text-ink text-sm font-medium rounded-lg hover:bg-cream-100 transition-colors cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                  </form>
-                )}
-
-                {hasDownloadPin && (
-                  <div className="mt-4 flex items-center justify-between gap-3 p-4 bg-cream-100 rounded-xl border border-cream-200">
-                    <div>
-                      <p className="text-sm font-medium text-ink">Limit PIN usage</p>
-                      <p className="text-xs text-muted mt-0.5">Block downloads once the PIN has been used this many times.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        placeholder="Unlimited"
-                        value={pinLimit}
-                        onChange={(e) => setPinLimit(e.target.value)}
-                        className="w-24 px-3 py-1.5 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none text-right"
-                      />
-                      <SaveIndicator state={pinLimitSaveState} />
-                    </div>
-                  </div>
-                )}
-              </div>
+                    Change
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pwSaving}
+                    onClick={handleRemovePassword}
+                    className="px-2 py-1 text-xs font-medium text-red-600 hover:underline underline-offset-2 cursor-pointer disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <SecretField
+                  id="collection-password"
+                  value={password}
+                  onChange={(v) => { setPassword(v); setPwError(""); }}
+                  onCommit={commitPassword}
+                  placeholder="Add a password"
+                  autoFocus={pwEditing}
+                  disabled={pwSaving}
+                  invalid={Boolean(pwError)}
+                  label="password"
+                />
+              )}
+              {pwError && <p role="alert" className="text-xs text-red-600">{pwError}</p>}
+              <p className="text-xs text-muted">
+                Require visitors to enter this password in order to see the collection.
+              </p>
             </div>
           </div>
         )}
@@ -751,6 +682,70 @@ export default function GallerySettingsPage() {
                   {noSizeSelected && <p className="text-xs text-red-600">Choose at least one download size.</p>}
                 </fieldset>
 
+                {/* Download PIN — independent of the collection password.
+                    Off by default; the PIN is typed by the photographer,
+                    stored hashed, and never shown again. Off stops
+                    enforcement but keeps the stored PIN. */}
+                <div className="pt-4 border-t border-cream-200 space-y-3">
+                  <p className="text-sm font-medium text-ink">Download PIN</p>
+                  <label className="flex items-center gap-3 text-sm text-ink w-fit">
+                    <span className="toggle-wrap">
+                      <input
+                        type="checkbox"
+                        aria-label="Download PIN"
+                        checked={pinEnabled}
+                        disabled={!isDownloadable}
+                        onChange={(e) => {
+                          pinToastRef.current = true;
+                          setPinEnabled(e.target.checked);
+                          setPinEditing(false); setDownloadPin(""); setPinError("");
+                        }}
+                      />
+                      <span className="toggle-slider" />
+                    </span>
+                    {pinEnabled ? "On" : "Off"}
+                  </label>
+
+                  {pinEnabled && (
+                    <div className="space-y-2 max-w-xl">
+                      {hasDownloadPin && !pinEditing ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-cream-200 bg-cream-50">
+                          <span aria-label="PIN is set" className="flex-1 text-sm text-ink tracking-[0.3em]">••••</span>
+                          <button
+                            type="button"
+                            disabled={pinUpdating || !isDownloadable}
+                            onClick={() => { setPinEditing(true); setDownloadPin(""); setPinError(""); }}
+                            className="px-2 py-1 text-xs font-medium text-brand-green-700 hover:underline underline-offset-2 cursor-pointer disabled:opacity-50"
+                          >
+                            Change
+                          </button>
+                        </div>
+                      ) : (
+                        <SecretField
+                          id="download-pin"
+                          value={downloadPin}
+                          onChange={(v) => { setDownloadPin(v.replace(/\D/g, "").slice(0, 8)); setPinError(""); }}
+                          onCommit={commitDownloadPin}
+                          placeholder="4–8 digits"
+                          inputMode="numeric"
+                          maxLength={8}
+                          autoFocus={pinEditing}
+                          disabled={pinUpdating || !isDownloadable}
+                          invalid={Boolean(pinError)}
+                          label="PIN"
+                        />
+                      )}
+                      {pinError && <p role="alert" className="text-xs text-red-600">{pinError}</p>}
+                      {!hasDownloadPin && !pinError && (
+                        <p className="text-xs text-amber-700">Enter a PIN to activate.</p>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted">
+                    Share this PIN with your client after payment. Visitors can preview the gallery without it.
+                  </p>
+                </div>
+
                 <label className="flex cursor-pointer items-center justify-between rounded-xl border border-cream-200 p-4">
                   <span>
                     <span className="block text-sm font-medium text-ink">Require email</span>
@@ -764,7 +759,7 @@ export default function GallerySettingsPage() {
                     className="h-4 w-4 accent-brand-green-600 disabled:cursor-not-allowed"
                   />
                 </label>
-                {!requireDownloadEmail && !hasDownloadPin && isDownloadable && (
+                {!requireDownloadEmail && !(pinEnabled && hasDownloadPin) && isDownloadable && (
                   <p className="text-xs text-amber-700">Frictionless downloads are on: clients will not be asked for email or a PIN.</p>
                 )}
 

@@ -657,11 +657,17 @@ its unlock token (`Authorization: Bearer <access_token>` or `token` in the body)
 Throttled like the unlock endpoint (5/minute) because it is where a PIN can be
 guessed.
 
+The PIN is enforced only when a PIN hash is saved (`POST /galleries/{slug}/set-download-pin/`)
+AND `design_settings.downloads.pin_enabled` is not `false` (the Download-tab toggle; a
+missing value counts as on). Toggle on without a saved PIN enforces nothing; toggle off
+stops enforcement but keeps the stored hash. The public `has_download_pin` reflects the
+enforced state. Neither the PIN nor its hash is ever returned.
+
 Request Body — JSON
 
 {
   "email": "guest@example.com",   // required unless the unlock session already has one
-  "pin": "4821"                   // required only when the gallery has a download PIN
+  "pin": "4821"                   // required only while the gallery's download PIN is enforced
 }
 
 Success Response — 200 OK
