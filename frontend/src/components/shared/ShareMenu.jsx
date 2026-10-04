@@ -1,30 +1,22 @@
 // File Location: frontend/src/components/shared/ShareMenu.jsx
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Link2, Mail, MessageCircle, Send, Share2 } from "lucide-react";
+import { Link2, Mail, QrCode, Share2 } from "lucide-react";
+import ShareLinkModal from "./ShareLinkModal";
+import ShareQrModal from "./ShareQrModal";
 import { useToast } from "../ui/Toast";
-import {
-  buildShareTargets,
-  canNativeShare,
-  copyText,
-  isMobileDevice,
-  toCanonicalShareUrl,
-} from "../../utils/share";
-
-// lucide-react ships no brand icons, so Facebook's "f" is drawn inline (same
-// stroke style as the other menu icons).
-function Facebook({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-    </svg>
-  );
-}
+import { buildShareEmailHref, canNativeShare, shareText, toCanonicalShareUrl } from "../../utils/share";
 
 /**
- * Share a gallery: Copy Link, WhatsApp, Facebook, Messenger, Email, and the
- * device's native share sheet where the browser has one.
+ * Share a gallery — a deliberately small dropdown (Pixieset style):
  *
- * The URL shared is always the canonical, credential-free gallery link (see
+ *   Share by email   opens the visitor's mail app with the title and link filled in
+ *   Get direct link  opens the link modal (link field + Copy / "Copied")
+ *   Get QR code      opens the QR modal (QR + Download PNG)
+ *   Share…           the device's native share sheet — ONLY where `navigator.share`
+ *                    exists. It already lists every installed app, so there are no
+ *                    separate WhatsApp / Facebook / Messenger / Copy buttons.
+ *
+ * The URL shared is always the plain, credential-free gallery link (see
  * utils/share.js) — sharing never carries or grants access; the gallery's own
  * password / published / expiry gates apply to whoever opens it.
  *
@@ -41,16 +33,13 @@ export default function ShareMenu({ url, title, variant = "icon", note = null, a
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
   const [open, setOpen] = useState(false);
-  const [manualCopy, setManualCopy] = useState(false);
+  const [dialog, setDialog] = useState(null); // null | "link" | "qr"
 
   const shareUrl = toCanonicalShareUrl(url);
-  const targets = shareUrl ? buildShareTargets({ url: shareUrl, title }) : null;
-  const mobile = isMobileDevice();
   const nativeShare = canNativeShare();
 
   const close = useCallback((returnFocus = true) => {
     setOpen(false);
-    setManualCopy(false);
     if (returnFocus) triggerRef.current?.focus();
   }, []);
 
@@ -106,26 +95,9 @@ export default function ShareMenu({ url, title, variant = "icon", note = null, a
     }
   };
 
-  const handleCopy = async () => {
-    const ok = await copyText(shareUrl);
-    if (ok) {
-      toast("Link copied", "success");
-      close();
-    } else {
-      // Be honest: nothing was copied. Offer the link selected, ready for Ctrl/Cmd+C.
-      setManualCopy(true);
-      toast("Couldn't copy automatically — copy the link below.", "error");
-      requestAnimationFrame(() => {
-        const field = menuRef.current?.querySelector("input[data-manual-copy]");
-        field?.focus();
-        field?.select();
-      });
-    }
-  };
-
   const handleNative = async () => {
     try {
-      await navigator.share({ title: title || undefined, text: targets.text, url: shareUrl });
+      await navigator.share({ title: title || undefined, text: shareText(title), url: shareUrl });
       close();
     } catch (err) {
       // The user dismissing the sheet is not an error.
@@ -133,32 +105,13 @@ export default function ShareMenu({ url, title, variant = "icon", note = null, a
     }
   };
 
-  const openExternal = (href) => {
-    window.open(href, "_blank", "noopener,noreferrer");
+  // The menu closes WITHOUT stealing focus back, so the dialog it opens keeps it.
+  const openDialog = (name) => {
     close(false);
+    setDialog(name);
   };
 
-  const handleMessenger = async () => {
-    if (mobile) {
-      window.location.href = targets.messengerApp;
-      close(false);
-    } else if (targets.messengerWeb) {
-      openExternal(targets.messengerWeb);
-    } else {
-      // Messenger's web composer can't be pre-filled without a Facebook app id:
-      // put the link on the clipboard and open Messenger so it can be pasted.
-      const ok = await copyText(shareUrl);
-      toast(ok ? "Link copied — paste it into Messenger" : "Copy the link, then paste it into Messenger", ok ? "success" : "info");
-      openExternal("https://www.messenger.com/");
-    }
-  };
-
-  const handleEmail = () => {
-    window.location.href = targets.email;
-    close(false);
-  };
-
-  if (!targets) return null;
+  if (!shareUrl) return null;
 
   const itemClass =
     "flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-ink transition-colors hover:bg-cream-100 focus:bg-cream-100 focus:outline-none sm:px-3 sm:py-2.5 sm:text-xs";
@@ -169,6 +122,13 @@ export default function ShareMenu({ url, title, variant = "icon", note = null, a
       <Icon className="h-4 w-4 flex-shrink-0 text-muted" aria-hidden="true" />
       {label}
     </button>
+  );
+
+  const menuLink = (Icon, label, href) => (
+    <a key={label} role="menuitem" href={href} onClick={() => close(false)} className={itemClass}>
+      <Icon className="h-4 w-4 flex-shrink-0 text-muted" aria-hidden="true" />
+      {label}
+    </a>
   );
 
   const trigger =
@@ -204,6 +164,8 @@ export default function ShareMenu({ url, title, variant = "icon", note = null, a
   return (
     <div className="relative">
       {trigger}
+      <ShareLinkModal open={dialog === "link"} onClose={() => setDialog(null)} url={shareUrl} note={note} />
+      <ShareQrModal open={dialog === "qr"} onClose={() => setDialog(null)} url={shareUrl} filename={shareUrl.split("/").pop()} />
       {open && (
         <>
           {/* Phones: dim the page behind the bottom sheet */}
@@ -224,29 +186,11 @@ export default function ShareMenu({ url, title, variant = "icon", note = null, a
             {note && <p className="border-b border-cream-200 bg-amber-50 px-4 py-2 text-[11px] leading-snug text-amber-800 sm:px-3">{note}</p>}
 
             <div className="py-1">
+              {menuLink(Mail, "Share by email", buildShareEmailHref({ url: shareUrl, title }))}
+              {menuItem(Link2, "Get direct link", () => openDialog("link"))}
+              {menuItem(QrCode, "Get QR code", () => openDialog("qr"))}
               {nativeShare && menuItem(Share2, "Share…", handleNative)}
-              {menuItem(Link2, "Copy link", handleCopy)}
-              {menuItem(MessageCircle, "WhatsApp", () => openExternal(targets.whatsapp))}
-              {menuItem(Facebook, "Facebook", () => openExternal(targets.facebook))}
-              {menuItem(Send, "Messenger", handleMessenger)}
-              {menuItem(Mail, "Email", handleEmail)}
             </div>
-
-            {manualCopy && (
-              <div className="border-t border-cream-200 p-3">
-                <label htmlFor={`${menuId}-manual`} className="mb-1 block text-[11px] text-muted">
-                  Copy this link:
-                </label>
-                <input
-                  id={`${menuId}-manual`}
-                  data-manual-copy
-                  readOnly
-                  value={shareUrl}
-                  onFocus={(event) => event.target.select()}
-                  className="w-full rounded-lg border border-cream-200 bg-cream-100/50 px-2 py-1.5 font-mono text-[11px] text-ink focus:outline-none focus:ring-2 focus:ring-brand-green-500"
-                />
-              </div>
-            )}
           </div>
         </>
       )}

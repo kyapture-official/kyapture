@@ -3,11 +3,11 @@ import ClientDialog from "./ClientDialog";
 import DownloadForm from "./DownloadForm";
 
 /**
- * The client "Download" dialog: choose a size, then (only when the gallery needs
- * them) the download PIN and an email, then the download itself. Opened by an
- * explicit Download click from the gallery toolbar, a photo tile, or the
- * lightbox — never on gallery entry. A centered card on desktop, a full-width
- * bottom sheet on phones (see ClientDialog).
+ * The client "Download" dialog: ONE box. Email and/or the download PIN appear at
+ * the top only when this visitor still has to give them, followed by size choice
+ * and a single Download button. Opened by an explicit Download click from the
+ * gallery toolbar, a photo tile, or the lightbox — never on gallery entry. A
+ * centered card on desktop, a full-width bottom sheet on phones (see ClientDialog).
  */
 export default function DownloadModal({
   open,

@@ -1,20 +1,17 @@
 // File Location: frontend/src/utils/share.js
 //
-// Share helpers. The shared link is ALWAYS the gallery's canonical, plain
-// client URL — the server sends it as `share_url` (built from the public app
-// origin) and it carries no credential of any kind. Opening it puts the visitor
-// in front of the gallery's normal gates (published, not expired, password),
-// exactly like anyone else, so sharing can never grant access.
+// Share helpers. The shared link is ALWAYS the gallery's plain client URL built
+// by utils/appUrl.js — it carries no credential of any kind. Opening it puts the
+// visitor in front of the gallery's normal gates (published, not expired,
+// password), exactly like anyone else, so sharing can never grant access.
 
-import { buildClientGalleryUrl } from './formatters'
-
-const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID || ''
+import { buildGalleryLink } from './appUrl.js'
 
 /**
  * Normalizes whatever URL we were given down to `origin + path`. Anything
  * after the path (a query string such as ?token=…, a hash) is dropped, so even
  * a caller that mistakenly passes a URL with a secret attached can't put it
- * into a social/email share payload. Returns '' for anything that isn't http(s).
+ * into an email or share payload. Returns '' for anything that isn't http(s).
  */
 export function toCanonicalShareUrl(rawUrl) {
   try {
@@ -26,37 +23,25 @@ export function toCanonicalShareUrl(rawUrl) {
   }
 }
 
-/** The URL to share: the server's canonical `share_url`, else the path-based client URL. */
-export function resolveShareUrl(shareUrl, username, slug) {
-  return toCanonicalShareUrl(shareUrl || buildClientGalleryUrl(username, slug))
-}
-
-export function isMobileDevice() {
-  if (typeof navigator === 'undefined') return false
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+/** The link to share for a gallery: built from the app origin, credential-free. */
+export function resolveShareUrl(username, slug) {
+  return toCanonicalShareUrl(buildGalleryLink(username, slug))
 }
 
 export function canNativeShare() {
   return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 }
 
-/** Every target URL, correctly encoded. `url` must already be canonical. */
-export function buildShareTargets({ url, title }) {
-  const encodedUrl = encodeURIComponent(url)
+/** The sentence that accompanies a shared gallery link. */
+export function shareText(title) {
   const heading = title ? title.trim() : ''
-  const text = heading ? `${heading} — view the gallery` : 'View this gallery'
-  return {
-    whatsapp: `https://wa.me/?text=${encodeURIComponent(`${text}: ${url}`)}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-    // Messenger: the app deep link works on phones; the web "send" dialog
-    // needs a Facebook app id, so it's only available when one is configured.
-    messengerApp: `fb-messenger://share/?link=${encodedUrl}`,
-    messengerWeb: FACEBOOK_APP_ID
-      ? `https://www.facebook.com/dialog/send?link=${encodedUrl}&app_id=${encodeURIComponent(FACEBOOK_APP_ID)}&redirect_uri=${encodedUrl}`
-      : null,
-    email: `mailto:?subject=${encodeURIComponent(heading || 'A gallery for you')}&body=${encodeURIComponent(`${text}:\n\n${url}`)}`,
-    text,
-  }
+  return heading ? `${heading} — view the gallery` : 'View this gallery'
+}
+
+/** `mailto:` for "Share by email": the gallery title as subject, the link in the body. */
+export function buildShareEmailHref({ url, title }) {
+  const heading = title ? title.trim() : ''
+  return `mailto:?subject=${encodeURIComponent(heading || 'A gallery for you')}&body=${encodeURIComponent(`${shareText(title)}:\n\n${url}`)}`
 }
 
 /**

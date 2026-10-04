@@ -46,29 +46,6 @@ export const toDateInputValue = (value) => {
 }
 
 /**
- * WHAT: Isomorphic Absolute URL Generator
- * WHY:  Dynamic link generator that returns the canonical same-origin gallery
- *       path in every environment.
- */
-// Locked product decision: the MVP client gallery URL is path-based only —
-// /g/:username/:slug — everywhere, including production. Wildcard subdomain
-// galleries (username.domain.tld) are explicitly post-MVP (no wildcard DNS/
-// TLS/routing infrastructure exists for them yet); this must stay
-// path-based until that infrastructure is actually built. See
-// docs/KYAPTURE_PRODUCT_DECISIONS.md #3-4.
-export const buildClientGalleryUrl = (username, slug) => {
-  if (!username || !slug) return ''
-
-  if (typeof window !== 'undefined') {
-    // Same-origin path build — correct in dev, staging, and production
-    // alike, and immune to VITE_APP_DOMAIN drifting from the real origin.
-    return `${window.location.origin}/g/${username}/${slug}`
-  }
-
-  return `/g/${username}/${slug}`
-}
-
-/**
  * WHAT: Media Playback Duration Formatter
  * WHY:  Parses raw duration integers/floats (seconds) into standard MM:SS or H:MM:SS format
  *       defensively, preventing NaN outputs on empty, negative, or invalid data.

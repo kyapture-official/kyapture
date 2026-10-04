@@ -2,7 +2,9 @@
 import React, { useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { Download, Heart, Share2 } from "lucide-react";
-import { buildClientGalleryUrl, formatDuration } from "../../utils/formatters";
+import { formatDuration } from "../../utils/formatters";
+import { buildGalleryLink } from "../../utils/appUrl";
+import { copyText } from "../../utils/share";
 import { getBlurhashDataUrl } from "../../utils/blurhashDataUrl";
 import { useToast } from "../ui/Toast";
 
@@ -97,12 +99,8 @@ function LazyPhoto({
 
   const handleShare = async (event) => {
     event.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(buildClientGalleryUrl(username, slug));
-      toast("Link copied", "success");
-    } catch {
-      toast("Unable to copy the link.", "error");
-    }
+    const copied = await copyText(buildGalleryLink(username, slug));
+    toast(copied ? "Link copied" : "Unable to copy the link.", copied ? "success" : "error");
   };
 
   // No thumbnail yet because the asset is still processing (not because

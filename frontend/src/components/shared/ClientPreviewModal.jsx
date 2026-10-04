@@ -2,8 +2,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDate } from "../../utils/formatters";
+import { useAuthStore } from "../../store/authStore";
+import { useToast } from "../ui/Toast";
+import { copyText, resolveShareUrl } from "../../utils/share";
 
 export default function ClientPreviewModal({ open, onClose, gallery }) {
+  const toast = useToast();
+  const username = useAuthStore((state) => state.user?.username);
   const [showGrid, setShowGrid] = useState(false);
   const [scrolledPastHero, setScrolledPastHero] = useState(false);
   const [favorites, setFavorites] = useState(new Set());
@@ -43,12 +48,15 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
     });
   };
 
+  // Copies the gallery's client link — not this dashboard page's address.
   const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-    } catch {
-      // silent
+    const link = resolveShareUrl(username, gallery?.slug);
+    if (!link) {
+      toast("Unable to build link — profile not loaded yet.", "error");
+      return;
     }
+    const copied = await copyText(link);
+    toast(copied ? "Gallery link copied" : "Could not copy the link.", copied ? "success" : "error");
   };
 
   if (!open) return null;

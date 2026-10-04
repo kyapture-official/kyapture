@@ -20,7 +20,7 @@ Canonical, and only, client gallery URL scheme for MVP:
 /g/:username/:slug
 ```
 
-This matches `frontend/src/App.jsx`'s router. `frontend/src/utils/formatters.js`'s `buildClientGalleryUrl()` and all current gallery-link call sites use this same path-based scheme.
+This matches `frontend/src/App.jsx`'s router. `frontend/src/utils/appUrl.js`'s `buildGalleryLink()` (origin = `VITE_PUBLIC_APP_URL` if set, else `window.location.origin`; never a hard-coded port) is the single builder, and all gallery-link call sites use this same path-based scheme.
 
 ## 4. Subdomain gallery URLs: post-MVP
 

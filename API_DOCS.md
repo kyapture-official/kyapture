@@ -813,6 +813,11 @@ URL), so sharing it can never bypass a gallery's own gates — whoever opens it 
 the normal published / expiry / password checks. A password-protected gallery's
 locked response does not include it.
 
+The web app does not display this field: it builds the link it shows and copies from
+the origin it is actually served from (`frontend/src/utils/appUrl.js`), because
+`FRONTEND_URL` defaults to the Vite dev port (`http://localhost:5173`), which is not
+where the Docker stack serves the app (`http://localhost:3000`).
+
 Download Activity — GET /api/v1/galleries/{slug}/download-logs/?type=gallery|photo|video&page=N
 
 Owner-only (404 for any other account or an unknown slug, 401 unauthenticated).

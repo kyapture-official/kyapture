@@ -86,6 +86,10 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       CELERY_TASK_ALWAYS_EAGER: "false"
       CELERY_TASK_EAGER_PROPAGATES: "false"
+      # Where this stack serves the web app. Backend-built links (the "your download is
+      # ready" email, password-reset and notification links) use it; it defaults to the
+      # Vite dev port (5173), which nothing listens on under compose.
+      FRONTEND_URL: http://localhost:3000
     ports:
       - "8000:8000"
     depends_on:
@@ -123,6 +127,10 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       CELERY_TASK_ALWAYS_EAGER: "false"
       CELERY_TASK_EAGER_PROPAGATES: "false"
+      # Where this stack serves the web app. Backend-built links (the "your download is
+      # ready" email, password-reset and notification links) use it; it defaults to the
+      # Vite dev port (5173), which nothing listens on under compose.
+      FRONTEND_URL: http://localhost:3000
     depends_on:
       db:
         condition: service_healthy
@@ -153,6 +161,10 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       CELERY_TASK_ALWAYS_EAGER: "false"
       CELERY_TASK_EAGER_PROPAGATES: "false"
+      # Where this stack serves the web app. Backend-built links (the "your download is
+      # ready" email, password-reset and notification links) use it; it defaults to the
+      # Vite dev port (5173), which nothing listens on under compose.
+      FRONTEND_URL: http://localhost:3000
     depends_on:
       db:
         condition: service_healthy

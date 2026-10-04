@@ -2,7 +2,6 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { clientsApi } from "../../api/clientsApi";
 import { useClientStore } from "../../store/clientStore";
 import { useVisitorStore } from "../../store/visitorStore";
-import PinBoxes from "./PinBoxes";
 
 // "Original" follows the High Resolution switch on the server (a gallery that
 // allows High Resolution allows its originals), so it is offered whenever
@@ -53,13 +52,20 @@ const ghostButton = "rounded-lg px-4 py-2.5 text-sm text-muted transition hover:
 
 /**
  * Explicit download flow (the same component powers the in-gallery dialog and the
- * standalone /download page):
+ * standalone /download page). Opening a gallery never reaches it — it exists only
+ * once the visitor clicks Download.
  *
- *   1 Choose   scope (gallery only) + size (only the sizes the gallery allows)
- *   2 PIN      only if the gallery has a download PIN - checked on the server
- *   3 Email    only if the gallery requires one; asked once, then remembered
- *   4 Prepare  a gallery/set ZIP is PREPARED in the background -> ready screen
- *              with a big Download button; a single photo downloads directly
+ *   form      ONE box. At the top, ONLY what this visitor still has to give:
+ *               - an email   (the gallery requires one and this session has none yet)
+ *               - the PIN    (the gallery has a download PIN and this session has not passed it)
+ *             then scope + size, and a single Download button. Email and PIN are
+ *             sent to the server together and checked there; a wrong PIN comes
+ *             back inline as "Incorrect PIN". Once accepted, the signed access
+ *             token is remembered for this browser session, so the next photo
+ *             skips the details entirely. A gallery that needs neither goes
+ *             straight to size choice / download.
+ *   preparing a gallery/set ZIP is PREPARED in the background -> ready screen
+ *             with a big Download button; a single photo downloads directly
  *
  * Closing the dialog never cancels a prepared download: the job keeps running,
  * and asking for the same download again simply picks it back up.
@@ -95,15 +101,20 @@ export default function DownloadForm({
   const isPhoto = target?.type === "photo";
   const defaultSize = (allowedSizes.find((option) => option.value === "download") || allowedSizes[0]).value;
 
-  const needsIdentity = () => hasDownloadPin || requiresEmail;
-  const initialStep =
-    resumeJobId && needsIdentity() && !getDownloadAccess(sessionKey) ? (hasDownloadPin ? "pin" : "email") : "choose";
+  // What the visitor still has to give. A remembered, unexpired access token
+  // (earned earlier this session) covers both email and PIN.
+  const storedAccess = useClientStore((state) => state.downloadAccess[sessionKey]);
+  const rememberedAccess = storedAccess?.token && storedAccess.expiresAt > Date.now() ? storedAccess : null;
+  const needsPin = hasDownloadPin && !rememberedAccess;
+  const needsEmail = requiresEmail && !rememberedAccess;
+  const needsGate = needsPin || needsEmail;
 
-  const [step, setStep] = useState(initialStep);
+  const [step, setStep] = useState("form");
   const [scopeSetId, setScopeSetId] = useState(target?.type === "gallery" ? target.setId || "" : "");
   const [resolution, setResolution] = useState(defaultSize);
   const [email, setEmail] = useState(profile?.email || "");
   const [pin, setPin] = useState("");
+  const pinInputRef = useRef(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState(linkExpired ? { form: "That download link has expired. Prepare your download again below." } : {});
   const [notifyEmail, setNotifyEmail] = useState(null);
@@ -146,8 +157,8 @@ export default function DownloadForm({
     setDownloadAccess(sessionKey, null);
     setPin("");
     setErrors({ form: "Your download session expired. Please confirm your details again." });
-    setStep(hasDownloadPin ? "pin" : "email");
-  }, [sessionKey, setDownloadAccess, stopPolling, hasDownloadPin]);
+    setStep("form");
+  }, [sessionKey, setDownloadAccess, stopPolling]);
 
   const checkJob = useCallback(async () => {
     const job = activeJob.current;
@@ -234,19 +245,20 @@ export default function DownloadForm({
     });
     if (!href) {
       setErrors({ form: "This file isn't available for download." });
-      setStep("choose");
+      setStep("form");
       return;
     }
     startBrowserDownload(href);
     setStep("requested");
   };
 
-  // Arrived from the "ready" email: continue with that job as soon as access is in hand.
+  // Arrived from the "ready" email: continue with that job as soon as access is in
+  // hand — straight away when this session already has it, else after the details box.
   useEffect(() => {
-    if (!resumeJobId || step !== "choose") return;
+    if (!resumeJobId || step !== "form" || needsGate) return;
     beginPolling(resumeJobId, getDownloadAccess(sessionKey));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeJobId]);
+  }, [resumeJobId, needsGate]);
 
   const rememberAccess = (grant, fallbackEmail) => {
     const access = {
@@ -272,87 +284,42 @@ export default function DownloadForm({
       setErrors({ form: "Too many attempts. Please wait a minute and try again." });
     } else if (err?.code === "pin_required" || err?.code === "invalid_pin") {
       setPin("");
-      setStep("pin");
       setErrors({ pin: "Incorrect PIN" });
+      requestAnimationFrame(() => pinInputRef.current?.focus());
     } else if (err?.code === "email_required" || err?.code === "invalid_email") {
-      setStep("email");
       setErrors({ email: err.message });
     } else {
       setErrors({ form: err?.message || "Something went wrong. Please try again." });
     }
   };
 
-  // Step 1 -> next
-  const handleChoose = async (event) => {
-    event.preventDefault();
-    setErrors({});
-    const remembered = getDownloadAccess(sessionKey);
-    if (!needsIdentity() || remembered) {
-      launchDownload(remembered);
-      return;
-    }
-    if (hasDownloadPin) {
-      setStep("pin");
-      return;
-    }
-    // Email-only gallery: a remembered email means no second prompt.
-    if (profile?.email && EMAIL_PATTERN.test(profile.email)) {
-      setSubmitting(true);
-      try {
-        finishWith(rememberAccess(await requestAccess({ email: profile.email }), profile.email));
-      } catch (err) {
-        handleAuthorizationError(err);
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
-    setStep("email");
-  };
-
-  // Step 2: the PIN is verified by the SERVER right here, so a wrong one is
-  // reported inline on this screen before any email is asked for.
-  const handlePin = async (event) => {
+  // The one submit: validate what is on screen, let the SERVER check email + PIN
+  // together (so a wrong PIN is reported inline, before anything is prepared),
+  // then start the download.
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (submitting) return;
     setErrors({});
-    if (pin.length < 4) {
-      setErrors({ pin: "Enter the download PIN your photographer gave you." });
+    if (!needsGate) {
+      finishWith(rememberedAccess);
       return;
     }
-    setSubmitting(true);
-    try {
-      const rememberedEmail = requiresEmail && profile?.email && EMAIL_PATTERN.test(profile.email) ? profile.email : null;
-      const grant = await requestAccess({ pin, email: rememberedEmail || undefined });
-      setPin("");
-      finishWith(rememberAccess(grant, rememberedEmail));
-    } catch (err) {
-      if (err?.code === "email_required" && requiresEmail) {
-        // The PIN was accepted; only the email is still missing.
-        setStep("email");
-        return;
-      }
-      handleAuthorizationError(err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Step 3
-  const handleEmail = async (event) => {
-    event.preventDefault();
-    if (submitting) return;
-    setErrors({});
     const cleanEmail = email.trim();
-    if (!EMAIL_PATTERN.test(cleanEmail)) {
-      setErrors({ email: "Please enter a valid email address." });
+    const problems = {};
+    if (needsEmail && !EMAIL_PATTERN.test(cleanEmail)) problems.email = "Please enter a valid email address.";
+    if (needsPin && !pin.trim()) problems.pin = "Enter the download PIN.";
+    if (Object.keys(problems).length) {
+      setErrors(problems);
       return;
     }
     setSubmitting(true);
     try {
-      const grant = await requestAccess({ email: cleanEmail, pin: hasDownloadPin ? pin : undefined });
+      const grant = await requestAccess({
+        email: needsEmail ? cleanEmail : undefined,
+        pin: needsPin ? pin.trim() : undefined,
+      });
       setPin("");
-      finishWith(rememberAccess(grant, cleanEmail));
+      finishWith(rememberAccess(grant, needsEmail ? cleanEmail : null));
     } catch (err) {
       handleAuthorizationError(err);
     } finally {
@@ -417,7 +384,7 @@ export default function DownloadForm({
         </div>
         <p className="truncate rounded-lg bg-cream-100 px-3 py-2 text-xs text-muted" title={filename}>{filename} · {sizeLabel}</p>
         <div className="flex justify-center gap-3">
-          <button type="button" onClick={() => setStep("choose")} className="rounded-lg border border-cream-300 px-4 py-2 text-sm text-ink hover:bg-cream-100">Download again</button>
+          <button type="button" onClick={() => setStep("form")} className="rounded-lg border border-cream-300 px-4 py-2 text-sm text-ink hover:bg-cream-100">Download again</button>
           {onCancel && <button type="button" onClick={onCancel} className={primaryButton + " !px-6 !py-2"}>Done</button>}
         </div>
       </div>
@@ -488,105 +455,120 @@ export default function DownloadForm({
           </p>
         </div>
         <div className="flex justify-center gap-3">
-          <button type="button" onClick={() => { setErrors({}); setStep("choose"); }} className="rounded-lg border border-cream-300 px-4 py-2 text-sm text-ink hover:bg-cream-100">Back</button>
+          <button type="button" onClick={() => { setErrors({}); setStep("form"); }} className="rounded-lg border border-cream-300 px-4 py-2 text-sm text-ink hover:bg-cream-100">Back</button>
           <button type="button" onClick={() => prepareGallery(getDownloadAccess(sessionKey))} className={primaryButton + " !px-6 !py-2"}>{expired ? "Prepare again" : "Try again"}</button>
         </div>
       </div>
     );
   }
 
-  // ── 2: PIN ────────────────────────────────────────────────────────────────
-  if (step === "pin") {
-    return (
-      <form onSubmit={handlePin} noValidate className="space-y-6 text-center">
-        <div>
-          <h4 className={heading}>Download PIN</h4>
-          <p className="mt-3 text-sm leading-relaxed text-muted">Enter the download PIN your photographer gave you to download this photo collection.</p>
-        </div>
-        <PinBoxes value={pin} onChange={(value) => { setPin(value); if (errors.pin) setErrors({}); }} invalid={Boolean(errors.pin)} autoFocus describedBy={`${uid}-pin-error`} />
-        <p id={`${uid}-pin-error`} role="alert" className="min-h-[1.25rem] text-sm text-red-600">{errors.pin || ""}</p>
-        {errors.form && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{errors.form}</p>}
-        <div className="flex justify-center gap-2">
-          <button type="button" onClick={() => { setErrors({}); setStep("choose"); }} className={ghostButton}>Back</button>
-          <button type="submit" disabled={submitting} className={primaryButton}>{submitting ? "Checking…" : "Next"}</button>
-        </div>
-      </form>
-    );
-  }
-
-  // ── 3: email ──────────────────────────────────────────────────────────────
-  if (step === "email") {
-    return (
-      <form onSubmit={handleEmail} noValidate className="space-y-5 text-center">
-        <div>
-          <h4 className={heading}>Download Photos</h4>
-          <p className="mt-3 text-sm leading-relaxed text-muted">Your email will be used to notify you when the files are ready for download.</p>
-        </div>
-        <div className="space-y-1.5 text-left">
-          <label htmlFor={`${uid}-email`} className="block text-[11px] font-medium uppercase tracking-wider text-muted">Email address</label>
-          <input id={`${uid}-email`} type="email" autoComplete="email" autoFocus value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@email.com" aria-invalid={Boolean(errors.email)} className={inputClass(errors.email)} />
-          {errors.email && <p role="alert" className="text-xs text-red-600">{errors.email}</p>}
-        </div>
-        <p className="text-left text-[11px] leading-relaxed text-muted">By continuing, you agree that your email is shared with the photographer so they know who downloaded their photos. We&apos;ll remember it on this device.</p>
-        {errors.form && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{errors.form}</p>}
-        <div className="flex justify-center gap-2">
-          {!resumeJobId && <button type="button" onClick={() => { setErrors({}); setStep(hasDownloadPin ? "pin" : "choose"); }} className={ghostButton}>Back</button>}
-          <button type="submit" disabled={submitting} className={primaryButton}>{submitting ? "Checking…" : "Next"}</button>
-        </div>
-      </form>
-    );
-  }
-
-  // ── 1: choose ─────────────────────────────────────────────────────────────
+  // ── the one box ───────────────────────────────────────────────────────────
   const scopeOptions = [{ id: "", name: "All photos", photo_count: photoCount }, ...photoSets];
+  const gateIntro =
+    needsEmail && needsPin
+      ? "Your email will be used to notify you when the files are ready for download. Please enter the download PIN provided by your photographer to download this photo collection."
+      : needsPin
+        ? "Please enter the download PIN provided by your photographer to download this photo collection."
+        : "Your email will be used to notify you when the files are ready for download.";
   return (
-    <form onSubmit={handleChoose} noValidate className="space-y-7 text-left">
-      {!isPhoto && (
-        <fieldset>
-          <legend className={sectionLabel}>Choose Photos</legend>
-          <div className="space-y-2">
-            {scopeOptions.map((option) => (
-              <label key={option.id || "all"} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-1 py-1.5 text-sm text-ink">
-                <span className="flex items-center gap-3">
-                  <input type="radio" name={`${uid}-scope`} checked={scopeSetId === option.id} onChange={() => setScopeSetId(option.id)} className="h-4 w-4 accent-ink" />
-                  {option.name}
-                </span>
-                <span className="text-xs text-muted">{option.photo_count ?? 0} photos</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+    <form onSubmit={handleSubmit} noValidate className="space-y-7 text-left">
+      {needsGate && (
+        <section className="space-y-4" aria-label="Your details">
+          <p className="text-sm leading-relaxed text-muted">{gateIntro}</p>
+          {needsEmail && (
+            <div className="space-y-1.5">
+              <label htmlFor={`${uid}-email`} className="block text-[11px] font-medium uppercase tracking-wider text-muted">Email address</label>
+              <input
+                id={`${uid}-email`}
+                type="email"
+                autoComplete="email"
+                autoFocus
+                value={email}
+                onChange={(event) => { setEmail(event.target.value); if (errors.email) setErrors({}); }}
+                placeholder="you@email.com"
+                aria-invalid={Boolean(errors.email)}
+                aria-describedby={errors.email ? `${uid}-email-error` : undefined}
+                className={inputClass(errors.email)}
+              />
+              {errors.email && <p id={`${uid}-email-error`} role="alert" className="text-xs text-red-600">{errors.email}</p>}
+              <p className="text-[11px] leading-relaxed text-muted">By continuing, you agree that your email is shared with the photographer so they know who downloaded their photos. We&apos;ll remember it on this device.</p>
+            </div>
+          )}
+          {needsPin && (
+            <div className="space-y-1.5">
+              <label htmlFor={`${uid}-pin`} className="block text-[11px] font-medium uppercase tracking-wider text-muted">Download PIN</label>
+              <input
+                id={`${uid}-pin`}
+                ref={pinInputRef}
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                autoFocus={!needsEmail}
+                maxLength={8}
+                value={pin}
+                onChange={(event) => { setPin(event.target.value.replace(/\D/g, "")); if (errors.pin) setErrors({}); }}
+                placeholder="Enter download PIN"
+                aria-invalid={Boolean(errors.pin)}
+                aria-describedby={errors.pin ? `${uid}-pin-error` : undefined}
+                className={inputClass(errors.pin)}
+              />
+              {errors.pin && <p id={`${uid}-pin-error`} role="alert" className="text-xs text-red-600">{errors.pin}</p>}
+            </div>
+          )}
+        </section>
       )}
-      {isPhoto && <p className="truncate text-sm text-muted" title={target.photo?.original_name}>{target.photo?.original_name || "This photo"}</p>}
 
-      <fieldset>
-        <legend className={sectionLabel}>Choose Download Size</legend>
-        <div className="space-y-2.5">
-          {allowedSizes.map((option) => (
-            <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg px-1 py-1.5">
-              <input type="radio" name={`${uid}-resolution`} value={option.value} checked={resolution === option.value} onChange={() => setResolution(option.value)} className="mt-1 h-4 w-4 accent-ink" />
-              <span>
-                <span className="block text-sm text-ink">{option.label}</span>
-                <span className="block text-xs text-muted">{option.note}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {!resumeJobId && (
+        <>
+          {!isPhoto && (
+            <fieldset>
+              <legend className={sectionLabel}>Choose Photos</legend>
+              <div className="space-y-2">
+                {scopeOptions.map((option) => (
+                  <label key={option.id || "all"} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-1 py-1.5 text-sm text-ink">
+                    <span className="flex items-center gap-3">
+                      <input type="radio" name={`${uid}-scope`} checked={scopeSetId === option.id} onChange={() => setScopeSetId(option.id)} className="h-4 w-4 accent-ink" />
+                      {option.name}
+                    </span>
+                    <span className="text-xs text-muted">{option.photo_count ?? 0} photos</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          {isPhoto && <p className="truncate text-sm text-muted" title={target.photo?.original_name}>{target.photo?.original_name || "This photo"}</p>}
 
-      <div>
-        <p className={sectionLabel}>Download To</p>
-        <div className="flex items-center justify-center gap-3 rounded-lg border border-cream-300 bg-white px-4 py-3.5 text-sm text-ink">
-          <svg className="h-5 w-5 text-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9H4V6zm-2 11h20v1a2 2 0 01-2 2H4a2 2 0 01-2-2v-1z" /></svg>
-          Save to My Device
-          <svg className="h-4 w-4 text-brand-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-        </div>
-      </div>
+          <fieldset>
+            <legend className={sectionLabel}>Choose Download Size</legend>
+            <div className="space-y-2.5">
+              {allowedSizes.map((option) => (
+                <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg px-1 py-1.5">
+                  <input type="radio" name={`${uid}-resolution`} value={option.value} checked={resolution === option.value} onChange={() => setResolution(option.value)} className="mt-1 h-4 w-4 accent-ink" />
+                  <span>
+                    <span className="block text-sm text-ink">{option.label}</span>
+                    <span className="block text-xs text-muted">{option.note}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div>
+            <p className={sectionLabel}>Download To</p>
+            <div className="flex items-center justify-center gap-3 rounded-lg border border-cream-300 bg-white px-4 py-3.5 text-sm text-ink">
+              <svg className="h-5 w-5 text-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9H4V6zm-2 11h20v1a2 2 0 01-2 2H4a2 2 0 01-2-2v-1z" /></svg>
+              Save to My Device
+              <svg className="h-4 w-4 text-brand-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            </div>
+          </div>
+        </>
+      )}
 
       {errors.form && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{errors.form}</p>}
-      <div className="flex justify-center gap-2 pt-1">
+      {/* In the dialog the action row stays pinned to the bottom of the scrolling body, so the Download button is always in reach. */}
+      <div className={`flex justify-center gap-2 ${onCancel ? "sticky bottom-0 -mx-6 -mb-5 border-t border-cream-200 bg-surface-light px-6 py-4" : "pt-1"}`}>
         {onCancel && <button type="button" onClick={onCancel} className={ghostButton}>Cancel</button>}
-        <button type="submit" disabled={submitting} className={primaryButton}>{submitting ? "Checking…" : "Start Download"}</button>
+        <button type="submit" disabled={submitting} className={primaryButton}>{submitting ? "Checking…" : "Download"}</button>
       </div>
     </form>
   );

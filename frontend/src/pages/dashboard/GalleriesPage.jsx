@@ -11,7 +11,8 @@ import CreateGalleryModal from "../../components/shared/CreateGalleryModal";
 import Spinner from "../../components/ui/Spinner";
 import ItemMenu from "../../components/shared/ItemMenu";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
-import { canNativeShare, copyText, isMobileDevice, resolveShareUrl } from "../../utils/share";
+import ShareLinkModal from "../../components/shared/ShareLinkModal";
+import { resolveShareUrl } from "../../utils/share";
 
 export default function GalleriesPage() {
   const toast = useToast();
@@ -28,6 +29,7 @@ export default function GalleriesPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [linkGallery, setLinkGallery] = useState(null); // collection whose direct link is shown
   const [pendingDelete, setPendingDelete] = useState(null); // collection awaiting the permanent-delete confirmation
   const [deleting, setDeleting] = useState(false);
 
@@ -142,42 +144,13 @@ export default function GalleriesPage() {
     }
   };
 
-  const handleCopyLink = async (gallery) => {
-    if (!username) {
+  // "Get direct link": the same link modal the Share dropdown and the collection's three-dot menu use.
+  const handleGetLink = (gallery) => {
+    if (!resolveShareUrl(username, gallery.slug)) {
       toast("Unable to build link — profile not loaded yet.", "error");
       return;
     }
-
-    const link = `${window.location.origin}/g/${username}/${gallery.slug}`;
-
-    try {
-      await navigator.clipboard.writeText(link);
-      toast("Gallery link copied!", "success");
-    } catch {
-      toast(
-        "Could not copy link. Copy it manually from the address bar.",
-        "error",
-      );
-    }
-  };
-
-  // Share: the phone's share sheet on phones (as ShareMenu does), otherwise copy the canonical link.
-  const handleShare = async (gallery) => {
-    const url = resolveShareUrl(gallery.share_url, username, gallery.slug);
-    if (!url) {
-      toast("Unable to build link — profile not loaded yet.", "error");
-      return;
-    }
-    if (isMobileDevice() && canNativeShare()) {
-      try {
-        await navigator.share({ url, title: gallery.title });
-        return;
-      } catch (err) {
-        if (err?.name === "AbortError") return; // the person closed the sheet
-      }
-    }
-    const copied = await copyText(url);
-    toast(copied ? "Gallery link copied!" : "Could not copy link. Copy it manually from the address bar.", copied ? "success" : "error");
+    setLinkGallery(gallery);
   };
 
   // Permanent delete — only after the confirm dialog; the card disappears only after the server says it is gone.
@@ -350,7 +323,7 @@ export default function GalleriesPage() {
                     className="absolute right-3 top-3 z-10"
                     label={`More actions for ${gallery.title}`}
                     items={[
-                      { key: "share", label: "Share", onSelect: () => handleShare(gallery) },
+                      { key: "link", label: "Get direct link", onSelect: () => handleGetLink(gallery) },
                       {
                         key: "preview",
                         label: "Preview",
@@ -427,9 +400,9 @@ export default function GalleriesPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(gallery)}
-                      title="Copy public gallery link"
-                      aria-label="Copy public gallery link"
+                      onClick={() => handleGetLink(gallery)}
+                      title="Get direct link"
+                      aria-label="Get direct link"
                       className="px-3 py-2.5 border border-cream-200 hover:border-cream-300 text-muted hover:text-ink hover:bg-cream-100 rounded-xl transition-all cursor-pointer bg-surface-light"
                     >
                       <svg
@@ -454,6 +427,13 @@ export default function GalleriesPage() {
           })}
         </div>
       )}
+
+      <ShareLinkModal
+        open={linkGallery !== null}
+        onClose={() => setLinkGallery(null)}
+        url={linkGallery ? resolveShareUrl(username, linkGallery.slug) : ""}
+        note={linkGallery && linkGallery.is_published === false ? "This collection is a draft — clients can't open the link until you publish it." : null}
+      />
 
       <ConfirmDialog
         open={pendingDelete !== null}

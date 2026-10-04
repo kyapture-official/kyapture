@@ -80,8 +80,6 @@ export default function ClientGalleryPage() {
   const [isPasswordProtected, setIsPasswordProtected] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState(null);
   const [slideshowAutoplay, setSlideshowAutoplay] = useState(false);
-  // The gallery's canonical share link as sent by the server (credential-free).
-  const [shareUrl, setShareUrl] = useState(null);
 
   // The client's identity for favorites: the verified unlock token for a
   // protected gallery, or a per-browser generated id for an open one —
@@ -184,7 +182,6 @@ export default function ClientGalleryPage() {
     setGalleryTitle(data.title || "");
     setPhotographerName(data.photographer_name || "");
     setPhotographerLogo(data.photographer_logo || null);
-    setShareUrl(data.share_url || null);
     setLogoFailed(false);
     setEventDate(data.event_date || null);
     setCoverUrl(data.cover_url || null);
@@ -781,7 +778,7 @@ export default function ClientGalleryPage() {
                   <Download className="h-5 w-5" />
                 </button>
               )}
-              <ShareMenu url={resolveShareUrl(shareUrl, username, slug)} title={galleryTitle} />
+              <ShareMenu url={resolveShareUrl(username, slug)} title={galleryTitle} />
               {photos.length > 0 && (
                 <button
                   type="button"

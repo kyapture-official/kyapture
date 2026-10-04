@@ -5,7 +5,8 @@ import { usePixieset } from "../../context/PixiesetContext";
 import { useAuthStore } from "../../store/authStore";
 import { galleriesApi } from "../../api/galleriesApi";
 import ShareMenu from "../shared/ShareMenu";
-import { copyText, resolveShareUrl } from "../../utils/share";
+import ShareLinkModal from "../shared/ShareLinkModal";
+import { resolveShareUrl } from "../../utils/share";
 
 export default function TopNavBar({ gallery = null }) {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ export default function TopNavBar({ gallery = null }) {
   const { user } = useAuthStore();
   const { collection, publishCollection, unpublishCollection, addToast } = usePixieset();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [loading, setLoading] = useState(false); 
   const moreRef = useRef(null);
@@ -54,14 +56,19 @@ export default function TopNavBar({ gallery = null }) {
     }
   };
 
-  // The canonical, credential-free client link for this collection (server-built).
-  const shareUrl = resolveShareUrl(gallery?.share_url, user?.username, id);
+  // The credential-free client link for this collection, built from the app's own origin.
+  const shareUrl = resolveShareUrl(user?.username, id);
   const isDraft = gallery ? gallery.is_published === false : collection?.status !== "PUBLISHED";
 
-  const handleCopyDirectLink = async () => {
-    const ok = await copyText(shareUrl);
-    addToast({ message: ok ? "Direct link copied!" : "Failed to copy link", type: ok ? "success" : "error" });
+  const draftNote = isDraft ? "This collection is a draft — clients can't open the link until you publish it." : null;
+
+  const handleGetDirectLink = () => {
     setMoreOpen(false);
+    if (!shareUrl) {
+      addToast({ message: "Unable to build link — profile not loaded yet.", type: "error" });
+      return;
+    }
+    setLinkOpen(true);
   };
 
   const handleDelete = async () => {
@@ -148,12 +155,12 @@ export default function TopNavBar({ gallery = null }) {
             Preview
           </button>
 
-          {/* Share: Copy Link / WhatsApp / Facebook / Messenger / Email / native share */}
+          {/* Share: Share by email / Get direct link / Get QR code / native Share… */}
           <ShareMenu
             url={shareUrl}
             title={gallery?.title || collection?.title}
             variant="button"
-            note={isDraft ? "This collection is a draft — clients can't open the link until you publish it." : null}
+            note={draftNote}
           />
 
           {/* More Dropdown */}
@@ -168,7 +175,7 @@ export default function TopNavBar({ gallery = null }) {
             </button>
             {moreOpen && (
               <div className="absolute top-full mt-1 right-0 bg-surface-light border border-cream-200 rounded-xl shadow-lg py-1 w-52 animate-scale-in z-50">
-                <button onClick={handleCopyDirectLink} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
+                <button onClick={handleGetDirectLink} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-cream-100 transition-colors cursor-pointer">
                   Get direct link
                 </button>
                 <div className="border-t border-cream-200 my-1" />
@@ -180,6 +187,7 @@ export default function TopNavBar({ gallery = null }) {
           </div>
         </div>
       </div>
+      <ShareLinkModal open={linkOpen} onClose={() => setLinkOpen(false)} url={shareUrl} note={draftNote} />
     </div>
   );
 }

@@ -1,0 +1,267 @@
+[
+  {
+    "name": "open link: cover is shown with \"View Gallery\", no dialog / PIN field / email field",
+    "ok": true,
+    "detail": "{\"dialogs\":0,\"pinFields\":0,\"emailFields\":0,\"title\":\"Pin Gallery\",\"viewGallery\":true}"
+  },
+  {
+    "name": "open link: no download-access / download request is made on open",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "View Gallery scrolls to the photos with no gate",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "new visitor, click Download: ONE dialog with email AND PIN fields together",
+    "ok": true,
+    "detail": "{\"e\":1,\"p\":1,\"forms\":1}"
+  },
+  {
+    "name": "exactly one submit button \"Download\" (no Next / Start Download step)",
+    "ok": true,
+    "detail": "Cancel | DOWNLOAD"
+  },
+  {
+    "name": "size choice is in the same box",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no horizontal scroll with the gate open",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "empty submit: inline email + PIN messages, no request sent",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "wrong PIN: inline \"Incorrect PIN\", box stays open, email kept",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "wrong PIN: nothing was prepared (no POST /download/)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "wrong PIN: the PIN box was cleared",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "correct email + PIN → ZIP prepared → \"ready to download\"",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "ready file downloads as a real ZIP",
+    "ok": true,
+    "detail": "pin-gallery-photo-download-1of1.zip"
+  },
+  {
+    "name": "second download (single photo, same session): NO email / PIN fields",
+    "ok": true,
+    "detail": "{\"e\":0,\"p\":0}"
+  },
+  {
+    "name": "second download: size choice + one Download button",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "second download: photo file arrives",
+    "ok": true,
+    "detail": "qa-photo-1.jpg"
+  },
+  {
+    "name": "second download: no new download-access request (token reused)",
+    "ok": true,
+    "detail": "GET /public/qa14/pin-gallery/photo/01a10544-1771-70ae-bef5-199b8fdb308e/download/"
+  },
+  {
+    "name": "after a page reload in the same session: still no email / PIN asked",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no console/page errors in phase 1",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "email-required gallery, no PIN: email field only",
+    "ok": true,
+    "detail": "{\"e\":1,\"p\":0}"
+  },
+  {
+    "name": "email-only gallery: submit → ZIP ready",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "email-only gallery: activity email goes to the server",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "\"download ready\" email link points at the app port (3000), not the dev port",
+    "ok": true,
+    "detail": "http://localhost:3000/g/qa14/open-gallery/download?job"
+  },
+  {
+    "name": "no email requirement and no PIN: straight to size choice (no fields)",
+    "ok": true,
+    "detail": "{\"e\":0,\"p\":0}"
+  },
+  {
+    "name": "frictionless gallery: ZIP ready with no access request",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "gallery payload tells the client a PIN exists (no PIN value)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "ZIP prepare with email + PIN in the body but NO token → refused",
+    "ok": true,
+    "detail": "401 download_access_required"
+  },
+  {
+    "name": "direct photo URL, no token → refused",
+    "ok": true,
+    "detail": "401"
+  },
+  {
+    "name": "direct photo URL, forged token → refused",
+    "ok": true,
+    "detail": "401 download_access_expired"
+  },
+  {
+    "name": "download-access with a wrong PIN → 401 invalid_pin, no token",
+    "ok": true,
+    "detail": "401 invalid_pin"
+  },
+  {
+    "name": "download-access with the right PIN but no email → 400 email_required, no token",
+    "ok": true,
+    "detail": "400 email_required"
+  },
+  {
+    "name": "dropdown lists exactly Share by email / Get direct link / Get QR code + Share… (navigator.share supported)",
+    "ok": true,
+    "detail": "[\"Share by email\",\"Get direct link\",\"Get QR code\",\"Share…\"]"
+  },
+  {
+    "name": "no WhatsApp / Facebook / Messenger / Copy link buttons",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Share by email: mailto with the gallery title as subject and the link in the body",
+    "ok": true,
+    "detail": "mailto:?subject=Pin%20Gallery&body=Pin%20Gallery%20%E2%80%94%20view%20the%20gallery%3A%0A%0Ahttp%3A%2F%2Flocalhost%3A3000%2Fg%2Fqa14%2Fpin-gallery"
+  },
+  {
+    "name": "direct link is built from the page origin: http://localhost:3000/g/qa14/pin-gallery",
+    "ok": true,
+    "detail": "http://localhost:3000/g/qa14/pin-gallery"
+  },
+  {
+    "name": "Copy → button shows \"Copied\"",
+    "ok": true,
+    "detail": "COPIED"
+  },
+  {
+    "name": "clipboard now holds the direct link",
+    "ok": true,
+    "detail": "http://localhost:3000/g/qa14/pin-gallery"
+  },
+  {
+    "name": "QR modal shows a generated QR image",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Download PNG saves a PNG whose QR decodes to the gallery link",
+    "ok": true,
+    "detail": "pin-gallery-qr.png → http://localhost:3000/g/qa14/pin-gallery"
+  },
+  {
+    "name": "no horizontal scroll with modals",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "copied link opens in a fresh tab (mobile viewport): HTTP 200, shows \"Pin Gallery\"",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "fresh tab: opens straight to the gallery — no PIN / email prompt",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "where navigator.share is unsupported, \"Share…\" is not offered",
+    "ok": true,
+    "detail": "[\"Share by email\",\"Get direct link\",\"Get QR code\"]"
+  },
+  {
+    "name": "no console/page errors in phase 4",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "collection card ⋯ menu offers \"Get direct link\"",
+    "ok": true,
+    "detail": "[\"Get direct link\",\"Preview\",\"Quick edit\",\"Delete\"]"
+  },
+  {
+    "name": "card \"Get direct link\" → same modal, link http://localhost:3000/g/qa14/pin-gallery",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "workspace has a Share button",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "dashboard Share dropdown: same minimal list",
+    "ok": true,
+    "detail": "[\"Share by email\",\"Get direct link\",\"Get QR code\",\"Share…\"]"
+  },
+  {
+    "name": "dashboard Share → Get direct link: http://localhost:3000/g/qa14/pin-gallery",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "three-dot menu keeps only \"Get direct link\" and \"Delete collection\"",
+    "ok": true,
+    "detail": "[\"Get direct link\",\"Delete collection\"]"
+  },
+  {
+    "name": "three-dot \"Get direct link\" opens the SAME link modal with the same link",
+    "ok": true,
+    "detail": "http://localhost:3000/g/qa14/pin-gallery"
+  },
+  {
+    "name": "no horizontal scroll on the dashboard with the modal",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no console/page errors in phase 5",
+    "ok": true,
+    "detail": ""
+  }
+]

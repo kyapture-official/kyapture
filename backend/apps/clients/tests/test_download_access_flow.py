@@ -669,3 +669,58 @@ class DownloadActivityEndToEndTests(DownloadFlowBase):
         self.zip()
         self.authorize(pin="0000")
         self.assertFalse(DownloadLog.objects.exists())
+
+
+class CombinedEmailAndPinGateTests(DownloadFlowBase):
+    """
+    The client asks for email and PIN in ONE box and sends them in ONE request.
+    The server alone decides: neither half can be satisfied by the other, and a
+    half-correct submission never yields a token.
+    """
+
+    def test_wrong_pin_with_a_valid_email_gets_no_token(self):
+        response = self.authorize(email="client@example.com", pin="0000")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["code"], "invalid_pin")
+        self.assertNotIn("download_token", response.data)
+
+    def test_the_pin_is_judged_before_the_email(self):
+        # A wrong PIN must read "Incorrect PIN" even when the email is also bad,
+        # so the box never reveals anything beyond the PIN failing.
+        response = self.client.post(self.access_url, {"pin": "0000", "email": "nope"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["code"], "invalid_pin")
+
+    def test_correct_pin_without_an_email_gets_no_token_when_email_is_required(self):
+        response = self.client.post(self.access_url, {"pin": PIN}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "email_required")
+        self.assertNotIn("download_token", response.data)
+
+    def test_a_valid_email_alone_never_opens_a_pin_gallery(self):
+        response = self.client.post(self.access_url, {"email": "client@example.com"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["code"], "pin_required")
+        self.assertNotIn("download_token", response.data)
+
+    def test_email_and_pin_posted_straight_to_prepare_do_not_replace_the_token(self):
+        # No bypass through the ZIP endpoint: credentials in the body are not a
+        # substitute for the token the access endpoint issues.
+        from apps.clients.models import DownloadJob
+
+        response = self.client.post(
+            f"{self.base}download/", {"email": "client@example.com", "pin": PIN}, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["code"], "download_access_required")
+        self.assertFalse(DownloadJob.objects.exists())
+
+    def test_one_combined_authorization_serves_every_later_photo_without_asking_again(self):
+        token = self.token(email="client@example.com", pin=PIN)
+        for asset in (self.a1, self.a2, self.b1):
+            response = self.client.get(self.photo_url(asset), {"download_token": token})
+            self.assertEqual(response.status_code, status.HTTP_200_OK, asset.original_name)
+        rows = DownloadLog.objects.order_by("created_at")
+        self.assertEqual(rows.count(), 3)
+        self.assertEqual({row.email for row in rows}, {"client@example.com"})
+        self.assertTrue(all(row.pin_verified for row in rows))
