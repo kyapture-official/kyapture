@@ -130,6 +130,10 @@ def normalize_download_settings(value, *, instance=None, user=None):
                 raise serializers.ValidationError({
                     'sets_enabled': 'One or more sets do not belong to this gallery.'
                 })
+        if not sets_enabled:
+            raise serializers.ValidationError({
+                'sets_enabled': 'At least one set must stay available for download.'
+            })
         sets_enabled = sorted(set(sets_enabled))
 
     limit_total = value.get('limit_total', None)
@@ -155,10 +159,9 @@ def normalize_download_settings(value, *, instance=None, user=None):
             raise serializers.ValidationError({'allowed_emails': f'"{raw}" is not a valid email address.'})
         seen.add(email)
         allowed_emails.append(email)
-    if restrict_contacts and not allowed_emails:
-        raise serializers.ValidationError({
-            'allowed_emails': 'Add at least one email address to restrict downloads to.'
-        })
+    # restrict_contacts On with an empty list is allowed: nobody can download
+    # until a contact is added (apps/clients/download_access.py::email_is_allowed
+    # fails closed), and the settings screen says so.
 
     # Omitted = keep what is stored (a block that never mentions the PIN
     # toggle must not silently flip it); a fresh gallery defaults to On.

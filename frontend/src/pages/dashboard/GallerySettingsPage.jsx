@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
+import { photosApi } from "../../api/photosApi";
 import { useToast } from "../../components/ui/Toast";
 import { useSubscription } from "../../hooks/useSubscription";
 import { toDateInputValue } from "../../utils/formatters";
@@ -20,13 +21,6 @@ const normalizeWebPx = (px) => (px === 1280 ? 1024 : px);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MIN_LENGTH = 4; // mirrors GallerySetPasswordView
-
-function clampPositiveIntOrNull(raw) {
-  const trimmed = String(raw ?? "").trim();
-  if (!trimmed) return null;
-  const n = parseInt(trimmed, 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
 
 /** Small fading "Saved" / "Saving…" indicator for the autosaved Download tab. */
 function SaveIndicator({ state }) {
@@ -85,6 +79,82 @@ function SecretField({ id, value, onChange, onCommit, label, invalid, ...inputPr
     </div>
   );
 }
+
+/** "On"/"Off" switch with its label beside it (Download > Advanced). */
+function OnOffToggle({ label, checked, onChange, disabled }) {
+  return (
+    <label className="flex items-center gap-3 text-sm text-ink w-fit cursor-pointer">
+      <span className="toggle-wrap">
+        <input
+          type="checkbox"
+          aria-label={label}
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="toggle-slider" />
+      </span>
+      {checked ? "On" : "Off"}
+    </label>
+  );
+}
+
+const LIMIT_RE = /^[1-9]\d{0,6}$/;
+
+/**
+ * Whole-number field that commits on blur / Enter only -- never while the
+ * photographer is still typing ("1" on the way to "100" must not be saved).
+ * An empty field commits null (no limit); anything else that is not a whole
+ * number >= 1 shows an inline message and leaves the saved value alone.
+ */
+function LimitField({ id, committed, onCommit, placeholder, suffix, disabled }) {
+  const [draft, setDraft] = useState(committed != null ? String(committed) : "");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setDraft(committed != null ? String(committed) : "");
+    setError("");
+  }, [committed]);
+
+  const commit = () => {
+    const text = draft.trim();
+    if (text === "") { setError(""); onCommit(null); return; }
+    if (!LIMIT_RE.test(text)) { setError("Enter a whole number of 1 or more."); return; }
+    setError("");
+    onCommit(Number(text));
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div
+        className={`flex items-center w-full max-w-xs rounded-lg border bg-white transition-all focus-within:ring-2 ${
+          error
+            ? "border-red-300 focus-within:border-red-400 focus-within:ring-red-200"
+            : "border-cream-200 focus-within:border-brand-green-500 focus-within:ring-brand-green-500/10"
+        }`}
+      >
+        <input
+          id={id}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={7}
+          placeholder={placeholder}
+          value={draft}
+          disabled={disabled}
+          onChange={(e) => { setDraft(e.target.value.replace(/\D/g, "")); setError(""); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
+          onBlur={commit}
+          className="flex-1 min-w-0 bg-transparent px-3 py-2 text-sm text-ink focus:outline-none disabled:opacity-50"
+        />
+        <span className="pr-3 text-xs text-muted">{suffix}</span>
+      </div>
+      {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+const MAX_CONTACTS = 500;
+const CONTACT_SPLIT_RE = /[\s,;]+/;
 
 export default function GallerySettingsPage() {
   const { gallery, setGallery, slug, navigate, isMountedRef } = useOutletContext();
@@ -145,26 +215,36 @@ export default function GallerySettingsPage() {
     initialDownloads.require_email !== false,
   );
 
-  // No control for this on the General tab any more; carried through every
-  // save so an existing "Photo Sets Available for Download" choice is kept.
-  const [setsEnabled] = useState(
+  // Photo sets (Advanced). null = every set may be downloaded (the default).
+  const [sets, setSets] = useState(null); // null while loading
+  const [setsEnabled, setSetsEnabled] = useState(
     Array.isArray(initialDownloads.sets_enabled) ? initialDownloads.sets_enabled : null,
   );
+  const [setsError, setSetsError] = useState("");
 
-  const [limitTotal, setLimitTotal] = useState(
-    initialDownloads.limit_total != null ? String(initialDownloads.limit_total) : "",
-  );
+  // Limit Photo Downloads: `limitOn` is only the reveal state; nothing is
+  // enforced until a whole number >= 1 is saved. Off = null.
+  const [limitTotal, setLimitTotal] = useState(initialDownloads.limit_total ?? null);
+  const [limitOn, setLimitOn] = useState(initialDownloads.limit_total != null);
+
+  // Restrict Downloads to Specific Contacts. On with an empty list is a real,
+  // saved state: the server then lets nobody download. Off clears the list.
   const [restrictContacts, setRestrictContacts] = useState(Boolean(initialDownloads.restrict_contacts));
   const [allowedEmails, setAllowedEmails] = useState(
     Array.isArray(initialDownloads.allowed_emails) ? initialDownloads.allowed_emails : [],
   );
-  const [newEmail, setNewEmail] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
   const [emailError, setEmailError] = useState("");
+
+  // Limit PIN usage (design_settings.privacy.pin_limit). Off = null.
+  const [pinLimit, setPinLimit] = useState(gallery.design_settings?.privacy?.pin_limit ?? null);
+  const [pinLimitOn, setPinLimitOn] = useState(gallery.design_settings?.privacy?.pin_limit != null);
+  const pinUseCount = gallery.design_settings?.privacy?.pin_use_count ?? 0;
 
   const [downloadSaveState, setDownloadSaveState] = useState("idle"); // idle | saving | error
   const [downloadSaveError, setDownloadSaveError] = useState("");
   const downloadTimerRef = useRef(null);
-  const downloadSkipRef = useRef(true);
+  const savedDownloadsRef = useRef(null); // last values the server confirmed
 
   // Locked product decision: the MVP gallery URL is /g/:username/:slug —
   // stable, server-assigned, not photographer-editable (there is no
@@ -216,53 +296,95 @@ export default function GallerySettingsPage() {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    photosApi.listSets(slug).then((data) => {
+      if (!cancelled) setSets(Array.isArray(data) ? data : data?.results || []);
+    }).catch(() => { if (!cancelled) setSets([]); });
+    return () => { cancelled = true; };
+  }, [slug]);
+
   // ── Download tab: one consistent autosave pattern. Every toggle/radio/
-  // checkbox/number field below lands here, debounced, with a
-  // "Collection updated" toast -- no separate Save/Set buttons. ──
+  // checkbox/field below lands here (number fields only once committed on
+  // blur/Enter), debounced, with a "Collection updated" toast -- no separate
+  // Save/Set buttons. A failed save puts every control back to the last
+  // value the server confirmed and says so inline. ──
+  const downloadsSnapshot = () => ({
+    isDownloadable, highResEnabled, highResMode: effectiveHighResMode, webEnabled, webPx,
+    requireDownloadEmail, setsEnabled, limitTotal, restrictContacts, allowedEmails, pinEnabled, pinLimit,
+  });
+
+  const restoreDownloads = (s) => {
+    setIsDownloadable(s.isDownloadable);
+    setHighResEnabled(s.highResEnabled);
+    setHighResMode(s.highResMode);
+    setWebEnabled(s.webEnabled);
+    setWebPx(s.webPx);
+    setRequireDownloadEmail(s.requireDownloadEmail);
+    setSetsEnabled(s.setsEnabled);
+    setLimitTotal(s.limitTotal);
+    setLimitOn(s.limitTotal != null);
+    setRestrictContacts(s.restrictContacts);
+    setAllowedEmails(s.allowedEmails);
+    setPinEnabled(s.pinEnabled);
+    setPinLimit(s.pinLimit);
+    setPinLimitOn(s.pinLimit != null);
+  };
+
   const saveDownloadSettings = async () => {
+    const snapshot = downloadsSnapshot();
     setDownloadSaveState("saving");
     setDownloadSaveError("");
     const payload = {
-      is_downloadable: isDownloadable,
+      is_downloadable: snapshot.isDownloadable,
       design_settings: {
         ...(gallery.design_settings || {}),
         downloads: {
-          require_email: requireDownloadEmail,
-          high_res: { enabled: highResEnabled, mode: effectiveHighResMode },
-          web: { enabled: webEnabled, px: webPx },
-          sets_enabled: setsEnabled,
-          limit_total: clampPositiveIntOrNull(limitTotal),
-          restrict_contacts: restrictContacts,
-          allowed_emails: allowedEmails,
-          pin_enabled: pinEnabled,
+          require_email: snapshot.requireDownloadEmail,
+          high_res: { enabled: snapshot.highResEnabled, mode: snapshot.highResMode },
+          web: { enabled: snapshot.webEnabled, px: snapshot.webPx },
+          sets_enabled: snapshot.setsEnabled,
+          limit_total: snapshot.limitTotal,
+          restrict_contacts: snapshot.restrictContacts,
+          allowed_emails: snapshot.allowedEmails,
+          pin_enabled: snapshot.pinEnabled,
         },
+        privacy: { ...(gallery.design_settings?.privacy || {}), pin_limit: snapshot.pinLimit },
       },
     };
     try {
       const updated = USE_MOCK_DATA ? { ...gallery, ...payload } : await galleriesApi.updateGallery(slug, payload);
       if (!isMountedRef.current) return;
+      savedDownloadsRef.current = snapshot;
       setGallery(updated);
       setDownloadSaveState("idle");
       toast("Collection updated", "success");
     } catch (err) {
       if (!isMountedRef.current) return;
       const data = err.response?.data;
+      const detail = data?.error || data?.detail
+        || (data && typeof data === "object" ? Object.values(data).flat().map(String).join(" ") : "");
+      if (savedDownloadsRef.current) restoreDownloads(savedDownloadsRef.current);
       setDownloadSaveState("error");
-      setDownloadSaveError(data?.error || "Failed to save download settings.");
-      toast(data?.error || "Failed to save download settings", "error");
+      setDownloadSaveError(`Couldn't save, your previous setting was kept. ${detail}`.trim());
     }
   };
 
+  const setsInvalid = Array.isArray(setsEnabled) && setsEnabled.length === 0;
+
   useEffect(() => {
-    if (downloadSkipRef.current) { downloadSkipRef.current = false; return; }
-    if (!highResEnabled && !webEnabled) return; // invalid -- wait for the user to fix it
+    // The first run only records what the page loaded with.
+    if (savedDownloadsRef.current === null) { savedDownloadsRef.current = downloadsSnapshot(); return undefined; }
+    if (JSON.stringify(downloadsSnapshot()) === JSON.stringify(savedDownloadsRef.current)) return undefined;
+    if (!highResEnabled && !webEnabled) return undefined; // invalid -- wait for the user to fix it
+    if (setsInvalid) return undefined; // same: at least one set must stay on
     if (downloadTimerRef.current) window.clearTimeout(downloadTimerRef.current);
     downloadTimerRef.current = window.setTimeout(saveDownloadSettings, 700);
     return () => window.clearTimeout(downloadTimerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isDownloadable, highResEnabled, highResMode, webEnabled, webPx, requireDownloadEmail,
-    setsEnabled, limitTotal, restrictContacts, allowedEmails, pinEnabled,
+    setsEnabled, limitTotal, restrictContacts, allowedEmails, pinEnabled, pinLimit,
   ]);
 
   // ── Download PIN (Download tab). Typed by the photographer, hashed
@@ -355,15 +477,61 @@ export default function GallerySettingsPage() {
     }
   };
 
-  const addAllowedEmail = () => {
-    const email = newEmail.trim().toLowerCase();
-    if (!email) return;
-    if (!EMAIL_RE.test(email)) { setEmailError("Enter a valid email address."); return; }
-    setEmailError("");
-    if (!allowedEmails.includes(email)) setAllowedEmails((prev) => [...prev, email]);
-    setNewEmail("");
+  // ── Advanced: Restrict Downloads to Specific Contacts (email chips). ──────
+  // Splits on commas/spaces/newlines, lowercases, de-duplicates. Invalid
+  // entries are never added as chips; they stay in the box with a message.
+  const addContacts = (raw) => {
+    const parts = String(raw).split(CONTACT_SPLIT_RE).map((p) => p.trim().toLowerCase()).filter(Boolean);
+    if (parts.length === 0) { setEmailDraft(""); setEmailError(""); return; }
+    const invalid = [];
+    const next = [...allowedEmails];
+    let capped = false;
+    for (const part of parts) {
+      if (!EMAIL_RE.test(part) || part.length > 254) { invalid.push(part); continue; }
+      if (next.includes(part)) continue;
+      if (next.length >= MAX_CONTACTS) { capped = true; continue; }
+      next.push(part);
+    }
+    if (next.length !== allowedEmails.length) setAllowedEmails(next);
+    setEmailDraft(invalid.join(" "));
+    if (capped) setEmailError(`You can add up to ${MAX_CONTACTS} contacts.`);
+    else if (invalid.length === 1 && parts.length === 1) setEmailError("Enter a valid email address.");
+    else if (invalid.length > 0) {
+      const shown = invalid.slice(0, 3).join(", ") + (invalid.length > 3 ? ` and ${invalid.length - 3} more` : "");
+      setEmailError(`Not added, not valid email addresses: ${shown}`);
+    } else setEmailError("");
   };
   const removeAllowedEmail = (email) => setAllowedEmails((prev) => prev.filter((e) => e !== email));
+
+  const toggleRestrictContacts = (on) => {
+    setRestrictContacts(on);
+    if (!on) { setAllowedEmails([]); setEmailDraft(""); setEmailError(""); }
+  };
+
+  const toggleLimitTotal = (on) => {
+    setLimitOn(on);
+    if (!on) setLimitTotal(null);
+  };
+
+  const togglePinLimit = (on) => {
+    setPinLimitOn(on);
+    if (!on) setPinLimit(null);
+  };
+
+  // ── Advanced: Photo Sets Available for Download. Checking every set is the
+  // same as "no restriction" (null); at least one must stay checked. ───────
+  const isSetEnabled = (setId) => setsEnabled === null || setsEnabled.includes(setId);
+  const toggleSet = (setId) => {
+    const allIds = sets.map((s) => s.id);
+    const active = setsEnabled === null ? allIds : setsEnabled;
+    const next = active.includes(setId) ? active.filter((id) => id !== setId) : [...active, setId];
+    if (next.length === 0) {
+      setSetsError("At least one set must stay available for download.");
+      return;
+    }
+    setSetsError("");
+    setSetsEnabled(next.length === allIds.length ? null : next);
+  };
 
   const noSizeSelected = !highResEnabled && !webEnabled;
   // A Free (or lapsed) account never sees or saves "original": the server
@@ -750,75 +918,157 @@ export default function GallerySettingsPage() {
             )}
 
             {downloadSubTab === "advanced" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3 p-4 bg-cream-100 rounded-xl border border-cream-200">
-                  <div>
-                    <p className="text-sm font-medium text-ink">Limit Photo Downloads</p>
-                    <p className="text-xs text-muted mt-0.5">Stop all downloads once this many have been completed, in total.</p>
-                  </div>
-                  <input
-                    type="number"
-                    min={1}
-                    placeholder="Unlimited"
-                    value={limitTotal}
-                    onChange={(e) => setLimitTotal(e.target.value)}
-                    className="w-28 px-3 py-1.5 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none text-right"
-                  />
+              <div className="space-y-5">
+                {/* Limit Photo Downloads */}
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-ink">Limit Photo Downloads</p>
+                  <OnOffToggle label="Limit Photo Downloads" checked={limitOn} onChange={toggleLimitTotal} />
+                  {limitOn && (
+                    <LimitField
+                      id="limit-total"
+                      committed={limitTotal}
+                      onCommit={setLimitTotal}
+                      placeholder="e.g. 100"
+                      suffix="photos"
+                    />
+                  )}
+                  {limitOn && limitTotal == null && (
+                    <p className="text-xs text-amber-700">No limit until you enter a number.</p>
+                  )}
+                  <p className="text-xs text-muted">
+                    Stop downloads once this many photos have been downloaded in total, shared by all visitors.
+                    A gallery or set ZIP counts every photo in it.
+                  </p>
                 </div>
 
-                <div className="rounded-xl border border-cream-200 p-4 space-y-3">
-                  <label className="flex cursor-pointer items-center justify-between">
-                    <span>
-                      <span className="block text-sm font-medium text-ink">Restrict Downloads to Specific Contacts</span>
-                      <span className="block text-xs text-muted mt-0.5">Only the email addresses below may download.</span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={restrictContacts}
-                      onChange={(e) => setRestrictContacts(e.target.checked)}
-                      className="h-4 w-4 accent-brand-green-600"
-                    />
-                  </label>
-
+                {/* Restrict Downloads to Specific Contacts */}
+                <div className="pt-5 border-t border-cream-200 space-y-3">
+                  <p className="text-sm font-medium text-ink">Restrict Downloads to Specific Contacts</p>
+                  <OnOffToggle label="Restrict Downloads to Specific Contacts" checked={restrictContacts} onChange={toggleRestrictContacts} />
                   {restrictContacts && (
-                    <div className="space-y-2 pt-2 border-t border-cream-200">
-                      <div className="flex gap-2">
+                    <div className="space-y-2 max-w-xl">
+                      <div
+                        className={`flex flex-wrap items-center gap-2 p-2 rounded-lg border bg-white max-h-64 overflow-y-auto transition-all focus-within:ring-2 ${
+                          emailError
+                            ? "border-red-300 focus-within:border-red-400 focus-within:ring-red-200"
+                            : "border-cream-200 focus-within:border-brand-green-500 focus-within:ring-brand-green-500/10"
+                        }`}
+                      >
+                        {allowedEmails.map((email) => (
+                          <span key={email} className="inline-flex items-center gap-1 max-w-full pl-2.5 pr-1 py-1 rounded-full bg-cream-100 border border-cream-200 text-xs text-ink">
+                            <span className="truncate">{email}</span>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${email}`}
+                              onClick={() => removeAllowedEmail(email)}
+                              className="flex-none w-5 h-5 rounded-full text-muted hover:text-ink hover:bg-cream-200 cursor-pointer leading-none"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
                         <input
-                          type="email"
-                          placeholder="client@example.com"
-                          value={newEmail}
-                          onChange={(e) => { setNewEmail(e.target.value); setEmailError(""); }}
-                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAllowedEmail(); } }}
-                          className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none"
+                          id="contacts-input"
+                          type="text"
+                          inputMode="email"
+                          autoComplete="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          placeholder={allowedEmails.length ? "Add another email" : "name@example.com"}
+                          value={emailDraft}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v.includes(",") || v.includes(";")) addContacts(v);
+                            else { setEmailDraft(v); setEmailError(""); }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); addContacts(emailDraft); }
+                            else if (e.key === "Backspace" && !emailDraft && allowedEmails.length) {
+                              removeAllowedEmail(allowedEmails[allowedEmails.length - 1]);
+                            }
+                          }}
+                          onPaste={(e) => {
+                            e.preventDefault();
+                            addContacts(`${emailDraft} ${e.clipboardData.getData("text")}`);
+                          }}
+                          onBlur={() => addContacts(emailDraft)}
+                          className="flex-1 min-w-[10rem] bg-transparent px-1 py-1 text-sm text-ink focus:outline-none"
                         />
-                        <button
-                          type="button"
-                          onClick={addAllowedEmail}
-                          className="px-3 py-2 border border-cream-200 text-ink text-sm font-medium rounded-lg hover:bg-cream-100 transition-colors cursor-pointer"
-                        >
-                          Add
-                        </button>
                       </div>
-                      {emailError && <p className="text-xs text-red-600">{emailError}</p>}
-                      {allowedEmails.length === 0 ? (
-                        <p className="text-xs text-amber-700">Add at least one email address to restrict downloads to.</p>
-                      ) : (
-                        <ul className="space-y-1.5">
-                          {allowedEmails.map((email) => (
-                            <li key={email} className="flex items-center justify-between px-3 py-1.5 bg-cream-100 rounded-lg text-sm text-ink">
-                              {email}
-                              <button
-                                type="button"
-                                onClick={() => removeAllowedEmail(email)}
-                                className="text-xs text-red-600 hover:text-red-700 cursor-pointer"
-                              >
-                                Remove
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
+                      {emailError && <p role="alert" className="text-xs text-red-600">{emailError}</p>}
+                      <p className="text-xs text-muted" data-testid="contacts-count">
+                        {allowedEmails.length} {allowedEmails.length === 1 ? "contact" : "contacts"}
+                      </p>
+                      {allowedEmails.length === 0 && (
+                        <p className="text-xs text-amber-700">No one can download until you add at least one email.</p>
                       )}
                     </div>
+                  )}
+                  <p className="text-xs text-muted">Allow only specific contacts to download photos and videos.</p>
+                </div>
+
+                {/* Photo Sets Available for Download */}
+                <div className="pt-5 border-t border-cream-200 space-y-3">
+                  <p className="text-sm font-medium text-ink">Photo Sets Available for Download</p>
+                  {sets === null ? (
+                    <p className="text-xs text-muted">Loading sets…</p>
+                  ) : sets.length === 0 ? (
+                    <p className="text-xs text-muted">This gallery has no photo sets yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {sets.map((set) => (
+                        <label key={set.id} className="flex items-center gap-3 text-sm text-ink w-fit cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isSetEnabled(set.id)}
+                            onChange={() => toggleSet(set.id)}
+                            className="accent-brand-green-600"
+                          />
+                          {set.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {(setsError || setsInvalid) && (
+                    <p role="alert" className="text-xs text-red-600">At least one set must stay available for download.</p>
+                  )}
+                  <p className="text-xs text-muted">
+                    Select which sets visitors can download. This applies to set, single-photo and whole-gallery
+                    downloads; while any set is unchecked, whole-gallery download is unavailable and visitors
+                    download set by set.
+                  </p>
+                </div>
+
+                {/* Limit PIN Usage */}
+                <div className="pt-5 border-t border-cream-200 space-y-3">
+                  <p className="text-sm font-medium text-ink">Limit PIN Usage</p>
+                  {pinEnabled && hasDownloadPin ? (
+                    <>
+                      <OnOffToggle label="Limit PIN Usage" checked={pinLimitOn} onChange={togglePinLimit} />
+                      {pinLimitOn && (
+                        <>
+                          <LimitField
+                            id="pin-limit"
+                            committed={pinLimit}
+                            onCommit={setPinLimit}
+                            placeholder="e.g. 5"
+                            suffix="uses"
+                          />
+                          {pinLimit != null ? (
+                            <p className="text-xs text-ink" data-testid="pin-usage">Used {pinUseCount} of {pinLimit}</p>
+                          ) : (
+                            <p className="text-xs text-amber-700">No limit until you enter a number.</p>
+                          )}
+                        </>
+                      )}
+                      <p className="text-xs text-muted">
+                        Limit how many times this PIN can be entered. Each correct entry counts once and unlocks
+                        downloads for a limited time, whatever the visitor downloads next (gallery, set or single
+                        photo). Wrong PINs don't count. Changing the PIN resets the count.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted">Turn on Download PIN in General to use this.</p>
                   )}
                 </div>
               </div>

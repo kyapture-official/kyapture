@@ -227,17 +227,24 @@ def email_is_allowed(gallery, email):
 
 def download_limit_reached(gallery):
     """
-    "Limit Photo Downloads" (total, shared by all visitors). Counts real
-    DownloadLog rows — one per prepared job actually served (not per
-    repeat serve of the same job) and one per single-photo/video GET —
-    the same rows that already back the photographer's Download Activity
-    feed, so there is no separate counter to keep in sync.
+    "Limit Photo Downloads" (total, shared by all visitors), counted in
+    PHOTOS: each DownloadLog row (one per prepared ZIP actually served, one
+    per single-photo/video GET) counts its photo_count, or 1 when that is
+    unknown (a single file, or a row written before photo_count existed).
+    The same rows back the photographer's Download Activity feed, so there is
+    no separate counter to keep in sync. Once the total has reached the limit
+    nothing new starts; a ZIP that started below it is allowed to finish.
     """
     limit_total = _effective_downloads(gallery)['limit_total']
     if not limit_total:
         return False
+    from django.db.models import Sum
+    from django.db.models.functions import Coalesce
     from .models import DownloadLog
-    return DownloadLog.objects.filter(gallery=gallery).count() >= limit_total
+    used = DownloadLog.objects.filter(gallery=gallery).aggregate(
+        total=Sum(Coalesce('photo_count', 1))
+    )['total'] or 0
+    return used >= limit_total
 
 
 def pin_limit_reached(gallery):
@@ -368,6 +375,10 @@ def read_download_token(token, gallery):
         return None
     if get_download_policy(gallery)['require_email'] and not payload.get('e'):
         return None
+    # "Restrict Downloads to Specific Contacts": a contact removed from the
+    # list after their token was issued loses access immediately.
+    if not email_is_allowed(gallery, payload.get('e')):
+        return None
     return payload
 
 
@@ -426,6 +437,9 @@ def file_token_state(token, job, gallery, index):
         return 'mismatch'
     # PIN changed or cleared since the grant was issued.
     if payload.get('f') != _pin_fingerprint(gallery):
+        return 'invalid'
+    # A contact removed from the allow-list no longer holds a working link.
+    if not email_is_allowed(gallery, job.email):
         return 'invalid'
     return 'ok'
 
