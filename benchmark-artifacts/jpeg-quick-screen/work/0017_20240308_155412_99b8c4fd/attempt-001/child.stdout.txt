@@ -1,0 +1,2 @@
+Benchmarking 1 JPEGs; output=C:\Users\LENOVO\Desktop\kyapture\benchmark-artifacts\jpeg-quick-screen\work\0017_20240308_155412_99b8c4fd\attempt-001
+[1/1] 20240308_155412.jpg 1,800,947 bytes -> (1920, 2560)

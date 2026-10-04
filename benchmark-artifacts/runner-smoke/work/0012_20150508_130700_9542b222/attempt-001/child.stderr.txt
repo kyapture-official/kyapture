@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\Desktop\kyapture\benchmark\scripts\jpeg_download_benchmark.py", line 1315, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\LENOVO\Desktop\kyapture\benchmark\scripts\jpeg_download_benchmark.py", line 1247, in main
+    encode_ms = encoder(tool.path, ppm_path, selected_path, result["quality"], result["subsampling"], args.timeout_seconds)
+  File "C:\Users\LENOVO\Desktop\kyapture\benchmark\scripts\jpeg_download_benchmark.py", line 531, in encode_mozjpeg
+    return run_encoder_command(command, output_path, timeout)
+  File "C:\Users\LENOVO\Desktop\kyapture\benchmark\scripts\jpeg_download_benchmark.py", line 556, in run_encoder_command
+    raise RuntimeError(f"encoder failed ({completed.returncode}): {detail[-600:]}")
+RuntimeError: encoder failed (4294967295): no output

@@ -1,0 +1,2 @@
+filename,threshold,current_bytes,mozjpeg_bytes,jpegli_bytes,pixieset_bytes,current_bytes_delta_vs_pixieset,mozjpeg_bytes_delta_vs_pixieset,jpegli_bytes_delta_vs_pixieset,current_ssimulacra2,mozjpeg_ssimulacra2,jpegli_ssimulacra2,current_beats_mozjpeg,jpegli_beats_current,mozjpeg_beats_jpegli,mozjpeg_bytes_saved_vs_current,jpegli_bytes_saved_vs_current,mozjpeg_bytes_saved_vs_jpegli
+2013-10-14 10.34.12.jpg,88.0,383090,600086,524182,439841,-56751,160245,84341,82.59465367,88.65965953,88.5075972,True,False,False,-216996,-141092,-75904

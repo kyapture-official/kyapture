@@ -1,0 +1,21 @@
+[
+  {
+    "blue_fraction": 0.01530704941860465,
+    "bright_fraction": 0.0011355377906976745,
+    "bytes": 2834749,
+    "dark_fraction": 0.1917923328488372,
+    "filename": "20150508_130002-1.jpg",
+    "green_fraction": 0.000840297965116279,
+    "height": 2558,
+    "long_edge": 2558,
+    "mean_luma": 0.40037211886898655,
+    "orientation": "portrait",
+    "path": "benchmark\\data\\jpeg_real\\20150508_130002-1.jpg",
+    "screen_strata": [
+      "portrait_skin"
+    ],
+    "skin_fraction": 0.316883175872093,
+    "variance": 0.06241684360799899,
+    "width": 1723
+  }
+]

@@ -1,0 +1,458 @@
+[
+  {
+    "blue_fraction": 0.01530704941860465,
+    "bright_fraction": 0.0011355377906976745,
+    "bytes": 2834749,
+    "dark_fraction": 0.1917923328488372,
+    "filename": "20150508_130002-1.jpg",
+    "green_fraction": 0.000840297965116279,
+    "height": 2558,
+    "long_edge": 2558,
+    "mean_luma": 0.40037211886898655,
+    "orientation": "portrait",
+    "path": "benchmark\\data\\jpeg_real\\20150508_130002-1.jpg",
+    "screen_strata": [
+      "portrait_skin"
+    ],
+    "skin_fraction": 0.316883175872093,
+    "variance": 0.06241684360799899,
+    "width": 1723
+  },
+  {
+    "blue_fraction": 0.0,
+    "bright_fraction": 0.0,
+    "bytes": 1143189,
+    "dark_fraction": 1.0,
+    "filename": "20240511_184736.jpg",
+    "green_fraction": 0.0,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.023885381896573733,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20240511_184736.jpg",
+    "screen_strata": [
+      "low_light_high_iso_proxy"
+    ],
+    "skin_fraction": 0.0,
+    "variance": 0.00015490619918380282,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.0037706163194444445,
+    "bright_fraction": 0.009982638888888888,
+    "bytes": 3721478,
+    "dark_fraction": 0.029405381944444444,
+    "filename": "20140927_093337.jpg",
+    "green_fraction": 0.4996202256944444,
+    "height": 1836,
+    "long_edge": 3264,
+    "mean_luma": 0.4119074968724469,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20140927_093337.jpg",
+    "screen_strata": [
+      "foliage_proxy"
+    ],
+    "skin_fraction": 0.022081163194444444,
+    "variance": 0.046967397423524654,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.976806640625,
+    "bright_fraction": 0.0,
+    "bytes": 2795880,
+    "dark_fraction": 0.0,
+    "filename": "20240514_100852.jpg",
+    "green_fraction": 0.0,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.5796895805568321,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20240514_100852.jpg",
+    "screen_strata": [
+      "sky_gradient_proxy"
+    ],
+    "skin_fraction": 0.011739095052083334,
+    "variance": 0.005705323310326945,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.003472222222222222,
+    "bright_fraction": 0.010118272569444444,
+    "bytes": 3687720,
+    "dark_fraction": 0.04568142361111111,
+    "filename": "20140927_093336.jpg",
+    "green_fraction": 0.4831000434027778,
+    "height": 1836,
+    "long_edge": 3264,
+    "mean_luma": 0.39451438589324617,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20140927_093336.jpg",
+    "screen_strata": [
+      "fine_texture_proxy"
+    ],
+    "skin_fraction": 0.023491753472222224,
+    "variance": 0.04580763524485813,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.034423828125,
+    "bright_fraction": 0.24184163411458334,
+    "bytes": 2134510,
+    "dark_fraction": 0.032999674479166664,
+    "filename": "20240531_091725.jpg",
+    "green_fraction": 0.028238932291666668,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.45278311845766944,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20240531_091725.jpg",
+    "screen_strata": [
+      "architecture_proxy"
+    ],
+    "skin_fraction": 0.005330403645833333,
+    "variance": 0.12071059080976317,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.08880615234375,
+    "bright_fraction": 0.3382771809895833,
+    "bytes": 1930930,
+    "dark_fraction": 0.0014444986979166667,
+    "filename": "20241004_055321.jpg",
+    "green_fraction": 0.076171875,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.7129482943825316,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20241004_055321.jpg",
+    "screen_strata": [
+      "bright_highlights"
+    ],
+    "skin_fraction": 0.018086751302083332,
+    "variance": 0.07485830513737614,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.007771809895833333,
+    "bright_fraction": 0.06905110677083333,
+    "bytes": 2113372,
+    "dark_fraction": 0.5638631184895834,
+    "filename": "20241006_131126.jpg",
+    "green_fraction": 0.050862630208333336,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.22792431118834253,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20241006_131126.jpg",
+    "screen_strata": [
+      "dark_shadows"
+    ],
+    "skin_fraction": 0.0013631184895833333,
+    "variance": 0.08494895453698698,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.13332112630208334,
+    "bright_fraction": 0.0010172526041666667,
+    "bytes": 1260268,
+    "dark_fraction": 0.02740478515625,
+    "filename": "2013-10-14 10.29.22.jpg",
+    "green_fraction": 0.051737467447916664,
+    "height": 1536,
+    "long_edge": 2048,
+    "mean_luma": 0.44011151453354774,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\2013-10-14 10.29.22.jpg",
+    "screen_strata": [
+      "landscape_orientation"
+    ],
+    "skin_fraction": 0.23089599609375,
+    "variance": 0.04343832639597389,
+    "width": 2048
+  },
+  {
+    "blue_fraction": 0.2954915364583333,
+    "bright_fraction": 0.0004475911458333333,
+    "bytes": 1265684,
+    "dark_fraction": 0.02587890625,
+    "filename": "2013-10-14 10.33.46.jpg",
+    "green_fraction": 0.0289306640625,
+    "height": 2048,
+    "long_edge": 2048,
+    "mean_luma": 0.4751772051164216,
+    "orientation": "portrait",
+    "path": "benchmark\\data\\jpeg_real\\2013-10-14 10.33.46.jpg",
+    "screen_strata": [
+      "portrait_orientation"
+    ],
+    "skin_fraction": 0.14180501302083334,
+    "variance": 0.03678299659103304,
+    "width": 1536
+  },
+  {
+    "blue_fraction": 0.01329719387755102,
+    "bright_fraction": 0.18718112244897958,
+    "bytes": 71940,
+    "dark_fraction": 0.0953922193877551,
+    "filename": "Dad....jpg",
+    "green_fraction": 0.12418686224489796,
+    "height": 641,
+    "long_edge": 641,
+    "mean_luma": 0.47174896851240494,
+    "orientation": "portrait",
+    "path": "benchmark\\data\\jpeg_real\\Dad....jpg",
+    "screen_strata": [
+      "small_original"
+    ],
+    "skin_fraction": 0.02072704081632653,
+    "variance": 0.10925649649209175,
+    "width": 614
+  },
+  {
+    "blue_fraction": 0.0014105902777777778,
+    "bright_fraction": 0.0,
+    "bytes": 2534246,
+    "dark_fraction": 0.0976833767361111,
+    "filename": "20150508_130700.jpg",
+    "green_fraction": 5.425347222222222e-05,
+    "height": 5312,
+    "long_edge": 5312,
+    "mean_luma": 0.4825627314389297,
+    "orientation": "portrait",
+    "path": "benchmark\\data\\jpeg_real\\20150508_130700.jpg",
+    "screen_strata": [
+      "large_original"
+    ],
+    "skin_fraction": 0.22037760416666666,
+    "variance": 0.05222656350354189,
+    "width": 2988
+  },
+  {
+    "blue_fraction": 0.11004638671875,
+    "bright_fraction": 0.0007731119791666666,
+    "bytes": 1199359,
+    "dark_fraction": 0.012430826822916666,
+    "filename": "2013-10-14 10.34.12.jpg",
+    "green_fraction": 0.10911051432291667,
+    "height": 1536,
+    "long_edge": 2048,
+    "mean_luma": 0.4583437309793709,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\2013-10-14 10.34.12.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.20855712890625,
+    "variance": 0.02940298044387204,
+    "width": 2048
+  },
+  {
+    "blue_fraction": 0.056939019097222224,
+    "bright_fraction": 0.00390625,
+    "bytes": 2132198,
+    "dark_fraction": 0.09358723958333333,
+    "filename": "20141003_202621.jpg",
+    "green_fraction": 0.013047960069444444,
+    "height": 1836,
+    "long_edge": 3264,
+    "mean_luma": 0.35393316782832923,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20141003_202621.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.3154296875,
+    "variance": 0.04039866180979775,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.0019327799479166667,
+    "bright_fraction": 0.0,
+    "bytes": 2132094,
+    "dark_fraction": 0.15382893880208334,
+    "filename": "20150506_192925.jpg",
+    "green_fraction": 0.0013020833333333333,
+    "height": 3264,
+    "long_edge": 3264,
+    "mean_luma": 0.36647433218762765,
+    "orientation": "portrait",
+    "path": "benchmark\\data\\jpeg_real\\20150506_192925.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.059468587239583336,
+    "variance": 0.04279615533799907,
+    "width": 2448
+  },
+  {
+    "blue_fraction": 0.039326985677083336,
+    "bright_fraction": 0.014119466145833334,
+    "bytes": 2057898,
+    "dark_fraction": 0.15118408203125,
+    "filename": "20230605_154755.jpg",
+    "green_fraction": 0.011576334635416666,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.2959638750382966,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20230605_154755.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.08135986328125,
+    "variance": 0.049965447691322176,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.5232340494791666,
+    "bright_fraction": 0.07371012369791667,
+    "bytes": 1800947,
+    "dark_fraction": 0.12481689453125,
+    "filename": "20240308_155412.jpg",
+    "green_fraction": 0.021219889322916668,
+    "height": 1920,
+    "long_edge": 2560,
+    "mean_luma": 0.5004163807827818,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20240308_155412.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.016011555989583332,
+    "variance": 0.09373232817958825,
+    "width": 2560
+  },
+  {
+    "blue_fraction": 0.8085734049479166,
+    "bright_fraction": 0.0011189778645833333,
+    "bytes": 2846153,
+    "dark_fraction": 0.0,
+    "filename": "20240514_100830.jpg",
+    "green_fraction": 0.0008951822916666666,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.5561695477175245,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20240514_100830.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.0,
+    "variance": 0.010809948021794502,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.07615152994791667,
+    "bright_fraction": 0.022908528645833332,
+    "bytes": 2377522,
+    "dark_fraction": 0.06697591145833333,
+    "filename": "20240904_163240.jpg",
+    "green_fraction": 0.006571451822916667,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.3953043770903544,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20240904_163240.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.046000162760416664,
+    "variance": 0.06359900886181062,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.11551920572916667,
+    "bright_fraction": 0.09859212239583333,
+    "bytes": 2286364,
+    "dark_fraction": 0.0296630859375,
+    "filename": "20241006_142857.jpg",
+    "green_fraction": 0.0019938151041666665,
+    "height": 2448,
+    "long_edge": 3264,
+    "mean_luma": 0.4852923430638531,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\20241006_142857.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.061258951822916664,
+    "variance": 0.08737979245056501,
+    "width": 3264
+  },
+  {
+    "blue_fraction": 0.0,
+    "bright_fraction": 0.0018717447916666667,
+    "bytes": 2698409,
+    "dark_fraction": 0.10654703776041667,
+    "filename": "Copy (2) of Picture 330.jpg",
+    "green_fraction": 0.00020345052083333334,
+    "height": 2736,
+    "long_edge": 3648,
+    "mean_luma": 0.47706422540402876,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\Copy (2) of Picture 330.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.3136393229166667,
+    "variance": 0.05959972489378708,
+    "width": 3648
+  },
+  {
+    "blue_fraction": 6.103515625e-05,
+    "bright_fraction": 0.00030517578125,
+    "bytes": 2631911,
+    "dark_fraction": 0.14223225911458334,
+    "filename": "Copy of Picture 354.jpg",
+    "green_fraction": 0.09122721354166667,
+    "height": 3648,
+    "long_edge": 3648,
+    "mean_luma": 0.29415129721647776,
+    "orientation": "portrait",
+    "path": "benchmark\\data\\jpeg_real\\Copy of Picture 354.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.14337158203125,
+    "variance": 0.030937358976439143,
+    "width": 2736
+  },
+  {
+    "blue_fraction": 0.13664010067114093,
+    "bright_fraction": 0.0,
+    "bytes": 1781089,
+    "dark_fraction": 0.0,
+    "filename": "DSC04787.JPG",
+    "green_fraction": 0.0008651426174496645,
+    "height": 2400,
+    "long_edge": 4110,
+    "mean_luma": 0.5837880582971443,
+    "orientation": "landscape",
+    "path": "benchmark\\data\\jpeg_real\\DSC04787.JPG",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.0,
+    "variance": 0.021467034232126123,
+    "width": 4110
+  },
+  {
+    "blue_fraction": 0.4521484375,
+    "bright_fraction": 0.04388020833333333,
+    "bytes": 69611,
+    "dark_fraction": 0.00026041666666666666,
+    "filename": "FB_IMG_1688025634095.jpg",
+    "green_fraction": 0.007845052083333333,
+    "height": 1370,
+    "long_edge": 1370,
+    "mean_luma": 0.47046814407169113,
+    "orientation": "portrait",
+    "path": "benchmark\\data\\jpeg_real\\FB_IMG_1688025634095.jpg",
+    "screen_strata": [
+      "deterministic_fill"
+    ],
+    "skin_fraction": 0.04778645833333333,
+    "variance": 0.056387148069904566,
+    "width": 640
+  }
+]

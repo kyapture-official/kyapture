@@ -1,0 +1,2 @@
+filename,threshold,current_bytes,mozjpeg_bytes,jpegli_bytes,pixieset_bytes,current_bytes_delta_vs_pixieset,mozjpeg_bytes_delta_vs_pixieset,jpegli_bytes_delta_vs_pixieset,current_ssimulacra2,mozjpeg_ssimulacra2,jpegli_ssimulacra2,current_beats_mozjpeg,jpegli_beats_current,mozjpeg_beats_jpegli,mozjpeg_bytes_saved_vs_current,jpegli_bytes_saved_vs_current,mozjpeg_bytes_saved_vs_jpegli
+20150508_130002-1.jpg,88,598290,971899,1047507,636657,-38367,335242,410850,82.94486522,88.02131538,88.2283257,True,False,True,-373609,-449217,75608

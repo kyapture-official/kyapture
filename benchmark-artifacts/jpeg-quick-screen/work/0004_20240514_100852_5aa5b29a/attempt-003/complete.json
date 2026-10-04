@@ -1,0 +1,17 @@
+{
+  "candidate_count": 50,
+  "candidate_results_csv": "C:\\Users\\LENOVO\\Desktop\\kyapture\\benchmark-artifacts\\jpeg-quick-screen\\work\\0004_20240514_100852_5aa5b29a\\attempt-003\\candidate-results.csv",
+  "completed_at": 1791030049.8807092,
+  "config_hash": "26ed1c0b2e5df71e94703ae1a194c5b9e0bcb3719075bfb5176dddbd2eec76dc",
+  "filename": "20240514_100852.jpg",
+  "result_count": 9,
+  "results_csv": "C:\\Users\\LENOVO\\Desktop\\kyapture\\benchmark-artifacts\\jpeg-quick-screen\\work\\0004_20240514_100852_5aa5b29a\\attempt-003\\results.csv",
+  "source_bytes": 2795880,
+  "status": "complete",
+  "thresholds": [
+    80.0,
+    85.0,
+    88.0,
+    90.0
+  ]
+}

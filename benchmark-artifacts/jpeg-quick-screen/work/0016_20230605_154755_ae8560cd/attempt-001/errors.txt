@@ -1,0 +1,1 @@
+jpegli 20230605_154755.jpg: SSIMULACRA2 failed for 20230605_154755.jpg: metric command failed (4294967295): 

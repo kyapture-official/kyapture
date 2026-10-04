@@ -1,0 +1,2 @@
+filename,threshold,current_bytes,mozjpeg_bytes,jpegli_bytes,pixieset_bytes,current_bytes_delta_vs_pixieset,mozjpeg_bytes_delta_vs_pixieset,jpegli_bytes_delta_vs_pixieset,current_ssimulacra2,mozjpeg_ssimulacra2,jpegli_ssimulacra2,current_beats_mozjpeg,jpegli_beats_current,mozjpeg_beats_jpegli,mozjpeg_bytes_saved_vs_current,jpegli_bytes_saved_vs_current,mozjpeg_bytes_saved_vs_jpegli
+Copy of Picture 354.jpg,88.0,1215049,1698764,1832602,1368769,-153720,329995,463833,82.81963687,88.33202322,88.83013998,True,False,True,-483715,-617553,133838

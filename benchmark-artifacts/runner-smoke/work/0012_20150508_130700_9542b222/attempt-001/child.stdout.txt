@@ -1,0 +1,2 @@
+Benchmarking 1 JPEGs; output=C:\Users\LENOVO\Desktop\kyapture\benchmark-artifacts\runner-smoke\work\0012_20150508_130700_9542b222\attempt-001
+[1/1] 20150508_130700.jpg 2,534,246 bytes -> (2025, 3600)

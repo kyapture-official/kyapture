@@ -1,0 +1,4 @@
+Benchmarking 1 JPEGs; output=C:\Users\LENOVO\Desktop\kyapture\benchmark-artifacts\runner-smoke\work\0001_20150508_130002-1_3c60d488\attempt-001
+[1/1] 20150508_130002-1.jpg 2,834,749 bytes -> (1723, 2558)
+report=C:\Users\LENOVO\Desktop\kyapture\benchmark-artifacts\runner-smoke\work\0001_20150508_130002-1_3c60d488\attempt-001\report.md
+results=C:\Users\LENOVO\Desktop\kyapture\benchmark-artifacts\runner-smoke\work\0001_20150508_130002-1_3c60d488\attempt-001\results.csv

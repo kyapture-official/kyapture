@@ -1,0 +1,4 @@
+Benchmarking 1 JPEGs; output=C:\Users\LENOVO\Desktop\kyapture\benchmark-artifacts\jpeg-quick-screen\work\0013_2013-10-14_10.34.12_dcbb6168\attempt-003
+[1/1] 2013-10-14 10.34.12.jpg 1,199,359 bytes -> (1536, 2048)
+report=C:\Users\LENOVO\Desktop\kyapture\benchmark-artifacts\jpeg-quick-screen\work\0013_2013-10-14_10.34.12_dcbb6168\attempt-003\report.md
+results=C:\Users\LENOVO\Desktop\kyapture\benchmark-artifacts\jpeg-quick-screen\work\0013_2013-10-14_10.34.12_dcbb6168\attempt-003\results.csv

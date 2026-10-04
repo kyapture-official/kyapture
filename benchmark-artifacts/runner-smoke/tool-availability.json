@@ -1,0 +1,38 @@
+[
+  {
+    "error": null,
+    "name": "Pillow/Python image pipeline",
+    "path": "C:\\Users\\LENOVO\\Desktop\\kyapture\\.venv\\Scripts\\python.exe",
+    "version": "Pillow 12.2.0 (C:\\Users\\LENOVO\\Desktop\\kyapture\\.venv\\Scripts\\python.exe)"
+  },
+  {
+    "error": null,
+    "name": "MozJPEG cjpeg",
+    "path": "C:\\Users\\LENOVO\\Desktop\\kyapture\\benchmark\\tools\\build\\mozjpeg-ninja\\cjpeg.exe",
+    "version": "C:\\Users\\LENOVO\\Desktop\\kyapture\\benchmark\\tools\\build\\mozjpeg-ninja\\cjpeg.exe: unknown option '-version'"
+  },
+  {
+    "error": null,
+    "name": "jpegli cjpegli",
+    "path": "C:\\Users\\LENOVO\\Desktop\\kyapture\\benchmark\\tools\\build\\jpegli-msvc\\tools\\cjpegli.exe",
+    "version": "Unknown argument: --version"
+  },
+  {
+    "error": null,
+    "name": "SSIMULACRA2",
+    "path": "C:\\Users\\LENOVO\\Desktop\\kyapture\\benchmark\\tools\\build\\ssimulacra2\\ssimulacra2.exe",
+    "version": "SSIMULACRA 2.1 [AVX2,SSE4,SSSE3,SSE2]"
+  },
+  {
+    "error": null,
+    "name": "Butteraugli",
+    "path": null,
+    "version": null
+  },
+  {
+    "error": null,
+    "name": "Docker host",
+    "path": "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.EXE",
+    "version": "Docker version 29.8.1, build 4a63305"
+  }
+]
