@@ -561,9 +561,18 @@ class GallerySetDownloadPinView(APIView):
         pin = request.data.get('pin')
         pin = pin.strip() if pin else ''
 
+        # 1R.6: a new PIN (including clearing the old one) starts its own
+        # "Limit PIN Usage" count — design_settings.privacy.pin_use_count —
+        # rather than inheriting whatever the previous PIN had already used.
+        design_settings = dict(gallery.design_settings or {})
+        privacy = dict(design_settings.get('privacy') or {})
+        privacy['pin_use_count'] = 0
+        design_settings['privacy'] = privacy
+
         if not pin:
             gallery.download_pin_hash = None
-            gallery.save(update_fields=['download_pin_hash'])
+            gallery.design_settings = design_settings
+            gallery.save(update_fields=['download_pin_hash', 'design_settings'])
             return Response({
                 'status': 'success',
                 'has_download_pin': False,
@@ -578,7 +587,8 @@ class GallerySetDownloadPinView(APIView):
         gallery.download_pin_hash = bcrypt.hashpw(
             pin.encode('utf-8'), bcrypt.gensalt()
         ).decode('utf-8')
-        gallery.save(update_fields=['download_pin_hash'])
+        gallery.design_settings = design_settings
+        gallery.save(update_fields=['download_pin_hash', 'design_settings'])
 
         return Response({
             'status': 'success',

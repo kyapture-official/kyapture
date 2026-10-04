@@ -173,13 +173,15 @@ class GalleryZipDownloadPinAndResolutionTestCase(InlineDownloadJobsMixin, APITes
         log = DownloadLog.objects.get()
         self.assertEqual(log.resolution, DownloadLog.Resolution.WEB)
 
-    def test_original_resolution_serves_original_bytes(self):
+    def test_original_resolution_rejected_with_400(self):
+        """1R.6: a raw resolution=original is never accepted from a client --
+        'download' ("High Resolution") is the only size choice that can
+        resolve to the true original, and only server-side (see
+        effective_high_res_mode / _get_client_download_source)."""
         response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": "9999", "resolution": "original"})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        with zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content))) as archive:
-            self.assertEqual(archive.read("photo.jpg"), b"ORIGINAL-BYTES-HERE")
-        log = DownloadLog.objects.get()
-        self.assertEqual(log.resolution, DownloadLog.Resolution.ORIGINAL)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data.get("code"), "invalid_resolution")
+        self.assertFalse(DownloadLog.objects.exists())
 
     def test_invalid_resolution_rejected(self):
         response = request_zip(self.client, self.base, {"email": "guest@example.com", "pin": "9999", "resolution": "ultra-hd"})
@@ -250,10 +252,12 @@ class SinglePhotoDownloadPinAndResolutionTestCase(APITestCase):
         log = DownloadLog.objects.get()
         self.assertEqual(log.resolution, DownloadLog.Resolution.WEB)
 
-    def test_original_resolution_serves_original_bytes(self):
+    def test_original_resolution_rejected_with_400(self):
+        """1R.6: same client-facing rule as the ZIP endpoint -- see the
+        matching test on GalleryZipDownloadPinAndResolutionTestCase."""
         response = self.download(pin="5555", resolution="original")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(b"".join(response.streaming_content), b"ORIGINAL-BYTES-HERE")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data.get("code"), "invalid_resolution")
 
     def test_default_resolution_without_param_is_download_master(self):
         response = self.download(pin="5555")

@@ -267,18 +267,30 @@ class PublicGallerySerializer(serializers.ModelSerializer):
     def get_share_url(self, obj):
         return build_gallery_share_url(obj)
 
+    # 1R.6: design_settings now also carries 'downloads' (photographer-only
+    # download rules -- including the private "Restrict Downloads to
+    # Specific Contacts" email allow-list) and 'privacy' (PIN usage
+    # counters). Neither belongs in the public payload: the client gets
+    # the already-filtered `download_policy` field instead of the raw
+    # `downloads` block, and has no legitimate use for `privacy` at all.
+    _PRIVATE_DESIGN_SETTINGS_KEYS = frozenset({'watermark', 'downloads', 'privacy'})
+
     def get_design_settings(self, obj):
         """
         The gallery's persisted look-and-feel for the client page. The
-        photographer's private watermark configuration (text, position, ...)
-        lives in the same JSON blob but is processing input, not display
-        input — it is baked into the images and is not part of the public
-        payload.
+        photographer's private watermark configuration (text, position, ...),
+        download rules (including the contacts email allow-list), and PIN
+        usage counters all live in the same JSON blob but are
+        photographer-only input/state, never part of the public payload --
+        see _PRIVATE_DESIGN_SETTINGS_KEYS above.
         """
         settings_blob = obj.design_settings
         if not isinstance(settings_blob, dict):
             return {}
-        return {key: value for key, value in settings_blob.items() if key != 'watermark'}
+        return {
+            key: value for key, value in settings_blob.items()
+            if key not in self._PRIVATE_DESIGN_SETTINGS_KEYS
+        }
 
     def get_cover_url(self, obj):
         """

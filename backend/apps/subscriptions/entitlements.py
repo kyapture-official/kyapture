@@ -23,14 +23,21 @@ from django.utils import timezone
 
 BRANDING = 'branding'
 WATERMARK = 'watermark'
+# 1R.6: Original (byte-identical, unwatermarked) high-resolution downloads
+# are gated behind the same Pro+ bundle as branding/watermark — see
+# apps/galleries/serializers.py (save-time gate) and apps/clients/
+# download_access.py (effective-mode resolution at download time).
+ORIGINAL_DOWNLOAD = 'original_download'
 
 UPGRADE_CODES = {
     BRANDING: 'branding_requires_upgrade',
     WATERMARK: 'watermark_requires_upgrade',
+    ORIGINAL_DOWNLOAD: 'original_download_requires_upgrade',
 }
 UPGRADE_MESSAGES = {
     BRANDING: 'Custom branding is available on the Pro plan and above. Upgrade your plan to add your logo.',
     WATERMARK: 'Watermarking is available on the Pro plan and above. Upgrade your plan to enable it.',
+    ORIGINAL_DOWNLOAD: 'Original-quality downloads are available on the Pro plan and above. Upgrade your plan to offer untouched originals.',
 }
 
 
@@ -52,12 +59,15 @@ def get_feature_entitlements(user):
     rather than calling has_feature() twice.
     """
     if user is None or not getattr(user, 'is_authenticated', False):
-        return {BRANDING: False, WATERMARK: False, 'plan_name': None}
+        return {BRANDING: False, WATERMARK: False, ORIGINAL_DOWNLOAD: False, 'plan_name': None}
     if user.is_superuser or user.is_staff:
-        return {BRANDING: True, WATERMARK: True, 'plan_name': 'Admin'}
+        return {BRANDING: True, WATERMARK: True, ORIGINAL_DOWNLOAD: True, 'plan_name': 'Admin'}
     plan = _active_plan(user)
     included = bool(plan and plan.includes_branding_watermark)
-    return {BRANDING: included, WATERMARK: included, 'plan_name': plan.name if plan else None}
+    return {
+        BRANDING: included, WATERMARK: included, ORIGINAL_DOWNLOAD: included,
+        'plan_name': plan.name if plan else None,
+    }
 
 
 def entitlements_for_subscription(user, subscription):
@@ -67,7 +77,7 @@ def entitlements_for_subscription(user, subscription):
     subscription doesn't re-query the same row just to read its plan flag.
     """
     if user.is_superuser or user.is_staff:
-        return {BRANDING: True, WATERMARK: True, 'plan_name': 'Admin'}
+        return {BRANDING: True, WATERMARK: True, ORIGINAL_DOWNLOAD: True, 'plan_name': 'Admin'}
     live = (
         subscription is not None
         and subscription.status == 'active'
@@ -75,7 +85,10 @@ def entitlements_for_subscription(user, subscription):
     )
     plan = subscription.plan if live else None
     included = bool(plan and plan.includes_branding_watermark)
-    return {BRANDING: included, WATERMARK: included, 'plan_name': plan.name if plan else None}
+    return {
+        BRANDING: included, WATERMARK: included, ORIGINAL_DOWNLOAD: included,
+        'plan_name': plan.name if plan else None,
+    }
 
 
 def has_feature(user, feature):

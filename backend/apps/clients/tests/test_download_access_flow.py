@@ -210,11 +210,16 @@ class GalleryPasswordAndDownloadPinAreSeparateTests(DownloadFlowBase):
 
 class DownloadAccessEndpointTests(DownloadFlowBase):
     def test_public_download_policy_defaults_to_email_and_both_sizes(self):
+        # 1R.6 extended the public policy shape with sets_enabled (null =
+        # every set downloadable, the default) and web_px (the gallery's
+        # configured Web Size tier, 2048 by default) -- both read by the
+        # client's "Choose Photos" / size pickers. allowed_sizes and
+        # require_email are the original Task 1R.4 fields, unchanged.
         response = self.client.get(self.base)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.data['download_policy'],
-            {'allowed_sizes': ['download', 'web'], 'require_email': True},
+            {'allowed_sizes': ['download', 'web'], 'require_email': True, 'sets_enabled': None, 'web_px': 2048},
         )
 
     def test_correct_pin_and_email_issue_a_token(self):
@@ -315,7 +320,6 @@ class SinglePhotoDownloadWithTokenTests(DownloadFlowBase):
         expected = {
             "download": (b"MASTER:a1.jpg", DownloadLog.Resolution.DOWNLOAD),
             "web": (b"DISPLAY:a1.jpg", DownloadLog.Resolution.WEB),
-            "original": (b"ORIGINAL:a1.jpg", DownloadLog.Resolution.ORIGINAL),
         }
         for resolution, (body, logged) in expected.items():
             response = self.client.get(
@@ -325,6 +329,19 @@ class SinglePhotoDownloadWithTokenTests(DownloadFlowBase):
             self.assertEqual(b"".join(response.streaming_content), body, resolution)
             self.assertIn("attachment", response["Content-Disposition"])
             self.assertEqual(DownloadLog.objects.latest("created_at").resolution, logged)
+
+    def test_original_resolution_is_rejected_with_400(self):
+        """1R.6: 'original' is never a client-facing resolution -- only
+        'download' ("High Resolution") and 'web' ("Web Size") are
+        accepted; which bytes 'download' resolves to is a server-only
+        decision (see effective_high_res_mode)."""
+        token = self.token()
+        response = self.client.get(
+            self.photo_url(self.a1), {"download_token": token, "resolution": "original"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "invalid_resolution")
+        self.assertFalse(DownloadLog.objects.exists())
 
     def test_default_resolution_is_the_download_master(self):
         token = self.token()

@@ -3,13 +3,15 @@ import { clientsApi } from "../../api/clientsApi";
 import { useClientStore } from "../../store/clientStore";
 import { useVisitorStore } from "../../store/visitorStore";
 
-// "Original" follows the High Resolution switch on the server (a gallery that
-// allows High Resolution allows its originals), so it is offered whenever
-// 'download' is — or when the policy lists it explicitly.
+// 1R.6: the server never offers 'original' to a client (see
+// apps/clients/download_access.py::resolution_is_allowed and
+// DOWNLOAD_RESOLUTIONS in views.py) — "High Resolution" resolves, at
+// serve time, to either the 3600px Download Master or a Pro
+// photographer's chosen true original, but the word "Original" is
+// never shown to a client.
 const SIZE_OPTIONS = [
-  { value: "original", label: "Original", note: "The untouched files exactly as uploaded" },
   { value: "download", label: "High Resolution", note: "Full quality, optimized for print and sharing" },
-  { value: "web", label: "Web Size", note: "2048 px — small files, easy to share online" },
+  { value: "web", label: "Web Size", note: "Small files, easy to share online" },
 ];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EXPIRY_MARGIN_MS = 60 * 1000;
@@ -92,14 +94,27 @@ export default function DownloadForm({
   const policy = downloadPolicy || { allowed_sizes: ["download", "web"], require_email: true };
   const allowedSizes = useMemo(() => {
     const values = Array.isArray(policy.allowed_sizes) ? policy.allowed_sizes : [];
-    const allowed = SIZE_OPTIONS.filter(
-      (option) => values.includes(option.value) || (option.value === "original" && values.includes("download")),
+    const webPx = policy.web_px || 2048;
+    const options = SIZE_OPTIONS.map((option) =>
+      option.value === "web" ? { ...option, note: `${webPx} px — small files, easy to share online` } : option,
     );
-    return allowed.length ? allowed : SIZE_OPTIONS.filter((option) => option.value !== "original");
-  }, [policy.allowed_sizes]);
+    const allowed = options.filter((option) => values.includes(option.value));
+    return allowed.length ? allowed : options;
+  }, [policy.allowed_sizes, policy.web_px]);
   const requiresEmail = policy.require_email !== false;
   const isPhoto = target?.type === "photo";
   const defaultSize = (allowedSizes.find((option) => option.value === "download") || allowedSizes[0]).value;
+
+  // 1R.6 "Photo Sets Available for Download": sets_enabled=null allows
+  // the whole gallery and every set; once restricted to specific sets,
+  // "All photos" is dropped entirely — the server refuses a
+  // whole-gallery request the same way (set_is_enabled_for_download) —
+  // and only the enabled sets are offered.
+  const enabledSetIds = Array.isArray(policy.sets_enabled) ? policy.sets_enabled : null;
+  const scopeOptions = useMemo(() => {
+    if (!enabledSetIds) return [{ id: "", name: "All photos", photo_count: photoCount }, ...photoSets];
+    return photoSets.filter((set) => enabledSetIds.includes(String(set.id)));
+  }, [enabledSetIds, photoSets, photoCount]);
 
   // What the visitor still has to give. A remembered, unexpired access token
   // (earned earlier this session) covers both email and PIN.
@@ -133,6 +148,17 @@ export default function DownloadForm({
     if (pollTimer.current) window.clearTimeout(pollTimer.current);
     pollTimer.current = null;
   }, []);
+
+  // If the active set was disabled for download (or the previously
+  // browsed set is simply not in the enabled list), fall back to the
+  // first option this visitor can actually choose.
+  useEffect(() => {
+    if (isPhoto) return;
+    if (!scopeOptions.some((option) => option.id === scopeSetId)) {
+      setScopeSetId(scopeOptions[0]?.id ?? "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeOptions, isPhoto]);
 
   useEffect(() => {
     unmounted.current = false;
@@ -463,7 +489,6 @@ export default function DownloadForm({
   }
 
   // ── the one box ───────────────────────────────────────────────────────────
-  const scopeOptions = [{ id: "", name: "All photos", photo_count: photoCount }, ...photoSets];
   const gateIntro =
     needsEmail && needsPin
       ? "Your email will be used to notify you when the files are ready for download. Please enter the download PIN provided by your photographer to download this photo collection."

@@ -2045,3 +2045,132 @@ acceptance is recorded.
   `makemigrations --check --dry-run` passed; Vite production build passed;
   `git diff --check` passed. The existing Vite >500 kB chunk advisory remains
   non-blocking.
+
+## Phase 8 — Task 1R.6: Pixieset-style Download/Privacy settings + Pro-only Original, verification pass (2026-10-04)
+
+### Scope carried into this pass
+Continuing from a prior session that implemented the feature code but was
+interrupted before verification: Privacy tab holds the gallery-password and
+download-PIN gates (PIN usage limit included) and nothing else; Download tab
+is reworked into Pixieset-style General/Advanced sub-tabs with debounced
+autosave; "Original" is never shown to a client — a Free photographer only
+sees "Original — Upgrade required" (disabled); Pro's chosen High-Resolution
+mode (`download` vs `original`) and set-level/total download/contact
+restrictions are enforced server-side, not just hidden in the UI.
+
+### What this pass actually did
+The frontend (`GallerySettingsPage.jsx`, `DownloadForm.jsx`,
+`useSubscription.js`) and backend (`download_access.py`, `views.py`,
+`galleries/serializers.py`, `subscriptions/entitlements.py`) code from the
+prior session was already in the working tree. This pass's job was
+verification — code-level and functional, not pixel-level: the browser-driven
+click-through QA that was attempted (seeded local sqlite DB, Vite dev server,
+a remote-device browser) hit an unrelated environment issue (login rejected
+by the browser-submitted form while an identical API-level login succeeded)
+that was not resolved; rather than keep chasing a sandbox quirk, verification
+was redirected to the two checks that actually prove the feature works: the
+automated test suite, and a direct HTTP-level functional run against the real
+Django app and a real (ephemeral, file-based sqlite) database.
+
+- **Backend automated tests:** the three 1R.6 test modules —
+  `test_download_access_flow.py`, `test_download_pin_resolution.py`,
+  `test_download_policy_1r6.py` — **118/118 passed**. These cover: original
+  never accepted as a client-sent `resolution` (400); Pro can save/serve a
+  true byte-identical original, Free cannot save `mode=original` (403
+  `original_download_requires_upgrade`) and a downgraded Pro falls back to the
+  3600px master without mutating the stored choice; `sets_enabled` narrows the
+  download picker only (never gallery browsing) and refuses a whole-gallery
+  ZIP once any set is restricted, including for a single photo in a disabled
+  set; the contact allow-list authorizes/refuses without ever revealing
+  itself, even forced into the email prompt; the PIN usage limit blocks
+  further verifications once reached and resets on a new PIN, and wrong
+  attempts never count against it; the total download limit blocks further
+  ZIPs and single-photo downloads once reached.
+- **Frontend:** `npm run build` and `npm test` both pass (13/13).
+- **Live functional (HTTP-level) smoke test:** rather than fight the
+  sandbox's browser-login quirk, a one-off script
+  (`/tmp/patch/smoke_test2.py`, not part of the repo) drove the real app
+  through Django's `test.Client` (`enforce_csrf_checks=True`, so CSRF is
+  exercised for real) against the dev settings module pointed at a real file
+  sqlite DB — i.e. real URL routing, middleware, views, serializers and ORM,
+  not mocks. Logged in as a seeded Pro photographer, PATCHed the Download tab
+  shape (`high_res.mode=original`, `sets_enabled=[one set]`, `limit_total`,
+  `restrict_contacts`+`allowed_emails`), set a PIN, then — as a fresh
+  unauthenticated client — fetched the public gallery, ran the two-step
+  download-access → download flow, and logged in as a seeded Free
+  photographer to confirm the server (not just the UI) rejects
+  `mode=original`. Every check passed after the fix below.
+
+### Real bug found and fixed (not hypothetical — reproduced before fixing)
+The live smoke test caught a genuine information-disclosure bug: the public
+gallery endpoint (`PublicGallerySerializer.get_design_settings`, in
+`backend/apps/clients/serializers.py`) only ever stripped the `watermark` key
+out of the stored `design_settings` JSON blob before serving it to anyone
+viewing the gallery. 1R.6 added the Download/Privacy settings into that same
+blob (`design_settings.downloads`, including the private
+`allowed_emails` contact allow-list, and `design_settings.privacy`, the PIN
+usage counters) — so the **raw, unfiltered allow-list was being served in the
+public `GET /api/v1/public/{username}/{slug}/` response** to any visitor,
+alongside the already-correct, already-filtered `download_policy` field that
+was supposed to be the only public-facing view of download settings. This is
+exactly the leak the task brief explicitly called out as unacceptable ("the
+email allow-list ... must never be revealed to a visitor even in error
+messages") — found here in the gallery payload itself, not only in an error
+path.
+
+**Fix:** `get_design_settings` now excludes `{'watermark', 'downloads',
+'privacy'}`, not just `{'watermark'}` — one line changed
+(`backend/apps/clients/serializers.py`). The client already gets everything
+it legitimately needs about downloads from the separate `download_policy`
+field; it has no use for the raw `downloads`/`privacy` blocks at all.
+Re-verified: the targeted test modules that exercise this serializer
+(`test_public_gallery.py`, `test_delivery_and_pagination.py`,
+`test_portfolio_privacy.py`, `test_public_photo_sets.py` — **34/34 passed**)
+plus the live smoke test (all checks pass, allow-list and PIN counters no
+longer present anywhere in the public payload).
+
+### Known pre-existing, unrelated test flakiness (not caused by this pass)
+Running the full `apps.clients` test package surfaced two failures —
+`test_favorites.ProtectedGalleryFavoritesTestCase
+.test_favorite_with_valid_session_links_session_and_email` and
+`test_favorite_lists.PhotographerFavoriteActivityTests
+.test_visitors_are_grouped_by_email_with_their_lists_counts_and_thumbnails` —
+neither related to downloads, privacy, or `design_settings`. Confirmed
+pre-existing and unrelated to this pass's change by stashing the
+`serializers.py` fix and re-running both in isolation: the first test then
+*passed* (an order-dependent/isolation issue between tests, not a real
+defect, and not present with the fix applied either), and the second *still
+failed identically* with the fix completely removed — proving it is
+unaffected by this pass's work. Left as-is; out of scope for 1R.6.
+
+### Not done this pass
+- **No new browser screenshots.** The original 14 Pixieset/admin-panel
+  reference screenshots from the task brief were never persisted to disk by
+  the interrupted prior session and are unrecoverable here; the only saved
+  reference images (`docs/pixieset-ref/*.png`, 6 files) turned out to be of
+  the client-facing download flow already covered by Phase 5/1R.4 QA, not
+  the admin Settings panel this task changed. A local click-through QA
+  attempt (seeded sqlite DB + Vite dev server + remote-device browser) was
+  started but the browser-submitted login was rejected while an identical
+  API login succeeded — an unresolved environment quirk, not reproduced at
+  the API/HTTP level at all. Per direction received mid-session, verification
+  effort was redirected to the automated-test and live-HTTP-functional checks
+  above instead of continuing to chase that sandbox issue; `docs/qa-1r6/`
+  remains empty.
+- **Known pre-existing UX gap, not introduced here:** the public single-photo
+  payload (`PublicMediaAssetSerializer`) never exposes a photo's
+  `photo_set_id`, so the client cannot pre-filter an individual photo's
+  download-size menu by `sets_enabled` the way the gallery-level "Choose
+  Photos" picker does — the server still correctly refuses the download
+  itself (covered by `test_single_photo_in_a_disabled_set_cannot_be
+  _downloaded`), the gap is cosmetic (no early UI warning) on that one path.
+
+### Exact next phase
+If pixel-level QA screenshots are still wanted: get a fresh set of the 14
+admin-panel reference images from the user (the originals are gone), fix the
+environment-specific browser-login quirk (CSRF priming / cookie timing is
+the leading suspect — not yet root-caused), then capture desktop + 390px
+screenshots of the Privacy tab, Download tab (General/Advanced), the
+Free-plan locked-Original state, and the client-facing download modal, and
+save them to `docs/qa-1r6/`. Otherwise this task is code- and
+test-verified complete.

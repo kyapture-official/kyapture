@@ -16,7 +16,7 @@ const FREE_PLAN_LIMITS = {
 // feature) and sends them with /subscriptions/my-subscription/. Until that
 // answer arrives — or if it fails — everything reads as locked, so the UI can
 // never offer a feature the API would refuse. The API enforces regardless.
-const NO_ENTITLEMENTS = { branding: false, watermark: false }
+const NO_ENTITLEMENTS = { branding: false, watermark: false, original_download: false }
 
 
 export function useSubscription() {

@@ -4,7 +4,10 @@ from rest_framework import serializers
 from apps.core.share import build_gallery_share_url
 from apps.core.watermark import validate_watermark_config
 from apps.users.collection_defaults import apply_collection_defaults
-from apps.subscriptions.entitlements import WATERMARK, require_feature
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email as django_validate_email
+
+from apps.subscriptions.entitlements import ORIGINAL_DOWNLOAD, WATERMARK, require_feature
 
 from apps.core.utils import generate_unique_slug, sanitize_text
 from apps.photos.models import MediaAsset
@@ -18,36 +21,182 @@ RESERVED_GALLERY_SLUGS = {
 }
 
 DOWNLOAD_SIZE_VALUES = {'download', 'web'}
+# The three derivative tiers this app actually generates for the public
+# gallery (apps/core/utils.py::_DISPLAY_TIERS: display/medium/thumbnail).
+# Pixieset's own Web Size picker labels its three options 2048/1024/640 —
+# we show our real numbers (2048/1280/640) instead of mislabeling the
+# 1280px "medium" tier as 1024px (docs/KYAPTURE_AGENT_RULES.md: never
+# invent measurements).
+WEB_PX_VALUES = {2048, 1280, 640}
+HIGH_RES_MODES = {'3600', 'original'}
+MAX_ALLOWED_EMAILS = 500
 
 
-def normalize_download_settings(value):
-    """Validate the compact download-policy block stored in design_settings."""
+def normalize_download_settings(value, *, instance=None, user=None):
+    """
+    Validate + normalize the gallery's download-policy block, stored under
+    design_settings.downloads.
+
+    Backward compatible with the original Task 1R.4 shape
+    ({allowed_sizes, require_email}): a payload sending only those two
+    keys still works exactly as before, and existing stored galleries
+    that predate the newer keys get sane defaults for them.
+
+    Task 1R.6 additions (Pixieset-style Download settings, product rules
+    in docs/KYAPTURE_AGENT_RULES.md's task brief):
+      - high_res: {enabled, mode}  mode 'original' is Pro+ only (checked
+        here at save time via require_feature; the download-time path in
+        apps/clients/download_access.py separately falls back to '3600'
+        if the plan has since lapsed, so a stored 'original' choice is
+        never silently honored for a Free/expired account).
+      - web: {enabled, px}         px in WEB_PX_VALUES.
+      - sets_enabled: null (all sets) or a list of this gallery's own
+        PhotoSet ids — validated against `instance.sets` when an instance
+        is available (an update; not on first create).
+      - limit_total: null or a positive integer cap on total downloads.
+      - restrict_contacts + allowed_emails: an explicit allow-list gate.
+
+    allowed_sizes is still computed and returned (derived from
+    high_res.enabled/web.enabled) because
+    apps/clients/download_access.py's resolution_is_allowed() and every
+    existing caller already key off it exactly as before — one source of
+    truth, no duplicate "is this size on" flag.
+    """
     if not isinstance(value, dict):
         raise serializers.ValidationError('downloads must be an object.')
 
-    allowed_sizes = value.get('allowed_sizes')
-    if not isinstance(allowed_sizes, list) or not allowed_sizes:
-        raise serializers.ValidationError({
-            'allowed_sizes': 'Choose at least one download size.'
-        })
-    if any(not isinstance(size, str) or size not in DOWNLOAD_SIZE_VALUES for size in allowed_sizes):
-        raise serializers.ValidationError({
-            'allowed_sizes': 'Each size must be "download" or "web".'
-        })
-    if len(set(allowed_sizes)) != len(allowed_sizes):
-        raise serializers.ValidationError({
-            'allowed_sizes': 'Each download size may only be selected once.'
-        })
+    def _bool(d, key, default):
+        v = d.get(key, default)
+        if not isinstance(v, bool):
+            raise serializers.ValidationError({key: f'{key} must be true or false.'})
+        return v
+
+    legacy_sizes = value.get('allowed_sizes')
+    legacy_sizes = legacy_sizes if isinstance(legacy_sizes, list) else None
+    if legacy_sizes is not None and any(not isinstance(s, str) for s in legacy_sizes):
+        raise serializers.ValidationError({'allowed_sizes': 'Each size must be "download" or "web".'})
+
+    high_res_in = value.get('high_res') if isinstance(value.get('high_res'), dict) else {}
+    web_in = value.get('web') if isinstance(value.get('web'), dict) else {}
+
+    if 'enabled' in high_res_in:
+        high_res_enabled = _bool(high_res_in, 'enabled', True)
+    elif legacy_sizes is not None:
+        high_res_enabled = 'download' in legacy_sizes
+    else:
+        high_res_enabled = True
+
+    if 'enabled' in web_in:
+        web_enabled = _bool(web_in, 'enabled', True)
+    elif legacy_sizes is not None:
+        web_enabled = 'web' in legacy_sizes
+    else:
+        web_enabled = True
+
+    if not high_res_enabled and not web_enabled:
+        raise serializers.ValidationError({'allowed_sizes': 'Choose at least one download size.'})
+
+    mode = high_res_in.get('mode', '3600')
+    if mode not in HIGH_RES_MODES:
+        raise serializers.ValidationError({'high_res': {'mode': 'mode must be "3600" or "original".'}})
+    if mode == 'original' and high_res_enabled and user is not None:
+        # Free users may never SAVE 'original' — not even disabled-but-stored,
+        # since a lapsed-then-renewed Pro photographer should never find an
+        # old Free-era attempt silently reactivated. Reject outright (403).
+        require_feature(user, ORIGINAL_DOWNLOAD)
+
+    px = web_in.get('px', 2048)
+    if px not in WEB_PX_VALUES:
+        raise serializers.ValidationError({'web': {'px': 'px must be 2048, 1280 or 640.'}})
+
+    allowed_sizes = (['download'] if high_res_enabled else []) + (['web'] if web_enabled else [])
+
     if 'require_email' in value and not isinstance(value['require_email'], bool):
+        raise serializers.ValidationError({'require_email': 'require_email must be true or false.'})
+    require_email = value.get('require_email', True)
+
+    sets_enabled = value.get('sets_enabled', None)
+    if sets_enabled is not None:
+        if not isinstance(sets_enabled, list) or any(not isinstance(s, str) for s in sets_enabled):
+            raise serializers.ValidationError({
+                'sets_enabled': 'sets_enabled must be a list of set ids, or null for all sets.'
+            })
+        if instance is not None and instance.pk:
+            valid_ids = {str(pk) for pk in instance.sets.values_list('id', flat=True)}
+            if any(s not in valid_ids for s in sets_enabled):
+                raise serializers.ValidationError({
+                    'sets_enabled': 'One or more sets do not belong to this gallery.'
+                })
+        sets_enabled = sorted(set(sets_enabled))
+
+    limit_total = value.get('limit_total', None)
+    if limit_total is not None:
+        if isinstance(limit_total, bool) or not isinstance(limit_total, int) or limit_total < 1:
+            raise serializers.ValidationError({
+                'limit_total': 'limit_total must be a positive whole number, or null for no limit.'
+            })
+
+    restrict_contacts = _bool(value, 'restrict_contacts', False)
+    allowed_emails_in = value.get('allowed_emails', [])
+    if not isinstance(allowed_emails_in, list):
+        raise serializers.ValidationError({'allowed_emails': 'allowed_emails must be a list of email addresses.'})
+    allowed_emails = []
+    seen = set()
+    for raw in allowed_emails_in[:MAX_ALLOWED_EMAILS]:
+        email = raw.strip().lower() if isinstance(raw, str) else ''
+        if not email or email in seen:
+            continue
+        try:
+            django_validate_email(email)
+        except DjangoValidationError:
+            raise serializers.ValidationError({'allowed_emails': f'"{raw}" is not a valid email address.'})
+        seen.add(email)
+        allowed_emails.append(email)
+    if restrict_contacts and not allowed_emails:
         raise serializers.ValidationError({
-            'require_email': 'require_email must be true or false.'
+            'allowed_emails': 'Add at least one email address to restrict downloads to.'
         })
+
     return {
         'allowed_sizes': allowed_sizes,
         # Frictionless downloads must be saved explicitly, never inferred
         # from a missing setting on an older gallery.
-        'require_email': value.get('require_email', True),
+        'require_email': require_email,
+        'high_res': {'enabled': high_res_enabled, 'mode': mode},
+        'web': {'enabled': web_enabled, 'px': px},
+        'sets_enabled': sets_enabled,
+        'limit_total': limit_total,
+        'restrict_contacts': restrict_contacts,
+        'allowed_emails': allowed_emails,
     }
+
+
+def normalize_privacy_settings(value, existing):
+    """
+    Validate + normalize design_settings.privacy: currently just the
+    optional "Limit PIN Usage" cap (Pixieset Advanced Settings), moved to
+    the Privacy tab per the 1R.6 product rule that every gate secret/limit
+    lives there, never on the Download tab.
+
+    pin_use_count is an internal counter (how many times the CURRENT PIN
+    has successfully unlocked a download — apps/clients/views.py
+    ::PublicDownloadAccessView) that a photographer request never sets
+    directly; it is always carried forward from the existing stored value.
+    GallerySetDownloadPinView resets it to 0 whenever the PIN itself is
+    set, changed or cleared, since a new PIN should start its own count.
+    """
+    if not isinstance(value, dict):
+        raise serializers.ValidationError('privacy must be an object.')
+    pin_limit = value.get('pin_limit', None)
+    if pin_limit is not None:
+        if isinstance(pin_limit, bool) or not isinstance(pin_limit, int) or pin_limit < 1:
+            raise serializers.ValidationError({
+                'pin_limit': 'pin_limit must be a positive whole number, or null for no limit.'
+            })
+    existing_count = existing.get('pin_use_count', 0) if isinstance(existing, dict) else 0
+    if not isinstance(existing_count, int):
+        existing_count = 0
+    return {'pin_limit': pin_limit, 'pin_use_count': existing_count}
 
 class CoverPhotoSerializer(serializers.ModelSerializer):
     """Read-only. Returns highly compact cover photo metadata."""
@@ -361,13 +510,21 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         existing = (self.instance.design_settings or {}) if self.instance else {}
         existing_block = existing.get('watermark') if isinstance(existing, dict) else None
         existing_downloads = existing.get('downloads') if isinstance(existing, dict) else None
+        existing_privacy = existing.get('privacy') if isinstance(existing, dict) else None
 
         if 'downloads' in value:
-            value['downloads'] = normalize_download_settings(value['downloads'])
+            value['downloads'] = normalize_download_settings(
+                value['downloads'], instance=self.instance, user=self.context['request'].user,
+            )
         elif existing_downloads is not None:
             # Design-page updates must not erase download rules saved on the
             # Settings page.
             value['downloads'] = existing_downloads
+
+        if 'privacy' in value:
+            value['privacy'] = normalize_privacy_settings(value['privacy'], existing_privacy or {})
+        elif existing_privacy is not None:
+            value['privacy'] = existing_privacy
 
         if 'watermark' not in value:
             if existing_block is not None:

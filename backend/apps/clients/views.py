@@ -59,16 +59,24 @@ from apps.core.utils import (
 )
 from .download_access import (
     as_clean_str,
+    asset_set_is_enabled_for_download,
     authorize_download,
     download_access_ttl,
+    download_limit_reached,
+    effective_high_res_mode,
+    email_is_allowed,
     error_response,
     file_token_state,
     get_download_policy,
     issue_download_token,
     issue_file_token,
+    pin_limit_reached,
+    record_pin_use,
     resolution_is_allowed,
+    set_is_enabled_for_download,
     validate_client_email,
     verify_pin,
+    web_px_for_gallery,
 )
 from .download_jobs import (
     expire_if_stale,
@@ -88,14 +96,21 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-DOWNLOAD_RESOLUTIONS = ('web', 'download', 'original')
+# 1R.6: "Original" is never a client-facing resolution any more -- the
+# client only ever asks for 'web' ("Web Size") or 'download' ("High
+# Resolution"); which bytes 'download' actually resolves to (the 3600px
+# Download Master, or the true original for an entitled Pro photographer
+# who chose it) is a server-only decision -- see effective_high_res_mode()
+# in download_access.py. A raw resolution=original is rejected here with
+# a plain 400, before it reaches any policy/entitlement check.
+DOWNLOAD_RESOLUTIONS = ('web', 'download')
 
 
 def _validate_download_resolution(gallery, resolution):
     """Return an API error when a valid size is disabled by its owner."""
     if resolution not in DOWNLOAD_RESOLUTIONS:
         return Response(
-            {'error': "resolution must be 'web', 'download', or 'original'."},
+            {'error': "resolution must be 'web' or 'download'.", 'code': 'invalid_resolution'},
             status=status.HTTP_400_BAD_REQUEST,
         )
     if not resolution_is_allowed(gallery, resolution):
@@ -113,31 +128,60 @@ def _get_client_ip(request):
     return request.META.get('REMOTE_ADDR')
 
 
-def _resolve_zip_source(asset, resolution):
+def _studio_name(gallery):
+    """Human-facing name for a "Contact {studio}" error -- never the allow-list itself."""
+    photographer = gallery.photographer
+    return photographer.display_name or photographer.username
+
+
+def _resolve_web_source(asset, px):
+    """
+    Which already-generated derivative backs a 'web' ("Web Size") download
+    at the gallery's configured px tier (2048/1280/640 -- the three real
+    tiers apps/core/utils.py's pipeline already produces; see
+    _DISPLAY_TIERS there). Video has no sized derivative, so 'web' serves
+    the H.264 playback file. Falls back down the chain, then to the
+    original, rather than ever returning nothing for an asset still
+    processing.
+    """
+    if asset.media_type != MediaAsset.MediaType.IMAGE:
+        return getattr(asset, 'playback_file', None) or asset.original_file
+    preferred = {2048: 'display_file', 1280: 'medium_file', 640: 'thumbnail_file'}.get(px, 'display_file')
+    ordered = [preferred] + [f for f in ('display_file', 'medium_file', 'thumbnail_file') if f != preferred]
+    for field_name in ordered:
+        field = getattr(asset, field_name, None)
+        if field:
+            return field
+    return asset.original_file
+
+
+def _resolve_zip_source(asset, resolution, gallery):
     """
     Which stored file represents `asset` inside a ZIP at the requested
-    resolution. 'web' prefers the already-generated display derivative and
-    falls back to the original (still processing, or a video — videos have
-    no display_file); 'download' is the private Download Master (lazily
-    backfilled for legacy assets); 'original' is the authorized original.
+    resolution. 'web' uses _resolve_web_source at the gallery's configured
+    px tier; 'download' ("High Resolution") resolves via
+    _get_client_download_source -- the 3600px Download Master, or the true
+    original for an entitled Pro photographer who chose it.
     """
-    if resolution == 'web' and getattr(asset, 'display_file', None):
-        return asset.display_file
-    if resolution == 'download':
-        return _get_client_download_source(asset)[0]
-    return asset.original_file
+    if resolution == 'web':
+        return _resolve_web_source(asset, web_px_for_gallery(gallery))
+    return _get_client_download_source(asset, gallery)[0]
 
 
 def _zip_entry_base_name(asset, source_field, resolution):
     """
-    Sanitized archive filename for `asset`. A Web Size entry is the display
-    WebP derivative, so its extension must match those bytes rather than the
-    camera original's (a .jpg name holding WebP data is a lying file).
+    Sanitized archive filename for `asset`. A Web Size entry is a WebP
+    derivative tier (2048/1280/640px), so its extension must match those
+    bytes rather than the camera original's (a .jpg name holding WebP data
+    is a lying file).
     """
     safe_name = sanitize_download_filename(asset.original_name, fallback=str(asset.id))
-    display_file = getattr(asset, 'display_file', None)
-    if resolution == 'web' and display_file and source_field.name == display_file.name:
-        safe_name = os.path.splitext(safe_name)[0] + os.path.splitext(source_field.name)[1]
+    if resolution == 'web':
+        for field_name in ('display_file', 'medium_file', 'thumbnail_file'):
+            field = getattr(asset, field_name, None)
+            if field and source_field.name == field.name:
+                safe_name = os.path.splitext(safe_name)[0] + os.path.splitext(source_field.name)[1]
+                break
     return safe_name
 
 
@@ -173,9 +217,20 @@ def _get_photo_set(gallery, raw_set_id):
         return None
 
 
-def _get_client_download_source(asset):
-    """Return the private Download Master, backfilling it lazily if needed."""
-    if asset.media_type != MediaAsset.MediaType.IMAGE:
+def _get_client_download_source(asset, gallery):
+    """
+    Return the file to serve for a 'download' ("High Resolution") request,
+    plus the DownloadLog.Resolution label to record.
+
+    'original' only when the gallery's EFFECTIVE High Resolution mode is
+    'original' (chosen by the photographer AND currently Pro-entitled --
+    see effective_high_res_mode(); auto-falls back to '3600' the moment a
+    Pro plan lapses, with the stored choice left untouched) -- or always,
+    for video, which has no Download Master pipeline (unchanged
+    pre-existing behavior). Otherwise the private Download Master, lazily
+    backfilled for legacy assets that predate it.
+    """
+    if effective_high_res_mode(gallery) == 'original' or asset.media_type != MediaAsset.MediaType.IMAGE:
         return asset.original_file, DownloadLog.Resolution.ORIGINAL
     if asset.download_file:
         return asset.download_file, DownloadLog.Resolution.DOWNLOAD
@@ -938,6 +993,15 @@ class PublicDownloadAccessView(APIView):
 
         pin_verified = False
         if gallery.download_pin_hash:
+            # 1R.6 "Limit PIN usage" (Privacy tab, Advanced) -- checked
+            # before the PIN itself so a limit already hit can't be worked
+            # around by guessing; the limit counts successful verifications
+            # only (see record_pin_use below), never bare attempts.
+            if pin_limit_reached(gallery):
+                return error_response(
+                    f'Download limit reached. Contact {_studio_name(gallery)}.', 'pin_limit_reached',
+                    status.HTTP_403_FORBIDDEN,
+                )
             raw_pin = request.data.get('pin')
             if not as_clean_str(raw_pin):
                 return error_response(
@@ -949,6 +1013,7 @@ class PublicDownloadAccessView(APIView):
                     'Incorrect download PIN.', 'invalid_pin', status.HTTP_401_UNAUTHORIZED,
                 )
             pin_verified = True
+            record_pin_use(gallery)
 
         policy = get_download_policy(gallery)
         email = None
@@ -961,6 +1026,14 @@ class PublicDownloadAccessView(APIView):
         elif policy['require_email']:
             _, email_error = validate_client_email(None)
             return email_error
+
+        # 1R.6 "Restrict Downloads to Specific Contacts" -- never reveals
+        # the allow-list itself, win or lose.
+        if not email_is_allowed(gallery, email):
+            return error_response(
+                f'This email is not authorized to download. Contact {_studio_name(gallery)}.',
+                'email_not_authorized', status.HTTP_403_FORBIDDEN,
+            )
 
         # Remember the email on the unlock session (never overwriting one
         # the client already gave) so downloads and favorite activity for
@@ -1068,15 +1141,12 @@ class PublicGalleryDownloadView(APIView):
             if email_error:
                 return email_error
 
-        # 4b. Resolution choice: 'web' serves the already-generated 2048px
-        # WebP display derivative (no regeneration, no extra stored
-        # file — see Gallery.design_settings-style "reuse what already
-        # exists" convention); 'original' (default, preserves prior
-        # behavior for any existing caller that doesn't send this field
-        # yet) serves the authorized private original. An asset with no
-        # display derivative yet (still processing, or a video — videos
-        # have no display_file) falls back to its original rather than
-        # silently dropping it from the ZIP.
+        # 4b. Resolution choice: 'web' ("Web Size") serves the gallery's
+        # configured derivative tier; 'download' ("High Resolution")
+        # resolves to either the 3600px Download Master or, for an
+        # entitled Pro photographer who chose it, the true original -- see
+        # effective_high_res_mode(). Only 'web'/'download' are ever
+        # accepted from a client.
         resolution = as_clean_str(request.data.get('resolution')).lower() or 'download'
         resolution_error = _validate_download_resolution(gallery, resolution)
         if resolution_error:
@@ -1094,6 +1164,22 @@ class PublicGalleryDownloadView(APIView):
         # the one it asked for.
         if as_clean_str(request.data.get('set_id')) and photo_set is None:
             return error_response('Photo set not found.', 'set_not_found', status.HTTP_404_NOT_FOUND)
+
+        # 1R.6 "Photo Sets Available for Download" -- a whole-gallery
+        # download (photo_set is None) is refused outright once restricted
+        # to a subset of sets, rather than silently shipping a partial ZIP.
+        if not set_is_enabled_for_download(gallery, photo_set):
+            return error_response(
+                'That part of the gallery is not available for download.', 'set_not_enabled',
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        # 1R.6 "Limit Photo Downloads" (total, shared by all visitors).
+        if download_limit_reached(gallery):
+            return error_response(
+                f'Download limit reached. Contact {_studio_name(gallery)}.', 'download_limit_reached',
+                status.HTTP_403_FORBIDDEN,
+            )
 
         # 5. Selection. asset_ids is validated through a real UUIDField list,
         # exactly like PhotoBulkDeleteSerializer/PhotoReorderSerializer
@@ -1374,6 +1460,15 @@ class PublicDownloadJobFileView(DownloadJobGateMixin, APIView):
             and last_log.ip_address == ip_address
             and last_log.created_at >= timezone.now() - timedelta(seconds=DOWNLOAD_RETRY_WINDOW_SECONDS)
         )
+        # 1R.6 "Limit Photo Downloads" -- gates only a NEW Download Activity
+        # row, never the harmless retry/resume above (same job, same IP,
+        # within the window) that collapses into the one already logged.
+        if not is_retry and download_limit_reached(gallery):
+            return error_response(
+                f'Download limit reached. Contact {_studio_name(gallery)}.', 'download_limit_reached',
+                status.HTTP_403_FORBIDDEN,
+            )
+
         if not is_retry:
             job.download_log = DownloadLog.objects.create(
                 gallery=gallery,
@@ -1507,7 +1602,12 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
     """
     GET /api/v1/public/{username}/{slug}/photo/{photo_id}/download/
     GET .../download/?token=<unlock token>&download_token=<download access token>
-                     &resolution=web|download|original
+                     &resolution=web|download
+
+    'download' ("High Resolution") resolves to the 3600px Download Master
+    or, for an entitled Pro photographer who chose it, the true original --
+    see _get_client_download_source()/effective_high_res_mode(). A raw
+    resolution=original is rejected with a 400, never served.
 
     Streams ONE file (image OR video — despite the URL saying "photo",
     nothing here restricts media_type; PublicMediaAssetSerializer.download_url
@@ -1584,23 +1684,35 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
         if resolution_error:
             return resolution_error
 
-        # 'web' prefers the smaller, already-generated derivative — the
-        # display WebP for an image, the H.264 playback MP4 for a video —
-        # over re-serving the original. Falls back to the original when
-        # no such derivative exists yet (still processing).
+        # 1R.6 "Photo Sets Available for Download" -- a single-photo/video
+        # download is refused the same way a ZIP covering it would be.
+        if not asset_set_is_enabled_for_download(gallery, asset):
+            return Response(
+                {'error': 'That photo is not available for download.', 'code': 'set_not_enabled'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # 1R.6 "Limit Photo Downloads" (total, shared by all visitors).
+        if download_limit_reached(gallery):
+            return Response(
+                {
+                    'error': f'Download limit reached. Contact {_studio_name(gallery)}.',
+                    'code': 'download_limit_reached',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # 'web' ("Web Size") serves the gallery's configured derivative
+        # tier for an image, the H.264 playback MP4 for a video -- over
+        # re-serving the original. Falls back to the original when no
+        # such derivative exists yet (still processing).
         source_field = asset.original_file
         if resolution == 'web':
-            web_field = (
-                asset.display_file
-                if asset.media_type == MediaAsset.MediaType.IMAGE
-                else asset.playback_file
-            )
-            if web_field:
-                source_field = web_field
-            else:
+            source_field = _resolve_web_source(asset, web_px_for_gallery(gallery))
+            if source_field is asset.original_file:
                 resolution = 'original'
         elif resolution == 'download':
-            source_field, resolution = _get_client_download_source(asset)
+            source_field, resolution = _get_client_download_source(asset, gallery)
 
         if not source_field:
             return Response({'error': 'File unavailable.'}, status=status.HTTP_404_NOT_FOUND)

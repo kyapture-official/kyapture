@@ -167,7 +167,7 @@ def run_download_job(job_id):
         added = 0
         with zipfile.ZipFile(temp_path, 'w', compression=zipfile.ZIP_STORED) as archive:
             for asset in assets:
-                source_field = _resolve_zip_source(asset, job.resolution)
+                source_field = _resolve_zip_source(asset, job.resolution, gallery)
                 if not source_field:
                     continue
                 entry_name = _unique_zip_entry_name(

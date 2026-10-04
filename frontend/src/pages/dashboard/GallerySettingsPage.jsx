@@ -1,44 +1,133 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GallerySettingsPage.jsx
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
+import { photosApi } from "../../api/photosApi";
 import { useToast } from "../../components/ui/Toast";
+import { useSubscription } from "../../hooks/useSubscription";
+import UpgradePrompt from "../../components/shared/UpgradePrompt";
 import { toDateInputValue } from "../../utils/formatters";
 import WatermarkSettings from "../../components/shared/WatermarkSettings";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
+// The three real derivative tiers the processing pipeline generates
+// (apps/core/utils.py::_DISPLAY_TIERS on the backend) -- these are the
+// honest numbers for this app, not Pixieset's 2048/1024/640 labels.
+const WEB_SIZE_OPTIONS = [
+  { value: 2048, label: "2048px", hint: "Full web resolution" },
+  { value: 1280, label: "1280px", hint: "Medium" },
+  { value: 640, label: "640px", hint: "Small" },
+];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function clampPositiveIntOrNull(raw) {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return null;
+  const n = parseInt(trimmed, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Small fading "Saved" / "Saving…" indicator for the autosaved Download tab. */
+function SaveIndicator({ state }) {
+  if (state === "idle") return null;
+  return (
+    <span
+      className={`text-[11px] font-medium transition-opacity ${
+        state === "error" ? "text-red-600" : "text-muted"
+      }`}
+    >
+      {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Couldn't save"}
+    </span>
+  );
+}
+
 export default function GallerySettingsPage() {
-  const { gallery, setGallery, slug, skipNextLoadRef, navigate, isMountedRef } = useOutletContext();
+  const { gallery, setGallery, slug, navigate, isMountedRef } = useOutletContext();
   const toast = useToast();
+  const { entitlements, loading: planLoading } = useSubscription();
+  const originalLocked = !planLoading && !entitlements.original_download;
 
   const [activeTab, setActiveTab] = useState("general");
 
   const [title, setTitle] = useState(gallery.title);
   const [brandingColor, setBrandingColor] = useState(gallery.branding_color);
-  const [isDownloadable, setIsDownloadable] = useState(
-    gallery.is_downloadable ?? gallery.allow_download ?? false
-  );
-  const [password, setPassword] = useState("");
   const [eventDate, setEventDate] = useState(toDateInputValue(gallery.event_date));
   const [expiresAt, setExpiresAt] = useState(toDateInputValue(gallery.expires_at));
   const [hasPassword, setHasPassword] = useState(gallery.has_password);
   const passwordInputRef = useRef(null);
+  const [password, setPassword] = useState("");
   const [updating, setUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Phase 3 — download PIN, a second gate independent of the gallery
-  // access password above.
+  // ── Privacy tab: Download PIN -- the ONLY other gate secret, independent
+  // of the gallery password above. Never shown in plaintext; the server
+  // never returns it, only has_download_pin. ──────────────────────────────
   const [hasDownloadPin, setHasDownloadPin] = useState(gallery.has_download_pin ?? false);
+  const [pinEditing, setPinEditing] = useState(false);
   const [downloadPin, setDownloadPin] = useState("");
   const [pinUpdating, setPinUpdating] = useState(false);
-  const initialDownloadPolicy = gallery.design_settings?.downloads || {};
-  const [allowedDownloadSizes, setAllowedDownloadSizes] = useState(
-    initialDownloadPolicy.allowed_sizes || ["download", "web"],
+  const [pinError, setPinError] = useState("");
+
+  // "Limit PIN usage" (Privacy tab, Advanced) -- a non-secret cap, so it
+  // autosaves like the Download tab's own limits.
+  const initialPrivacy = gallery.design_settings?.privacy || {};
+  const [pinLimit, setPinLimit] = useState(
+    initialPrivacy.pin_limit != null ? String(initialPrivacy.pin_limit) : "",
   );
+  const [pinLimitSaveState, setPinLimitSaveState] = useState("idle");
+  const pinLimitTimerRef = useRef(null);
+  const pinLimitSkipRef = useRef(true);
+
+  // ── Download tab ─────────────────────────────────────────────────────
+  const initialDownloads = gallery.design_settings?.downloads || {};
+  const legacySizes = Array.isArray(initialDownloads.allowed_sizes) ? initialDownloads.allowed_sizes : null;
+
+  const [isDownloadable, setIsDownloadable] = useState(
+    gallery.is_downloadable ?? gallery.allow_download ?? false,
+  );
+  const [downloadSubTab, setDownloadSubTab] = useState("general"); // general | advanced
+
+  const [highResEnabled, setHighResEnabled] = useState(
+    initialDownloads.high_res?.enabled ?? (legacySizes ? legacySizes.includes("download") : true),
+  );
+  const [highResMode, setHighResMode] = useState(initialDownloads.high_res?.mode || "3600");
+  const [webEnabled, setWebEnabled] = useState(
+    initialDownloads.web?.enabled ?? (legacySizes ? legacySizes.includes("web") : true),
+  );
+  const [webPx, setWebPx] = useState(initialDownloads.web?.px || 2048);
   const [requireDownloadEmail, setRequireDownloadEmail] = useState(
-    initialDownloadPolicy.require_email !== false,
+    initialDownloads.require_email !== false,
   );
+
+  const [sets, setSets] = useState([]);
+  const [setsEnabled, setSetsEnabled] = useState(
+    Array.isArray(initialDownloads.sets_enabled) ? initialDownloads.sets_enabled : null,
+  );
+
+  const [limitTotal, setLimitTotal] = useState(
+    initialDownloads.limit_total != null ? String(initialDownloads.limit_total) : "",
+  );
+  const [restrictContacts, setRestrictContacts] = useState(Boolean(initialDownloads.restrict_contacts));
+  const [allowedEmails, setAllowedEmails] = useState(
+    Array.isArray(initialDownloads.allowed_emails) ? initialDownloads.allowed_emails : [],
+  );
+  const [newEmail, setNewEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+
+  const [downloadSaveState, setDownloadSaveState] = useState("idle"); // idle | saving | saved | error
+  const [downloadSaveError, setDownloadSaveError] = useState("");
+  const downloadTimerRef = useRef(null);
+  const downloadSkipRef = useRef(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    photosApi.listSets(slug).then((data) => {
+      if (!cancelled) setSets(Array.isArray(data) ? data : data?.results || []);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [slug]);
 
   // Locked product decision: the MVP gallery URL is /g/:username/:slug —
   // stable, server-assigned, not photographer-editable (there is no
@@ -65,16 +154,8 @@ export default function GallerySettingsPage() {
     const payload = {
       title: title.trim(),
       branding_color: brandingColor,
-      is_downloadable: isDownloadable, // allow_download ko thau ma yahi lekhne
       event_date: eventDate || null,
       expires_at: expiresAt || null,
-      design_settings: {
-        ...(gallery.design_settings || {}),
-        downloads: {
-          allowed_sizes: allowedDownloadSizes,
-          require_email: requireDownloadEmail,
-        },
-      },
     };
 
     try {
@@ -87,17 +168,10 @@ export default function GallerySettingsPage() {
       setGallery(updated);
       setTitle(updated.title);
       setBrandingColor(updated.branding_color);
-      setIsDownloadable(updated.allow_download ?? updated.is_downloadable ?? false);
-      setHasPassword(updated.has_password);
-      const updatedPolicy = updated.design_settings?.downloads || {};
-      setAllowedDownloadSizes(updatedPolicy.allowed_sizes || ["download", "web"]);
-      setRequireDownloadEmail(updatedPolicy.require_email !== false);
       toast("Settings saved successfully", "success");
-      // Slug is stable across a title edit (see docstring above), so there's
-      // no slug-drift redirect to handle here anymore.
     } catch (err) {
       if (isMountedRef.current) {
-        setErrorMsg(err.response?.data?.detail || "Failed to save settings.");
+        setErrorMsg(err.response?.data?.detail || err.response?.data?.error || "Failed to save settings.");
         toast("Failed to save settings", "error");
       }
     } finally {
@@ -105,30 +179,108 @@ export default function GallerySettingsPage() {
     }
   };
 
-  const handleSaveDownloadPin = async (e) => {
-    e.preventDefault();
+  // ── Download tab: one consistent autosave pattern. Every toggle/radio/
+  // checkbox/number field below lands here, debounced, with a small
+  // "Saved" indicator -- no more separate Save/Set buttons on this tab. ──
+  const saveDownloadSettings = async () => {
+    setDownloadSaveState("saving");
+    setDownloadSaveError("");
+    const payload = {
+      is_downloadable: isDownloadable,
+      design_settings: {
+        ...(gallery.design_settings || {}),
+        downloads: {
+          require_email: requireDownloadEmail,
+          high_res: { enabled: highResEnabled, mode: highResMode },
+          web: { enabled: webEnabled, px: webPx },
+          sets_enabled: setsEnabled,
+          limit_total: clampPositiveIntOrNull(limitTotal),
+          restrict_contacts: restrictContacts,
+          allowed_emails: allowedEmails,
+        },
+      },
+    };
+    try {
+      const updated = USE_MOCK_DATA ? { ...gallery, ...payload } : await galleriesApi.updateGallery(slug, payload);
+      if (!isMountedRef.current) return;
+      setGallery(updated);
+      setDownloadSaveState("saved");
+      window.clearTimeout(saveDownloadSettings._fadeTimer);
+      saveDownloadSettings._fadeTimer = window.setTimeout(() => {
+        if (isMountedRef.current) setDownloadSaveState((s) => (s === "saved" ? "idle" : s));
+      }, 2000);
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      const data = err.response?.data;
+      setDownloadSaveState("error");
+      setDownloadSaveError(data?.error || "Failed to save download settings.");
+      toast(data?.error || "Failed to save download settings", "error");
+    }
+  };
+
+  useEffect(() => {
+    if (downloadSkipRef.current) { downloadSkipRef.current = false; return; }
+    if (!highResEnabled && !webEnabled) return; // invalid -- wait for the user to fix it
+    if (downloadTimerRef.current) window.clearTimeout(downloadTimerRef.current);
+    downloadTimerRef.current = window.setTimeout(saveDownloadSettings, 700);
+    return () => window.clearTimeout(downloadTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isDownloadable, highResEnabled, highResMode, webEnabled, webPx, requireDownloadEmail,
+    setsEnabled, limitTotal, restrictContacts, allowedEmails,
+  ]);
+
+  // ── Privacy tab: "Limit PIN usage" autosave (non-secret). ───────────────
+  const savePinLimit = async () => {
+    setPinLimitSaveState("saving");
+    const payload = {
+      design_settings: {
+        ...(gallery.design_settings || {}),
+        privacy: { ...(gallery.design_settings?.privacy || {}), pin_limit: clampPositiveIntOrNull(pinLimit) },
+      },
+    };
+    try {
+      const updated = USE_MOCK_DATA ? { ...gallery, ...payload } : await galleriesApi.updateGallery(slug, payload);
+      if (!isMountedRef.current) return;
+      setGallery(updated);
+      setPinLimitSaveState("saved");
+      window.setTimeout(() => { if (isMountedRef.current) setPinLimitSaveState((s) => (s === "saved" ? "idle" : s)); }, 2000);
+    } catch {
+      if (isMountedRef.current) setPinLimitSaveState("error");
+    }
+  };
+
+  useEffect(() => {
+    if (pinLimitSkipRef.current) { pinLimitSkipRef.current = false; return; }
+    if (pinLimitTimerRef.current) window.clearTimeout(pinLimitTimerRef.current);
+    pinLimitTimerRef.current = window.setTimeout(savePinLimit, 700);
+    return () => window.clearTimeout(pinLimitTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinLimit]);
+
+  const handleSaveDownloadPin = async (nextPin) => {
     if (pinUpdating) return;
-    if (!downloadPin && hasDownloadPin) {
-      if (!window.confirm("Remove the download PIN?")) return;
+    if (!nextPin && hasDownloadPin) {
+      if (!window.confirm("Remove the download PIN? Downloads will no longer require one.")) return;
     }
     setPinUpdating(true);
+    setPinError("");
     try {
+      let response;
       if (USE_MOCK_DATA) {
-        const newHasPin = Boolean(downloadPin);
-        setHasDownloadPin(newHasPin);
-        setGallery((prev) => ({ ...prev, has_download_pin: newHasPin }));
-        setDownloadPin("");
-        toast(downloadPin ? "Download PIN set" : "Download PIN removed", "success");
+        response = { has_download_pin: Boolean(nextPin) };
       } else {
-        const response = await galleriesApi.setDownloadPin(slug, downloadPin || null);
-        setHasDownloadPin(response.has_download_pin);
-        setGallery((prev) => ({ ...prev, has_download_pin: response.has_download_pin }));
-        setDownloadPin("");
-        toast(downloadPin ? "Download PIN set" : "Download PIN removed", "success");
+        response = await galleriesApi.setDownloadPin(slug, nextPin || null);
       }
+      if (!isMountedRef.current) return;
+      setHasDownloadPin(response.has_download_pin);
+      setGallery((prev) => ({ ...prev, has_download_pin: response.has_download_pin }));
+      setDownloadPin("");
+      setPinEditing(false);
+      toast(nextPin ? "Download PIN set" : "Download PIN removed", "success");
     } catch (err) {
       if (isMountedRef.current) {
-        setErrorMsg(err.response?.data?.error || "Failed to update download PIN.");
+        setPinError(err.response?.data?.error || "Failed to update download PIN.");
         toast("Failed to update download PIN", "error");
       }
     } finally {
@@ -179,6 +331,29 @@ export default function GallerySettingsPage() {
       if (isMountedRef.current) setUpdating(false);
     }
   };
+
+  const toggleSet = (setId) => {
+    setSetsEnabled((current) => {
+      const allIds = sets.map((s) => s.id);
+      const activeIds = current === null ? allIds : current;
+      const isOn = activeIds.includes(setId);
+      const next = isOn ? activeIds.filter((id) => id !== setId) : [...activeIds, setId];
+      return next.length === allIds.length ? null : next;
+    });
+  };
+  const isSetEnabled = (setId) => setsEnabled === null || setsEnabled.includes(setId);
+
+  const addAllowedEmail = () => {
+    const email = newEmail.trim().toLowerCase();
+    if (!email) return;
+    if (!EMAIL_RE.test(email)) { setEmailError("Enter a valid email address."); return; }
+    setEmailError("");
+    if (!allowedEmails.includes(email)) setAllowedEmails((prev) => [...prev, email]);
+    setNewEmail("");
+  };
+  const removeAllowedEmail = (email) => setAllowedEmails((prev) => prev.filter((e) => e !== email));
+
+  const noSizeSelected = !highResEnabled && !webEnabled;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -281,17 +456,20 @@ export default function GallerySettingsPage() {
           />
         )}
 
-        {/* Privacy Tab */}
+        {/* Privacy Tab — the ONLY place gate secrets live: gallery password
+            and download PIN, plus the non-secret "Limit PIN usage" cap. */}
         {activeTab === "privacy" && (
           <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
             <h2 className="font-serif text-lg text-ink mb-2">Privacy & Security</h2>
-            <p className="text-xs text-muted mb-6">Control access to your gallery.</p>
+            <p className="text-xs text-muted mb-6">
+              Nothing is asked when a visitor opens this gallery unless you turn on a password or PIN below.
+            </p>
 
             <div className="space-y-5">
               <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
                 <div>
-                  <p className="text-sm font-medium text-ink">Password Protection</p>
-                  <p className="text-xs text-muted mt-0.5">Require a password to view the gallery</p>
+                  <p className="text-sm font-medium text-ink">Gallery Password</p>
+                  <p className="text-xs text-muted mt-0.5">Require a password just to view the gallery</p>
                 </div>
                 <label className="toggle-wrap">
                   <input
@@ -335,109 +513,358 @@ export default function GallerySettingsPage() {
                   {password ? "Save" : hasPassword ? "Clear" : "Set"}
                 </button>
               </form>
+
+              {/* Download PIN — a second, independent gate from the gallery
+                  password above. The photographer always types their own
+                  PIN; there is no auto-generated default and no reset button. */}
+              <div className="pt-5 border-t border-cream-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-medium text-ink">Download PIN</p>
+                    <p className="text-xs text-muted mt-0.5">
+                      Require a 4–8 digit PIN before a visitor can download anything — view access stays open.
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                      hasDownloadPin
+                        ? "bg-brand-green-50 text-brand-green-700 border-brand-green-200"
+                        : "bg-cream-200 text-muted border-cream-300"
+                    }`}
+                  >
+                    {hasDownloadPin ? "Enabled" : "Off"}
+                  </span>
+                </div>
+
+                {pinError && <p className="text-xs text-red-600 mb-2">{pinError}</p>}
+
+                {!pinEditing ? (
+                  <div className="flex items-center gap-3 p-4 bg-cream-100 rounded-xl border border-cream-200">
+                    <span className="flex-1 font-mono text-sm text-ink tracking-[0.3em]">
+                      {hasDownloadPin ? "••••" : "No PIN set"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setPinEditing(true); setDownloadPin(""); }}
+                      className="px-3 py-1.5 border border-cream-200 bg-white text-ink text-xs font-medium rounded-lg hover:bg-cream-50 transition-colors cursor-pointer"
+                    >
+                      {hasDownloadPin ? "Change PIN" : "Set PIN"}
+                    </button>
+                    {hasDownloadPin && (
+                      <button
+                        type="button"
+                        disabled={pinUpdating}
+                        onClick={() => handleSaveDownloadPin("")}
+                        className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        Remove PIN
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); if (downloadPin) handleSaveDownloadPin(downloadPin); }}
+                    className="flex gap-3"
+                  >
+                    <input
+                      type="text"
+                      autoFocus
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={8}
+                      placeholder="4–8 digits"
+                      value={downloadPin}
+                      onChange={(e) => setDownloadPin(e.target.value.replace(/\D/g, ""))}
+                      disabled={pinUpdating}
+                      className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
+                    />
+                    <button
+                      type="submit"
+                      disabled={pinUpdating || downloadPin.length < 4}
+                      className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setPinEditing(false); setDownloadPin(""); setPinError(""); }}
+                      className="px-4 py-2 border border-cream-200 text-ink text-sm font-medium rounded-lg hover:bg-cream-100 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                )}
+
+                {hasDownloadPin && (
+                  <div className="mt-4 flex items-center justify-between gap-3 p-4 bg-cream-100 rounded-xl border border-cream-200">
+                    <div>
+                      <p className="text-sm font-medium text-ink">Limit PIN usage</p>
+                      <p className="text-xs text-muted mt-0.5">Block downloads once the PIN has been used this many times.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Unlimited"
+                        value={pinLimit}
+                        onChange={(e) => setPinLimit(e.target.value)}
+                        className="w-24 px-3 py-1.5 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none text-right"
+                      />
+                      <SaveIndicator state={pinLimitSaveState} />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Download Tab */}
+        {/* Download Tab — Pixieset-style General / Advanced, one autosave
+            pattern throughout. */}
         {activeTab === "download" && (
           <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
-            <h2 className="font-serif text-lg text-ink mb-2">Download Settings</h2>
-            <p className="text-xs text-muted mb-6">Control how clients download photos.</p>
-
-            <form onSubmit={handleSaveSettings} noValidate className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
-                <div>
-                  <p className="text-sm font-medium text-ink">Allow Downloads</p>
-                  <p className="text-xs text-muted mt-0.5">Let clients download high-resolution photos</p>
-                </div>
-                <label className="toggle-wrap">
-                  <input type="checkbox" checked={isDownloadable} onChange={(e) => setIsDownloadable(e.target.checked)} />
-                  <span className="toggle-slider" />
-                </label>
+            <div className="flex items-start justify-between gap-4 mb-2">
+              <div>
+                <h2 className="font-serif text-lg text-ink">Download Settings</h2>
+                <p className="text-xs text-muted mt-1">Control how clients download photos.</p>
               </div>
-
-              <fieldset className="rounded-xl border border-cream-200 p-4 space-y-3">
-                <legend className="px-1 text-sm font-medium text-ink">Allowed download sizes</legend>
-                {[
-                  { value: "download", label: "High Resolution", hint: "Uses the protected Download Master." },
-                  { value: "web", label: "Web Size", hint: "Uses the web-optimized file." },
-                ].map((size) => (
-                  <label key={size.value} className="flex cursor-pointer items-start gap-3 text-sm text-ink">
-                    <input
-                      type="checkbox"
-                      checked={allowedDownloadSizes.includes(size.value)}
-                      disabled={!isDownloadable}
-                      onChange={(event) => setAllowedDownloadSizes((current) => {
-                        if (event.target.checked) return [...current, size.value];
-                        return current.filter((value) => value !== size.value);
-                      })}
-                      className="mt-0.5 accent-brand-green-600 disabled:cursor-not-allowed"
-                    />
-                    <span><span className="block font-medium">{size.label}</span><span className="block text-xs text-muted">{size.hint}</span></span>
-                  </label>
-                ))}
-                {isDownloadable && allowedDownloadSizes.length === 0 && <p className="text-xs text-red-600">Choose at least one download size.</p>}
-              </fieldset>
-
-              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-cream-200 p-4">
-                <span><span className="block text-sm font-medium text-ink">Require email</span><span className="block text-xs text-muted mt-0.5">Record the downloader’s email before any download.</span></span>
-                <input type="checkbox" checked={requireDownloadEmail} disabled={!isDownloadable} onChange={(event) => setRequireDownloadEmail(event.target.checked)} className="h-4 w-4 accent-brand-green-600 disabled:cursor-not-allowed" />
-              </label>
-              {!requireDownloadEmail && !hasDownloadPin && isDownloadable && <p className="text-xs text-amber-700">Frictionless downloads are on: clients will not be asked for email or a PIN.</p>}
-
-              <div className="flex justify-end pt-4 border-t border-cream-200">
+              <div className="flex items-center gap-3 flex-none">
+                <SaveIndicator state={downloadSaveState} />
                 <button
-                  type="submit"
-                  disabled={updating || (isDownloadable && allowedDownloadSizes.length === 0)}
-                  className="px-4 py-2 bg-brand-green-600 text-white text-sm font-medium rounded-lg hover:bg-brand-green-700 transition-colors cursor-pointer disabled:opacity-50"
+                  type="button"
+                  onClick={() => navigate(`/dashboard/galleries/${slug}/activities`)}
+                  className="text-xs font-medium text-brand-green-700 hover:text-brand-green-800 underline-offset-2 hover:underline cursor-pointer whitespace-nowrap"
                 >
-                  {updating ? "Saving..." : "Save Download Settings"}
+                  Download Activity →
                 </button>
               </div>
-            </form>
+            </div>
+            {downloadSaveState === "error" && (
+              <p className="text-xs text-red-600 mb-4">{downloadSaveError}</p>
+            )}
 
-            {/* Phase 3 — Download PIN: a second, independent gate from the
-                gallery access password above. */}
-            <div className="mt-6 pt-6 border-t border-cream-200">
-              <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200 mb-3">
-                <div>
-                  <p className="text-sm font-medium text-ink">Download PIN</p>
-                  <p className="text-xs text-muted mt-0.5">
-                    Require a 4–8 digit PIN before a client can trigger any download — independent of the gallery password.
-                  </p>
-                </div>
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                    hasDownloadPin
-                      ? "bg-brand-green-50 text-brand-green-700 border-brand-green-200"
-                      : "bg-cream-200 text-muted border-cream-300"
+            <div className="flex gap-1 bg-cream-100 rounded-lg p-1 mb-6 w-fit">
+              {[{ id: "general", label: "General" }, { id: "advanced", label: "Advanced" }].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setDownloadSubTab(t.id)}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                    downloadSubTab === t.id ? "bg-surface-light text-ink shadow-sm" : "text-muted hover:text-ink"
                   }`}
                 >
-                  {hasDownloadPin ? "Enabled" : "Off"}
-                </span>
-              </div>
-              <form onSubmit={handleSaveDownloadPin} className="flex gap-3">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={8}
-                  placeholder={hasDownloadPin ? "Enter new PIN (4-8 digits)" : "Set a PIN (4-8 digits)"}
-                  value={downloadPin}
-                  onChange={(e) => setDownloadPin(e.target.value.replace(/\D/g, ""))}
-                  disabled={pinUpdating}
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none focus:ring-2 focus:ring-brand-green-500/10 transition-all disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={pinUpdating}
-                  className="px-4 py-2 border border-cream-200 text-ink text-sm font-medium rounded-lg hover:bg-cream-100 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {downloadPin ? "Save" : hasDownloadPin ? "Clear" : "Set"}
+                  {t.label}
                 </button>
-              </form>
+              ))}
             </div>
+
+            {downloadSubTab === "general" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-cream-100 rounded-xl border border-cream-200">
+                  <div>
+                    <p className="text-sm font-medium text-ink">Photo Download</p>
+                    <p className="text-xs text-muted mt-0.5">Let clients download photos from this gallery</p>
+                  </div>
+                  <label className="toggle-wrap">
+                    <input type="checkbox" checked={isDownloadable} onChange={(e) => setIsDownloadable(e.target.checked)} />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+
+                <fieldset disabled={!isDownloadable} className="rounded-xl border border-cream-200 p-4 space-y-4 disabled:opacity-60">
+                  <legend className="px-1 text-sm font-medium text-ink">Photo Download Sizes</legend>
+
+                  <div className="space-y-2">
+                    <label className="flex cursor-pointer items-center gap-3 text-sm text-ink">
+                      <input
+                        type="checkbox"
+                        checked={highResEnabled}
+                        onChange={(e) => setHighResEnabled(e.target.checked)}
+                        className="accent-brand-green-600"
+                      />
+                      <span className="font-medium">High Resolution</span>
+                    </label>
+                    {highResEnabled && (
+                      <div className="ml-7 space-y-2">
+                        <label className="flex items-center gap-2 text-sm text-ink">
+                          <input
+                            type="radio"
+                            name="high-res-mode"
+                            checked={highResMode === "3600"}
+                            onChange={() => setHighResMode("3600")}
+                            className="accent-brand-green-600"
+                          />
+                          3600px (Download Master)
+                        </label>
+                        <label
+                          className={`flex items-center gap-2 text-sm ${originalLocked ? "text-muted cursor-not-allowed" : "text-ink cursor-pointer"}`}
+                        >
+                          <input
+                            type="radio"
+                            name="high-res-mode"
+                            checked={highResMode === "original"}
+                            disabled={originalLocked}
+                            onChange={() => setHighResMode("original")}
+                            className="accent-brand-green-600 disabled:cursor-not-allowed"
+                          />
+                          Original{originalLocked ? " — Upgrade required" : ""}
+                        </label>
+                        {originalLocked && (
+                          <UpgradePrompt
+                            className="mt-2"
+                            title="Original downloads are a Pro feature"
+                            message="Offer clients the untouched, full-resolution original with the Pro plan or above."
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-cream-200">
+                    <label className="flex cursor-pointer items-center gap-3 text-sm text-ink">
+                      <input
+                        type="checkbox"
+                        checked={webEnabled}
+                        onChange={(e) => setWebEnabled(e.target.checked)}
+                        className="accent-brand-green-600"
+                      />
+                      <span className="font-medium">Web Size</span>
+                    </label>
+                    {webEnabled && (
+                      <div className="ml-7 flex flex-wrap gap-4">
+                        {WEB_SIZE_OPTIONS.map((opt) => (
+                          <label key={opt.value} className="flex items-center gap-2 text-sm text-ink cursor-pointer">
+                            <input
+                              type="radio"
+                              name="web-px"
+                              checked={webPx === opt.value}
+                              onChange={() => setWebPx(opt.value)}
+                              className="accent-brand-green-600"
+                            />
+                            {opt.label}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {noSizeSelected && <p className="text-xs text-red-600">Choose at least one download size.</p>}
+                </fieldset>
+
+                <label className="flex cursor-pointer items-center justify-between rounded-xl border border-cream-200 p-4">
+                  <span>
+                    <span className="block text-sm font-medium text-ink">Require email</span>
+                    <span className="block text-xs text-muted mt-0.5">Record the downloader's email before any download.</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={requireDownloadEmail}
+                    disabled={!isDownloadable}
+                    onChange={(e) => setRequireDownloadEmail(e.target.checked)}
+                    className="h-4 w-4 accent-brand-green-600 disabled:cursor-not-allowed"
+                  />
+                </label>
+                {!requireDownloadEmail && !hasDownloadPin && isDownloadable && (
+                  <p className="text-xs text-amber-700">Frictionless downloads are on: clients will not be asked for email or a PIN.</p>
+                )}
+
+                <fieldset disabled={!isDownloadable} className="rounded-xl border border-cream-200 p-4 space-y-2 disabled:opacity-60">
+                  <legend className="px-1 text-sm font-medium text-ink">Photo Sets Available for Download</legend>
+                  <p className="text-xs text-muted -mt-1 mb-2">Leave every set checked to allow the whole gallery to be downloaded.</p>
+                  {sets.length === 0 ? (
+                    <p className="text-xs text-muted">This gallery has no photo sets yet.</p>
+                  ) : (
+                    sets.map((set) => (
+                      <label key={set.id} className="flex cursor-pointer items-center gap-3 text-sm text-ink">
+                        <input
+                          type="checkbox"
+                          checked={isSetEnabled(set.id)}
+                          onChange={() => toggleSet(set.id)}
+                          className="accent-brand-green-600"
+                        />
+                        {set.name}
+                        <span className="text-xs text-muted">({set.photo_count ?? 0})</span>
+                      </label>
+                    ))
+                  )}
+                </fieldset>
+              </div>
+            )}
+
+            {downloadSubTab === "advanced" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3 p-4 bg-cream-100 rounded-xl border border-cream-200">
+                  <div>
+                    <p className="text-sm font-medium text-ink">Limit Photo Downloads</p>
+                    <p className="text-xs text-muted mt-0.5">Stop all downloads once this many have been completed, in total.</p>
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Unlimited"
+                    value={limitTotal}
+                    onChange={(e) => setLimitTotal(e.target.value)}
+                    className="w-28 px-3 py-1.5 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none text-right"
+                  />
+                </div>
+
+                <div className="rounded-xl border border-cream-200 p-4 space-y-3">
+                  <label className="flex cursor-pointer items-center justify-between">
+                    <span>
+                      <span className="block text-sm font-medium text-ink">Restrict Downloads to Specific Contacts</span>
+                      <span className="block text-xs text-muted mt-0.5">Only the email addresses below may download.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={restrictContacts}
+                      onChange={(e) => setRestrictContacts(e.target.checked)}
+                      className="h-4 w-4 accent-brand-green-600"
+                    />
+                  </label>
+
+                  {restrictContacts && (
+                    <div className="space-y-2 pt-2 border-t border-cream-200">
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          placeholder="client@example.com"
+                          value={newEmail}
+                          onChange={(e) => { setNewEmail(e.target.value); setEmailError(""); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAllowedEmail(); } }}
+                          className="flex-1 px-3 py-2 text-sm rounded-lg border border-cream-200 focus:border-brand-green-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={addAllowedEmail}
+                          className="px-3 py-2 border border-cream-200 text-ink text-sm font-medium rounded-lg hover:bg-cream-100 transition-colors cursor-pointer"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      {emailError && <p className="text-xs text-red-600">{emailError}</p>}
+                      {allowedEmails.length === 0 ? (
+                        <p className="text-xs text-amber-700">Add at least one email address to restrict downloads to.</p>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {allowedEmails.map((email) => (
+                            <li key={email} className="flex items-center justify-between px-3 py-1.5 bg-cream-100 rounded-lg text-sm text-ink">
+                              {email}
+                              <button
+                                type="button"
+                                onClick={() => removeAllowedEmail(email)}
+                                className="text-xs text-red-600 hover:text-red-700 cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

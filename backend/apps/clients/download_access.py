@@ -37,48 +37,223 @@ DEFAULT_DOWNLOAD_ACCESS_TTL_SECONDS = 2 * 60 * 60
 DOWNLOAD_RESOLUTIONS = ('download', 'web')
 
 
-def get_download_policy(gallery):
-    """Return the small, validated public-download policy for a gallery.
-
-    The policy lives under ``Gallery.design_settings.downloads`` so it travels
-    with the collection's other photographer-controlled settings.  Existing
-    galleries that predate it deliberately default to email-required and both
-    safe client sizes: permissive downloads must be an explicit choice.
+def _effective_downloads(gallery):
+    """
+    Read-time view of ``Gallery.design_settings.downloads`` with every
+    1R.6 key defaulted for a gallery saved before it existed — including
+    one storing only the original Task 1R.4 shape ({allowed_sizes,
+    require_email}). Never raises: a malformed/corrupt stored value
+    degrades to the same safe defaults the serializer itself falls back
+    to (apps/galleries/serializers.py::normalize_download_settings),
+    never a blank/crashed response.
     """
     design_settings = gallery.design_settings if isinstance(gallery.design_settings, dict) else {}
-    raw_policy = design_settings.get('downloads')
-    raw_policy = raw_policy if isinstance(raw_policy, dict) else {}
+    raw = design_settings.get('downloads')
+    raw = raw if isinstance(raw, dict) else {}
 
-    raw_sizes = raw_policy.get('allowed_sizes')
-    allowed_sizes = [
-        size for size in raw_sizes
-        if isinstance(size, str) and size in DOWNLOAD_RESOLUTIONS
-    ] if isinstance(raw_sizes, list) else list(DOWNLOAD_RESOLUTIONS)
+    raw_sizes = raw.get('allowed_sizes')
+    legacy_sizes = [
+        size for size in raw_sizes if isinstance(size, str) and size in DOWNLOAD_RESOLUTIONS
+    ] if isinstance(raw_sizes, list) else None
+
+    high_res = raw.get('high_res') if isinstance(raw.get('high_res'), dict) else {}
+    web = raw.get('web') if isinstance(raw.get('web'), dict) else {}
+
+    high_res_enabled = high_res.get('enabled')
+    if not isinstance(high_res_enabled, bool):
+        high_res_enabled = 'download' in legacy_sizes if legacy_sizes is not None else True
+    web_enabled = web.get('enabled')
+    if not isinstance(web_enabled, bool):
+        web_enabled = 'web' in legacy_sizes if legacy_sizes is not None else True
+
+    allowed_sizes = (['download'] if high_res_enabled else []) + (['web'] if web_enabled else [])
     if not allowed_sizes:
         # Invalid historic JSON must never silently leave a live gallery with
         # no predictable policy. Serializer validation prevents new bad data.
         allowed_sizes = list(DOWNLOAD_RESOLUTIONS)
 
+    mode = high_res.get('mode')
+    if mode not in ('3600', 'original'):
+        mode = '3600'
+    px = web.get('px')
+    if px not in (2048, 1280, 640):
+        px = 2048
+
+    sets_enabled = raw.get('sets_enabled')
+    if not (isinstance(sets_enabled, list) and all(isinstance(s, str) for s in sets_enabled)):
+        sets_enabled = None
+
+    limit_total = raw.get('limit_total')
+    if isinstance(limit_total, bool) or not isinstance(limit_total, int) or limit_total < 1:
+        limit_total = None
+
+    allowed_emails = raw.get('allowed_emails')
+    allowed_emails = (
+        [e.strip().lower() for e in allowed_emails if isinstance(e, str) and e.strip()]
+        if isinstance(allowed_emails, list) else []
+    )
+
     return {
         'allowed_sizes': allowed_sizes,
-        'require_email': raw_policy.get('require_email') is not False,
+        'require_email': raw.get('require_email') is not False,
+        'high_res_enabled': high_res_enabled,
+        'high_res_mode': mode,
+        'web_enabled': web_enabled,
+        'web_px': px,
+        'sets_enabled': sets_enabled,
+        'limit_total': limit_total,
+        'restrict_contacts': bool(raw.get('restrict_contacts', False)),
+        'allowed_emails': allowed_emails,
+    }
+
+
+def get_download_policy(gallery):
+    """
+    Return the small, PUBLIC-safe download policy for a gallery — read by
+    the client gallery payload (apps/clients/serializers.py) to decide
+    what the "Choose Photos" / "Choose Download Size" pickers show.
+
+    Deliberately excludes anything private: limit_total, restrict_contacts,
+    allowed_emails (the email allow-list must never be revealed to a
+    visitor) and the raw high_res mode (a client only ever sees "High
+    Resolution" — which bytes that resolves to is a server decision, see
+    effective_high_res_mode() below).
+    """
+    eff = _effective_downloads(gallery)
+    return {
+        'allowed_sizes': eff['allowed_sizes'],
+        # Also effectively required whenever "Restrict Downloads to
+        # Specific Contacts" is on -- the allow-list can't be checked
+        # without an email to check it against, and this is the client's
+        # only signal to show that field. The contact list itself is
+        # still never exposed here or anywhere else public.
+        'require_email': eff['require_email'] or eff['restrict_contacts'],
+        # null = every set may be downloaded (the default); otherwise the
+        # client filters its set picker to just these ids.
+        'sets_enabled': eff['sets_enabled'],
+        'web_px': eff['web_px'],
     }
 
 
 def download_access_required(gallery):
     """Whether a browser must earn a short-lived download token first."""
-    return get_download_policy(gallery)['require_email'] or bool(gallery.download_pin_hash)
+    eff = _effective_downloads(gallery)
+    return eff['require_email'] or bool(gallery.download_pin_hash) or eff['restrict_contacts']
 
 
 def resolution_is_allowed(gallery, resolution):
-    """Apply the photographer's public-size choice to every download URL.
-
-    ``original`` remains a legacy API value, but is governed by the same
-    High Resolution switch as the Download Master. It is never offered by the
-    client UI and cannot bypass a photographer who disabled High Resolution.
     """
-    policy_resolution = 'download' if resolution == 'original' else resolution
-    return policy_resolution in get_download_policy(gallery)['allowed_sizes']
+    Apply the photographer's public-size choice. Only 'web' and 'download'
+    are ever accepted from a client — apps/clients/views.py::
+    _validate_download_resolution rejects a raw resolution=original
+    outright (400) before this is ever reached, so there is no legacy
+    'original' mapping here any more: an 'original' that somehow arrives
+    resolves to a policy key that is never in allowed_sizes and is simply
+    denied. 'download' is the single "High Resolution" choice offered to
+    clients; which bytes it actually resolves to (the 3600px Download
+    Master, or the true original for an entitled Pro photographer who
+    chose it) is decided at serve time by effective_high_res_mode() below
+    — never by the client.
+    """
+    return resolution in get_download_policy(gallery)['allowed_sizes']
+
+
+def effective_high_res_mode(gallery):
+    """
+    'original' only when the photographer chose it AND currently holds
+    the Pro+ Original-download entitlement; otherwise (Free, or a lapsed
+    Pro) falls back to '3600' automatically. Never mutates the stored
+    design_settings.downloads.high_res.mode — only the EFFECTIVE mode used
+    for THIS request falls back, exactly like watermark/branding lapsing.
+    """
+    eff = _effective_downloads(gallery)
+    if eff['high_res_mode'] != 'original':
+        return '3600'
+    from apps.subscriptions.entitlements import ORIGINAL_DOWNLOAD, has_feature
+    return 'original' if has_feature(gallery.photographer, ORIGINAL_DOWNLOAD) else '3600'
+
+
+def web_px_for_gallery(gallery):
+    return _effective_downloads(gallery)['web_px']
+
+
+def set_is_enabled_for_download(gallery, photo_set):
+    """
+    Whether a download covering `photo_set` (None = the whole gallery) is
+    allowed under "Photo Sets Available for Download". sets_enabled=None
+    (the default) means every set, and the whole gallery, may be
+    downloaded. Once restricted to a subset, a whole-gallery download is
+    refused outright rather than silently shipping a partial ZIP that
+    drops the disabled sets' photos without being asked to.
+    """
+    sets_enabled = _effective_downloads(gallery)['sets_enabled']
+    if sets_enabled is None:
+        return True
+    if photo_set is None:
+        return False
+    return str(photo_set.id) in sets_enabled
+
+
+def asset_set_is_enabled_for_download(gallery, asset):
+    """Same gate as set_is_enabled_for_download, for a single-photo/video download."""
+    sets_enabled = _effective_downloads(gallery)['sets_enabled']
+    if sets_enabled is None:
+        return True
+    return asset.photo_set_id is not None and str(asset.photo_set_id) in sets_enabled
+
+
+def email_is_allowed(gallery, email):
+    """"Restrict Downloads to Specific Contacts" — true whenever the gate is off."""
+    eff = _effective_downloads(gallery)
+    if not eff['restrict_contacts']:
+        return True
+    return bool(email) and email.strip().lower() in eff['allowed_emails']
+
+
+def download_limit_reached(gallery):
+    """
+    "Limit Photo Downloads" (total, shared by all visitors). Counts real
+    DownloadLog rows — one per prepared job actually served (not per
+    repeat serve of the same job) and one per single-photo/video GET —
+    the same rows that already back the photographer's Download Activity
+    feed, so there is no separate counter to keep in sync.
+    """
+    limit_total = _effective_downloads(gallery)['limit_total']
+    if not limit_total:
+        return False
+    from .models import DownloadLog
+    return DownloadLog.objects.filter(gallery=gallery).count() >= limit_total
+
+
+def pin_limit_reached(gallery):
+    """"Limit PIN Usage" (Privacy tab, Advanced). None/0 = unlimited."""
+    design_settings = gallery.design_settings if isinstance(gallery.design_settings, dict) else {}
+    privacy = design_settings.get('privacy') if isinstance(design_settings.get('privacy'), dict) else {}
+    limit = privacy.get('pin_limit')
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        return False
+    count = privacy.get('pin_use_count', 0)
+    count = count if isinstance(count, int) and not isinstance(count, bool) else 0
+    return count >= limit
+
+
+def record_pin_use(gallery):
+    """
+    One successful PIN verification used up — incremented only at the one
+    place a PIN is actually checked against the client-supplied value
+    (PublicDownloadAccessView), never when a previously-issued download
+    token merely carries an earlier verification forward.
+    """
+    design_settings = dict(gallery.design_settings or {})
+    privacy = dict(design_settings.get('privacy') or {})
+    count = privacy.get('pin_use_count', 0)
+    count = count if isinstance(count, int) and not isinstance(count, bool) else 0
+    privacy['pin_use_count'] = count + 1
+    design_settings['privacy'] = privacy
+    gallery.design_settings = design_settings
+    gallery.save(update_fields=['design_settings'])
+
+
 MAX_EMAIL_LENGTH = 254
 
 
