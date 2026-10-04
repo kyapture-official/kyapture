@@ -219,7 +219,8 @@ class DownloadAccessEndpointTests(DownloadFlowBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.data['download_policy'],
-            {'allowed_sizes': ['download', 'web'], 'require_email': True, 'sets_enabled': None, 'web_px': 2048},
+            {'allowed_sizes': ['download', 'web'], 'require_email': True, 'sets_enabled': None, 'web_px': 2048,
+             'limit_reached': False},
         )
 
     def test_correct_pin_and_email_issue_a_token(self):

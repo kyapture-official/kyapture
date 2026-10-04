@@ -249,16 +249,18 @@ export const clientsApi = {
    * @param {string} [opts.token] - gallery unlock token (protected galleries)
    * @param {string} [opts.resolution] - 'web' | 'download'
    * @param {string} [opts.setId] - limit the ZIP to this photo set
+   * @param {string[]} [opts.setIds] - limit the ZIP to these photo sets (two or more)
    * @returns {Promise<{ job_id: string, state: string, status_url: string }>}
    */
   prepareGalleryDownload: async (username, slug, opts = {}) => {
     const path = `${buildGalleryPath(username, slug)}download/`
-    const { downloadToken, token, resolution, setId, signal } = opts
+    const { downloadToken, token, resolution, setId, setIds, signal } = opts
 
     const body = {}
     if (downloadToken) body.download_token = downloadToken
     if (resolution) body.resolution = resolution
     if (setId) body.set_id = setId
+    if (Array.isArray(setIds) && setIds.length) body.set_ids = setIds
 
     const config = { signal }
     if (token) config.headers = { Authorization: `Bearer ${token}` }

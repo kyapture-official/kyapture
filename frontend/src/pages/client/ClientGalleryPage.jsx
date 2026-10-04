@@ -92,21 +92,24 @@ export default function ClientGalleryPage() {
     [isPasswordProtected, token, sessionKey, getOrCreateClientUid],
   );
 
-  // Download is always an explicit action: it opens the download dialog
-  // (size choice, plus email/PIN only when authorization is needed), and
-  // only then asks the server to authorize. Browsing never reaches it.
-  // target: { type: 'gallery', setId? } | { type: 'photo', photo } | null
-  const [downloadTarget, setDownloadTarget] = useState(null);
+  // Download is always an explicit action, never asked for on gallery entry.
+  // The header icon opens the full-page flow (/g/{user}/{slug}/download) in a new
+  // tab; a single photo's Download opens the small dialog below. Both authorize
+  // server-side (email / PIN) only after the click.
+  const [downloadPhoto, setDownloadPhoto] = useState(null);
 
-  const openGalleryDownload = () =>
-    setDownloadTarget({ type: "gallery", setId: activeSetId || null });
+  // Not `noopener`: the new tab inherits this tab's sessionStorage, so a
+  // password-unlocked gallery stays unlocked there.
+  const openGalleryDownload = () => {
+    window.open(`/g/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/download`, "_blank");
+  };
 
   const openPhotoDownload = (photo) => {
     if (!photo?.download_url) {
       toast("This file isn't available for download.", "error");
       return;
     }
-    setDownloadTarget({ type: "photo", photo });
+    setDownloadPhoto(photo);
   };
 
   const openSlideshow = () => {
@@ -130,7 +133,6 @@ export default function ClientGalleryPage() {
   const [loadMoreError, setLoadMoreError] = useState(false);
   const [allowDownload, setAllowDownload] = useState(false);
   const [photos, setPhotos] = useState([]);
-  const [photosCount, setPhotosCount] = useState(0);
 
   // Phase 2 large-gallery pagination: the initial gallery payload embeds
   // only the FIRST page of READY photos (see PublicGallerySerializer /
@@ -188,7 +190,6 @@ export default function ClientGalleryPage() {
     setCoverMediumUrl(data.cover_medium_url || null);
     setAllowDownload(Boolean(data.allow_download));
     setPhotos(data.photos || []);
-    setPhotosCount(Number(data.photos_count) || (data.photos || []).length);
     setPhotosHasMore(Boolean(data.photos_has_more));
     nextPageRef.current = 2;
     setDesignSettings(data.design_settings || null);
@@ -772,8 +773,8 @@ export default function ClientGalleryPage() {
                   type="button"
                   onClick={openGalleryDownload}
                   className="rounded p-2 text-slate-600 transition hover:bg-slate-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
-                  aria-label="Download gallery"
-                  title="Download gallery"
+                  aria-label="Download"
+                  title="Download"
                 >
                   <Download className="h-5 w-5" />
                 </button>
@@ -907,8 +908,8 @@ export default function ClientGalleryPage() {
         />
 
         <DownloadModal
-          open={downloadTarget !== null}
-          onClose={() => setDownloadTarget(null)}
+          photo={downloadPhoto}
+          onClose={() => setDownloadPhoto(null)}
           username={username}
           slug={slug}
           galleryToken={token}
@@ -916,9 +917,6 @@ export default function ClientGalleryPage() {
           photographerName={photographerName}
           hasDownloadPin={hasDownloadPin}
           downloadPolicy={downloadPolicy}
-          target={downloadTarget}
-          photoSets={photoSets}
-          photoCount={photosCount}
         />
       </main>
 

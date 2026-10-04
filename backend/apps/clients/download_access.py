@@ -147,6 +147,9 @@ def get_download_policy(gallery):
         # client filters its set picker to just these ids.
         'sets_enabled': eff['sets_enabled'],
         'web_px': eff['web_px'],
+        # Only the yes/no -- never the limit or the running total -- so the
+        # download pages can show "Download limit reached" up front.
+        'limit_reached': download_limit_reached(gallery),
     }
 
 

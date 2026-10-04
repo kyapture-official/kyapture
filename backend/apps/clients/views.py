@@ -1166,10 +1166,46 @@ class PublicGalleryDownloadView(APIView):
         if as_clean_str(request.data.get('set_id')) and photo_set is None:
             return error_response('Photo set not found.', 'set_not_found', status.HTTP_404_NOT_FOUND)
 
+        # Several sets at once (the download page's "Choose Photos" checkboxes).
+        # Each must be one of THIS gallery's sets AND enabled for download;
+        # the job then packages exactly their READY photos via asset_ids. One
+        # set is the ordinary set_id case; "no set" stays the whole gallery.
+        set_ids_raw = request.data.get('set_ids')
+        extra_asset_ids = []
+        using_set_ids = set_ids_raw not in (None, '', [])
+        if using_set_ids:
+            if not isinstance(set_ids_raw, list):
+                return Response({'error': 'set_ids must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+            if photo_set is not None:
+                return error_response(
+                    'Send either set_id or set_ids, not both.', 'set_conflict', status.HTTP_400_BAD_REQUEST,
+                )
+            chosen_sets = {}
+            for raw_id in set_ids_raw:
+                chosen = _get_photo_set(gallery, raw_id)
+                if chosen is None:
+                    return error_response('Photo set not found.', 'set_not_found', status.HTTP_404_NOT_FOUND)
+                if not set_is_enabled_for_download(gallery, chosen):
+                    return error_response(
+                        'That part of the gallery is not available for download.', 'set_not_enabled',
+                        status.HTTP_403_FORBIDDEN,
+                    )
+                chosen_sets[chosen.id] = chosen
+            if len(chosen_sets) == 1:
+                photo_set = next(iter(chosen_sets.values()))
+            else:
+                extra_asset_ids = list(
+                    job_assets(gallery).filter(photo_set_id__in=chosen_sets.keys()).values_list('id', flat=True)
+                )
+                if not extra_asset_ids:
+                    return error_response(
+                        'No ready photos are available to download.', 'no_media', status.HTTP_400_BAD_REQUEST,
+                    )
+
         # 1R.6 "Photo Sets Available for Download" -- a whole-gallery
         # download (photo_set is None) is refused outright once restricted
         # to a subset of sets, rather than silently shipping a partial ZIP.
-        if not set_is_enabled_for_download(gallery, photo_set):
+        if not using_set_ids and not set_is_enabled_for_download(gallery, photo_set):
             return error_response(
                 'That part of the gallery is not available for download.', 'set_not_enabled',
                 status.HTTP_403_FORBIDDEN,
@@ -1202,6 +1238,13 @@ class PublicGalleryDownloadView(APIView):
                 )
         else:
             asset_ids = []
+        if extra_asset_ids:
+            wanted = {str(asset_id) for asset_id in asset_ids}
+            asset_ids = [i for i in extra_asset_ids if not wanted or str(i) in wanted]
+            if not asset_ids:   # an empty list would mean "no filter" below
+                return error_response(
+                    'No ready photos are available to download.', 'no_media', status.HTTP_400_BAD_REQUEST,
+                )
 
         # Same READY-only contract as the public gallery; scoped to THIS gallery.
         assets = list(job_assets(gallery, photo_set, asset_ids))
