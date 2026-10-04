@@ -1,0 +1,247 @@
+[
+  {
+    "name": "desktop: gate shown first with email + PIN",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: gate has NEXT button",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: wrong PIN rejected inline",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: modal has PHOTO SIZE / DOWNLOAD TO / Remember / button",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: only Save to My Device offered",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: High Resolution is the default",
+    "pass": true,
+    "extra": "[\"High Resolution\"]"
+  },
+  {
+    "name": "desktop: Web Size states its real px",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: direct download started (web)",
+    "pass": true,
+    "extra": "Ceremony_001.jpg"
+  },
+  {
+    "name": "desktop: web file is a JPEG at exactly 2048 px (long edge)",
+    "pass": true,
+    "extra": "{\"h\":1365,\"w\":2048}"
+  },
+  {
+    "name": "desktop: filename is the real photo name",
+    "pass": true,
+    "extra": "Ceremony_001.jpg"
+  },
+  {
+    "name": "desktop: dialog closed, still on the gallery (no JSON page, no new tab)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: no ZIP job created",
+    "pass": true,
+    "extra": "jobs=0"
+  },
+  {
+    "name": "desktop: activity row = real filename + email + web",
+    "pass": true,
+    "extra": "{\"n\":55,\"jobs\":0,\"filename\":\"Ceremony_001.jpg\",\"email\":\"qa5d-desktop-1791132621230@example.com\",\"res\":\"web\",\"type\":\"photo\"}"
+  },
+  {
+    "name": "desktop: remember stored in localStorage per gallery",
+    "pass": true,
+    "extra": "[[\"kyapture:photo-download:qa5dphotog:qa-5d\",\"{\\\"resolution\\\":\\\"web\\\"}\"]]"
+  },
+  {
+    "name": "desktop: lightbox has a download button",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: no gate again this session (token remembered)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: remembered Web Size preselected + checkbox ticked",
+    "pass": true,
+    "extra": "[\"Web SizeUp to 2048 px\"]"
+  },
+  {
+    "name": "desktop: direct download started (high resolution)",
+    "pass": true,
+    "extra": "Ceremony_002.jpg"
+  },
+  {
+    "name": "desktop: high-res file is the full-size master (3000px, not upscaled)",
+    "pass": true,
+    "extra": "{\"h\":2000,\"w\":3000}"
+  },
+  {
+    "name": "desktop: filename is the real photo name",
+    "pass": true,
+    "extra": "Ceremony_002.jpg"
+  },
+  {
+    "name": "desktop: activity row = real filename + high-res",
+    "pass": true,
+    "extra": "{\"n\":56,\"jobs\":0,\"filename\":\"Ceremony_002.jpg\",\"email\":\"qa5d-desktop-1791132621230@example.com\",\"res\":\"download\",\"type\":\"photo\"}"
+  },
+  {
+    "name": "desktop: unticking Remember forgets the selection",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: disabled set refused inline in the modal",
+    "pass": true,
+    "extra": "oad to  save to my device remember my selection  that part of the gallery is not available for download.  download photo"
+  },
+  {
+    "name": "desktop: nothing downloaded or logged, tab not navigated",
+    "pass": true,
+    "extra": "{\"files\":2,\"before\":2,\"n\":56,\"n0\":56,\"url\":\"http://localhost:3000/g/qa5dphotog/qa-5d?set=01a107ca-78f0-7686-958f-457e9becb17a\"}"
+  },
+  {
+    "name": "desktop: disabled size not offered",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: limit reached mid-session refused inline",
+    "pass": true,
+    "extra": "save to my device remember my selection  download limit reached. contact qa5dphotog.  download photo"
+  },
+  {
+    "name": "desktop: limit reached shown up front, button disabled",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: gate shown first with email + PIN",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: gate has NEXT button",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: wrong PIN rejected inline",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: modal has PHOTO SIZE / DOWNLOAD TO / Remember / button",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: only Save to My Device offered",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: High Resolution is the default",
+    "pass": true,
+    "extra": "[\"High Resolution\"]"
+  },
+  {
+    "name": "mobile: Web Size states its real px",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: direct download started (web)",
+    "pass": true,
+    "extra": "Ceremony_001.jpg"
+  },
+  {
+    "name": "mobile: web file is a JPEG at exactly 2048 px (long edge)",
+    "pass": true,
+    "extra": "{\"h\":1365,\"w\":2048}"
+  },
+  {
+    "name": "mobile: filename is the real photo name",
+    "pass": true,
+    "extra": "Ceremony_001.jpg"
+  },
+  {
+    "name": "mobile: dialog closed, still on the gallery (no JSON page, no new tab)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: no ZIP job created",
+    "pass": true,
+    "extra": "jobs=0"
+  },
+  {
+    "name": "mobile: activity row = real filename + email + web",
+    "pass": true,
+    "extra": "{\"n\":57,\"jobs\":0,\"filename\":\"Ceremony_001.jpg\",\"email\":\"qa5d-mobile-1791132742415@example.com\",\"res\":\"web\",\"type\":\"photo\"}"
+  },
+  {
+    "name": "mobile: remember stored in localStorage per gallery",
+    "pass": true,
+    "extra": "[[\"kyapture:photo-download:qa5dphotog:qa-5d\",\"{\\\"resolution\\\":\\\"web\\\"}\"]]"
+  },
+  {
+    "name": "mobile: lightbox has a download button",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: no gate again this session (token remembered)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "mobile: remembered Web Size preselected + checkbox ticked",
+    "pass": true,
+    "extra": "[\"Web SizeUp to 2048 px\"]"
+  },
+  {
+    "name": "mobile: direct download started (high resolution)",
+    "pass": true,
+    "extra": "Ceremony_002.jpg"
+  },
+  {
+    "name": "mobile: high-res file is the full-size master (3000px, not upscaled)",
+    "pass": true,
+    "extra": "{\"h\":2000,\"w\":3000}"
+  },
+  {
+    "name": "mobile: filename is the real photo name",
+    "pass": true,
+    "extra": "Ceremony_002.jpg"
+  },
+  {
+    "name": "mobile: activity row = real filename + high-res",
+    "pass": true,
+    "extra": "{\"n\":58,\"jobs\":0,\"filename\":\"Ceremony_002.jpg\",\"email\":\"qa5d-mobile-1791132742415@example.com\",\"res\":\"download\",\"type\":\"photo\"}"
+  },
+  {
+    "name": "mobile: unticking Remember forgets the selection",
+    "pass": true,
+    "extra": ""
+  }
+]

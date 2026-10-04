@@ -148,3 +148,53 @@ test('page 3/4 view: preparing, ready, expired (7 days / purged / unknown key), 
   assert.equal(jobViewFor({ error: { status: 503 } }), 'retry')
   assert.equal(jobViewFor({ error: { name: 'Error' } }), 'retry')
 })
+
+// ── 1R.5-D single photo ─────────────────────────────────────────────────────
+
+import {
+  photoGateIntro, photoPrefsKey, photoSizeOptions, readRememberedSize, writeRememberedSize,
+} from './downloadFlow.js'
+
+const memoryStorage = () => {
+  const map = new Map()
+  return { getItem: (k) => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, v), removeItem: (k) => map.delete(k) }
+}
+
+test('photo gate intro names exactly what is asked', () => {
+  assert.match(photoGateIntro({ needsEmail: true, needsPin: true, studio: 'herry shop' }), /email and the download PIN provided by herry shop to download this photo\.$/)
+  assert.match(photoGateIntro({ needsEmail: false, needsPin: true, studio: 'herry shop' }), /^Please enter the download PIN provided by herry shop/)
+  assert.equal(photoGateIntro({ needsEmail: true, needsPin: false }), 'Please enter your email to download this photo.')
+})
+
+test('photo sizes: only enabled ones, High Resolution first, Web Size states its real px', () => {
+  const both = photoSizeOptions({ allowed_sizes: ['download', 'web'], web_px: 1024 })
+  assert.deepEqual(both.map((o) => o.value), ['download', 'web'])
+  assert.equal(both[0].note, undefined)
+  assert.equal(both[1].note, 'Up to 1024 px')
+  assert.deepEqual(photoSizeOptions({ allowed_sizes: ['web'], web_px: 640 }).map((o) => o.value), ['web'])
+  assert.deepEqual(photoSizeOptions({ allowed_sizes: ['download'] }).map((o) => o.value), ['download'])
+  assert.equal(defaultSize(both), 'download')
+})
+
+test('remember my selection: stored per gallery, only while still offered', () => {
+  const storage = memoryStorage()
+  const options = photoSizeOptions({ allowed_sizes: ['download', 'web'] })
+  const key = photoPrefsKey('ana', 'wedding')
+  assert.notEqual(key, photoPrefsKey('ana', 'other'))
+  assert.equal(readRememberedSize(storage, key, options), null)
+  writeRememberedSize(storage, key, 'web', true)
+  assert.equal(readRememberedSize(storage, key, options), 'web')
+  assert.equal(readRememberedSize(storage, photoPrefsKey('ana', 'other'), options), null)
+  // the photographer switched Web Size off since: the old choice is ignored
+  assert.equal(readRememberedSize(storage, key, photoSizeOptions({ allowed_sizes: ['download'] })), null)
+  writeRememberedSize(storage, key, 'web', false)
+  assert.equal(readRememberedSize(storage, key, options), null)
+})
+
+test('remembered selection survives blocked or corrupt storage', () => {
+  const options = photoSizeOptions({ allowed_sizes: ['download', 'web'] })
+  const blocked = { getItem() { throw new Error('denied') }, setItem() { throw new Error('denied') }, removeItem() { throw new Error('denied') } }
+  assert.equal(readRememberedSize(blocked, 'k', options), null)
+  assert.doesNotThrow(() => writeRememberedSize(blocked, 'k', 'web', true))
+  assert.equal(readRememberedSize({ getItem: () => '{not json' }, 'k', options), null)
+})

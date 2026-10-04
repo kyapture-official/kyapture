@@ -15,6 +15,7 @@ const inputClass = (hasError) =>
  * owes: an email (the gallery requires one) and/or the Download PIN. NEXT sends
  * both to the server together; the server is the one that decides, so a wrong PIN
  * comes back as an inline "Incorrect PIN" and nothing is skipped by editing the URL.
+ * The single-photo dialog reuses it with its own `heading` and `intro`.
  */
 export default function DownloadAuthStep({
   username,
@@ -24,6 +25,8 @@ export default function DownloadAuthStep({
   needsEmail,
   needsPin,
   notice = "",
+  heading = "Download Photos",
+  intro = null,
   onGranted,
 }) {
   const uid = useId();
@@ -91,8 +94,8 @@ export default function DownloadAuthStep({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-8">
-      <h2 className="text-center font-serif text-xl font-bold uppercase tracking-[0.16em] text-ink">Download Photos</h2>
-      <p className="text-[15px] leading-8 text-muted">{gateIntro({ needsEmail, needsPin, studio })}</p>
+      <h2 className="text-center font-serif text-xl font-bold uppercase tracking-[0.16em] text-ink">{heading}</h2>
+      <p className="text-[15px] leading-8 text-muted">{intro ?? gateIntro({ needsEmail, needsPin, studio })}</p>
 
       <div className="space-y-4">
         {needsEmail && (

@@ -1766,6 +1766,13 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # 1R.5-D preflight: the browser downloads this URL as a plain link, so a
+        # refusal (limit hit since the page loaded, a set switched off, ...) would
+        # otherwise replace the gallery tab with a JSON error. The modal asks first
+        # with ?check=1: every gate above has passed, nothing is served or logged.
+        if request.query_params.get('check') == '1':
+            return Response({'ok': True})
+
         # 'web' ("Web Size") serves the gallery's configured derivative
         # tier for an image, the H.264 playback MP4 for a video -- over
         # re-serving the original. Falls back to the original when no
@@ -1814,7 +1821,12 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
         elif source_field is asset.original_file or resolution == 'download':
             raw_filename = asset.original_name
         else:
-            raw_filename = os.path.basename(source_field.name)
+            # A stored tier/playback file (a Web Size fallback while processing):
+            # the photo's own name with that file's extension -- never the
+            # storage name, which is a UUID.
+            raw_filename = os.path.splitext(
+                sanitize_download_filename(asset.original_name, fallback=str(asset.id))
+            )[0] + os.path.splitext(source_field.name)[1]
         download_filename = sanitize_download_filename(raw_filename, fallback=str(asset.id))
 
         # Audit only after every gate above has passed and the file has

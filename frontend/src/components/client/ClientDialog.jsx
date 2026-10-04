@@ -17,6 +17,9 @@ const FOCUSABLE =
  * lightbox (z-[100]) and swallow keyboard events while open, so typing an email
  * never toggles the lightbox slideshow (Space) or flips photos (arrow keys)
  * underneath it.
+ *
+ * variant="plain" (single-photo download): the Pixieset-style bare white box —
+ * square corners, just a close button, the content brings its own heading.
  */
 export default function ClientDialog({
   open,
@@ -25,6 +28,7 @@ export default function ClientDialog({
   photographerName,
   heading,
   size = "md",
+  variant = "default",
   children,
 }) {
   const dialogRef = useRef(null);
@@ -82,6 +86,19 @@ export default function ClientDialog({
   if (!open) return null;
 
   const widthClass = size === "lg" ? "sm:max-w-2xl" : "sm:max-w-md";
+  const plain = variant === "plain";
+  const closeButton = (
+    <button
+      type="button"
+      onClick={() => onCloseRef.current?.()}
+      className={`shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-cream-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 ${plain ? "absolute right-3 top-3 z-10" : "-mr-1.5"}`}
+      aria-label="Close dialog"
+    >
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  );
 
   return createPortal(
     <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-4">
@@ -95,34 +112,36 @@ export default function ClientDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="client-dialog-title"
-        className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-cream-200 bg-surface-light shadow-2xl sm:max-h-[90vh] sm:rounded-2xl ${widthClass}`}
+        className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden border border-cream-200 bg-surface-light shadow-2xl sm:max-h-[90vh] ${plain ? "rounded-t-sm bg-white sm:rounded-sm" : "rounded-t-2xl sm:rounded-2xl"} ${widthClass}`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-cream-200 px-6 pb-4 pt-5">
-          <div className="min-w-0">
-            <h3 id="client-dialog-title" className="truncate font-serif text-xl uppercase tracking-[0.12em] text-ink">
-              {galleryTitle || heading}
-            </h3>
-            {photographerName && (
-              <p className="mt-0.5 truncate text-[11px] uppercase tracking-[0.2em] text-muted">{photographerName}</p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => onCloseRef.current?.()}
-            className="-mr-1.5 shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-cream-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500"
-            aria-label="Close dialog"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        {plain ? (
+          <>
+            <span id="client-dialog-title" className="sr-only">{heading || galleryTitle}</span>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-9 sm:px-10">{children}</div>
+            {/* After the content so the initial focus lands on the first field, not on Close. */}
+            {closeButton}
+          </>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-4 border-b border-cream-200 px-6 pb-4 pt-5">
+              <div className="min-w-0">
+                <h3 id="client-dialog-title" className="truncate font-serif text-xl uppercase tracking-[0.12em] text-ink">
+                  {galleryTitle || heading}
+                </h3>
+                {photographerName && (
+                  <p className="mt-0.5 truncate text-[11px] uppercase tracking-[0.2em] text-muted">{photographerName}</p>
+                )}
+              </div>
+              {closeButton}
+            </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
 
-        <div className="border-t border-cream-200 px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-[10px] uppercase tracking-[0.2em] text-muted">
-          Powered by <span className="font-semibold text-ink">KYAPTURE</span>
-        </div>
+            <div className="border-t border-cream-200 px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-[10px] uppercase tracking-[0.2em] text-muted">
+              Powered by <span className="font-semibold text-ink">KYAPTURE</span>
+            </div>
+          </>
+        )}
       </div>
     </div>,
     document.body,

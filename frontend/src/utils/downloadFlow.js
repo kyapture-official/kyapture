@@ -169,3 +169,50 @@ export function jobViewFor({ data = null, error = null } = {}) {
   if (data?.state === 'failed') return EXPIRED_CODES.includes(data.code) ? 'expired' : 'failed'
   return 'retry'
 }
+
+// ── Single photo (tile icon / lightbox) ─────────────────────────────────────
+
+/** Page-1 sentence for a single photo: it is saved straight away, nobody is emailed. */
+export function photoGateIntro({ needsEmail, needsPin, studio }) {
+  const who = studio || 'your photographer'
+  if (needsEmail && needsPin) return `Please enter your email and the download PIN provided by ${who} to download this photo.`
+  if (needsPin) return `Please enter the download PIN provided by ${who} to download this photo.`
+  return 'Please enter your email to download this photo.'
+}
+
+/**
+ * PHOTO SIZE choices: only the enabled sizes. Web Size says what it really is —
+ * the photographer's px is the longest edge and a smaller photo is never
+ * upscaled, so "Up to N px". High Resolution carries no number: the client never
+ * learns whether it is the 3600px master or a Pro photographer's original.
+ */
+export function photoSizeOptions(policy) {
+  const webPx = Number(policy?.web_px) || 2048
+  return sizeOptions(policy).map((option) =>
+    option.value === 'web' ? { ...option, note: `Up to ${webPx} px` } : option)
+}
+
+/** localStorage key for "Remember my selection" — one per gallery. */
+export function photoPrefsKey(username, slug) {
+  return `kyapture:photo-download:${username}:${slug}`
+}
+
+/** The remembered size if it is still offered, else null. Never throws (storage may be blocked). */
+export function readRememberedSize(storage, key, options) {
+  try {
+    const saved = JSON.parse(storage?.getItem(key) || 'null')
+    return options.some((option) => option.value === saved?.resolution) ? saved.resolution : null
+  } catch {
+    return null
+  }
+}
+
+/** Remember the size (remember = true) or forget it (false). Never throws. */
+export function writeRememberedSize(storage, key, resolution, remember) {
+  try {
+    if (remember) storage?.setItem(key, JSON.stringify({ resolution }))
+    else storage?.removeItem(key)
+  } catch {
+    // blocked/full storage: the download still works, it just is not remembered
+  }
+}

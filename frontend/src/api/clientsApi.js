@@ -390,8 +390,32 @@ export const clientsApi = {
     if (opts.token) params.set('token', opts.token)
     if (opts.downloadToken) params.set('download_token', opts.downloadToken)
     if (opts.resolution) params.set('resolution', opts.resolution)
+    if (opts.check) params.set('check', '1')
     const qs = params.toString()
     return qs ? `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}${qs}` : downloadUrl
+  },
+
+  /**
+   * Asks the server whether this single-photo download would be served, WITHOUT
+   * serving or logging it (the same GET with ?check=1). The download itself is a
+   * plain link, so a refusal there would replace the gallery tab with a JSON
+   * error; this lets the dialog show it inline instead.
+   *
+   * Rejects with an Error whose `.code` is the server's code (download_limit_reached,
+   * set_not_enabled, resolution_not_allowed, download_access_expired, ...).
+   */
+  checkPhotoDownload: async (downloadUrl, opts = {}) => {
+    const href = clientsApi.buildPhotoDownloadHref(downloadUrl, { ...opts, check: true })
+    if (!href) return null
+    try {
+      const res = await api.get(href, { signal: opts.signal })
+      return res.data
+    } catch (error) {
+      handleRequestError(error, {
+        authMessage: 'Your download session has expired. Please try again.',
+        notFoundMessage: 'This file is no longer available.',
+      })
+    }
   },
 
   // ─────────────────────────────────────────────────────────────────────────
