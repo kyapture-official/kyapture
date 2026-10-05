@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { subscriptionsApi } from '../../api/subscriptionsApi'
+import { galleriesApi } from '../../api/galleriesApi'
 import { useSubscription } from '../../hooks/useSubscription'
 import { useToast } from '../../components/ui/Toast'
 import { formatCurrency, formatPlanPrice } from '../../utils/formatters'
@@ -28,6 +29,7 @@ export default function BillingPage() {
   // The Free tier is a plan row too (for the comparison table) but cannot be bought.
   const paidPlans = plans.filter((p) => !p.is_free)
   const [payments, setPayments] = useState([])
+  const [usage, setUsage] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const [selectedPlan, setSelectedPlan] = useState(null)
@@ -55,15 +57,18 @@ export default function BillingPage() {
 
       setLoading(true)
       try {
-        const [plansData, paymentsData] = await Promise.all([
+        const [plansData, paymentsData, usageData] = await Promise.all([
           subscriptionsApi.getPlans(controller.signal),
           subscriptionsApi.paymentHistory(controller.signal),
+          // Usage only adds the video-minutes line: the page works without it.
+          galleriesApi.getDashboardStats().catch(() => null),
         ])
 
         if (isMountedRef.current) {
           const plansList = plansData.results || plansData || []
           setPlans(plansList)
           setPayments(paymentsData.results || paymentsData || [])
+          setUsage(usageData)
 
           const queryParams = new URLSearchParams(window.location.search)
           const targetPlanId = queryParams.get('plan_id')
@@ -214,6 +219,16 @@ export default function BillingPage() {
           <p className="text-xs text-muted font-light leading-relaxed">
             You are currently running on the Free tier plan. Select a tier below to request an upgrade.
           </p>
+        )}
+
+        {/* Only a plan with a video allowance (> 0 min, not unlimited) has minutes to count. */}
+        {usage?.video_minutes_limit > 0 && (
+          <div className="text-xs font-light" data-testid="video-minutes-used">
+            <span className="text-muted block text-[10px] uppercase font-bold tracking-wider mb-1">Video Minutes</span>
+            <span className="font-semibold text-ink text-sm">
+              {usage.video_minutes_used} / {usage.video_minutes_limit} min
+            </span>
+          </div>
         )}
       </section>
 

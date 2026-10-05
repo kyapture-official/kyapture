@@ -4,11 +4,20 @@ import { galleriesApi } from "../../api/galleriesApi";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { photosApi } from "../../api/photosApi";
+import { subscriptionsApi } from "../../api/subscriptionsApi";
 import Spinner from "../../components/ui/Spinner";
 import DropZone from "../../components/ui/DropZone";
 import PhotoGrid from "../../components/shared/PhotoGrid";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
-import { useSubscription } from "../../hooks/useSubscription";
+import PlanLimitModal from "../../components/shared/PlanLimitModal";
+import { usePlanUsage } from "../../hooks/usePlanUsage";
+import {
+  cheapestVideoPlan,
+  isVideoFile,
+  planVideoFiles,
+  videoLimitFromError,
+} from "../../utils/planLimitFlow";
+import { formatVideoMinutes } from "../../utils/planLimits";
 import { ArrowDownWideNarrow, Check, LayoutGrid, PlusCircle } from "lucide-react";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
@@ -16,7 +25,9 @@ const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_INTERVAL_MS = 15000;
 const MAX_POLL_ATTEMPTS = 100;
 
-const isVideoFile = (file) => file.type.startsWith("video/");
+// The picker always offers video: whether the plan allows it is the server's
+// answer (usage endpoint), shown as a modal when a video is chosen.
+const ACCEPTED_FILES = "image/*,video/mp4,video/quicktime,video/x-m4v";
 
 // View-only sorting of the set already loaded in the grid. "custom" is the
 // server order (upload order plus any drag-reorder) and is the only mode where
@@ -70,8 +81,10 @@ export default function GalleryPhotosPage() {
     refreshSets,
     activeSetId,
   } = useOutletContext();
-  const { limits } = useSubscription();
-  const allowVideo = limits.allow_video;
+  const { usage, refresh: refreshUsage } = usePlanUsage();
+  const [videoLimit, setVideoLimit] = useState(null); // why video was refused: { code, used_minutes, plan_limit_minutes, plan_name, videoPlan, photosKept }
+  const plansRef = useRef(null);
+  const noVideoOnPlan = usage?.video_minutes_limit === 0;
 
   const [photos, setPhotos] = useState([]);
   const [photosLoading, setPhotosLoading] = useState(true);
@@ -96,9 +109,7 @@ export default function GalleryPhotosPage() {
     () => sets.find((set) => String(set.id) === String(activeSetId)) || null,
     [activeSetId, sets],
   );
-  const acceptedFiles = allowVideo
-    ? "image/*,video/mp4,video/quicktime,video/x-m4v"
-    : "image/*";
+  const acceptedFiles = ACCEPTED_FILES;
 
   useEffect(() => {
     photosRef.current = photos;
@@ -301,6 +312,22 @@ export default function GalleryPhotosPage() {
     };
   }, [activeSetId, hasPendingAssets, isMountedRef, slug]);
 
+  // Opens the shared limit modal for a video refusal. "Not in plan" also names
+  // the cheapest plan that has video (plans API), read before the modal opens so
+  // its text never changes under the user.
+  const showVideoLimit = async (info) => {
+    let videoPlan = null;
+    if (info.code === "video_not_in_plan") {
+      try {
+        if (!plansRef.current) plansRef.current = await subscriptionsApi.getPlans();
+        videoPlan = cheapestVideoPlan(plansRef.current?.results || plansRef.current);
+      } catch {
+        // Without the plans list the modal just doesn't name a plan.
+      }
+    }
+    if (isMountedRef.current) setVideoLimit({ ...info, videoPlan });
+  };
+
   const handleFilesSelected = async (selectedFiles) => {
     let files = Array.from(selectedFiles || []);
     if (!files.length) return;
@@ -310,17 +337,16 @@ export default function GalleryPhotosPage() {
       return;
     }
 
-    if (!allowVideo) {
-      const videoCount = files.filter(isVideoFile).length;
-      if (videoCount > 0) {
-        files = files.filter((file) => !isVideoFile(file));
-        setErrorMsg(
-          `Video uploads require an active plan. ${videoCount} video file${
-            videoCount > 1 ? "s were" : " was"
-          } skipped — upgrade to upload video.`,
-        );
+    // A video is checked against the live plan BEFORE it uploads. What the plan
+    // refuses is dropped and explained in the shared limit modal; the rest of
+    // the batch (photos, videos that fit) uploads as usual.
+    if (!USE_MOCK_DATA && files.some(isVideoFile)) {
+      const { allowed, block } = planVideoFiles(files, await refreshUsage());
+      if (block) {
+        showVideoLimit({ ...block, photosKept: allowed.length });
+        files = allowed;
+        if (!files.length) return;
       }
-      if (!files.length) return;
     }
 
     const queueItems = files.map((file) => {
@@ -417,6 +443,18 @@ export default function GalleryPhotosPage() {
       blobUrlsRef.current = blobUrlsRef.current.filter((url) => url !== item.previewUrl);
       return true;
     } catch (error) {
+      // Fallback if the click-time check was bypassed or stale: the server's own refusal.
+      const refusal = error?.response?.status === 403 ? videoLimitFromError(error.response.data) : null;
+      if (refusal) {
+        URL.revokeObjectURL(item.previewUrl);
+        blobUrlsRef.current = blobUrlsRef.current.filter((url) => url !== item.previewUrl);
+        if (isMountedRef.current) {
+          setUploadQueue((previous) => previous.filter((queueItem) => queueItem.id !== item.id));
+          showVideoLimit({ ...refusal, plan_name: usage?.plan_name });
+          refreshUsage();
+        }
+        return false;
+      }
       const message = getErrorMessage(error, `Failed to upload ${item.file.name}.`);
       if (isMountedRef.current) {
         setUploadQueue((previous) =>
@@ -750,9 +788,9 @@ export default function GalleryPhotosPage() {
           <div className="text-center">
             <p className="text-sm font-medium text-ink">Drop photos or videos here</p>
             <p className="mt-1 text-xs text-muted">
-              {allowVideo
-                ? "or click to browse — JPG, PNG, WEBP, MP4, MOV"
-                : "or click to browse — JPG, PNG, WEBP (video requires a paid plan)"}
+              {noVideoOnPlan
+                ? "or click to browse — JPG, PNG, WEBP (video requires a paid plan)"
+                : "or click to browse — JPG, PNG, WEBP, MP4, MOV"}
             </p>
           </div>
         </DropZone>
@@ -850,6 +888,40 @@ export default function GalleryPhotosPage() {
           This cannot be undone.
         </p>
       </ConfirmDialog>
+
+      <PlanLimitModal
+        open={videoLimit !== null}
+        title={videoLimit?.code === "video_not_in_plan" ? "Video upload is available on a paid plan" : "Video minutes limit reached"}
+        onClose={() => setVideoLimit(null)}
+      >
+        {videoLimit?.code === "video_not_in_plan" ? (
+          <p>
+            Your <span className="font-medium text-ink">{videoLimit.plan_name || "current"}</span> plan doesn&apos;t include video.
+            {videoLimit.videoPlan && (
+              <>
+                {" "}
+                <span className="font-medium text-ink">{videoLimit.videoPlan.name}</span> includes{" "}
+                {videoLimit.videoPlan.video_minutes == null
+                  ? "unlimited video"
+                  : `${formatVideoMinutes(videoLimit.videoPlan.video_minutes)} of video`}.
+              </>
+            )}
+            {videoLimit.photosKept > 0 &&
+              ` The other ${videoLimit.photosKept} file${videoLimit.photosKept === 1 ? " is" : "s are"} uploading.`}
+          </p>
+        ) : (
+          <p>
+            You have used{" "}
+            <span className="font-medium text-ink" data-testid="video-limit-count">
+              {videoLimit?.used_minutes} / {videoLimit?.plan_limit_minutes} min
+            </span>{" "}
+            of video{videoLimit?.plan_name ? <> on your <span className="font-medium text-ink">{videoLimit.plan_name}</span> plan</> : ""}.
+            Delete a video or view plans to upgrade.
+            {videoLimit?.photosKept > 0 &&
+              ` The other ${videoLimit.photosKept} file${videoLimit.photosKept === 1 ? " is" : "s are"} uploading.`}
+          </p>
+        )}
+      </PlanLimitModal>
     </div>
   );
 }

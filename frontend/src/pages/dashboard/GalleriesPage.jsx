@@ -15,6 +15,8 @@ import PlanLimitModal from "../../components/shared/PlanLimitModal";
 import ShareLinkModal from "../../components/shared/ShareLinkModal";
 import ShareQrModal from "../../components/shared/ShareQrModal";
 import { buildShareMenuChildren, resolveShareUrl, shareText } from "../../utils/share";
+import { usePlanUsage } from "../../hooks/usePlanUsage";
+import { collectionLimitInfo, collectionLimitReached } from "../../utils/planLimitFlow";
 
 export default function GalleriesPage() {
   const toast = useToast();
@@ -35,7 +37,8 @@ export default function GalleriesPage() {
   const [qrGallery, setQrGallery] = useState(null); // collection whose QR code is shown
   const [pendingDelete, setPendingDelete] = useState(null); // collection awaiting the permanent-delete confirmation
   const [deleting, setDeleting] = useState(false);
-  const [limitInfo, setLimitInfo] = useState(null); // the server's refusal when the plan's collection cap is reached
+  const [limitInfo, setLimitInfo] = useState(null); // plan_name / plan_limit / current_count when the collection cap is reached
+  const { usage, refresh: refreshUsage } = usePlanUsage();
 
   const defaultBrandingColor =
     useAuthStore((s) => s.user?.branding_color) ?? "#111827";
@@ -113,6 +116,19 @@ export default function GalleriesPage() {
     return () => clearTimeout(debounceRef.current);
   }, [searchQuery, fetchGalleries]);
 
+  // Every "create a collection" entry point goes through here. At the plan's
+  // cap the form never opens: the shared limit modal does. A count that says
+  // "full" is re-read first, so a delete that just finished can't block you.
+  const startCreate = async () => {
+    if (!collectionLimitReached(usage)) {
+      setOpenCreate(true);
+      return;
+    }
+    const fresh = (await refreshUsage()) || usage;
+    if (collectionLimitReached(fresh)) setLimitInfo(collectionLimitInfo(fresh));
+    else setOpenCreate(true);
+  };
+
   const handleCreateSubmit = async (payload) => {
     const loaderId = toast("Creating your new collection...", "loading");
 
@@ -122,6 +138,7 @@ export default function GalleriesPage() {
       toast("Collection created!", "success");
       setGalleries((prev) => [newGallery, ...prev]);
       setOpenCreate(false);
+      refreshUsage();
     } catch (err) {
       toast.dismiss(loaderId);
 
@@ -129,8 +146,10 @@ export default function GalleriesPage() {
         toast("Cannot reach the server. Make sure the backend is running on port 8000.", "error");
         throw new Error("Backend unreachable");
       } else if (err.response?.status === 403 && err.response?.data?.code === "gallery_limit_reached") {
+        // The count was stale: show the same modal and re-read the real count.
         setOpenCreate(false);
         setLimitInfo(err.response.data);
+        refreshUsage();
       } else if (err.response?.status === 403) {
         const data = err.response?.data;
         toast(data?.message || data?.error || data?.detail || "You can't create a collection on your current plan.", "warning");
@@ -208,6 +227,7 @@ export default function GalleriesPage() {
       setSearchTotal((previous) => Math.max(0, previous - 1));
       toast("Collection permanently deleted.", "success");
       setPendingDelete(null);
+      refreshUsage();
     } catch (err) {
       toast.dismiss(loaderId);
       toast(
@@ -243,7 +263,7 @@ export default function GalleriesPage() {
         </div>
         <button
           type="button"
-          onClick={() => setOpenCreate(true)}
+          onClick={startCreate}
           className="sm:self-start inline-flex items-center gap-2 px-5 py-2.5 bg-brand-green-600 hover:bg-brand-green-700 active:scale-[0.98] text-white text-sm font-medium rounded-xl transition-all cursor-pointer shadow-sm hover:shadow-md"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -323,7 +343,7 @@ export default function GalleriesPage() {
           </p>
           {!searchQuery && (
             <button
-              onClick={() => setOpenCreate(true)}
+              onClick={startCreate}
               className="inline-flex items-center gap-2 bg-brand-green-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-green-700 transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -507,9 +527,11 @@ export default function GalleriesPage() {
         onClose={() => setLimitInfo(null)}
       >
         <p>
-          Your <span className="font-medium text-ink">{limitInfo?.plan_name}</span> plan includes{" "}
-          <span className="font-medium text-ink" data-testid="limit-count">{limitInfo?.plan_limit}</span>{" "}
-          collection{limitInfo?.plan_limit === 1 ? "" : "s"}, and you are using {limitInfo?.current_count}.
+          You are using{" "}
+          <span className="font-medium text-ink" data-testid="limit-count">
+            {limitInfo?.current_count} / {limitInfo?.plan_limit}
+          </span>{" "}
+          collections on your <span className="font-medium text-ink">{limitInfo?.plan_name}</span> plan.
           Delete a collection or view plans to upgrade.
         </p>
       </PlanLimitModal>

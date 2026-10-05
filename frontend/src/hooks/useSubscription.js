@@ -5,8 +5,9 @@ import { subscriptionsApi } from '../api/subscriptionsApi'
 import { useAuthStore } from '../store/authStore'
 
 // No numbers here: plan limits are owner-editable data served by the API
-// (plans / my-subscription / dashboard stats). Free users only need to know
-// that video upload is a paid-plan capability.
+// (plans / my-subscription / dashboard stats). Without a live paid plan this
+// reads as "no video"; the usage endpoint (hooks/usePlanUsage) is the
+// authoritative answer for the Free plan's own allowance.
 const FREE_PLAN_LIMITS = {
   max_galleries: null,
   storage_gb: null,
@@ -98,7 +99,8 @@ export function useSubscription() {
       ? {
           max_galleries:          plan.max_collections,
           storage_gb:             plan.storage_gb,
-          allow_video:            true,
+          // The plan row's video minutes: 0 = no video, empty = unlimited, N = N minutes.
+          allow_video:            plan.video_minutes !== 0,
         }
       : FREE_PLAN_LIMITS
   }, [isSubscribed, plan])
