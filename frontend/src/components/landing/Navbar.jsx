@@ -14,7 +14,7 @@ const navLinks = [
       { label: "AI Culling", href: "#features" },
     ],
   },
-  { label: "Pricing", href: "#stats" },
+  { label: "Pricing", href: "/pricing" },
   { label: "Resources", href: "#testimonials" },
   { label: "Enterprise", href: "#cta" },
 ];
@@ -43,14 +43,14 @@ export default function Navbar() {
     >
       <nav className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <a href="#" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-teal-500 flex items-center justify-center">
               <span className="text-[#0A0E1A] font-bold text-sm">K</span>
             </div>
             <span className="text-xl font-bold tracking-tight text-white">
               Kyapture
             </span>
-          </a>
+          </Link>
 
           <div className="hidden lg:flex items-center gap-1">
             {navLinks.map((link) => (
@@ -60,21 +60,38 @@ export default function Navbar() {
                 onMouseEnter={() =>
                   link.children && setActiveDropdown(link.label)
                 }
-                onMouseLeave={() => setActiveDropdown(null)}
               >
-                <a
-                  href={link.href || "#"}
-                  className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium text-slate-400 transition-colors hover:text-white hover:bg-white/5"
-                >
-                  {link.label}
-                  {link.children && (
+                {link.children ? (
+                  <button
+                    type="button"
+                    aria-expanded={activeDropdown === link.label}
+                    onClick={() => setActiveDropdown(activeDropdown === link.label ? null : link.label)}
+                    className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium text-slate-400 transition-colors hover:text-white hover:bg-white/5"
+                  >
+                    {link.label}
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
                         activeDropdown === link.label ? "rotate-180" : ""
                       }`}
                     />
-                  )}
-                </a>
+                  </button>
+                ) : (
+                  link.href.startsWith("/") ? (
+                    <Link
+                      to={link.href}
+                      className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium text-slate-400 transition-colors hover:text-white hover:bg-white/5"
+                    >
+                      {link.label}
+                    </Link>
+                  ) : (
+                    <a
+                      href={link.href}
+                      className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium text-slate-400 transition-colors hover:text-white hover:bg-white/5"
+                    >
+                      {link.label}
+                    </a>
+                  )
+                )}
 
                 <AnimatePresence>
                   {link.children && activeDropdown === link.label && (
@@ -140,13 +157,39 @@ export default function Navbar() {
             <div className="space-y-1 px-6 py-4">
               {navLinks.map((link) => (
                 <div key={link.label}>
-                  <a
-                    href={link.href || "#"}
-                    className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    {link.label}
-                  </a>
+                  {link.children ? (
+                    <button
+                      type="button"
+                      aria-expanded={activeDropdown === link.label}
+                      onClick={() => setActiveDropdown(activeDropdown === link.label ? null : link.label)}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white"
+                    >
+                      {link.label}
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          activeDropdown === link.label ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                  ) : (
+                    link.href.startsWith("/") ? (
+                      <Link
+                        to={link.href}
+                        className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white"
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        {link.label}
+                      </Link>
+                    ) : (
+                      <a
+                        href={link.href}
+                        className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white"
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        {link.label}
+                      </a>
+                    )
+                  )}
                   {link.children?.map((child) => (
                     <a
                       key={child.label}

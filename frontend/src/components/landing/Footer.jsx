@@ -1,42 +1,15 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Globe, Mail, MessageCircle, Send } from 'lucide-react';
+import { ArrowRight, Globe } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const footerLinks = {
   Products: [
-    { label: 'Client Gallery', href: '#' },
-    { label: 'Portfolio Website', href: '#' },
-    { label: 'Studio Manager', href: '#' },
-    { label: 'Digital Store', href: '#' },
-    { label: 'AI Photo Editor', href: '#' },
-  ],
-  Resources: [
-    { label: 'Blog', href: '#' },
-    { label: 'Help Center', href: '#' },
-    { label: 'Tutorials', href: '#' },
-    { label: 'API Docs', href: '#' },
-    { label: 'Community', href: '#' },
-  ],
-  Company: [
-    { label: 'About Us', href: '#' },
-    { label: 'Careers', href: '#' },
-    { label: 'Press Kit', href: '#' },
-    { label: 'Partners', href: '#' },
-    { label: 'Contact', href: '#' },
-  ],
-  Legal: [
-    { label: 'Privacy Policy', href: '#' },
-    { label: 'Terms of Service', href: '#' },
-    { label: 'Cookie Policy', href: '#' },
-    { label: 'GDPR', href: '#' },
-    { label: 'DPA', href: '#' },
+    { label: 'Client Gallery', href: '#gallery' },
   ],
 };
 
 const socials = [
-  { icon: Globe, href: '#', label: 'Website' },
-  { icon: MessageCircle, href: '#', label: 'Community' },
-  { icon: Send, href: '#', label: 'Newsletter' },
-  { icon: Mail, href: '#', label: 'Email' },
+  { icon: Globe, href: '/', label: 'Website' },
 ];
 
 export default function Footer() {
@@ -63,13 +36,13 @@ export default function Footer() {
                 and grow their business.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-4">
-                <a
-                  href="#"
+                <Link
+                  to="/register"
                   className="group inline-flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-light hover:shadow-xl hover:shadow-primary/30"
                 >
                   Get Started Free
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </a>
+                </Link>
               </div>
             </div>
           </motion.div>
@@ -80,25 +53,25 @@ export default function Footer() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8 pt-16 pb-8">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
             <div className="col-span-2 md:col-span-1">
-              <a href="#" className="flex items-center gap-2 mb-4">
+              <Link to="/" className="flex items-center gap-2 mb-4">
                 <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                   <span className="text-white font-bold text-sm">K</span>
                 </div>
                 <span className="text-lg font-bold tracking-tight text-white">Kyapture</span>
-              </a>
+              </Link>
               <p className="text-sm text-slate-500 leading-relaxed max-w-xs">
                 The all-in-one platform built for professional photographers who want to focus on their craft.
               </p>
               <div className="flex items-center gap-3 mt-5">
                 {socials.map((social) => (
-                  <a
+                  <Link
                     key={social.label}
-                    href={social.href}
+                    to={social.href}
                     aria-label={social.label}
                     className="h-9 w-9 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
                   >
                     <social.icon className="h-4 w-4" />
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>
