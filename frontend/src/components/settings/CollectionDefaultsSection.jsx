@@ -170,8 +170,8 @@ export default function CollectionDefaultsSection() {
 
             {watermarkLocked && !form.watermark_enabled ? (
               <UpgradePrompt
-                title="Default watermark is a Pro feature"
-                message="Watermark new collections automatically with the Pro plan or above."
+                feature="watermark"
+                message="Watermark new collections automatically."
               />
             ) : (
               <Switch

@@ -4,6 +4,7 @@ import uuid
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils.text import slugify
 from apps.core.models import BaseModel
 
 
@@ -18,37 +19,81 @@ def get_payment_proof_upload_path(instance, filename):
     return f"payment_proofs/{user_uuid}/{payment_uuid}{ext}"
 
 
+FREE_PLAN_KEY = 'free'
+
+
 class SubscriptionPlan(BaseModel):
     """
-    Represents platform tiers (e.g., Basic, Pro, Studio) detailing
-    pricing parameters and multi-tenant system resource limitations.
-    """
-    name = models.CharField(max_length=50, unique=True)
-    price = models.DecimalField(max_digits=8, decimal_places=2)
-    
-    # System Resource Limits (Strict Positive Values Only)
-    max_galleries = models.PositiveIntegerField(validators=[MinValueValidator(1)])
-    max_photos_per_gallery = models.PositiveIntegerField(validators=[MinValueValidator(1)])
-    storage_gb = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    THE single source of truth for every plan: display name, price (NPR),
+    limits and feature flags. Edited in Django admin (later the staff
+    console) — no price, limit or feature list lives in code. The Free tier
+    is a row here too (key='free', price 0): a photographer with no live paid
+    subscription is on that row, so its limits and flags are owner-editable
+    exactly like the paid plans'.
 
-    # Feature entitlement: Pro-and-above tiers include client-gallery Branding
-    # (business logo) and Watermarking. A plan flag rather than a plan-name
-    # check at enforcement time, so which tiers qualify is plain data an admin
-    # can change in Django admin. Read through
-    # apps/subscriptions/entitlements.py — never directly by feature code.
-    includes_branding_watermark = models.BooleanField(
-        default=False,
-        help_text="Plan includes custom Branding (logo) and Watermark.",
+    Read feature flags through apps/subscriptions/entitlements.py (the
+    FEATURES registry names the flag fields below), never directly.
+    """
+    key = models.SlugField(
+        max_length=50, unique=True, blank=True,
+        help_text="Stable identifier (e.g. free, basic, pro, studio). Leave blank to derive it from the name; do not change once in use.",
+    )
+    name = models.CharField(max_length=50, unique=True, verbose_name='Display name')
+    price = models.DecimalField(
+        max_digits=8, decimal_places=2, verbose_name='Price (NPR / month)',
+        help_text="Monthly price in Nepali rupees. 0 for the Free tier.",
     )
 
-    is_active = models.BooleanField(default=True)
+    # Limits. Empty (NULL) = unlimited.
+    storage_gb = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    max_collections = models.PositiveIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)],
+        help_text="Maximum collections (galleries). Leave empty for unlimited.",
+    )
+    max_photos_per_gallery = models.PositiveIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)],
+        help_text="Maximum photos per collection. Leave empty for unlimited.",
+    )
+    video_minutes = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Video allowance in minutes. Leave empty for no limit. "
+                  "Not enforced yet (owner decision pending).",
+    )
+
+    # Feature flags — one per plan-gated feature, named in entitlements.FEATURES.
+    original_download = models.BooleanField(
+        default=False, help_text="Clients can download byte-identical originals.")
+    watermark = models.BooleanField(
+        default=False, help_text="Watermark on client gallery images.")
+    branding = models.BooleanField(
+        default=False, help_text="Custom logo and colour on client galleries.")
+
+    is_active = models.BooleanField(default=True, help_text="Shown on the Billing page.")
 
     class Meta:
         db_table = 'subscription_plans'
         ordering = ['price']
 
+    def save(self, *args, **kwargs):
+        if not self.key:
+            self.key = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_free(self):
+        return self.key == FREE_PLAN_KEY
+
+    @classmethod
+    def get_free(cls):
+        """The Free-tier row. Self-heals if an admin deleted it (editable afterwards)."""
+        plan, _ = cls.objects.get_or_create(
+            key=FREE_PLAN_KEY,
+            defaults={'name': 'Free', 'price': 0, 'storage_gb': 3},
+        )
+        return plan
+
     def __str__(self):
-        return f"{self.name} — ${self.price}/mo"
+        return f"{self.name} — NPR {self.price:,.0f}/month"
 
 
 class UserSubscription(BaseModel):

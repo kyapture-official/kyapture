@@ -368,7 +368,10 @@ class DashboardStatsView(APIView):
         storage_used_bytes = metrics["current_total_storage_bytes"]
         plan_storage_bytes = metrics["storage_bytes_limit"]
         
-        galleries_remaining = max(0, metrics["max_galleries"] - metrics["current_galleries_count"])
+        galleries_remaining = (
+            None if metrics["max_galleries"] is None
+            else max(0, metrics["max_galleries"] - metrics["current_galleries_count"])
+        )
         storage_remaining_gb = round(
             max(0.0, (plan_storage_bytes - storage_used_bytes) / (1024 ** 3)), 
             2

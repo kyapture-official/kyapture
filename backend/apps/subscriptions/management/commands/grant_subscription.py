@@ -2,6 +2,7 @@
 from datetime import timedelta
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
+from django.utils.text import slugify
 
 from apps.users.models import User
 from apps.subscriptions.models import SubscriptionPlan, UserSubscription
@@ -23,15 +24,14 @@ class Command(BaseCommand):
         except User.DoesNotExist:
             raise CommandError(f"No user found with email '{email}'")
 
-        plan, _ = SubscriptionPlan.objects.get_or_create(
-            name=options["plan"],
-            defaults={
-                "price": 0, "max_galleries": 50,
-                "max_photos_per_gallery": 500, "storage_gb": 50, "is_active": True,
-                # Pro-and-above tiers include Branding + Watermark.
-                "includes_branding_watermark": options["plan"].strip().lower() in ("pro", "studio"),
-            },
-        )
+        # Dev helper: use the real plan row (edited in admin). Only an unknown
+        # plan name creates a bare-bones row, with no features.
+        name = options["plan"].strip()
+        plan = SubscriptionPlan.objects.filter(name__iexact=name).first()
+        if plan is None:
+            plan = SubscriptionPlan.objects.create(
+                name=name, key=slugify(name) or 'dev-plan', price=0, storage_gb=50,
+            )
 
         now = timezone.now()
         sub, _ = UserSubscription.objects.update_or_create(

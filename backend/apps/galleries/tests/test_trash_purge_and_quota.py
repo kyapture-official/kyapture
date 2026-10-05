@@ -3,7 +3,7 @@
 Phase 4 regression tests — STORAGE/QUOTA INTEGRITY + TRASH/PURGE (F-30).
 
 Covers:
-  - free tier defaults to a 10-gallery cap (locked product decision #5)
+  - free tier collection cap comes from the Free plan row (seeded unlimited)
   - soft-deleting a gallery sets trashed_at and still counts toward quota
     (the actual leak fix — deleting no longer frees quota until purged)
   - the scheduled purge task hard-deletes only galleries past their
@@ -25,6 +25,8 @@ from apps.galleries.tasks import purge_trashed_galleries
 from apps.photos.models import MediaAsset
 from apps.core.utils import get_user_subscription_metrics
 
+from apps.subscriptions.models import SubscriptionPlan
+
 User = get_user_model()
 
 
@@ -37,11 +39,22 @@ class FreeTierGalleryCapTestCase(APITestCase):
         )
         self.client.force_authenticate(user=self.photographer)
 
-    def test_default_free_tier_max_galleries_is_ten(self):
+    def test_seeded_free_tier_has_unlimited_collections(self):
+        # Pixieset parity: unlimited collections on every plan; the owner can
+        # set a cap on the Free row in admin (see test below).
         metrics = get_user_subscription_metrics(self.photographer)
-        self.assertEqual(metrics["max_galleries"], 10)
+        self.assertIsNone(metrics["max_galleries"])
 
-    def test_eleventh_gallery_is_blocked_on_free_tier(self):
+    def test_free_row_cap_set_in_admin_is_enforced(self):
+        free = SubscriptionPlan.get_free()
+        free.max_collections = 10
+        free.save()
+        self.assertEqual(get_user_subscription_metrics(self.photographer)["max_galleries"], 10)
+
+    def test_eleventh_gallery_is_blocked_when_free_row_caps_at_ten(self):
+        free = SubscriptionPlan.get_free()
+        free.max_collections = 10
+        free.save()
         for i in range(10):
             Gallery.objects.create(
                 photographer=self.photographer, title=f"Gallery {i}", slug=f"gallery-{i}",
@@ -61,6 +74,10 @@ class TrashQuotaAccountingTestCase(APITestCase):
             username="trashquotauser",
         )
         self.client.force_authenticate(user=self.photographer)
+        # Free is seeded unlimited; these tests exercise the cap, so the owner "sets" 10.
+        free = SubscriptionPlan.get_free()
+        free.max_collections = 10
+        free.save()
 
     def test_deleting_a_gallery_is_permanent_not_a_trash_row(self):
         gallery = Gallery.objects.create(

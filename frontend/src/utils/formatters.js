@@ -37,6 +37,11 @@ export const formatCurrency = (amount) => {
 }
 
 /**
+ * Plan price as shown everywhere: "NPR 1,499/month".
+ */
+export const formatPlanPrice = (amount) => `${formatCurrency(amount)}/month`
+
+/**
  * Converts any date-ish string or ISO timestamp into a safe 'YYYY-MM-DD' input string.
  */
 export const toDateInputValue = (value) => {

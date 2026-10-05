@@ -42,7 +42,7 @@ export default function BrandingSection() {
     if (!file) return
 
     if (!entitlements.branding) {
-      setLogoStatus({ kind: 'error', message: 'Custom branding is available on the Pro plan and above.' })
+      setLogoStatus({ kind: 'error', message: 'Custom branding is not included in your plan. Upgrade to add your logo.' })
       return
     }
     if (file.size > 2 * 1024 * 1024) {
@@ -65,7 +65,7 @@ export default function BrandingSection() {
         kind: 'error',
         message:
           parsed.code === 'branding_requires_upgrade'
-            ? 'Custom branding is available on the Pro plan and above.'
+            ? parsed.message || 'Custom branding is not included in your plan.'
             : parsed.fieldErrors.logo || parsed.message,
       })
     } finally {
@@ -130,8 +130,8 @@ export default function BrandingSection() {
           <div className="min-w-0 flex-1 space-y-3">
             {brandingLocked ? (
               <UpgradePrompt
-                title="Branding is a Pro feature"
-                message="Add your business logo to every client gallery with the Pro plan or above."
+                feature="branding"
+                message="Add your business logo to every client gallery."
               />
             ) : (
               <label className="inline-block cursor-pointer rounded-xl border border-cream-200 bg-surface-light px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-ink transition-all hover:border-cream-300 hover:bg-cream-100 focus-within:ring-2 focus-within:ring-brand-green-500">

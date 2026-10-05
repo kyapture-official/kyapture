@@ -526,9 +526,9 @@ class NotificationEventTests(Base):
 
     def test_payment_events(self):
         staff = User.objects.create_user(email='staff@kyapture.com', password='Sturdy-Pass-8842!', username='staffer', is_staff=True)
-        plan = SubscriptionPlan.objects.create(name='Pro', price=24.99, max_galleries=20, max_photos_per_gallery=500, storage_gb=50)
+        plan = SubscriptionPlan.objects.get(key='pro')
         for action, fragment in (('approve', 'approved'), ('reject', 'could not be approved')):
-            payment = ManualPayment(user=self.owner, plan=plan, amount=24.99)
+            payment = ManualPayment(user=self.owner, plan=plan, amount=plan.price)
             payment.payment_proof.save('p.png', ContentFile(b'x'), save=False)
             payment.save()
             self.client.force_authenticate(user=staff)

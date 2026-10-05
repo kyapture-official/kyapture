@@ -89,38 +89,27 @@ def get_user_subscription_metrics(user):
     with apps.subscriptions, apps.galleries, and apps.photos.
     """
 
-    # Fallback default limits if no active plan is found (SaaS safety net).
-    # Locked product decision (docs/KYAPTURE_PRODUCT_DECISIONS.md #5):
-    # free tier is 3 GB storage AND a maximum of 10 galleries.
-    default_limits = {
-        "plan_name": "Free (Trial)",
-        "max_galleries": 10,
-        "max_photos_per_gallery": None,
-        "storage_bytes_limit": 3 * 1024 * 1024 * 1024,  # 3 GB limit
-        "allow_video": False,
-        "active_subscription": None,
+    # 1. Limits come from the plan table only: the photographer's active plan,
+    # else the Free-tier row (owner-editable in admin). NULL limits = unlimited.
+    try:
+        active_sub = UserSubscription.objects.select_related('plan').get(
+            user=user,
+            status='active'
+        )
+        plan, allow_video = active_sub.plan, True
+    except UserSubscription.DoesNotExist:
+        active_sub, plan, allow_video = None, SubscriptionPlan.get_free(), False
+
+    limits = {
+        "active_subscription": active_sub,
+        "plan_name": plan.name,
+        "max_galleries": plan.max_collections,
+        "max_photos_per_gallery": plan.max_photos_per_gallery,
+        "storage_bytes_limit": plan.storage_gb * 1024 * 1024 * 1024,
+        "allow_video": allow_video,
         "current_galleries_count": 0,
         "current_total_storage_bytes": 0,
     }
-
-    # 1. Fetch current active subscription plan
-    try:
-        active_sub = UserSubscription.objects.select_related('plan').get(
-            user=user, 
-            status='active'
-        )
-        plan = active_sub.plan
-        limits = {
-            "active_subscription": active_sub,
-            "plan_name": plan.name,
-            "max_galleries": plan.max_galleries,
-            "max_photos_per_gallery": plan.max_photos_per_gallery,
-            "storage_bytes_limit": plan.storage_gb * 1024 * 1024 * 1024,
-            "allow_video": True,
-        }
-    except UserSubscription.DoesNotExist:
-        # Fall back to free tier or force subscription via standard metadata
-        limits = default_limits
 
     # 2. Single-pass Aggregation for Current Usage
     #

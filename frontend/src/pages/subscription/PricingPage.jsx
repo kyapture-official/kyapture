@@ -124,7 +124,7 @@ export default function PricingPage() {
 
         {/* Pricing Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeUp [animation-delay:0.1s]">
-          {plans.map((plan) => {
+          {plans.filter((plan) => !plan.is_free).map((plan) => {
             const isCurrentPlan = activePlan?.id === plan.id
             const isPopular = plan.name?.toLowerCase() === 'pro'
 
@@ -149,7 +149,7 @@ export default function PricingPage() {
                   </h2>
                   <p className="font-serif text-5xl tracking-tight flex items-baseline gap-1" style={{ color: isPopular ? '#d1fae5' : '#1a1f1b' }}>
                     {formatCurrency(plan.price)}
-                    <span className="text-xs font-sans text-muted">/30 days</span>
+                    <span className="text-xs font-sans text-muted">/month</span>
                   </p>
 
                   <div className={`h-px w-full ${isPopular ? 'bg-white/10' : 'bg-cream-300'}`} />
@@ -157,11 +157,11 @@ export default function PricingPage() {
                   <ul id={`plan-desc-${plan.id}`} className="flex flex-col gap-3.5 text-xs font-light" style={{ color: isPopular ? '#a7f3d0' : '#64748b' }}>
                     <li className="flex items-center gap-2">
                       <span className="text-brand-green-500 font-bold">✓</span>
-                      <span>Max Collections: <strong className="font-semibold">{plan.max_galleries}</strong></span>
+                      <span>Collections: <strong className="font-semibold">{plan.max_collections ?? 'Unlimited'}</strong></span>
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-brand-green-500 font-bold">✓</span>
-                      <span>Photos per Gallery: <strong className="font-semibold">{plan.max_photos_per_gallery}</strong></span>
+                      <span>Photos per Collection: <strong className="font-semibold">{plan.max_photos_per_gallery ?? 'Unlimited'}</strong></span>
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-brand-green-500 font-bold">✓</span>
@@ -171,12 +171,12 @@ export default function PricingPage() {
                       <span className="text-brand-green-500 font-bold">✓</span>
                       Password-protected galleries
                     </li>
-                    {plan.includes_branding_watermark && (
-                      <li className="flex items-center gap-2">
+                    {plan.features.filter((f) => f.included).map((f) => (
+                      <li key={f.key} className="flex items-center gap-2">
                         <span className="text-brand-green-500 font-bold">✓</span>
-                        Custom branding &amp; watermark
+                        {f.label}
                       </li>
-                    )}
+                    ))}
                     <li className="flex items-center gap-2">
                       <span className="text-brand-green-500 font-bold">✓</span>
                       Client download controls

@@ -5,6 +5,7 @@ import { galleriesApi } from "../../api/galleriesApi";
 import { photosApi } from "../../api/photosApi";
 import { useToast } from "../../components/ui/Toast";
 import { useSubscription } from "../../hooks/useSubscription";
+import { requiredPlan, usePlans } from "../../hooks/usePlans";
 import { toDateInputValue } from "../../utils/formatters";
 import WatermarkSettings from "../../components/shared/WatermarkSettings";
 
@@ -161,6 +162,8 @@ export default function GallerySettingsPage() {
   const toast = useToast();
   const { entitlements, loading: planLoading } = useSubscription();
   const originalLocked = !planLoading && !entitlements.original_download;
+  const { plans } = usePlans();
+  const originalPlan = requiredPlan(plans, "original_download");
 
   const [activeTab, setActiveTab] = useState("general");
 
@@ -786,6 +789,9 @@ export default function GallerySettingsPage() {
                           <Link to="/dashboard/billing" className="text-brand-green-700 underline-offset-2 hover:underline">
                             Upgrade
                           </Link>
+                        )}
+                        {originalLocked && originalPlan && (
+                          <span className="text-xs text-muted">({originalPlan.name} and above)</span>
                         )}
                       </span>
                       <label className="inline-flex items-center gap-2 text-sm text-ink cursor-pointer">

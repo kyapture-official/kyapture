@@ -4,35 +4,51 @@ from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import serializers
 from apps.photos.models import MediaAsset
-from .models import SubscriptionPlan, UserSubscription, ManualPayment
+from .entitlements import FEATURES, feature_label, plan_feature_flags
+from .models import FREE_PLAN_KEY, SubscriptionPlan, UserSubscription, ManualPayment
 from rest_framework.exceptions import ValidationError
 
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     """
-    Read-only. Returns subscription plan tiers for the pricing page.
-    Converts and exposes standard storage parameters as bytes for frontend utility [1.1.2].
+    Read-only view of a plan row — the single feed for the Billing page, the
+    pricing page and every locked-feature banner. `features` is generated from
+    the entitlements.FEATURES registry + the plan's flag columns, so the
+    comparison table needs no per-plan code. Prices are NPR; limits that are
+    null mean unlimited.
     """
     storage_bytes = serializers.SerializerMethodField()
+    is_free = serializers.BooleanField(read_only=True)
+    features = serializers.SerializerMethodField()
 
     class Meta:
         model = SubscriptionPlan
         fields = [
             'id',
+            'key',
             'name',
             'price',
-            'max_galleries',
-            'max_photos_per_gallery',
+            'is_free',
             'storage_gb',
             'storage_bytes',
-            'includes_branding_watermark',
+            'max_collections',
+            'max_photos_per_gallery',
+            'video_minutes',
+            'features',
         ]
         read_only_fields = fields
 
     def get_storage_bytes(self, obj):
         # 1 GB = 1024^3 bytes (Binary base-2 representation) [1.1.2]
         return obj.storage_gb * (1024 ** 3)
+
+    def get_features(self, obj):
+        flags = plan_feature_flags(obj)
+        return [
+            {'key': key, 'label': feature_label(key), 'included': flags[key]}
+            for key in FEATURES
+        ]
 
 
 class UserSubscriptionSerializer(serializers.ModelSerializer):
@@ -118,7 +134,7 @@ class ManualPaymentSubmitSerializer(serializers.ModelSerializer):
     """
     payment_proof = serializers.ImageField(required=True)
     plan = serializers.PrimaryKeyRelatedField(
-        queryset=SubscriptionPlan.objects.filter(is_active=True)
+        queryset=SubscriptionPlan.objects.filter(is_active=True).exclude(key=FREE_PLAN_KEY)
     )
 
     class Meta:
@@ -158,7 +174,7 @@ class ManualPaymentSubmitSerializer(serializers.ModelSerializer):
             #1. Prevent photographers from forging the price on checkout
             if amount != plan.price:
                 raise serializers.ValidationError({
-                    "amount": f"Submitted payment amount (${amount}) does not match the chosen plan tier price (${plan.price})."
+                    "amount": f"Submitted payment amount (NPR {amount}) does not match the chosen plan tier price (NPR {plan.price})."
                 })
             
             # 2. Block duplicate pending submissions for the same plan [1.1.2]

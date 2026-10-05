@@ -4,10 +4,13 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { subscriptionsApi } from '../api/subscriptionsApi'
 import { useAuthStore } from '../store/authStore'
 
+// No numbers here: plan limits are owner-editable data served by the API
+// (plans / my-subscription / dashboard stats). Free users only need to know
+// that video upload is a paid-plan capability.
 const FREE_PLAN_LIMITS = {
   max_galleries: null,
   max_photos_per_gallery: null,
-  storage_gb: 3,
+  storage_gb: null,
   allow_video: false,
 }
 
@@ -94,7 +97,7 @@ export function useSubscription() {
   const limits = useMemo(() => {
     return isSubscribed && plan
       ? {
-          max_galleries:          plan.max_galleries,
+          max_galleries:          plan.max_collections,
           max_photos_per_gallery: plan.max_photos_per_gallery,
           storage_gb:             plan.storage_gb,
           allow_video:            true,

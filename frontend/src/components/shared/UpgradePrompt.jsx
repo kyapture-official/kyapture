@@ -1,14 +1,24 @@
 // File Location: frontend/src/components/shared/UpgradePrompt.jsx
 import { useNavigate } from "react-router-dom";
+import { featureLabel, requiredPlan, usePlans } from "../../hooks/usePlans";
 
 /**
  * The locked-feature state for plan-gated features (Branding, Watermark).
+ * `feature` is the entitlement key; the title and the plan it names are read
+ * from the plans API.
  * Shown instead of — or beside — the controls a Free plan can't use, with a
  * "View Plans" call to action that opens the existing Billing page. It is a
  * courtesy only: the API refuses the same writes for an unentitled account.
  */
-export default function UpgradePrompt({ title, message, className = "" }) {
+export default function UpgradePrompt({ feature, message, className = "" }) {
   const navigate = useNavigate();
+  // Plan name and feature label come from the plans API (owner-editable data),
+  // never from copy written here.
+  const { plans } = usePlans();
+  const plan = requiredPlan(plans, feature);
+  const label = featureLabel(plans, feature);
+  const title = label ? `${label} is ${plan ? `a ${plan.name}` : "a paid"} feature` : "This is a paid feature";
+  const availability = plan ? `Available on the ${plan.name} plan and above.` : "Available on paid plans.";
   return (
     <div
       role="note"
@@ -30,7 +40,7 @@ export default function UpgradePrompt({ title, message, className = "" }) {
       </svg>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-amber-900">{title}</p>
-        <p className="mt-0.5 text-xs leading-relaxed text-amber-800">{message}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-amber-800">{message} {availability}</p>
         <button
           type="button"
           onClick={() => navigate("/dashboard/billing")}

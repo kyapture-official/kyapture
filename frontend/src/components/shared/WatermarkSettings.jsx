@@ -179,11 +179,11 @@ export default function WatermarkSettings({ gallery, setGallery, slug, isMounted
 
       {locked && (
         <UpgradePrompt
-          title="Watermark is a Pro feature"
+          feature="watermark"
           message={
             gallery.watermark_enabled
               ? "Your current plan no longer includes watermarking, so new photos are not watermarked. You can turn the setting off below."
-              : "Add a text or logo watermark to your client galleries with the Pro plan or above."
+              : "Add a text or logo watermark to your client galleries."
           }
         />
       )}

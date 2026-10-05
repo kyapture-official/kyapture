@@ -5,9 +5,29 @@ from .models import SubscriptionPlan, UserSubscription, ManualPayment
 
 @admin.register(SubscriptionPlan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ['name', 'price', 'max_galleries', 'max_photos_per_gallery', 'storage_gb', 'includes_branding_watermark', 'is_active']
-    list_filter = ['is_active', 'includes_branding_watermark']
-    search_fields = ['name']
+    """The owner edits plans here: changes show on Billing immediately (no deploy)."""
+    list_display = [
+        'name', 'key', 'price', 'storage_gb', 'max_collections', 'video_minutes',
+        'original_download', 'watermark', 'branding', 'is_active',
+    ]
+    list_editable = ['price', 'storage_gb', 'is_active']
+    list_filter = ['is_active']
+    search_fields = ['name', 'key']
+    fieldsets = [
+        (None, {'fields': ['name', 'key', 'price', 'is_active']}),
+        ('Limits (empty = unlimited)', {'fields': ['storage_gb', 'max_collections', 'max_photos_per_gallery', 'video_minutes']}),
+        ('Features', {'fields': ['original_download', 'watermark', 'branding']}),
+    ]
+
+    def get_readonly_fields(self, request, obj=None):
+        # The key is how code finds the Free tier; freeze it once a row exists.
+        return ['key'] if obj else []
+
+    def has_delete_permission(self, request, obj=None):
+        # The Free-tier row backs every unpaid account — never deletable.
+        if obj is not None and obj.is_free:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(UserSubscription)

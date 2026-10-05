@@ -3,7 +3,7 @@
 Branding + Watermark plan entitlements, enforced server-side.
 
 Rule under test: Branding (business logo) and Watermark are included only on
-plans flagged `includes_branding_watermark` (Pro and above) while the
+plans whose branding/watermark/original_download flags are on (Pro and above) while the
 subscription is ACTIVE and unexpired. Free (no/pending/cancelled/expired
 subscription) and Basic are refused with a 403 {'error', 'code'} body by the
 API itself — the frontend's locked state is a courtesy, never the control.
@@ -100,24 +100,12 @@ class PlanEntitlementRuleTests(EntitlementBase):
         staff.save(update_fields=['is_staff'])
         self.assertTrue(self.entitlements(staff)['watermark'])
 
-    def test_plan_list_exposes_the_flag_for_the_pricing_page(self):
+    def test_plan_list_exposes_the_feature_rows_for_the_pricing_page(self):
         response = self.client.get('/api/v1/subscriptions/plans/')
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(all('includes_branding_watermark' in plan for plan in response.data))
-
-    def test_existing_pro_and_studio_rows_are_flagged_by_the_migration_backfill(self):
-        from importlib import import_module
-        from django.apps import apps as django_apps
-        from apps.subscriptions.models import SubscriptionPlan
-        for name in ('Pro', 'Studio', 'Basic'):
-            SubscriptionPlan.objects.update_or_create(name=name, defaults={
-                'price': 1, 'max_galleries': 1, 'max_photos_per_gallery': 1, 'storage_gb': 1,
-                'includes_branding_watermark': False})
-        migration = import_module('apps.subscriptions.migrations.0003_plan_includes_branding_watermark')
-        migration.flag_existing_pro_and_above(django_apps, None)
-        flags = dict(SubscriptionPlan.objects.values_list('name', 'includes_branding_watermark'))
-        self.assertTrue(flags['Pro'] and flags['Studio'])
-        self.assertFalse(flags['Basic'])
+        self.assertTrue(all(
+            {row['key'] for row in plan['features']} == {'branding', 'watermark', 'original_download'}
+            for plan in response.data))
 
 
 class WatermarkWriteGateTests(EntitlementBase):

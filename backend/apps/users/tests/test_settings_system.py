@@ -468,10 +468,8 @@ class PaymentNotificationTests(SettingsBase):
     def setUp(self):
         super().setUp()
         self.staff = self.make_user('reviewer', is_staff=True)
-        self.plan = SubscriptionPlan.objects.create(
-            name='Pro', price=24.99, max_galleries=20, max_photos_per_gallery=500, storage_gb=50,
-            includes_branding_watermark=True)
-        self.payment = ManualPayment(user=self.user, plan=self.plan, amount=24.99)
+        self.plan = SubscriptionPlan.objects.get(key='pro')
+        self.payment = ManualPayment(user=self.user, plan=self.plan, amount=self.plan.price)
         self.payment.payment_proof.save('proof.png', ContentFile(png().read()), save=False)
         self.payment.save()
         patcher = mock.patch('apps.users.tasks.send_notification_email.delay',
@@ -536,7 +534,7 @@ class PlanAndBillingTests(SettingsBase):
     def test_usage_endpoint_reports_the_real_plan_for_free_and_paid(self):
         free = self.client.get('/api/v1/galleries/dashboard/stats/').data
         self.assertEqual(free['subscription_status'], 'no_subscription')
-        self.assertEqual(free['plan_name'], 'Free (Trial)')
+        self.assertEqual(free['plan_name'], 'Free')
         grant_plan(self.user, name='Pro')
         paid = self.client.get('/api/v1/galleries/dashboard/stats/').data
         self.assertEqual(paid['plan_name'], 'Pro')
@@ -548,10 +546,9 @@ class PlanAndBillingTests(SettingsBase):
         self.assertEqual(response.data, [])
 
     def test_a_user_sees_only_their_own_payment_history(self):
-        plan = SubscriptionPlan.objects.create(name='Basic', price=9.99, max_galleries=3,
-                                               max_photos_per_gallery=100, storage_gb=5)
+        plan = SubscriptionPlan.objects.get(key='basic')
         for owner in (self.user, self.other):
-            payment = ManualPayment(user=owner, plan=plan, amount=9.99)
+            payment = ManualPayment(user=owner, plan=plan, amount=plan.price)
             payment.payment_proof.save('p.png', ContentFile(png().read()), save=False)
             payment.save()
         emails = [row['email'] for row in self.client.get('/api/v1/subscriptions/payments/').data]

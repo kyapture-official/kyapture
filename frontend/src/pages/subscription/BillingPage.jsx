@@ -5,7 +5,8 @@ import { useState, useEffect, useRef } from 'react'
 import { subscriptionsApi } from '../../api/subscriptionsApi'
 import { useSubscription } from '../../hooks/useSubscription'
 import { useToast } from '../../components/ui/Toast'
-import { formatCurrency } from '../../utils/formatters'
+import { formatCurrency, formatPlanPrice } from '../../utils/formatters'
+import PlanComparisonTable from '../../components/billing/PlanComparisonTable'
 import Spinner from '../../components/ui/Spinner'
 
 const STATUS_BADGE_STYLES = {
@@ -24,6 +25,8 @@ export default function BillingPage() {
   const { subscription, plan: activePlan, refetch: refetchSubscription } = useSubscription()
 
   const [plans, setPlans] = useState([])
+  // The Free tier is a plan row too (for the comparison table) but cannot be bought.
+  const paidPlans = plans.filter((p) => !p.is_free)
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -65,7 +68,7 @@ export default function BillingPage() {
           const queryParams = new URLSearchParams(window.location.search)
           const targetPlanId = queryParams.get('plan_id')
           if (targetPlanId) {
-            const match = plansList.find((p) => String(p.id) === String(targetPlanId))
+            const match = plansList.find((p) => String(p.id) === String(targetPlanId) && !p.is_free)
             if (match) setSelectedPlan(match)
           }
         }
@@ -218,7 +221,7 @@ export default function BillingPage() {
       <section className="space-y-6">
         <h2 className="font-serif text-2xl text-ink">1. Choose Upgrade Tier</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {plans.map((p) => {
+          {paidPlans.map((p) => {
             const isSelected = selectedPlan?.id === p.id
             const isActive = activePlan?.id === p.id
 
@@ -243,7 +246,7 @@ export default function BillingPage() {
                 }`}
               >
                 <h3 className="font-serif text-lg text-ink font-medium">{p.name}</h3>
-                <p className="text-2xl font-bold text-ink mt-1">{formatCurrency(p.price)}</p>
+                <p className="text-2xl font-bold text-ink mt-1">{formatPlanPrice(p.price)}</p>
                 {isActive && (
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-semibold bg-brand-green-50 text-brand-green-600 uppercase tracking-widest mt-3">
                     Active Plan
@@ -258,7 +261,7 @@ export default function BillingPage() {
           <form onSubmit={handleSubmit} className="space-y-6 p-6 border border-cream-200 rounded-2xl bg-surface-light shadow-card animate-fade-up">
             <h3 className="font-serif text-xl text-ink">2. Upload Proof of Transfer</h3>
             <p className="text-xs text-muted leading-relaxed max-w-2xl font-light">
-              Transfer <span className="font-bold text-ink">{formatCurrency(selectedPlan.price)}</span> to our standard eSewa account or bank portal. Take a screenshot confirmation and attach it below.
+              Transfer <span className="font-bold text-ink">{formatCurrency(selectedPlan.price)}</span> for one month of {selectedPlan.name} to our standard eSewa account or bank portal. Take a screenshot confirmation and attach it below.
             </p>
 
             <div className="space-y-4">
@@ -311,6 +314,12 @@ export default function BillingPage() {
             </button>
           </form>
         )}
+      </section>
+
+      {/* Plan comparison — generated from the plan table */}
+      <section className="space-y-4" aria-labelledby="compare-plans">
+        <h2 id="compare-plans" className="font-serif text-2xl text-ink">Compare plans</h2>
+        <PlanComparisonTable plans={plans} currentPlanId={activePlan?.id ?? plans.find((p) => p.is_free)?.id} />
       </section>
 
       {/* Payment History */}

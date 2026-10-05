@@ -31,7 +31,7 @@ class SaaSResourceGatingTestCase(APITestCase):
         self.strict_plan = SubscriptionPlan.objects.create(
             name="Strict Gating Plan",
             price=19.99,
-            max_galleries=2,
+            max_collections=2,
             max_photos_per_gallery=2,
             storage_gb=1,
             is_active=True
