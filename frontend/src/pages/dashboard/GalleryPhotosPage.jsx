@@ -9,6 +9,7 @@ import DropZone from "../../components/ui/DropZone";
 import PhotoGrid from "../../components/shared/PhotoGrid";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useSubscription } from "../../hooks/useSubscription";
+import { ArrowDownWideNarrow, Check, LayoutGrid, PlusCircle } from "lucide-react";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 const POLL_INTERVAL_MS = 3000;
@@ -16,6 +17,31 @@ const POLL_MAX_INTERVAL_MS = 15000;
 const MAX_POLL_ATTEMPTS = 100;
 
 const isVideoFile = (file) => file.type.startsWith("video/");
+
+// View-only sorting of the set already loaded in the grid. "custom" is the
+// server order (upload order plus any drag-reorder) and is the only mode where
+// drag-reorder is offered, so a reorder always saves what the photographer sees.
+const SORT_OPTIONS = [
+  { key: "custom", label: "Custom order" },
+  { key: "name-asc", label: "Filename A–Z" },
+  { key: "name-desc", label: "Filename Z–A" },
+  { key: "date-desc", label: "Newest uploads first" },
+  { key: "date-asc", label: "Oldest uploads first" },
+];
+
+const byName = (a, b) =>
+  String(a.original_name || "").localeCompare(String(b.original_name || ""), undefined, { numeric: true, sensitivity: "base" });
+const byDate = (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0);
+
+const sortPhotos = (photos, sortKey) => {
+  switch (sortKey) {
+    case "name-asc": return [...photos].sort(byName);
+    case "name-desc": return [...photos].sort((a, b) => byName(b, a));
+    case "date-asc": return [...photos].sort(byDate);
+    case "date-desc": return [...photos].sort((a, b) => byDate(b, a));
+    default: return photos;
+  }
+};
 
 const getErrorMessage = (error, fallback) => {
   const data = error?.response?.data;
@@ -56,6 +82,10 @@ export default function GalleryPhotosPage() {
   const [isGridDragging, setIsGridDragging] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null); // photo awaiting the permanent-delete confirmation
   const [deleting, setDeleting] = useState(false);
+  const [sortKey, setSortKey] = useState("custom");
+  const [sortOpen, setSortOpen] = useState(false);
+  const [tileSize, setTileSize] = useState("medium");
+  const sortRef = useRef(null);
 
   const blobUrlsRef = useRef([]);
   const photosRef = useRef(photos);
@@ -87,6 +117,24 @@ export default function GalleryPhotosPage() {
       setPhotosLoading(false);
     }
   }, [activeSet, activeSetId, setsLoading]);
+
+  useEffect(() => {
+    if (!sortOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (!sortRef.current?.contains(event.target)) setSortOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setSortOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [sortOpen]);
+
+  const displayedPhotos = useMemo(() => sortPhotos(photos, sortKey), [photos, sortKey]);
 
   useEffect(() => () => {
     blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -602,26 +650,74 @@ export default function GalleryPhotosPage() {
   };
 
   return (
-    <div className="bg-surface-light rounded-2xl border border-cream-200 shadow-card p-6">
-      <div className="mb-6 flex items-center justify-between gap-4 border-b border-cream-200 pb-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand-green-50">
-            <svg className="h-5 w-5 text-brand-green-600" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z" />
-            </svg>
+    <div>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <h2 className="min-w-0 truncate text-xl font-semibold text-ink md:text-2xl">
+          {activeSet?.name || (setsLoading ? "Loading photo set…" : "Photos")}
+        </h2>
+        <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
+          <div className="relative" ref={sortRef}>
+            <button
+              type="button"
+              onClick={() => setSortOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={sortOpen}
+              aria-label="Sort photos"
+              title="Sort photos"
+              className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors hover:bg-cream-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 ${
+                sortKey === "custom" ? "text-muted" : "text-brand-green-600"
+              }`}
+            >
+              <ArrowDownWideNarrow className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            {sortOpen && (
+              <div
+                role="menu"
+                aria-label="Sort photos"
+                className="absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden rounded-xl border border-cream-200 bg-white py-1 shadow-card"
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={sortKey === option.key}
+                    onClick={() => {
+                      setSortKey(option.key);
+                      setSortOpen(false);
+                    }}
+                    className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-left text-xs text-ink hover:bg-cream-100 focus:bg-cream-100 focus:outline-none"
+                  >
+                    {option.label}
+                    {sortKey === option.key && <Check className="h-3.5 w-3.5 text-brand-green-600" aria-hidden="true" />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <h2 className="truncate font-serif text-lg text-ink">
-            {activeSet?.name || (setsLoading ? "Loading photo set…" : "Photos")}
-          </h2>
+          <button
+            type="button"
+            onClick={() => setTileSize((size) => (size === "medium" ? "large" : "medium"))}
+            aria-pressed={tileSize === "large"}
+            aria-label={tileSize === "large" ? "Show smaller thumbnails" : "Show larger thumbnails"}
+            title={tileSize === "large" ? "Smaller thumbnails" : "Larger thumbnails"}
+            className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors hover:bg-cream-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 ${
+              tileSize === "large" ? "text-brand-green-600" : "text-muted"
+            }`}
+          >
+            <LayoutGrid className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          <span className="mx-1 hidden h-5 w-px bg-cream-200 sm:block" aria-hidden="true" />
+          <button
+            type="button"
+            onClick={openFilePicker}
+            disabled={photosLoading || (!USE_MOCK_DATA && !activeSetId)}
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-brand-green-600 hover:text-brand-green-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <PlusCircle className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+            Add Media
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={openFilePicker}
-          disabled={photosLoading || (!USE_MOCK_DATA && !activeSetId)}
-          className="flex-shrink-0 rounded-lg bg-brand-green-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-green-700 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-        >
-          + Add Media
-        </button>
       </div>
 
       <input
@@ -710,7 +806,7 @@ export default function GalleryPhotosPage() {
         </div>
       )}
 
-      <div className="mt-6">
+      <div className="mt-4">
         {photosLoading || (!USE_MOCK_DATA && setsLoading) ? (
           <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : !USE_MOCK_DATA && !activeSetId ? (
@@ -724,10 +820,11 @@ export default function GalleryPhotosPage() {
             className={isGridDragging ? "rounded-xl ring-2 ring-brand-green-400 ring-offset-2" : ""}
           >
             <PhotoGrid
-              photos={photos}
+              photos={displayedPhotos}
+              tileSize={tileSize}
               onDelete={setPendingDelete}
               onSetCover={handleSetCover}
-              onReorder={handleReorder}
+              onReorder={sortKey === "custom" ? handleReorder : undefined}
               onDownload={handleDownload}
               onToggleFavorite={handleToggleFavorite}
               onMoveToSet={handleMoveToSet}

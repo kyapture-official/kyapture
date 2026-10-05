@@ -82,6 +82,7 @@ export default function PhotoGrid({
   sets = [],
   activeSetId = null,
   showActions = false,
+  tileSize = "medium",
 }) {
   const [lightbox, setLightbox] = useState(null);
   const [brokenIds, setBrokenIds] = useState(() => new Set());
@@ -181,7 +182,15 @@ export default function PhotoGrid({
 
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+      {/* Auto-fill: as many tiles per row as the width allows, tiles stretch to
+          fill it. Below `sm` it is a fixed 2 columns (1 for the large size). */}
+      <div
+        className={`grid gap-4 ${
+          tileSize === "large"
+            ? "grid-cols-1 [--tile-min:220px] lg:[--tile-min:280px]"
+            : "grid-cols-2 [--tile-min:150px] lg:[--tile-min:200px]"
+        } sm:[grid-template-columns:repeat(auto-fill,minmax(var(--tile-min),1fr))]`}
+      >
         {photos.map((photo, idx) => {
           const isBroken = brokenIds.has(photo.id);
           const isVideo = photo.media_type === "video";
@@ -211,7 +220,7 @@ export default function PhotoGrid({
               onDragLeave={() => handleDragLeave(idx)}
               onDrop={(e) => handleDrop(e, idx)}
               onDragEnd={handleDragEnd}
-              className={`group relative overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 focus-visible:ring-offset-2 transition-all bg-cream-100 ${
+              className={`group relative aspect-[9/10] overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500 focus-visible:ring-offset-2 transition-all bg-cream-100 ${
                 canReorder
                   ? "cursor-grab active:cursor-grabbing"
                   : "cursor-pointer"
@@ -233,14 +242,14 @@ export default function PhotoGrid({
                 // see an unrelated stock photo standing in for their real
                 // one and have no way to know it never loaded. This now
                 // shows an honest "failed to load" state instead.
-                <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
                   {BROKEN_IMAGE_ICON}
                   <span className="text-[10px] font-medium">
                     {isFailed ? "Processing failed" : "Failed to load"}
                   </span>
                 </div>
               ) : showPlaceholder ? (
-                <div className="w-full h-48 flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted bg-cream-100">
                   <Spinner className="w-5 h-5" />
                   <span className="text-[10px] font-medium">Processing…</span>
                 </div>
@@ -251,7 +260,7 @@ export default function PhotoGrid({
                     alt={
                       photo.title || photo.original_name || "Collection asset"
                     }
-                    className="w-full h-48 object-cover block transition-transform duration-500 group-hover:scale-105"
+                    className="w-full h-full object-cover block transition-transform duration-500 group-hover:scale-105"
                     loading="lazy"
                     onError={() => markBroken(photo.id)}
                   />

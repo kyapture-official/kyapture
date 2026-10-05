@@ -90,7 +90,7 @@ export default function TopNavBar({ gallery = null }) {
   const isPublished = collection.status === "PUBLISHED";
 
   return (
-    <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-cream-200">
+    <div className="sticky top-0 z-50 bg-white border-b border-cream-200">
       <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-3">
         {/* Left: Breadcrumbs + Status */}
         <div className="flex items-center gap-2 min-w-0">

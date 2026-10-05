@@ -1,6 +1,6 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GalleryWorkspaceLayout.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate, useLocation, Outlet, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useLocation, useMatch, Outlet, useSearchParams } from "react-router-dom";
 import { galleriesApi } from "../../api/galleriesApi";
 import { photosApi } from "../../api/photosApi";
 import { mockGalleries } from "../../utils/mockGalleries";
@@ -18,6 +18,9 @@ function WorkspaceInner() {
   const location = useLocation();
   const { dispatch } = usePixieset();
   const [searchParams, setSearchParams] = useSearchParams();
+  // The Photos tab (the index route) fills the whole area beside the left panel;
+  // Design / Settings / Activities keep their centred reading width.
+  const isPhotosRoute = Boolean(useMatch({ path: "/dashboard/galleries/:id", end: true }));
 
   const [gallery, setGallery] = useState(null);
   const [sets, setSets] = useState([]);
@@ -229,7 +232,13 @@ function WorkspaceInner() {
           </div>
         )}
 
-        <div className="flex-1 max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-24 md:py-8 w-full">
+        <div
+          className={
+            isPhotosRoute
+              ? "flex-1 w-full bg-surface-light px-4 md:px-10 pt-5 pb-24 md:pt-8 md:pb-10"
+              : "flex-1 max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-24 md:py-8 w-full"
+          }
+        >
           <Outlet
             context={{
               gallery,
