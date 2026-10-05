@@ -79,6 +79,16 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 | 45 | The warning state shows on Billing and Settings only. The dashboard home and the workspace show nothing until an upload is refused, and nobody is told when an admin lowers a plan below their usage (no email or notification) | BILL-C | 9A-2 (dashboard) / 9C-1 |
 | 46 | Settings > Plan & Billing meters for collections and video still turn red at a frontend 90% constant; only storage reads its state and threshold from the backend | BILL-C | 9C-1 |
 
+## G. Raised by 6-A (compression calibration, docs/KYAPTURE_COMPRESSION_CALIBRATION.md)
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 47 | The Download Master helper runs 11 Pillow encodes plus a PSNR check per JPEG: 5.5-12.5 s of worker CPU per upload (measured), against 0.2-0.4 s for one fixed encode | 6-A | 6-B (fixed jpegli q90, no search) |
+| 48 | `cjpegli` is not in the backend image (Debian `libjxl-tools` has no cjpegli). Needs a pinned multi-stage build (124 s), a subprocess call with timeout, and a tested Pillow fallback | 6-A | 6-B |
+| 49 | Web Size is Pillow q90 baseline at request time: about 28% bigger than jpegli q90 for 1.6 lower SSIMULACRA2 (10 images, 2048 px). Not changed by 6-B unless the owner asks | 6-A | 6-B (owner decides) |
+| 50 | A source above 3600 px whose capped re-encode is larger than the original gets no Download Master (`_make_download_master` returns None), so `_get_client_download_source` serves the full original to a Free client. Found by reading the code, not reproduced | 6-A | 6-B (keep the capped master for sources above 3600 px) |
+| 51 | Calibration used 10 phone/scan JPEGs (largest 5312 px, one ICC source); no 24 MP+ DSLR file; Linux timings are from the dev Docker host, not production hardware | 6-A | 6-B verification / 15-A |
+
 Row 36 note: The sidebar label comes from `frontend/src/components/layout/DashboardLayout.jsx`, which maps `user?.is_active_plan` to "Pro Plan" or "Free Plan".
 Plan & Billing gets the plan and subscription from `frontend/src/hooks/useSubscription.js` and checks for an active subscription before showing the plan.
 Yes, a real paid user can see different labels if the auth-store flag and the live subscription response disagree or one is stale.
