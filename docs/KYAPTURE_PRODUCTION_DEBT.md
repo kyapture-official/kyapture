@@ -63,17 +63,23 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 
 | # | Gap | Raised in | Owner chunk |
 |---|-----|-----------|-------------|
-| 31 | A video whose length the browser cannot read (verified in Chrome: an MPEG-4 Part 2 `.mp4`) uploads in full before the server's ffprobe check can refuse it, so the bandwidth is still spent. The server stays authoritative; only the early refusal is missing (needs a server-side early probe, e.g. chunked/resumable upload) | VID-C | Unassigned (proposed: upload-pipeline chunk, with 7-B) |
-| 32 | The admin form cannot set a plan's `max_collections` to 0 (`MinValueValidator(1)`; empty = unlimited). A "no new collections" plan, and so the empty-state button at the cap, is reachable only by a direct row edit. VID-C's real-data test set Free to 0 with a row update (restored to 10) after confirming the form refuses 0. Owner decides whether 0 is a valid cap | VID-C | Unassigned (owner decision, then the plans/limits chunk) |
-| 33 | No visible "checking videos" state while the browser reads lengths and waits for the pre-flight (4 reads at a time, 5 s timeout each: a drop of hung files can wait several seconds with no feedback) | VID-C | Unassigned (proposed: 9A-3 upload UI) |
+| 31 | A video whose length the browser cannot read (verified in Chrome: an MPEG-4 Part 2 `.mp4`) uploads in full before the server's ffprobe check can refuse it, so the bandwidth is still spent. The server stays authoritative; only the early refusal is missing (needs a server-side early probe, e.g. chunked/resumable upload) | VID-C | 7-B (add upload body check for abusive clients) |
+| 33 | No visible "checking videos" state while the browser reads lengths and waits for the pre-flight (4 reads at a time, 5 s timeout each: a drop of hung files can wait several seconds with no feedback) | VID-C | 9A-3 |
 | 34 | The pre-flight rejects a drop of more than 200 videos (HTTP 400); the page then lets the uploads go ahead and the per-file server check decides, so such a batch has no early refusal | VID-C | Unassigned |
-| 35 | The pre-flight judges the drop as one batch: if the videos together exceed the plan, none upload (photos still do), even when the first alone would fit. No partial acceptance | VID-C | Unassigned (product decision) |
-| 36 | Dashboard sidebar footer reads "FREE PLAN" for a user on an active Pro subscription, while Settings > Plan & Billing shows Pro (seen in the VID-C desktop screenshot; cause not investigated) | VID-C | Unassigned (proposed: 9A-2) |
+| 35 | The pre-flight judges the drop as one batch: if the videos together exceed the plan, none upload (photos still do), even when the first alone would fit. No partial acceptance | VID-C | product decision, leave |
+| 36 | Dashboard sidebar footer reads "FREE PLAN" for a user on an active Pro subscription, while Settings > Plan & Billing shows Pro (seen in the VID-C desktop screenshot; cause not investigated) | VID-C | 9A-1 (App shell) — **MUST FIX** |
 | 37 | `frontend/nginx.conf` file-header comment (lines 41-45) still says no Content-Security-Policy is added, though one is set below it. Left alone to keep VID-C's nginx diff to `media-src` plus its own comment | VID-C | Unassigned |
 | 38 | VID-C browser QA ran as throwaway puppeteer scripts outside the repo (no end-to-end harness in the repo). Upload-request counts are covered in the repo only by unit tests with injected fakes | VID-C | QA-A |
+| 39 | docs/pixieset-ref screenshots show an IP address and emails: blur before committing | start | owner, before the first push of that folder |
+| 40 | Photo storage (GB) limit: is it enforced at upload with an upgrade modal, and what happens to a user already over a lowered limit | BILL-C | BILL-C |
+
+Row 36 note: The sidebar label comes from `frontend/src/components/layout/DashboardLayout.jsx`, which maps `user?.is_active_plan` to "Pro Plan" or "Free Plan".
+Plan & Billing gets the plan and subscription from `frontend/src/hooks/useSubscription.js` and checks for an active subscription before showing the plan.
+Yes, a real paid user can see different labels if the auth-store flag and the live subscription response disagree or one is stale.
 
 ## Accepted (no fix needed)
 
+- Row 32: The admin form cannot set a plan's `max_collections` to 0; empty = unlimited, and the minimum cap is 1 by design.
 - Old download rows show "-" for set names (no data existed).
 - Video short-preview file does not exist (dead code removed earlier); poster + 1080p MP4 is enough.
 - Video limit is per account, not per collection (owner decision made).
