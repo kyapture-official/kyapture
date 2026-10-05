@@ -18,3 +18,4 @@
 - No fake controls: every control is wired to the backend and enforced server-side.
 - Verify at desktop and 390px; screenshot next to the Pixieset target.
 QA cleanup: delete ONLY rows by exact id/email created in this session. Never delete by pattern (endswith / contains / LIKE). Before deleting, print the rows and confirm the count matches what you created.
+No "good enough for beta". If you leave any known gap, add a row to docs/KYAPTURE_PRODUCTION_DEBT.md (gap, chunk that raised it, owning chunk). Never write "beta is fine" in a report.
