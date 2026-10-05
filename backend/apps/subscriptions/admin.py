@@ -10,12 +10,12 @@ class PlanAdmin(admin.ModelAdmin):
         'name', 'key', 'price', 'storage_gb', 'max_collections', 'video_minutes',
         'original_download', 'watermark', 'branding', 'is_active',
     ]
-    list_editable = ['price', 'storage_gb', 'is_active']
+    list_editable = ['price', 'storage_gb', 'video_minutes', 'is_active']
     list_filter = ['is_active']
     search_fields = ['name', 'key']
     fieldsets = [
         (None, {'fields': ['name', 'key', 'price', 'is_active']}),
-        ('Limits (empty = unlimited)', {'fields': ['storage_gb', 'max_collections', 'max_photos_per_gallery', 'video_minutes']}),
+        ('Limits (empty = unlimited; video minutes: 0 = no video)', {'fields': ['storage_gb', 'max_collections', 'max_photos_per_gallery', 'video_minutes']}),
         ('Features', {'fields': ['original_download', 'watermark', 'branding']}),
     ]
 

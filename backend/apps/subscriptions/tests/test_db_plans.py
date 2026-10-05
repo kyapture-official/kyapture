@@ -42,7 +42,8 @@ class PlansApiTests(APITestCase):
             self.assertEqual(Decimal(plans[key]['price']), price, key)
             self.assertEqual(plans[key]['storage_gb'], gb, key)
             self.assertIsNone(plans[key]['max_collections'], key)              # unlimited everywhere
-            self.assertIsNone(plans[key]['video_minutes'], key)
+        # DUMMY seed values (migration 0007): 0 = no video, N = minutes; owner edits in admin.
+        self.assertEqual({k: p['video_minutes'] for k, p in plans.items()}, {'free': 0, 'basic': 0, 'pro': 60, 'studio': 120})
         self.assertTrue(plans['free']['is_free'])
         flags = {k: {f['key']: f['included'] for f in p['features']} for k, p in plans.items()}
         self.assertEqual(flags['pro'], {'branding': True, 'watermark': True, 'original_download': True})

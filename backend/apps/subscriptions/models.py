@@ -56,8 +56,8 @@ class SubscriptionPlan(BaseModel):
     )
     video_minutes = models.PositiveIntegerField(
         null=True, blank=True,
-        help_text="Video allowance in minutes. Leave empty for no limit. "
-                  "Not enforced yet (owner decision pending).",
+        help_text="Video allowance in minutes, counted across all of the account's videos. "
+                  "0 = videos not allowed on this plan. Leave empty for unlimited.",
     )
 
     # Feature flags — one per plan-gated feature, named in entitlements.FEATURES.
@@ -88,7 +88,7 @@ class SubscriptionPlan(BaseModel):
         """The Free-tier row. Self-heals if an admin deleted it (editable afterwards)."""
         plan, _ = cls.objects.get_or_create(
             key=FREE_PLAN_KEY,
-            defaults={'name': 'Free', 'price': 0, 'storage_gb': 3},
+            defaults={'name': 'Free', 'price': 0, 'storage_gb': 3, 'video_minutes': 0},
         )
         return plan
 

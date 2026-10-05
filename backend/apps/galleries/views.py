@@ -332,6 +332,8 @@ class DashboardStatsView(APIView):
                 'plan_photo_limit': None,
                 'plan_storage_limit_gb': None,
                 'plan_storage_limit_bytes': None,
+                'video_minutes_limit': None,
+                'video_minutes_used': round(metrics["current_video_seconds"] / 60, 1),
                 'galleries_remaining': None,
                 'storage_remaining_gb': None,
                 'subscription_status': 'admin',
@@ -359,6 +361,8 @@ class DashboardStatsView(APIView):
                 'galleries_remaining': None,
                 'storage_remaining_gb': storage_remaining_gb,
                 'allow_video': metrics["allow_video"],
+                'video_minutes_limit': metrics["video_minutes_limit"],
+                'video_minutes_used': round(metrics["current_video_seconds"] / 60, 1),
                 'subscription_status': 'no_subscription',
                 'expires_at': None,
                 'days_remaining': None,
@@ -392,7 +396,10 @@ class DashboardStatsView(APIView):
             
             'galleries_remaining': galleries_remaining,
             'storage_remaining_gb': storage_remaining_gb,
-            
+            'allow_video': metrics["allow_video"],
+            'video_minutes_limit': metrics["video_minutes_limit"],
+            'video_minutes_used': round(metrics["current_video_seconds"] / 60, 1),
+
             'subscription_status': subscription_status,
             'expires_at': expires_at,
             'days_remaining': days_remaining,

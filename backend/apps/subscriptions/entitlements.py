@@ -148,3 +148,43 @@ def require_feature(user, feature):
     if not has_feature(user, feature):
         from apps.core.utils import raise_gating_violation
         raise_gating_violation(upgrade_message(feature), UPGRADE_CODES[feature])
+
+
+# Video allowance (VID-A): a number on the plan row, not a boolean flag.
+VIDEO_NOT_IN_PLAN = 'video_not_in_plan'
+VIDEO_MINUTES_EXCEEDED = 'video_minutes_exceeded'
+
+
+def video_quota_violation(metrics, new_seconds):
+    """
+    The plan's video-minutes rule, applied to metrics from
+    apps.core.utils.get_user_subscription_metrics(): 0 = no video allowed,
+    None = unlimited, N = N minutes across the account's live videos.
+    Returns None when `new_seconds` of new video fits, otherwise the 403
+    payload (error/code/message plus the plan limit and minutes used).
+    """
+    limit = metrics['video_minutes_limit']
+    if limit is None:
+        return None
+    used_minutes = round(metrics['current_video_seconds'] / 60, 1)
+    figures = {'plan_limit_minutes': limit, 'used_minutes': used_minutes}
+    if limit == 0:
+        return {
+            'error': 'Video uploads are not included in your plan.',
+            'code': VIDEO_NOT_IN_PLAN,
+            'message': 'Your current plan does not include video. Upgrade your plan to upload videos.',
+            **figures,
+        }
+    if metrics['current_video_seconds'] + new_seconds > limit * 60:
+        batch_minutes = round(new_seconds / 60, 1)
+        return {
+            'error': 'Video minutes limit exceeded.',
+            'code': VIDEO_MINUTES_EXCEEDED,
+            'message': (
+                f'Your plan includes {limit} minutes of video and you have used {used_minutes}. '
+                f'This upload adds {batch_minutes}. Delete a video or upgrade your plan.'
+            ),
+            'upload_minutes': batch_minutes,
+            **figures,
+        }
+    return None

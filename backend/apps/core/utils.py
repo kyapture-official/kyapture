@@ -96,9 +96,9 @@ def get_user_subscription_metrics(user):
             user=user,
             status='active'
         )
-        plan, allow_video = active_sub.plan, True
+        plan = active_sub.plan
     except UserSubscription.DoesNotExist:
-        active_sub, plan, allow_video = None, SubscriptionPlan.get_free(), False
+        active_sub, plan = None, SubscriptionPlan.get_free()
 
     limits = {
         "active_subscription": active_sub,
@@ -106,7 +106,11 @@ def get_user_subscription_metrics(user):
         "max_galleries": plan.max_collections,
         "max_photos_per_gallery": plan.max_photos_per_gallery,
         "storage_bytes_limit": plan.storage_gb * 1024 * 1024 * 1024,
-        "allow_video": allow_video,
+        # Video allowance comes from the plan row: 0 = no video, None = unlimited,
+        # N = N minutes (apps/subscriptions/entitlements.py::video_quota_violation).
+        "video_minutes_limit": plan.video_minutes,
+        "allow_video": plan.video_minutes != 0,
+        "current_video_seconds": 0,
         "current_galleries_count": 0,
         "current_total_storage_bytes": 0,
     }
@@ -140,9 +144,13 @@ def get_user_subscription_metrics(user):
         # The dashboard also shows the count for ACTIVE (non-trashed)
         # galleries only; folding it into this aggregate saves a second scan.
         active_count=Count('id', filter=Q(gallery__is_active=True)),
+        # Live video rows only (freed the moment a video row is deleted), same
+        # scope as the storage total above.
+        video_seconds=Sum('duration', filter=Q(media_type=MediaAsset.MediaType.VIDEO)),
     )
 
     limits["current_total_storage_bytes"] = asset_aggregation['total_bytes'] or 0
+    limits["current_video_seconds"] = asset_aggregation['video_seconds'] or 0
     limits["current_photos_count"] = asset_aggregation['total_count'] or 0
     limits["active_photos_count"] = asset_aggregation['active_count'] or 0
     return limits
@@ -155,6 +163,59 @@ _ALLOWED_SIGNATURES = [
     b'\xff\xd8\xff\xdb',  # JPEG raw tables
     b'\x89PNG\r\n\x1a\n', # PNG
 ]
+
+
+def _ffprobe_duration(path):
+    """Container duration in seconds (float) via ffprobe; raises on an unreadable file."""
+    result = subprocess.run(
+        [
+            'ffprobe', '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            path,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+        timeout=60,
+    )
+    return float((result.stdout or "0").strip() or 0.0)
+
+
+def probe_video_duration(uploaded_file):
+    """
+    Whole-second duration of an uploaded video, measured at upload time so
+    the plan's video-minutes allowance can be enforced BEFORE anything is
+    stored. Large uploads arrive as temp files on disk, so ffprobe reads the
+    existing path where there is one; otherwise the (small, in-memory) upload
+    is spooled to a temp file. Returns None when ffprobe cannot read it.
+    """
+    path = getattr(uploaded_file, 'temporary_file_path', None)
+    if callable(path):
+        try:
+            return round(_ffprobe_duration(path()))
+        except (subprocess.SubprocessError, ValueError, OSError):
+            return None
+
+    temp_path = None
+    try:
+        uploaded_file.seek(0)
+        ext = os.path.splitext(uploaded_file.name)[1].lower() or ".mp4"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            temp_path = tmp.name
+            for chunk in uploaded_file.chunks():
+                tmp.write(chunk)
+        return round(_ffprobe_duration(temp_path))
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return None
+    finally:
+        uploaded_file.seek(0)
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
 
 def validate_video_magic_bytes(file_obj):
@@ -710,22 +771,10 @@ def process_video_pipeline(video_file):
                 temp_video.write(chunk)
         video_file.seek(0)
 
-        # 2. Extract exact video duration using FFprobe
-        ffprobe_cmd = [
-            'ffprobe', '-v', 'error',
-            '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            temp_video_path
-        ]
-        duration_result = subprocess.run(
-            ffprobe_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=True
-        )
-        duration_float = float((duration_result.stdout or "0").strip() or 0.0)
-        duration = int(duration_float)
+        # 2. Extract exact video duration using FFprobe (same helper the
+        #    upload endpoint uses, so both store the same whole-second value)
+        duration_float = _ffprobe_duration(temp_video_path)
+        duration = round(duration_float)
 
         # 3. Extract a poster frame (JPEG) at a SAFE timestamp — the
         #    clip's midpoint, capped at 2s, so it reliably lands inside

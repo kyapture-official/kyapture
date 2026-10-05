@@ -27,10 +27,12 @@ export default function PlanComparisonTable({ plans, currentPlanId }) {
   if (plans.some((p) => p.max_photos_per_gallery != null)) {
     limitRows.push({ key: 'photos', label: 'Photos per collection', cell: (p) => count(p.max_photos_per_gallery, 'photos') })
   }
-  // Video minutes are not enforced yet; the row only appears once the owner sets a value.
-  if (plans.some((p) => p.video_minutes != null)) {
-    limitRows.push({ key: 'video', label: 'Video', cell: (p) => (p.video_minutes == null ? '—' : `${p.video_minutes} min`) })
-  }
+  // Video minutes come from the plan row: 0 = no video, empty = unlimited, N = N minutes.
+  limitRows.push({
+    key: 'video',
+    label: 'Video',
+    cell: (p) => (p.video_minutes === 0 ? '—' : p.video_minutes == null ? 'Unlimited' : `${p.video_minutes} min`),
+  })
   const featureRows = plans[0].features || []
 
   return (

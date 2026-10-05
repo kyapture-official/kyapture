@@ -17,7 +17,8 @@ from .tasks import process_photo_asset, process_video_asset
 from PIL import Image as PILImage
 from PIL.ImageOps import exif_transpose
 
-from apps.core.utils import get_user_subscription_metrics, get_insertion_order, strip_exif_gps
+from apps.core.utils import get_user_subscription_metrics, get_insertion_order, probe_video_duration, strip_exif_gps
+from apps.subscriptions.entitlements import video_quota_violation
 from apps.galleries.models import Gallery
 from .models import MediaAsset, PhotoSet
 from .purge import purge_assets, purge_photo_set
@@ -135,14 +136,10 @@ class PhotoListUploadView(APIView):
         metrics = get_user_subscription_metrics(photographer)
 
         if not (photographer.is_superuser or photographer.is_staff):
-            # Check 0: free tier is images-only — reject the whole batch so
-            # nothing uploads partially.
+            # Check 0: plan has no video at all (video_minutes == 0) — refuse
+            # before the files are probed or stored, so nothing uploads partially.
             if video_files and not metrics["allow_video"]:
-                return Response({
-                    "error": "Video uploads require an active subscription plan.",
-                    "code": "video_upload_requires_subscription",
-                    "message": "Your current plan supports image uploads only. Upgrade your plan to upload videos."
-                }, status=status.HTTP_403_FORBIDDEN)
+                return Response(video_quota_violation(metrics, 0), status=status.HTTP_403_FORBIDDEN)
 
             # Check 1: per-gallery photo cap — skipped when plan has none
             if metrics["max_photos_per_gallery"] is not None:
@@ -173,6 +170,31 @@ class PhotoListUploadView(APIView):
                     "plan_limit_gb": f"{allowed_gb:.1f}",
                     "message": f"This upload of {batch_mb:.1f} MB would push your account past your {allowed_gb:.1f} GB storage limit. Upgrade your plan for more storage."
                 }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Video minutes: measure every video with ffprobe now, and refuse the
+        # whole batch if used + new would pass the plan's limit. Durations are
+        # kept for the row so the stored value is the one that was checked.
+        video_durations = {}
+        for index, file_data in enumerate(video_files):
+            # Extension / signature / size checks first: ffprobe only ever sees a plausible video.
+            checker = MediaAssetVideoUploadSerializer(data={'video': file_data}, context={'request': request})
+            if not checker.is_valid():
+                return Response(
+                    {"error": "Upload validation failed.", "details": checker.errors, "code": "upload_validation_failed"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            seconds = probe_video_duration(file_data)
+            if seconds is None:
+                return Response({
+                    "error": "This video could not be read.",
+                    "code": "video_unreadable",
+                    "message": f"{file_data.name} is not a valid video file.",
+                }, status=status.HTTP_400_BAD_REQUEST)
+            video_durations[index] = seconds
+        if video_files and not (photographer.is_superuser or photographer.is_staff):
+            violation = video_quota_violation(metrics, sum(video_durations.values()))
+            if violation:
+                return Response(violation, status=status.HTTP_403_FORBIDDEN)
 
 # ─── ENFORCEMENT CLEARED ───
         uploaded_assets = []
@@ -220,7 +242,7 @@ class PhotoListUploadView(APIView):
                     uploaded_assets.append(asset)
                     
                     # ── Videos ──
-                for file_data in video_files:
+                for index, file_data in enumerate(video_files):
                     serializer = MediaAssetVideoUploadSerializer(
                         data={'video': file_data, 'title': request.data.get('title', '')},
                         context={'request': request, 'gallery': gallery}
@@ -238,6 +260,7 @@ class PhotoListUploadView(APIView):
                         original_name=_safe_text_field(file_data.name, 255),
                         file_size=file_data.size,
                         title=_safe_text_field(title, 200),
+                        duration=video_durations[index],
                         processing_status=MediaAsset.ProcessingStatus.PENDING,
                         order=get_insertion_order(gallery.id),
                         photo_set=photo_set,
