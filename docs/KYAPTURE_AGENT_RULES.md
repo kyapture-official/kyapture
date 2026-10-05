@@ -17,3 +17,4 @@
 - Secrets (password/PIN): typed by the photographer, never auto-generated, never returned in plain text; show masked with Change.
 - No fake controls: every control is wired to the backend and enforced server-side.
 - Verify at desktop and 390px; screenshot next to the Pixieset target.
+QA cleanup: delete ONLY rows by exact id/email created in this session. Never delete by pattern (endswith / contains / LIKE). Before deleting, print the rows and confirm the count matches what you created.
