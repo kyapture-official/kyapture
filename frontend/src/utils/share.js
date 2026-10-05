@@ -45,6 +45,23 @@ export function buildShareEmailHref({ url, title }) {
 }
 
 /**
+ * The Share submenu entries for a gallery's three-dot menu: the same four labels,
+ * in the same order, as the client gallery's Share popover (components/shared/
+ * ShareMenu.jsx). "Share by email" is a mailto: link (there is no email service);
+ * "Share…" (native share sheet) is present only where the device supports it.
+ * The handlers are supplied by the caller, which owns the modals.
+ */
+export function buildShareMenuChildren({ url, title, onLink, onQr, onNative }) {
+  const children = [
+    { key: 'email', label: 'Share by email', href: buildShareEmailHref({ url, title }) },
+    { key: 'link', label: 'Get direct link', onSelect: onLink },
+    { key: 'qr', label: 'Get QR code', onSelect: onQr },
+  ]
+  if (canNativeShare()) children.push({ key: 'native', label: 'Share…', onSelect: onNative })
+  return children
+}
+
+/**
  * Copies text. Tries the async Clipboard API (needs a secure context), then the
  * legacy execCommand path (works on plain http and older browsers). Resolves
  * true/false — never throws — so the caller can show an honest result.

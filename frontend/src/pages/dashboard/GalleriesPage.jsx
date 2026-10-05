@@ -12,7 +12,8 @@ import Spinner from "../../components/ui/Spinner";
 import ItemMenu from "../../components/shared/ItemMenu";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import ShareLinkModal from "../../components/shared/ShareLinkModal";
-import { resolveShareUrl } from "../../utils/share";
+import ShareQrModal from "../../components/shared/ShareQrModal";
+import { buildShareMenuChildren, resolveShareUrl, shareText } from "../../utils/share";
 
 export default function GalleriesPage() {
   const toast = useToast();
@@ -30,6 +31,7 @@ export default function GalleriesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [linkGallery, setLinkGallery] = useState(null); // collection whose direct link is shown
+  const [qrGallery, setQrGallery] = useState(null); // collection whose QR code is shown
   const [pendingDelete, setPendingDelete] = useState(null); // collection awaiting the permanent-delete confirmation
   const [deleting, setDeleting] = useState(false);
 
@@ -151,6 +153,47 @@ export default function GalleriesPage() {
       return;
     }
     setLinkGallery(gallery);
+  };
+
+  // "Get QR code": the same QR modal the client gallery's Share popover uses.
+  const handleGetQr = (gallery) => {
+    if (!resolveShareUrl(username, gallery.slug)) {
+      toast("Unable to build link — profile not loaded yet.", "error");
+      return;
+    }
+    setQrGallery(gallery);
+  };
+
+  // "Share…": the device's native share sheet (only offered where navigator.share exists).
+  const handleNativeShare = async (gallery) => {
+    const url = resolveShareUrl(username, gallery.slug);
+    if (!url) {
+      toast("Unable to build link — profile not loaded yet.", "error");
+      return;
+    }
+    try {
+      await navigator.share({ title: gallery.title || undefined, text: shareText(gallery.title), url });
+    } catch (err) {
+      // The user dismissing the sheet is not an error.
+      if (err?.name !== "AbortError") toast("Sharing isn't available right now.", "error");
+    }
+  };
+
+  // The card menu's "Share" entry: Share by email / Get direct link / Get QR code / Share…
+  const shareMenuItem = (gallery) => {
+    const url = resolveShareUrl(username, gallery.slug);
+    if (!url) return { key: "share", label: "Share", onSelect: () => handleGetLink(gallery) };
+    return {
+      key: "share",
+      label: "Share",
+      children: buildShareMenuChildren({
+        url,
+        title: gallery.title,
+        onLink: () => handleGetLink(gallery),
+        onQr: () => handleGetQr(gallery),
+        onNative: () => handleNativeShare(gallery),
+      }),
+    };
   };
 
   // Permanent delete — only after the confirm dialog; the card disappears only after the server says it is gone.
@@ -323,7 +366,7 @@ export default function GalleriesPage() {
                     className="absolute right-3 top-3 z-10"
                     label={`More actions for ${gallery.title}`}
                     items={[
-                      { key: "link", label: "Get direct link", onSelect: () => handleGetLink(gallery) },
+                      shareMenuItem(gallery),
                       {
                         key: "preview",
                         label: "Preview",
@@ -433,6 +476,13 @@ export default function GalleriesPage() {
         onClose={() => setLinkGallery(null)}
         url={linkGallery ? resolveShareUrl(username, linkGallery.slug) : ""}
         note={linkGallery && linkGallery.is_published === false ? "This collection is a draft — clients can't open the link until you publish it." : null}
+      />
+
+      <ShareQrModal
+        open={qrGallery !== null}
+        onClose={() => setQrGallery(null)}
+        url={qrGallery ? resolveShareUrl(username, qrGallery.slug) : ""}
+        filename={qrGallery ? qrGallery.slug : "gallery"}
       />
 
       <ConfirmDialog
