@@ -2,6 +2,7 @@
 import secrets
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 from apps.core.models import BaseModel
 
@@ -188,6 +189,11 @@ class DownloadLog(BaseModel):
     # download and for rows written before this field existed).
     photo_count = models.PositiveIntegerField(null=True, blank=True)
 
+    # Names of the photo sets the downloaded files came from (a whole-gallery or
+    # multi-set ZIP spans several; `photo_set` can hold only one). Stored, not
+    # re-derived, so the row stays truthful if a set is renamed or deleted.
+    set_names = models.JSONField(default=list, blank=True)
+
     class Meta:
         db_table = 'download_logs'
         ordering = ['-created_at']
@@ -226,6 +232,13 @@ class FavoriteList(BaseModel):
         ordering = ['-created_at']
         constraints = [
             models.UniqueConstraint(fields=['gallery', 'client_key', 'name'], name='unique_favorite_list_name'),
+            # One visitor email = ONE default "My Favorites" list per gallery, however
+            # many browsers / unlock tokens they come back with (case-insensitive).
+            models.UniqueConstraint(
+                Lower('email'), 'gallery',
+                condition=models.Q(is_default=True, email__isnull=False) & ~models.Q(email=''),
+                name='unique_default_list_per_gallery_email',
+            ),
         ]
         indexes = [
             models.Index(fields=['gallery', 'client_key'], name='idx_favlist_gallery_client'),
@@ -382,6 +395,11 @@ class DownloadJob(BaseModel):
     # row in the photographer's Download Activity, however often it is re-saved.
     download_log = models.ForeignKey(
         DownloadLog, null=True, blank=True, on_delete=models.SET_NULL, related_name='jobs'
+    )
+    # The ONE bell notification of this job: every part of a multi-part ZIP that
+    # is downloaded bumps it ("N files") instead of adding a row per part.
+    notification = models.ForeignKey(
+        'users.Notification', null=True, blank=True, on_delete=models.SET_NULL, related_name='+'
     )
 
     class Meta:

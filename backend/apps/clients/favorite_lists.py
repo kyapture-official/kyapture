@@ -18,7 +18,9 @@ import re
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db.models import Count, Max, Min, OuterRef, Subquery
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Max, Min, OuterRef, Q, Subquery
+from django.utils import timezone
 
 from .models import ClientSession, Favorite, FavoriteList
 from apps.photos.models import MediaAsset
@@ -74,51 +76,137 @@ def session_email(gallery, client_key):
     )
 
 
-def visitor_lists(gallery, client_key):
+def _own_lists(gallery, client_key):
     return FavoriteList.objects.filter(gallery=gallery, client_key=client_key)
 
 
-def visitor_email(gallery, client_key):
-    """The email this visitor already gave (on any of their lists or their session), if any."""
+def _blank_email():
+    return Q(email__isnull=True) | Q(email='')
+
+
+def known_emails(gallery, client_key, claimed=None):
+    """
+    The emails this visitor is known by in this gallery: on their own lists, on
+    their unlock session, and the one their browser remembered and sent along
+    (`claimed`). One email = one visitor, however many tokens/browsers they used.
+    """
+    emails = {
+        e.strip().lower() for e in
+        _own_lists(gallery, client_key).exclude(_blank_email()).values_list('email', flat=True)
+    }
+    for email in (session_email(gallery, client_key), claimed):
+        if email:
+            emails.add(email.strip().lower())
+    return emails
+
+
+def visitor_lists(gallery, client_key, email=None):
+    """
+    The visitor's lists: the ones their client key owns PLUS every list under
+    their email - so a returning visitor with a new unlock token / browser id
+    still reaches the lists they made before.
+    """
+    match = Q(client_key=client_key)
+    for known in known_emails(gallery, client_key, email):
+        match |= Q(email__iexact=known)
+    return FavoriteList.objects.filter(gallery=gallery).filter(match)
+
+
+def visitor_favorites(gallery, client_key, email=None):
+    """Every Favorite of this visitor in the gallery (their lists' photos + legacy list-less rows)."""
+    return Favorite.objects.filter(gallery=gallery).filter(
+        Q(client_key=client_key) | Q(favorite_list__in=visitor_lists(gallery, client_key, email))
+    )
+
+
+def visitor_email(gallery, client_key, claimed=None):
+    """The email this visitor already gave (on any of their lists, their session, or the browser's memory), if any."""
     return (
-        visitor_lists(gallery, client_key).exclude(email__isnull=True).exclude(email='')
-        .values_list('email', flat=True).first()
-    ) or session_email(gallery, client_key)
+        _own_lists(gallery, client_key).exclude(_blank_email())
+        .order_by('created_at').values_list('email', flat=True).first()
+    ) or session_email(gallery, client_key) or claimed or None
+
+
+def email_default_list(gallery, email):
+    """The ONE default list of an email in a gallery (case-insensitive), if there is one."""
+    return (
+        FavoriteList.objects.filter(gallery=gallery, is_default=True, email__iexact=email)
+        .order_by('created_at', 'id').first()
+    )
+
+
+def merge_lists(source, target):
+    """
+    Moves every favorite of `source` into `target` (a photo `target` already has
+    is dropped, not duplicated) and deletes the emptied `source`.
+    """
+    with transaction.atomic():
+        have = list(target.favorites.values_list('media_asset_id', flat=True))
+        source.favorites.filter(media_asset_id__in=have).delete()
+        source.favorites.update(favorite_list=target, **({'email': target.email} if target.email else {}))
+        fields = {'updated_at': timezone.now()}
+        if not target.visitor_name and source.visitor_name:
+            fields['visitor_name'] = source.visitor_name
+        FavoriteList.objects.filter(pk=target.pk).update(**fields)
+        source.delete()
 
 
 def ensure_default_list(gallery, client_key, email=None, visitor_name=''):
     """
-    The visitor's default "My Favorites" list, created on first use. A later,
-    better email/name fills in a blank one (never overwrites what they gave).
+    The visitor's default "My Favorites" list, get-or-create. With an email it is
+    get-or-create per (gallery, email) - the same person on another browser, or
+    with a fresh unlock token, gets the SAME list (a DB constraint backs this). A
+    guest list is merged into it the moment the same browser gives an email. A
+    later, better name fills in a blank one (never overwrites what they gave).
     """
-    favorite_list = visitor_lists(gallery, client_key).filter(is_default=True).first()
-    if favorite_list is None:
-        favorite_list = visitor_lists(gallery, client_key).filter(name=DEFAULT_LIST_NAME).first()
-        if favorite_list is not None:
-            favorite_list.is_default = True
-            favorite_list.save(update_fields=['is_default', 'updated_at'])
-    if favorite_list is None:
-        favorite_list = FavoriteList.objects.create(
-            gallery=gallery, client_key=client_key, name=DEFAULT_LIST_NAME, is_default=True,
-            email=email or visitor_email(gallery, client_key), visitor_name=visitor_name,
-        )
-    else:
+    with transaction.atomic():
         remember_visitor(gallery, client_key, email, visitor_name)
-    return favorite_list
+        if email:
+            favorite_list = email_default_list(gallery, email)
+        else:
+            favorite_list = (
+                visitor_lists(gallery, client_key).filter(is_default=True).order_by('created_at', 'id').first()
+                or _own_lists(gallery, client_key).filter(name=DEFAULT_LIST_NAME).first()
+            )
+            if favorite_list is not None and not favorite_list.is_default:
+                favorite_list.is_default = True
+                favorite_list.save(update_fields=['is_default', 'updated_at'])
+        if favorite_list is not None:
+            return favorite_list
+        try:
+            with transaction.atomic():
+                return FavoriteList.objects.create(
+                    gallery=gallery, client_key=client_key, name=DEFAULT_LIST_NAME, is_default=True,
+                    email=email or visitor_email(gallery, client_key), visitor_name=visitor_name,
+                )
+        except IntegrityError:
+            # Lost a race with the same visitor's other request: theirs is the list.
+            return email_default_list(gallery, email) or _own_lists(gallery, client_key).get(name=DEFAULT_LIST_NAME)
 
 
 def remember_visitor(gallery, client_key, email, visitor_name=''):
-    """Fill in a missing email / name on ALL of this visitor's lists and favorites."""
+    """
+    Attach a given email / name to this visitor. Their guest default list becomes
+    (or is merged into) the email's one default list; any other guest list and
+    favorite of theirs simply gains the email.
+    """
     if email:
-        visitor_lists(gallery, client_key).filter(email__isnull=True).update(email=email)
-        visitor_lists(gallery, client_key).filter(email='').update(email=email)
-        Favorite.objects.filter(gallery=gallery, client_key=client_key, email__isnull=True).update(email=email)
+        own = _own_lists(gallery, client_key)
+        for guest_default in list(own.filter(_blank_email(), is_default=True).order_by('created_at', 'id')):
+            target = email_default_list(gallery, email)
+            if target is None:
+                guest_default.email = email
+                guest_default.save(update_fields=['email', 'updated_at'])
+            elif target.pk != guest_default.pk:
+                merge_lists(guest_default, target)
+        own.filter(_blank_email()).update(email=email)
+        Favorite.objects.filter(gallery=gallery, client_key=client_key).filter(_blank_email()).update(email=email)
     if visitor_name:
-        visitor_lists(gallery, client_key).filter(visitor_name='').update(visitor_name=visitor_name)
+        visitor_lists(gallery, client_key, email).filter(visitor_name='').update(visitor_name=visitor_name)
 
 
-def annotated_lists(gallery, client_key, sort='newest'):
-    qs = visitor_lists(gallery, client_key).annotate(
+def annotated_lists(gallery, client_key, sort='newest', email=None):
+    qs = visitor_lists(gallery, client_key, email).annotate(
         photo_count=Count('favorites'), last_added=Max('favorites__created_at'),
     )
     if sort == 'oldest':
@@ -126,10 +214,10 @@ def annotated_lists(gallery, client_key, sort='newest'):
     return qs.order_by('-created_at')
 
 
-def get_visitor_list(gallery, client_key, list_id):
+def get_visitor_list(gallery, client_key, list_id, email=None):
     """One of THIS visitor's lists in THIS gallery, or None (foreign / unknown / malformed id)."""
     try:
-        return visitor_lists(gallery, client_key).filter(pk=list_id).first()
+        return visitor_lists(gallery, client_key, email).filter(pk=list_id).first()
     except (ValueError, ValidationError):
         return None
 

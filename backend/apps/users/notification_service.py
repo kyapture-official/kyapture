@@ -67,19 +67,50 @@ def record_notification(user, kind, gallery=None, *, message, coalesced_message=
 def notify_download_event(download_log):
     """
     One notification per real download, worded "<What> downloaded by <email>".
-    These are deliberately NOT coalesced: the text names who downloaded what,
-    which a "3 downloads" roll-up would lose (the bell's list is paginated and
-    purged, so one row per download is bounded).
+    Separate downloads are deliberately NOT coalesced: the text names who
+    downloaded what, which a "3 downloads" roll-up would lose (the bell's list is
+    paginated and purged, so one row per download is bounded).
+
+    The exception is the parts of ONE multi-part ZIP (the log carries its
+    `_download_job`): they are one download, so they share ONE notification that
+    grows "... · 2 files", "... · 3 files" as each part is fetched.
     """
     gallery = download_log.gallery
     who = download_log.email or 'a client'
     what = 'Gallery' if download_log.download_type == 'gallery' else (
         'Video' if download_log.download_type == 'video' else 'Photo'
     )
-    record_notification(
-        gallery.photographer, Kind.DOWNLOAD, gallery,
-        message=f'{what} downloaded by {who}',
-    )
+    message = f'{what} downloaded by {who}'
+    job = getattr(download_log, '_download_job', None)
+    if job is not None:
+        return _notify_job_download(gallery, job, message)
+    return record_notification(gallery.photographer, Kind.DOWNLOAD, gallery, message=message)
+
+
+def _notify_job_download(gallery, job, message):
+    """The job's single notification: created with its first part, bumped by each later one."""
+    from apps.clients.models import DownloadJob      # clients imports this module's package at load time
+
+    try:
+        with transaction.atomic():
+            row = DownloadJob.objects.select_for_update().filter(pk=job.pk).first()
+            existing = Notification.objects.filter(pk=row.notification_id).first() if row and row.notification_id else None
+            if existing:
+                existing.count += 1
+                existing.message = f'{message} · {existing.count} files'[:300]
+                existing.is_read = False          # a new file is new activity, even if the first part was read
+                existing.read_at = None
+                existing.save(update_fields=['count', 'message', 'is_read', 'read_at', 'updated_at'])
+                return existing
+            note = Notification.objects.create(
+                user=gallery.photographer, kind=Kind.DOWNLOAD, gallery=gallery, message=message[:300],
+            )
+            if row:
+                DownloadJob.objects.filter(pk=row.pk).update(notification=note)
+            return note
+    except Exception:
+        logger.exception('Could not record the download notification of job %s', job.pk)
+        return None
 
 
 def notify_favorite_event(favorite):

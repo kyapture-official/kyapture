@@ -354,7 +354,7 @@ export const clientsApi = {
     const { signal } = options || {}
 
     const body = {}
-    if (email) body.email = email
+    if (email) body.email = email   // (overrides the remembered one a fresh typing just corrected)
     if (pin) body.pin = pin
 
     const config = { signal }
@@ -464,13 +464,16 @@ export const clientsApi = {
    *
    * @param {string} username
    * @param {string} slug
-   * @param {Object} identity - { clientUid } for open galleries, or { token } for protected ones
+   * @param {Object} identity - { clientUid } for open galleries, or { token } for protected ones;
+   *   `email` (the one this browser remembered for the gallery) reaches the lists saved under it
+   *   even when the unlock token / browser id is new
    */
   getFavorites: async (username, slug, identity = {}, options = {}) => {
     const path = `${buildGalleryPath(username, slug)}favorites/`
     const { signal } = options || {}
     const params = {}
     if (identity.clientUid) params.client_uid = identity.clientUid
+    if (identity.email) params.email = identity.email
 
     const config = { signal, params }
     if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
@@ -501,10 +504,11 @@ export const clientsApi = {
 
     const body = { media_asset_id: mediaAssetId }
     if (identity.clientUid) body.client_uid = identity.clientUid
+    if (identity.email) body.email = identity.email
     // The visitor's email (and optional name) is stored with the favorite so
     // the photographer sees who saved what; the server remembers it, so it only
     // needs to be sent the first time.
-    if (email) body.email = email
+    if (email) body.email = email   // (overrides the remembered one a fresh typing just corrected)
     if (name) body.name = name
     if (listId) body.list_id = listId
 
@@ -533,6 +537,7 @@ export const clientsApi = {
 
     const body = { media_asset_id: mediaAssetId }
     if (identity.clientUid) body.client_uid = identity.clientUid
+    if (identity.email) body.email = identity.email
     // With a list id the photo leaves only that list; without one, all of the visitor's lists.
     if (listId) body.list_id = listId
 
@@ -559,6 +564,7 @@ export const clientsApi = {
     const { signal, sort } = options || {}
     const params = { sort: sort || 'newest' }
     if (identity.clientUid) params.client_uid = identity.clientUid
+    if (identity.email) params.email = identity.email
     const config = { signal, params }
     if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
     try {
@@ -574,7 +580,8 @@ export const clientsApi = {
     const { signal, email, visitorName } = options || {}
     const body = { name }
     if (identity.clientUid) body.client_uid = identity.clientUid
-    if (email) body.email = email
+    if (identity.email) body.email = identity.email
+    if (email) body.email = email   // (overrides the remembered one a fresh typing just corrected)
     if (visitorName) body.visitor_name = visitorName
     const config = { signal }
     if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
@@ -593,6 +600,7 @@ export const clientsApi = {
     const params = { sort: sort || 'newest' }
     if (page) params.page = page
     if (identity.clientUid) params.client_uid = identity.clientUid
+    if (identity.email) params.email = identity.email
     const config = { signal, params }
     if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
     try {
@@ -611,6 +619,7 @@ export const clientsApi = {
     assertNonEmptyString(listId, 'listId')
     const body = { name }
     if (identity.clientUid) body.client_uid = identity.clientUid
+    if (identity.email) body.email = identity.email
     const config = { signal: options?.signal }
     if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
     try {
@@ -629,6 +638,7 @@ export const clientsApi = {
     assertNonEmptyString(listId, 'listId')
     const body = {}
     if (identity.clientUid) body.client_uid = identity.clientUid
+    if (identity.email) body.email = identity.email
     const config = { signal: options?.signal, data: body }
     if (identity.token) config.headers = { Authorization: `Bearer ${identity.token}` }
     try {

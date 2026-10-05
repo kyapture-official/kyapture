@@ -433,11 +433,17 @@ class PhotographerFavoriteSerializer(serializers.ModelSerializer):
     thumbnail_url = serializers.SerializerMethodField()
     title = serializers.CharField(source='media_asset.title', read_only=True)
     original_name = serializers.CharField(source='media_asset.original_name', read_only=True)
+    set_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Favorite
-        fields = ['id', 'media_asset_id', 'title', 'original_name', 'thumbnail_url', 'email', 'created_at']
+        fields = ['id', 'media_asset_id', 'title', 'original_name', 'set_name', 'thumbnail_url', 'email', 'created_at']
         read_only_fields = fields
+
+    def get_set_name(self, obj):
+        """The photo set the favorited photo sits in (null when it is in none)."""
+        asset = obj.media_asset
+        return asset.photo_set.name if asset.photo_set_id else None
 
     def get_thumbnail_url(self, obj):
         request = self.context.get('request')
@@ -464,6 +470,7 @@ class DownloadLogSerializer(serializers.ModelSerializer):
     media_asset_title = serializers.SerializerMethodField()
     media_asset_name = serializers.SerializerMethodField()
     photo_set_name = serializers.SerializerMethodField()
+    set_names = serializers.SerializerMethodField()
     scope = serializers.SerializerMethodField()
     pin_state = serializers.SerializerMethodField()
     filename = serializers.SerializerMethodField()
@@ -473,7 +480,7 @@ class DownloadLogSerializer(serializers.ModelSerializer):
         model = DownloadLog
         fields = [
             'id', 'email', 'download_type', 'resolution', 'pin_verified', 'pin_state',
-            'media_asset_id', 'media_asset_title', 'media_asset_name', 'photo_set_name', 'scope', 'filename',
+            'media_asset_id', 'media_asset_title', 'media_asset_name', 'photo_set_name', 'set_names', 'scope', 'filename',
             'photo_count', 'thumbnail_url', 'created_at',
         ]
         read_only_fields = fields
@@ -527,7 +534,15 @@ class DownloadLogSerializer(serializers.ModelSerializer):
             return None
         return obj.media_asset.title or obj.media_asset.original_name or None
 
-    def get_photo_set_name(self, obj):
+    def get_set_names(self, obj):
+        """Every set the download came from, as stored on the row (never re-derived)."""
+        names = [n for n in (obj.set_names or []) if isinstance(n, str) and n]
+        if names:
+            return names
+        single = self.get_photo_set_name_single(obj)
+        return [single] if single else []
+
+    def get_photo_set_name_single(self, obj):
         # A set-scoped ZIP records its set; a single photo/video belongs to
         # whichever set the downloaded asset sits in.
         if obj.photo_set_id and obj.photo_set:
@@ -536,3 +551,7 @@ class DownloadLogSerializer(serializers.ModelSerializer):
         if asset is not None and asset.photo_set_id and asset.photo_set:
             return asset.photo_set.name
         return None
+
+    def get_photo_set_name(self, obj):
+        """The set name, or "A, B" for a download spanning several sets; null when it had none."""
+        return ', '.join(self.get_set_names(obj)) or None

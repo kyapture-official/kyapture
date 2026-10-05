@@ -58,7 +58,7 @@ def job_assets(gallery, photo_set=None, asset_ids=None):
         qs = qs.filter(photo_set=photo_set)
     if asset_ids:
         qs = qs.filter(id__in=asset_ids)
-    return qs.order_by('order', 'created_at')
+    return qs.select_related('photo_set').order_by('order', 'created_at')
 
 
 def size_limit_error(assets):
@@ -187,7 +187,7 @@ def run_download_job(job_id):
         return job.state
 
     part_limit = max(1, int(settings.DOWNLOAD_ZIP_PART_MAX_BYTES))
-    parts = []          # {'path': temp file, 'count': photos, 'bytes': payload bytes}
+    parts = []          # {'path': temp file, 'count': photos, 'bytes': payload bytes, 'sets': set names}
     stored_names = []
     storage = PrivateMediaStorage()
     archive = None
@@ -197,7 +197,7 @@ def run_download_job(job_id):
         def start_part():
             fd, path = tempfile.mkstemp(suffix='.zip')
             os.close(fd)
-            parts.append({'path': path, 'count': 0, 'bytes': 0})
+            parts.append({'path': path, 'count': 0, 'bytes': 0, 'sets': []})
             return zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_STORED)
 
         for asset in assets:
@@ -221,6 +221,9 @@ def run_download_job(job_id):
                             destination.write(chunk)
                 parts[-1]['count'] += 1
                 parts[-1]['bytes'] += size
+                set_name = asset.photo_set.name if asset.photo_set_id else None
+                if set_name and set_name not in parts[-1]['sets']:
+                    parts[-1]['sets'].append(set_name)
             except Exception:
                 logger.exception('Failed to add asset %s to download job %s', asset.id, job.id)
                 used_names.discard(entry_name.lower())
@@ -244,7 +247,7 @@ def run_download_job(job_id):
             stored_names.append(stored_name)
             files.append({
                 'name': name, 'size_bytes': os.path.getsize(part['path']), 'storage_path': stored_name,
-                'photo_count': part['count'],
+                'photo_count': part['count'], 'set_names': part['sets'],
             })
 
         job.files = files

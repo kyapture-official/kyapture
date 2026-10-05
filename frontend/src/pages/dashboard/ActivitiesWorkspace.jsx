@@ -121,7 +121,7 @@ function DownloadTable({ type, rows }) {
           <tr className={headRow}>
             <th className={th}>Email</th>
             <th className={th}>{isGallery ? "Download" : type === "video" ? "Video" : "Photo"}</th>
-            {!isGallery && <th className={th}>Set</th>}
+            <th className={th}>{isGallery ? "Sets" : "Set"}</th>
             <th className={th}>Size</th>
             {isGallery && <th className={th}>Photos</th>}
             <th className={th}>PIN</th>
@@ -151,9 +151,11 @@ function DownloadTable({ type, rows }) {
                     </span>
                   </td>
                 )}
-                {!isGallery && (
-                  <td className={`${th} text-muted`}>{row.photo_set_name || "All photos"}</td>
-                )}
+                <td className={`${th} max-w-[14rem] text-muted`}>
+                  <span className="block truncate" title={row.photo_set_name || ""}>
+                    {row.photo_set_name || (isGallery ? "—" : "All photos")}
+                  </span>
+                </td>
                 <td className={th}>{RESOLUTION_LABELS[row.resolution] || row.resolution}</td>
                 {isGallery && <td className={`${th} text-muted`}>{row.photo_count ?? "—"}</td>}
                 <td className={`${th} text-muted`}>{row.pin_state === "verified" ? "Verified" : "Not required"}</td>
@@ -264,6 +266,7 @@ function FavoritePhotoGrid({ rows }) {
           <div className="p-2 text-[11px]">
             <p className="truncate text-ink" title={row.original_name || ""}>{row.original_name || "Photo"}</p>
             <p className="text-muted">{formatDateTime(row.created_at)}</p>
+            {row.set_name && <p className="truncate text-muted" title={row.set_name}>{row.set_name}</p>}
           </div>
         </div>
       ))}

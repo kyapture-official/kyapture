@@ -87,10 +87,12 @@ export default function ClientGalleryPage() {
   // Built lazily inside event handlers/effects (never during render) since
   // resolving the "open gallery" branch can write a freshly-generated uid
   // into the client store.
-  const getClientIdentity = useCallback(
-    () => (isPasswordProtected ? { token } : { clientUid: getOrCreateClientUid(sessionKey) }),
-    [isPasswordProtected, token, sessionKey, getOrCreateClientUid],
-  );
+  // `email` is the one this browser remembered for the gallery: it lets a
+  // returning visitor (new unlock token / browser id) reach the lists saved under it.
+  const getClientIdentity = useCallback(() => {
+    const email = useVisitorStore.getState().getProfile(sessionKey)?.email || serverEmail || undefined;
+    return isPasswordProtected ? { token, email } : { clientUid: getOrCreateClientUid(sessionKey), email };
+  }, [isPasswordProtected, token, sessionKey, getOrCreateClientUid, serverEmail]);
 
   // Download is always an explicit action, never asked for on gallery entry.
   // The header icon opens the full-page flow (/g/{user}/{slug}/download) in a new
@@ -285,9 +287,10 @@ export default function ClientGalleryPage() {
         // Batch-fetch favorites AFTER we know whether this gallery is
         // password-protected (identity depends on it) — fire-and-forget,
         // never blocks the gallery from rendering.
+        const email = useVisitorStore.getState().getProfile(sessionKey)?.email || undefined;
         const identity = data.is_password_protected
-          ? { token: currentToken }
-          : { clientUid: getOrCreateClientUid(sessionKey) };
+          ? { token: currentToken, email }
+          : { clientUid: getOrCreateClientUid(sessionKey), email };
         loadFavorites(currentToken, identity);
       } catch (err) {
         // Gracefully capture aborted controller events without throwing state anomalies
@@ -549,6 +552,8 @@ export default function ClientGalleryPage() {
     const photoId = pendingFavoriteRef.current;
     if (photoId) await applyFavorite(photoId, false, { email, name }); // a bad email surfaces inside the prompt
     setVisitorProfile(sessionKey, { email, name }); // remembered only once the server accepted it
+    // The email may already own a list from an earlier visit/browser: fill the hearts of everything in it.
+    loadFavorites(token, { ...getClientIdentity(), email });
     pendingFavoriteRef.current = null;
     setEmailPromptOpen(false);
     toast("Saved to My Favorites", "success");

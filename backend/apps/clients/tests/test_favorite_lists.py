@@ -262,8 +262,8 @@ class PhotographerFavoriteActivityTests(FavBase):
         by_email = {g['email'].lower(): g for g in data['results']}
         self.assertEqual(set(by_email), {'fan@example.com', 'other@example.com'})
         fan = by_email['fan@example.com']
-        self.assertEqual((fan['total_photos'], fan['list_count']), (3, 2))
-        self.assertEqual(sorted(l['photo_count'] for l in fan['lists']), [1, 2])
+        self.assertEqual((fan['total_photos'], fan['list_count']), (3, 1))       # 6.4-B: one email = ONE list
+        self.assertEqual([l['photo_count'] for l in fan['lists']], [3])
         self.assertTrue(all(l['thumbnail_url'] and l['created_at'] and l['updated_at'] for l in fan['lists']))
         self.assertEqual(by_email['other@example.com']['name'], 'Olive')
         self.assertNotIn('client_key', str(data))

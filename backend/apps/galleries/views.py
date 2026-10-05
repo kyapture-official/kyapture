@@ -670,7 +670,7 @@ class GalleryFavoriteActivityView(APIView):
         favorites = (
             Favorite.objects
             .filter(gallery=gallery)
-            .select_related('media_asset')
+            .select_related('media_asset__photo_set')
             .order_by('-created_at')
         )
 
