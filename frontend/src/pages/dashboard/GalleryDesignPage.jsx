@@ -57,6 +57,10 @@ export default function GalleryDesignPage() {
   };
   const [design, setDesign] = useState(initialDesign);
   const latestDesignRef = useRef(initialDesign);
+  // A stored coverPhoto is useful for showing the current picker selection,
+  // but must never be replayed by an unrelated Design save. Only a selection
+  // made during this visit is allowed to update the collection cover.
+  const coverPickerUsedRef = useRef(false);
   const saveInFlightRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState("cover");
@@ -77,7 +81,11 @@ export default function GalleryDesignPage() {
       while (true) {
         const settings = latestDesignRef.current;
         try {
-          const updated = await galleriesApi.updateGallery(slug, { design_settings: settings });
+          const { coverPhoto, ...designSettings } = settings;
+          const payloadSettings = coverPickerUsedRef.current && coverPhoto
+            ? { ...designSettings, coverPhoto }
+            : designSettings;
+          const updated = await galleriesApi.updateGallery(slug, { design_settings: payloadSettings });
 
           // Do not replace the parent gallery with an older response while a
           // newer design is queued. The final response remains the source of truth.
@@ -165,7 +173,10 @@ export default function GalleryDesignPage() {
                 {(gallery?.photos || []).slice(0, 8).map((photo) => (
                   <button
                     key={photo.id}
-                    onClick={() => update("coverPhoto", photo.id)}
+                    onClick={() => {
+                      coverPickerUsedRef.current = true;
+                      update("coverPhoto", photo.id);
+                    }}
                     className={`aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
                       design.coverPhoto === photo.id
                         ? "border-brand-green-500 ring-2 ring-brand-green-500/20"

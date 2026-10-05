@@ -335,10 +335,11 @@ export default function GallerySettingsPage() {
     const snapshot = downloadsSnapshot();
     setDownloadSaveState("saving");
     setDownloadSaveError("");
+    const { coverPhoto: _coverPhoto, ...settingsWithoutCover } = gallery.design_settings || {};
     const payload = {
       is_downloadable: snapshot.isDownloadable,
       design_settings: {
-        ...(gallery.design_settings || {}),
+        ...settingsWithoutCover,
         downloads: {
           require_email: snapshot.requireDownloadEmail,
           high_res: { enabled: snapshot.highResEnabled, mode: snapshot.highResMode },

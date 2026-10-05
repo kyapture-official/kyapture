@@ -134,7 +134,8 @@ export default function WatermarkSettings({ gallery, setGallery, slug, isMounted
       // A locked (lapsed) account may still switch the watermark OFF; only
       // send settings when the plan includes them.
       if (!locked) {
-        payload.design_settings = { ...(gallery.design_settings || {}), watermark: { ...config, text: config.text.trim() } };
+        const { coverPhoto: _coverPhoto, ...settingsWithoutCover } = gallery.design_settings || {};
+        payload.design_settings = { ...settingsWithoutCover, watermark: { ...config, text: config.text.trim() } };
       }
       const updated = await galleriesApi.updateGallery(slug, payload);
       if (isMountedRef?.current === false) return;

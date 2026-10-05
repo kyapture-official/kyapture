@@ -78,6 +78,27 @@ class GalleryUpdateTestCase(APITestCase):
             original_file="photographers/other/galleries/other/originals/foreign.jpg",
             processing_status=MediaAsset.ProcessingStatus.READY,
         )
+        self.same_photographer_gallery = Gallery.objects.create(
+            photographer=self.photographer,
+            title="Second Gallery",
+            slug="second-gallery",
+        )
+        self.same_photographer_foreign_asset = MediaAsset.objects.create(
+            gallery=self.same_photographer_gallery,
+            media_type=MediaAsset.MediaType.IMAGE,
+            original_name="same-owner-foreign.jpg",
+            file_size=1024,
+            original_file="photographers/test/galleries/second/originals/foreign.jpg",
+            processing_status=MediaAsset.ProcessingStatus.READY,
+        )
+        self.pending_asset = MediaAsset.objects.create(
+            gallery=self.gallery,
+            media_type=MediaAsset.MediaType.IMAGE,
+            original_name="pending.jpg",
+            file_size=1024,
+            original_file="photographers/test/galleries/test/originals/pending.jpg",
+            processing_status=MediaAsset.ProcessingStatus.PENDING,
+        )
 
     # ── F-01: design_settings must round-trip without crashing ──────────
     def test_patch_design_settings_round_trips(self):
@@ -155,22 +176,66 @@ class GalleryUpdateTestCase(APITestCase):
         # the FK sync, which get_cover_url() then reads from unconditionally.
         self.assertIn("cover_url", response.data)
 
-    def test_design_settings_cover_photo_from_other_gallery_is_ignored(self):
-        """
-        A coverPhoto id that doesn't belong to this gallery must never be
-        synced onto cover_photo — this is the same tenant-authorization
-        boundary validate_cover_photo() already enforces for the explicit
-        cover_photo field, applied to the design_settings-driven path too.
-        """
+    def test_design_settings_save_without_cover_photo_keeps_existing_cover(self):
+        self.gallery.cover_photo = self.asset
+        self.gallery.save(update_fields=["cover_photo"])
         response = self.client.patch(
             self.detail_url,
-            {"design_settings": {"coverPhoto": str(self.foreign_asset.id)}},
+            {"design_settings": {"layout": "left"}},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.gallery.refresh_from_db()
+        self.assertEqual(self.gallery.cover_photo_id, self.asset.id)
+
+    def test_design_settings_null_cover_photo_keeps_existing_cover(self):
+        self.gallery.cover_photo = self.asset
+        self.gallery.save(update_fields=["cover_photo"])
+        response = self.client.patch(
+            self.detail_url,
+            {"design_settings": {"layout": "left", "coverPhoto": None}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.gallery.refresh_from_db()
+        self.assertEqual(self.gallery.cover_photo_id, self.asset.id)
+
+    def test_design_settings_cover_photo_from_another_gallery_is_rejected(self):
+        response = self.client.patch(
+            self.detail_url,
+            {"design_settings": {"coverPhoto": str(self.same_photographer_foreign_asset.id)}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         self.gallery.refresh_from_db()
         self.assertIsNone(self.gallery.cover_photo_id)
+
+    def test_cannot_set_pending_photo_as_cover(self):
+        response = self.client.patch(
+            self.detail_url,
+            {"cover_photo": str(self.pending_asset.id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_set_deleted_photo_as_cover(self):
+        deleted_id = str(self.asset.id)
+        self.asset.delete()
+        response = self.client.patch(
+            self.detail_url,
+            {"cover_photo": deleted_id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_set_same_photographers_other_gallery_photo_as_cover(self):
+        response = self.client.patch(
+            self.detail_url,
+            {"cover_photo": str(self.same_photographer_foreign_asset.id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_cannot_set_cover_photo_from_another_photographers_gallery(self):
         response = self.client.patch(

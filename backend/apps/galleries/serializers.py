@@ -540,6 +540,30 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         elif existing_privacy is not None:
             value['privacy'] = existing_privacy
 
+        # coverPhoto is a legacy Design-picker transport field, not a
+        # general settings value. Omitting it (or old clients sending null)
+        # must not clear or replace the collection cover. Preserve a stored
+        # picker selection for UI continuity, and only accept a non-null id
+        # when the picker explicitly sent one.
+        cover_photo_id = value.get('coverPhoto')
+        if cover_photo_id is None:
+            value.pop('coverPhoto', None)
+            if isinstance(existing, dict) and existing.get('coverPhoto') is not None:
+                value['coverPhoto'] = existing['coverPhoto']
+        else:
+            try:
+                cover_asset = MediaAsset.objects.get(pk=cover_photo_id)
+            except (MediaAsset.DoesNotExist, TypeError, ValueError):
+                raise serializers.ValidationError({
+                    'coverPhoto': 'Selected cover photo was not found.'
+                })
+            self.validate_cover_photo(cover_asset)
+            value['coverPhoto'] = str(cover_asset.pk)
+            # Keep the action separate from the persisted presentation
+            # value. Settings/Watermark payloads preserve that value but
+            # must never replay it as a cover-changing request.
+            self._design_cover_asset = cover_asset
+
         if 'watermark' not in value:
             if existing_block is not None:
                 value['watermark'] = existing_block
@@ -581,11 +605,24 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
 
 
     def validate_cover_photo(self, value):
-        request = self.context.get('request')
-        # Check if the photo belongs to the current user's gallery
-        if value is not None and request and value.gallery.photographer_id != request.user.id:
+        if value is None:
+            return value
+
+        # Covers can only reference a live, ready asset in this exact
+        # collection. The PrimaryKeyRelatedField has already rejected a
+        # permanently deleted row before this point; re-checking through the
+        # scoped queryset also makes a concurrent deletion fail closed.
+        is_valid_cover = (
+            self.instance is not None
+            and MediaAsset.objects.filter(
+                pk=value.pk,
+                gallery_id=self.instance.pk,
+                processing_status=MediaAsset.ProcessingStatus.READY,
+            ).exists()
+        )
+        if not is_valid_cover:
             raise serializers.ValidationError(
-                "You can only set a photo from one of your own galleries as the cover."
+                "Cover photo must be a READY photo in this collection."
             )
         return value
 
@@ -610,13 +647,14 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         clients). So, unlike GalleryCreateSerializer.create(), title
         changes here only ever touch instance.title, never instance.slug.
 
-        If design_settings carries a 'coverPhoto' id (the Design page's
-        cover-photo picker), sync it onto the model's cover_photo FK so
+        If design_settings carries an explicitly chosen 'coverPhoto' id (the
+        Design page's cover-photo picker), sync it onto the model's cover_photo FK so
         there is a single source of truth for "which photo is the cover"
         driving both the dashboard listing (GalleryListSerializer.cover_url)
         and the client-facing hero (PublicGallerySerializer.cover_url) —
-        validated the same way an explicit cover_photo field is: must
-        belong to this gallery.
+        validated the same way an explicit cover_photo field is: it must be
+        a READY photo in this gallery. Missing/null design coverPhoto values
+        are deliberately no-ops, never an implicit cover removal.
         """
         raw_password = validated_data.pop('password', '').strip()
 
@@ -628,16 +666,8 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
             instance.password_hash = None
 
         design_settings = validated_data.get('design_settings')
-        if isinstance(design_settings, dict) and 'coverPhoto' in design_settings:
-            cover_photo_id = design_settings.get('coverPhoto')
-            if cover_photo_id:
-                cover_asset = MediaAsset.objects.filter(
-                    pk=cover_photo_id, gallery_id=instance.pk
-                ).first()
-                if cover_asset:
-                    validated_data['cover_photo'] = cover_asset
-            else:
-                validated_data['cover_photo'] = None
+        if isinstance(design_settings, dict) and getattr(self, '_design_cover_asset', None):
+            validated_data['cover_photo'] = self._design_cover_asset
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
