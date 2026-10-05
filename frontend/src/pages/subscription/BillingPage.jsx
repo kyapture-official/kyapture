@@ -8,6 +8,7 @@ import { useSubscription } from '../../hooks/useSubscription'
 import { useToast } from '../../components/ui/Toast'
 import { formatCurrency, formatPlanPrice } from '../../utils/formatters'
 import PlanComparisonTable from '../../components/billing/PlanComparisonTable'
+import StorageMeter from '../../components/billing/StorageMeter'
 import Spinner from '../../components/ui/Spinner'
 
 const STATUS_BADGE_STYLES = {
@@ -220,6 +221,9 @@ export default function BillingPage() {
             You are currently running on the Free tier plan. Select a tier below to request an upgrade.
           </p>
         )}
+
+        {/* Storage used / limit and its warning / over-limit state come from the usage endpoint. */}
+        {usage && <StorageMeter usage={usage} />}
 
         {/* Only a plan with a video allowance (> 0 min, not unlimited) has minutes to count. */}
         {usage?.video_minutes_limit > 0 && (

@@ -105,7 +105,7 @@ class SaaSResourceGatingTestCase(APITestCase):
     def test_storage_quota_gating(self):
         """
         Verify that a photographer cannot upload files exceeding their aggregate storage quota.
-        Expected: Image upload with 0 bytes storage plan limit returns storage_quota_exceeded / storage_limit_reached (400).
+        Expected: Image upload with 0 bytes storage plan limit returns 403 / storage_limit_reached.
         """
         self.strict_plan.storage_gb = 0
         self.strict_plan.save()
@@ -120,11 +120,8 @@ class SaaSResourceGatingTestCase(APITestCase):
         img = self.generate_dummy_image("heavy_photo.jpg")
         response = self.client.post(upload_url, {"image": [img]}, format="multipart")
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        response_str = str(response.data)
-        self.assertTrue(
-            "storage_limit_reached" in response_str or "storage_quota_exceeded" in response_str
-        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "storage_limit_reached")
 
     def test_cross_tenant_access_denied(self):
         """

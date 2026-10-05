@@ -14,6 +14,7 @@ from rest_framework.pagination import PageNumberPagination
 
 # Dynamic permission routing prevents the Storage Lockout Paradox
 from apps.core.utils import get_user_subscription_metrics
+from apps.subscriptions.entitlements import storage_figures
 from apps.core.pagination import StandardResultsSetPagination
 from apps.photos.purge import purge_gallery
 from .models import Gallery
@@ -349,22 +350,13 @@ class DashboardStatsView(APIView):
 
         # 5. Handle Unsubscribed case cleanly (No crash, returns zero bounds)
         if subscription_status == "no_subscription":
-            storage_used_bytes = metrics["current_total_storage_bytes"]
-            plan_storage_bytes = metrics["storage_bytes_limit"]
-            storage_remaining_gb = round(
-                max(0.0, (plan_storage_bytes - storage_used_bytes) / (1024 ** 3)), 2
-            )
             return Response({
                 'galleries_used': galleries_used,
                 'photos_used': photos_used,
-                'storage_used_bytes': storage_used_bytes,
-                'storage_used_gb': round(storage_used_bytes / (1024 ** 3), 2),
+                **storage_figures(metrics),
                 'plan_name': metrics["plan_name"],
                 'plan_gallery_limit': metrics["max_galleries"],
-                'plan_storage_limit_gb': plan_storage_bytes / (1024 ** 3),
-                'plan_storage_limit_bytes': plan_storage_bytes,
                 'galleries_remaining': galleries_remaining,
-                'storage_remaining_gb': storage_remaining_gb,
                 'allow_video': metrics["allow_video"],
                 'video_minutes_limit': metrics["video_minutes_limit"],
                 'video_minutes_used': round(metrics["current_video_seconds"] / 60, 1),
@@ -373,29 +365,18 @@ class DashboardStatsView(APIView):
                 'days_remaining': None,
             }, status=status.HTTP_200_OK)
 
-        # 6. Calculate Remaining Quotas
-        storage_used_bytes = metrics["current_total_storage_bytes"]
-        plan_storage_bytes = metrics["storage_bytes_limit"]
-        
-        storage_remaining_gb = round(
-            max(0.0, (plan_storage_bytes - storage_used_bytes) / (1024 ** 3)), 
-            2
-        )
-
-        # 7. Deliver the structured JSON payload matching David's exact key mappings
+        # 6. Deliver the structured JSON payload matching David's exact key mappings.
+        # Storage figures (used / limit / remaining / meter state) come from the one
+        # storage rule in apps/subscriptions/entitlements.py.
         return Response({
             'galleries_used': galleries_used,
             'photos_used': photos_used,
-            'storage_used_bytes': storage_used_bytes,
-            'storage_used_gb': round(storage_used_bytes / (1024 ** 3), 2),
-            
+            **storage_figures(metrics),
+
             'plan_name': metrics["plan_name"],
             'plan_gallery_limit': metrics["max_galleries"],
-            'plan_storage_limit_gb': metrics["storage_bytes_limit"] / (1024 ** 3),
-            'plan_storage_limit_bytes': plan_storage_bytes,
-            
+
             'galleries_remaining': galleries_remaining,
-            'storage_remaining_gb': storage_remaining_gb,
             'allow_video': metrics["allow_video"],
             'video_minutes_limit': metrics["video_minutes_limit"],
             'video_minutes_used': round(metrics["current_video_seconds"] / 60, 1),

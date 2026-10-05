@@ -39,6 +39,69 @@ export const videoLimitFromError = (data) =>
       }
     : null
 
+const STORAGE_LIMIT_REACHED = 'storage_limit_reached'
+
+/** Server 403 body -> the storage-limit modal state, or null when it is some other error. */
+export const storageLimitFromError = (data) =>
+  data && data.code === STORAGE_LIMIT_REACHED
+    ? {
+        plan_name: data.plan_name,
+        used_gb: data.used_gb,
+        plan_limit_gb: data.plan_limit_gb,
+        refused_count: data.refused_count ?? 1,
+      }
+    : null
+
+/**
+ * An upload answer is a plain list of assets when everything was stored. When
+ * only part of a batch fit, it is { uploaded, refused, storage } (see the upload
+ * endpoint). Either way: the stored assets, and the storage refusal to show (or null).
+ */
+export const readUploadResponse = (data) => {
+  if (Array.isArray(data)) return { assets: data, storageRefusal: null }
+  if (data && Array.isArray(data.uploaded)) {
+    const refused = Array.isArray(data.refused) ? data.refused : []
+    return {
+      assets: data.uploaded,
+      storageRefusal: refused.length
+        ? storageLimitFromError({ ...data.storage, code: STORAGE_LIMIT_REACHED, refused_count: refused.length })
+        : null,
+    }
+  }
+  return { assets: data ? [data] : [], storageRefusal: null }
+}
+
+/**
+ * Click-time storage check, from the usage endpoint's own remaining space:
+ * files are taken in order while they still fit (a smaller file after a refused
+ * larger one may still go in), the same rule the server applies. No limit in the
+ * usage answer (staff) means everything may go. The server decides again at upload.
+ * Returns { allowed: File[], refused: File[] }.
+ */
+export const splitByStorage = (files, usage) => {
+  if (!usage || usage.storage_remaining_bytes == null) return { allowed: files, refused: [] }
+  let remaining = usage.storage_remaining_bytes
+  const allowed = []
+  const refused = []
+  for (const file of files) {
+    if (file.size <= remaining) {
+      allowed.push(file)
+      remaining -= file.size
+    } else {
+      refused.push(file)
+    }
+  }
+  return { allowed, refused }
+}
+
+/** The figures the storage modal shows, from the usage endpoint (same shape as storageLimitFromError). */
+export const storageLimitInfo = (usage, refusedCount) => ({
+  plan_name: usage.plan_name,
+  used_gb: usage.storage_used_gb,
+  plan_limit_gb: usage.plan_storage_limit_gb,
+  refused_count: refusedCount,
+})
+
 const READ_CHUNK = 4
 
 /**

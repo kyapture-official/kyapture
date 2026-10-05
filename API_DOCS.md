@@ -349,25 +349,23 @@ Single-pass optimized aggregate statistics of the photographer's account.
 
 Authentication: Required (IsAuthenticated)
 
-Success Response — 200 OK
+Success Response — 200 OK (flat; storage fields shown, collection and video fields omitted)
 
 {
-  "plan": {
-    "name": "Basic",
-    "expires_at": "2026-07-13T10:30:00Z",
-    "days_remaining": 29
-  },
-  "storage": {
-    "used_bytes": 524288000,
-    "limit_bytes": 5368709120,
-    "percentage_used": 9.77
-  },
-  "metrics": {
-    "total_galleries_used": 2,
-    "max_galleries_allowed": 3,
-    "total_views": 184
-  }
+  "plan_name": "Free",
+  "photos_used": 120,
+  "storage_used_bytes": 3221225472,
+  "storage_used_gb": 3.0,
+  "plan_storage_limit_bytes": 1073741824,
+  "plan_storage_limit_gb": 1.0,
+  "storage_remaining_bytes": 0,
+  "storage_remaining_gb": 0.0,
+  "storage_percent_used": 300.0,
+  "storage_state": "over",
+  "storage_warning_percent": 90
 }
+
+storage_state is decided by the backend: "ok", "warning" (used is at least storage_warning_percent of the limit; the threshold is the single constant STORAGE_WARNING_FRACTION in apps/subscriptions/entitlements.py), "full" (used equals the limit) or "over" (a plan was lowered below what the account already stores: nothing is deleted, uploads are refused, viewing, downloading and deleting keep working). The limit is the plan row's storage_gb, read on every request. Staff accounts have no limit: the limit fields are null.
 
 📷 3. Photos/Media Assets App (apps/photos)
 
@@ -419,22 +417,28 @@ Request Body — multipart/form-data
 image: [File] (One or many files; JPEGs/PNGs up to 25MB)
 title: "Anniversary Prep" (Optional metadata)
 
-Success Response — 201 Created
+Success Response — 202 Accepted
 
-Returns an array of successfully serialized asset objects.
+Everything fit: an array of the stored asset objects. If only part of a batch fit the plan's storage, the files that fit are stored and the response is
+{ "uploaded": [asset, ...], "refused": [{ "name", "size_bytes", "code": "storage_limit_reached" }], "storage": { ...the 403 body below... } }.
+Files are taken in the order sent (images, then videos) while they still fit; landing exactly on the limit fits.
 
-Gated Error Response — 400 Bad Request
+Gated Error Response — 403 Forbidden (nothing in the batch fits the plan's storage)
 
 {
-  "error": "Storage quota limit exceeded.",
+  "error": "Storage is full.",
   "code": "storage_limit_reached",
-  "details": {
-    "current_storage_mb": "4950.0",
-    "upload_batch_mb": "120.4",
-    "plan_limit_gb": "5.0",
-    "message": "This upload of 120.4 MB would push your account past your 5.0 GB plan storage limit."
-  }
+  "message": "You have used 0.99 GB of the 1 GB your Free plan includes. Delete files or upgrade your plan to upload more.",
+  "plan_name": "Free",
+  "used_gb": 0.99,
+  "plan_limit_gb": 1,
+  "used_bytes": 1063256064,
+  "plan_limit_bytes": 1073741824,
+  "refused_count": 3,
+  "refused_bytes": 52428800
 }
+
+Usage is the sum of the account's original files (trashed collections included until purged); generated copies are not counted.
 
 Get Media Asset
 

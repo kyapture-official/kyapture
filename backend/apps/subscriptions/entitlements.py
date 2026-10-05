@@ -150,6 +150,76 @@ def require_feature(user, feature):
         raise_gating_violation(upgrade_message(feature), UPGRADE_CODES[feature])
 
 
+# Storage allowance (BILL-C): `storage_gb` on the plan row, counted as the sum of the
+# account's original files (MediaAsset.file_size, trashed collections included).
+STORAGE_LIMIT_REACHED = 'storage_limit_reached'
+# The ONE threshold: from this share of the plan's storage up, the meters show a warning.
+STORAGE_WARNING_FRACTION = 0.9
+GB = 1024 ** 3
+
+
+def storage_fits(metrics, sizes):
+    """
+    Which of the new files (byte sizes, in upload order) fit the plan's storage.
+    A file is accepted when it still fits what is left after the files accepted
+    before it, so a mixed batch uploads what fits and a smaller later file can
+    still go in after a larger one was refused. Landing exactly on the limit fits;
+    an account already over a lowered limit has nothing left, so nothing fits.
+    """
+    remaining = max(0, metrics['storage_bytes_limit'] - metrics['current_total_storage_bytes'])
+    fits = []
+    for size in sizes:
+        fits.append(size <= remaining)
+        if fits[-1]:
+            remaining -= size
+    return fits
+
+
+def storage_figures(metrics):
+    """Used / limit / remaining and the meter state, from get_user_subscription_metrics()."""
+    used, limit = metrics['current_total_storage_bytes'], metrics['storage_bytes_limit']
+    if used > limit:
+        state = 'over'
+    elif used == limit:
+        state = 'full'
+    elif used >= limit * STORAGE_WARNING_FRACTION:
+        state = 'warning'
+    else:
+        state = 'ok'
+    return {
+        'storage_used_bytes': used,
+        'storage_used_gb': round(used / GB, 2),
+        'plan_storage_limit_bytes': limit,
+        'plan_storage_limit_gb': limit / GB,
+        'storage_remaining_bytes': max(0, limit - used),
+        'storage_remaining_gb': round(max(0, limit - used) / GB, 2),
+        'storage_percent_used': round(used / limit * 100, 1) if limit else 100.0,
+        'storage_state': state,
+        'storage_warning_percent': round(STORAGE_WARNING_FRACTION * 100),
+    }
+
+
+def storage_quota_violation(metrics, refused_count, refused_bytes):
+    """The 403 payload for files the plan's storage cannot take (used and limit in GB)."""
+    figures = storage_figures(metrics)
+    used_gb, limit_gb = figures['storage_used_gb'], round(figures['plan_storage_limit_gb'], 2)
+    return {
+        'error': 'Storage is full.',
+        'code': STORAGE_LIMIT_REACHED,
+        'message': (
+            f'You have used {used_gb:g} GB of the {limit_gb:g} GB your {metrics["plan_name"]} plan includes. '
+            'Delete files or upgrade your plan to upload more.'
+        ),
+        'plan_name': metrics['plan_name'],
+        'used_gb': used_gb,
+        'plan_limit_gb': limit_gb,
+        'used_bytes': figures['storage_used_bytes'],
+        'plan_limit_bytes': figures['plan_storage_limit_bytes'],
+        'refused_count': refused_count,
+        'refused_bytes': refused_bytes,
+    }
+
+
 # Video allowance (VID-A): a number on the plan row, not a boolean flag.
 VIDEO_NOT_IN_PLAN = 'video_not_in_plan'
 VIDEO_MINUTES_EXCEEDED = 'video_minutes_exceeded'

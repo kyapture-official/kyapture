@@ -5,6 +5,10 @@ import {
   collectionLimitInfo,
   collectionLimitReached,
   checkVideoBatch,
+  readUploadResponse,
+  splitByStorage,
+  storageLimitFromError,
+  storageLimitInfo,
   videoLimitFromError,
 } from './planLimitFlow.js'
 
@@ -118,4 +122,54 @@ test('video plan name comes from the plans API: cheapest paid plan with a video 
   assert.equal(cheapestVideoPlan(plans).name, 'P')
   assert.equal(cheapestVideoPlan([plans[0], plans[1]]), null)
   assert.equal(cheapestVideoPlan([{ name: 'U', is_free: false, price: '9', video_minutes: null }]).name, 'U') // empty = unlimited
+})
+
+// ── storage (BILL-C): fixtures are test numbers, not product limits ──
+const sized = (name, size) => ({ name, size, type: 'image/jpeg' })
+
+test('storage click-time split: takes files in order while they fit, a smaller later one still goes in', () => {
+  const files = [sized('a', 60), sized('b', 60), sized('c', 30)]
+  const { allowed, refused } = splitByStorage(files, { storage_remaining_bytes: 100 })
+  assert.deepEqual(allowed.map((f) => f.name), ['a', 'c'])
+  assert.deepEqual(refused.map((f) => f.name), ['b'])
+})
+
+test('storage click-time split: landing exactly on the remaining space fits, one byte over does not', () => {
+  assert.equal(splitByStorage([sized('a', 100)], { storage_remaining_bytes: 100 }).refused.length, 0)
+  assert.equal(splitByStorage([sized('a', 101)], { storage_remaining_bytes: 100 }).refused.length, 1)
+})
+
+test('storage click-time split: an over-limit account (0 left) refuses everything, unknown or no limit refuses nothing', () => {
+  assert.equal(splitByStorage([sized('a', 1)], { storage_remaining_bytes: 0 }).allowed.length, 0)
+  const files = [sized('a', 10 ** 12)]
+  assert.equal(splitByStorage(files, null).allowed.length, 1)                 // usage unknown: the server decides
+  assert.equal(splitByStorage(files, { plan_name: 'Admin' }).allowed.length, 1) // staff: no limit in the answer
+})
+
+test('storage refusal: the 403 body becomes the modal state, other codes do not', () => {
+  const body = { code: 'storage_limit_reached', plan_name: 'P', used_gb: 2.99, plan_limit_gb: 3, refused_count: 2 }
+  assert.deepEqual(storageLimitFromError(body), { plan_name: 'P', used_gb: 2.99, plan_limit_gb: 3, refused_count: 2 })
+  assert.equal(storageLimitFromError({ ...body, refused_count: undefined }).refused_count, 1)
+  assert.equal(storageLimitFromError({ code: 'video_minutes_exceeded' }), null)
+  assert.equal(storageLimitFromError(null), null)
+  assert.deepEqual(
+    storageLimitInfo({ plan_name: 'P', storage_used_gb: 3, plan_storage_limit_gb: 3 }, 4),
+    { plan_name: 'P', used_gb: 3, plan_limit_gb: 3, refused_count: 4 })
+})
+
+test('video refusal handler ignores a storage refusal and the reverse', () => {
+  assert.equal(videoLimitFromError({ code: 'storage_limit_reached' }), null)
+  assert.equal(storageLimitFromError({ code: 'video_not_in_plan' }), null)
+})
+
+test('upload response: a list is all stored; { uploaded, refused, storage } reports the rest', () => {
+  assert.deepEqual(readUploadResponse([{ id: 1 }]), { assets: [{ id: 1 }], storageRefusal: null })
+  assert.deepEqual(readUploadResponse({ id: 2 }), { assets: [{ id: 2 }], storageRefusal: null })
+  const partial = readUploadResponse({
+    uploaded: [{ id: 1 }],
+    refused: [{ name: 'c.jpg' }, { name: 'd.jpg' }],
+    storage: { plan_name: 'P', used_gb: 3, plan_limit_gb: 3 },
+  })
+  assert.deepEqual(partial.assets, [{ id: 1 }])
+  assert.deepEqual(partial.storageRefusal, { plan_name: 'P', used_gb: 3, plan_limit_gb: 3, refused_count: 2 })
 })

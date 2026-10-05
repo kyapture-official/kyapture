@@ -15,10 +15,14 @@ import {
   cheapestVideoPlan,
   checkVideoBatch,
   isVideoFile,
+  readUploadResponse,
+  splitByStorage,
+  storageLimitFromError,
+  storageLimitInfo,
   videoLimitFromError,
 } from "../../utils/planLimitFlow";
 import { readVideoDuration } from "../../utils/videoDuration";
-import { formatVideoMinutes } from "../../utils/planLimits";
+import { formatStorageFigures, formatVideoMinutes } from "../../utils/planLimits";
 import { ArrowDownWideNarrow, Check, LayoutGrid, PlusCircle } from "lucide-react";
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
@@ -86,6 +90,9 @@ export default function GalleryPhotosPage() {
   const [videoLimit, setVideoLimit] = useState(null); // why video was refused: { code, used_minutes, plan_limit_minutes, plan_name, videoPlan, photosKept }
   const plansRef = useRef(null);
   const noVideoOnPlan = usage?.video_minutes_limit === 0;
+  // Why files were not stored: { plan_name, used_gb, plan_limit_gb, refused_count, uploadedCount }.
+  const [storageLimit, setStorageLimit] = useState(null);
+  const storageRefusalsRef = useRef([]); // refusals the server made after the click-time check passed
 
   const [photos, setPhotos] = useState([]);
   const [photosLoading, setPhotosLoading] = useState(true);
@@ -329,6 +336,23 @@ export default function GalleryPhotosPage() {
     if (isMountedRef.current) setVideoLimit({ ...info, videoPlan });
   };
 
+  // Opens the shared limit modal for files the plan's storage could not take: the
+  // click-time refusals plus any the server refused afterwards (a stale answer).
+  const showStorageLimit = (info, uploadedCount) => {
+    if (isMountedRef.current) setStorageLimit({ ...info, uploadedCount });
+  };
+
+  const flushStorageRefusals = (uploadedCount) => {
+    const refusals = storageRefusalsRef.current.splice(0);
+    if (!refusals.length) return;
+    const last = refusals[refusals.length - 1];
+    showStorageLimit(
+      { ...last, refused_count: refusals.reduce((sum, refusal) => sum + (refusal.refused_count || 1), 0) },
+      uploadedCount,
+    );
+    refreshUsage();
+  };
+
   const handleFilesSelected = async (selectedFiles) => {
     let files = Array.from(selectedFiles || []);
     if (!files.length) return;
@@ -336,6 +360,18 @@ export default function GalleryPhotosPage() {
     if (!USE_MOCK_DATA && !activeSetId) {
       setErrorMsg("Choose a photo set before uploading media.");
       return;
+    }
+
+    // Storage first: files the plan's remaining space cannot take never upload;
+    // the rest of the drop does. The server checks again at upload time.
+    if (!USE_MOCK_DATA) {
+      const fresh = (await refreshUsage()) ?? usage;
+      const { allowed, refused } = splitByStorage(files, fresh);
+      if (refused.length) {
+        showStorageLimit(storageLimitInfo(fresh, refused.length), allowed.length);
+        files = allowed;
+        if (!files.length) return;
+      }
     }
 
     // Videos are checked BEFORE anything uploads: the browser reads each one's
@@ -402,10 +438,16 @@ export default function GalleryPhotosPage() {
     }
 
     let uploadedAtLeastOne = false;
+    let uploadedCount = 0;
 
     for (const item of queueItems) {
-      if (await uploadQueueItem(item)) uploadedAtLeastOne = true;
+      if (await uploadQueueItem(item)) {
+        uploadedAtLeastOne = true;
+        uploadedCount += 1;
+      }
     }
+
+    flushStorageRefusals(uploadedCount);
 
     if (uploadedAtLeastOne) {
       refreshSets().catch(() => {
@@ -438,7 +480,9 @@ export default function GalleryPhotosPage() {
         }
       });
       if (isMountedRef.current) {
-        const newAssets = Array.isArray(uploaded) ? uploaded : [uploaded];
+        // Normally a list of stored assets; { uploaded, refused, storage } when the server kept only part.
+        const { assets: newAssets, storageRefusal } = readUploadResponse(uploaded);
+        if (storageRefusal) storageRefusalsRef.current.push(storageRefusal);
         if (String(activeSetIdRef.current) === String(item.setId)) {
           setPhotos((previous) => [...previous, ...newAssets]);
         }
@@ -450,6 +494,16 @@ export default function GalleryPhotosPage() {
       return true;
     } catch (error) {
       // Fallback if the click-time check was bypassed or stale: the server's own refusal.
+      const storageRefusal = error?.response?.status === 403 ? storageLimitFromError(error.response.data) : null;
+      if (storageRefusal) {
+        URL.revokeObjectURL(item.previewUrl);
+        blobUrlsRef.current = blobUrlsRef.current.filter((url) => url !== item.previewUrl);
+        storageRefusalsRef.current.push(storageRefusal);
+        if (isMountedRef.current) {
+          setUploadQueue((previous) => previous.filter((queueItem) => queueItem.id !== item.id));
+        }
+        return false;
+      }
       const refusal = error?.response?.status === 403 ? videoLimitFromError(error.response.data) : null;
       if (refusal) {
         URL.revokeObjectURL(item.previewUrl);
@@ -487,7 +541,9 @@ export default function GalleryPhotosPage() {
           : queueItem,
       ),
     );
-    if (await uploadQueueItem(item)) {
+    const uploaded = await uploadQueueItem(item);
+    flushStorageRefusals(uploaded ? 1 : 0);
+    if (uploaded) {
       refreshSets().catch(() => {});
     }
   };
@@ -894,6 +950,27 @@ export default function GalleryPhotosPage() {
           This cannot be undone.
         </p>
       </ConfirmDialog>
+
+      {/* One limit dialog at a time: the storage one waits until the video one is closed. */}
+      <PlanLimitModal
+        open={storageLimit !== null && videoLimit === null}
+        title="Storage is full"
+        onClose={() => setStorageLimit(null)}
+      >
+        <p>
+          You have used{" "}
+          <span className="font-medium text-ink" data-testid="storage-limit-figures">
+            {formatStorageFigures(storageLimit?.used_gb, storageLimit?.plan_limit_gb)}
+          </span>{" "}
+          of storage{storageLimit?.plan_name ? <> on your <span className="font-medium text-ink">{storageLimit.plan_name}</span> plan</> : ""}.{" "}
+          <span data-testid="storage-limit-refused">
+            {storageLimit?.refused_count} file{storageLimit?.refused_count === 1 ? " was" : "s were"} not uploaded.
+          </span>{" "}
+          Delete files or view plans to upgrade.
+          {storageLimit?.uploadedCount > 0 &&
+            ` The other ${storageLimit.uploadedCount} file${storageLimit.uploadedCount === 1 ? " is" : "s are"} uploading.`}
+        </p>
+      </PlanLimitModal>
 
       <PlanLimitModal
         open={videoLimit !== null}

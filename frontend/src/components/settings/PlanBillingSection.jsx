@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { galleriesApi } from '../../api/galleriesApi'
 import { subscriptionsApi } from '../../api/subscriptionsApi'
+import StorageMeter from '../billing/StorageMeter'
 import { useSubscription } from '../../hooks/useSubscription'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { Card, ErrorBlock, LoadingBlock, ReadOnlyRow } from './SettingsUI'
@@ -140,7 +141,7 @@ export default function PlanBillingSection() {
       <Card title="Usage" description="Against your current plan's limits.">
         <div className="space-y-4">
           <Meter label="Collections" used={stats.galleries_used ?? 0} limit={stats.plan_gallery_limit} />
-          <Meter label="Storage" used={Number(stats.storage_used_gb ?? 0)} limit={stats.plan_storage_limit_gb ? Number(stats.plan_storage_limit_gb) : null} unit=" GB" />
+          <StorageMeter usage={stats} showUpgrade />
           {stats.video_minutes_limit > 0 && (
             <Meter label="Video" used={Number(stats.video_minutes_used ?? 0)} limit={stats.video_minutes_limit} unit=" min" />
           )}

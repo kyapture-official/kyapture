@@ -23,3 +23,13 @@ test('photo estimate is only formatted from the API value, never computed here',
   assert.equal(formatPhotoEstimate({ storage_gb: 3 }), '')           // no API value -> nothing invented
   assert.equal(formatStorage(3), '3 GB')
 })
+
+test('storage usage reads in bytes-aware units, figures from a refusal in GB', async () => {
+  const { formatStorageFigures, formatStorageUsage } = await import('./planLimits.js')
+  assert.equal(formatStorageUsage({ storage_used_bytes: 2.99 * 1024 ** 3, plan_storage_limit_gb: 3 }), '2.99 GB / 3 GB')
+  assert.equal(formatStorageUsage({ storage_used_bytes: 412 * 1024 ** 2, plan_storage_limit_gb: 3 }), '412.0 MB / 3 GB')
+  assert.equal(formatStorageUsage({ storage_used_bytes: 1024 ** 3 - 9308, plan_storage_limit_gb: 1 }), '1.00 GB / 1 GB') // not '1024.0 MB'
+  assert.equal(formatStorageUsage({ storage_used_bytes: 3.4 * 1024 ** 3, plan_storage_limit_gb: 1 }), '3.40 GB / 1 GB')
+  assert.equal(formatStorageFigures(2.994, 3), '2.99 / 3 GB')
+  assert.equal(formatStorageFigures(3.4, 1), '3.4 / 1 GB')
+})
