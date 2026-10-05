@@ -14,6 +14,7 @@ import FavoritesPanel from "../../components/client/FavoritesPanel";
 import { useVisitorStore } from "../../store/visitorStore";
 import ShareMenu from "../../components/shared/ShareMenu";
 import { resolveShareUrl } from "../../utils/share";
+import { nextFavoriteIds } from "../../utils/favoriteFlow";
 import Spinner from "../../components/ui/Spinner";
 import { useToast } from "../../components/ui/Toast";
 import { formatDate } from "../../utils/formatters";
@@ -504,10 +505,7 @@ export default function ClientGalleryPage() {
    */
   const applyFavorite = async (photoId, wasFavorited, profileOverride = null) => {
     setFavoritedIds((prev) => {
-      const next = new Set(prev);
-      if (wasFavorited) next.delete(photoId);
-      else next.add(photoId);
-      return next;
+      return nextFavoriteIds(prev, photoId, wasFavorited);
     });
 
     try {
@@ -521,10 +519,7 @@ export default function ClientGalleryPage() {
     } catch (err) {
       // Rollback — the optimistic update didn't actually stick server-side.
       setFavoritedIds((prev) => {
-        const next = new Set(prev);
-        if (wasFavorited) next.add(photoId);
-        else next.delete(photoId);
-        return next;
+        return nextFavoriteIds(prev, photoId, !wasFavorited);
       });
       throw err;
     }

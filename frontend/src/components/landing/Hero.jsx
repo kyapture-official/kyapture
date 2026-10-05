@@ -3,7 +3,7 @@ import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { ArrowRight, Camera, CheckCircle2, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const MotionLink = motion(Link);
+const MotionLink = motion.create(Link);
 
 const stagger = {
   hidden: {},

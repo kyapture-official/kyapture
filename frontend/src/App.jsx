@@ -1,35 +1,43 @@
 // C:/Users/LENOVO/Desktop/kyapture/frontend/src/App.jsx
-import React, { useEffect } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { ToastProvider } from "./components/ui/Toast";
 import ProtectedRoute from "./components/shared/ProtectedRoute";
 import DashboardLayout from "./components/layout/DashboardLayout";
 // Auth
-import LoginPage from "./pages/auth/LoginPage";
-import RegisterPage from "./pages/auth/RegisterPage";
-import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
-import ResetPasswordConfirmPage from "./pages/auth/ResetPasswordConfirmPage";
+const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/auth/RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/auth/ForgotPasswordPage"));
+const ResetPasswordConfirmPage = lazy(() => import("./pages/auth/ResetPasswordConfirmPage"));
 // Dashboard
-import HomePage from "./pages/dashboard/HomePage";
-import GalleriesPage from "./pages/dashboard/GalleriesPage";
-import FavoritesPage from "./pages/dashboard/FavoritesPage";
-import SettingsPage from "./pages/dashboard/SettingsPage";
-import BillingPage from "./pages/subscription/BillingPage";
+const HomePage = lazy(() => import("./pages/dashboard/HomePage"));
+const GalleriesPage = lazy(() => import("./pages/dashboard/GalleriesPage"));
+const FavoritesPage = lazy(() => import("./pages/dashboard/FavoritesPage"));
+const SettingsPage = lazy(() => import("./pages/dashboard/SettingsPage"));
+const BillingPage = lazy(() => import("./pages/subscription/BillingPage"));
 // Gallery workspace (own shell — no DashboardLayout)
-import GalleryWorkspaceLayout from "./pages/dashboard/GalleryWorkspaceLayout";
-import GalleryPhotosPage from "./pages/dashboard/GalleryPhotosPage";
-import GallerySettingsPage from "./pages/dashboard/GallerySettingsPage";
-import GalleryDesignPage from "./pages/dashboard/GalleryDesignPage";
-import ActivitiesWorkspace from "./pages/dashboard/ActivitiesWorkspace";
+const GalleryWorkspaceLayout = lazy(() => import("./pages/dashboard/GalleryWorkspaceLayout"));
+const GalleryPhotosPage = lazy(() => import("./pages/dashboard/GalleryPhotosPage"));
+const GallerySettingsPage = lazy(() => import("./pages/dashboard/GallerySettingsPage"));
+const GalleryDesignPage = lazy(() => import("./pages/dashboard/GalleryDesignPage"));
+const ActivitiesWorkspace = lazy(() => import("./pages/dashboard/ActivitiesWorkspace"));
 // Client portal
-import ClientHomePage from "./pages/client/ClientHomePage";
-import ClientGalleryPage from "./pages/client/ClientGalleryPage";
-import DownloadPage from "./pages/client/DownloadPage";
-import DownloadFilePage from "./pages/client/DownloadFilePage";
+const ClientHomePage = lazy(() => import("./pages/client/ClientHomePage"));
+const ClientGalleryPage = lazy(() => import("./pages/client/ClientGalleryPage"));
+const DownloadPage = lazy(() => import("./pages/client/DownloadPage"));
+const DownloadFilePage = lazy(() => import("./pages/client/DownloadFilePage"));
 // Public
-import PricingPage from "./pages/subscription/PricingPage";
-import LandingPage from "./pages/LandingPage";
+const PricingPage = lazy(() => import("./pages/subscription/PricingPage"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+
+function RouteLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#FDFBF7] text-sm text-muted" role="status">
+      Loading…
+    </div>
+  );
+}
 
 /**
  * Restores the photographer's session on page load — except on the public
@@ -61,9 +69,10 @@ export default function App() {
         }}
       >
         <AuthBootstrap />
-        <Routes>
-          {/* Public */}
-          <Route path="/" element={<LandingPage />} />
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<LandingPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -109,7 +118,8 @@ export default function App() {
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </ToastProvider>
   );
