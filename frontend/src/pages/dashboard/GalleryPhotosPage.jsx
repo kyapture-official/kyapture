@@ -13,10 +13,11 @@ import PlanLimitModal from "../../components/shared/PlanLimitModal";
 import { usePlanUsage } from "../../hooks/usePlanUsage";
 import {
   cheapestVideoPlan,
+  checkVideoBatch,
   isVideoFile,
-  planVideoFiles,
   videoLimitFromError,
 } from "../../utils/planLimitFlow";
+import { readVideoDuration } from "../../utils/videoDuration";
 import { formatVideoMinutes } from "../../utils/planLimits";
 import { ArrowDownWideNarrow, Check, LayoutGrid, PlusCircle } from "lucide-react";
 
@@ -337,13 +338,18 @@ export default function GalleryPhotosPage() {
       return;
     }
 
-    // A video is checked against the live plan BEFORE it uploads. What the plan
-    // refuses is dropped and explained in the shared limit modal; the rest of
-    // the batch (photos, videos that fit) uploads as usual.
+    // Videos are checked BEFORE anything uploads: the browser reads each one's
+    // length, the server (pre-flight, same rule as the upload) says whether the
+    // batch fits the plan. A refusal drops the videos and explains it in the
+    // shared limit modal; the rest of the batch (photos) uploads as usual.
     if (!USE_MOCK_DATA && files.some(isVideoFile)) {
-      const { allowed, block } = planVideoFiles(files, await refreshUsage());
+      const { allowed, block } = await checkVideoBatch(files, {
+        readDuration: readVideoDuration,
+        preflight: (count, durations) => photosApi.videoPreflight(count, durations),
+      });
       if (block) {
-        showVideoLimit({ ...block, photosKept: allowed.length });
+        const fresh = await refreshUsage();
+        showVideoLimit({ ...block, plan_name: fresh?.plan_name ?? usage?.plan_name, photosKept: allowed.length });
         files = allowed;
         if (!files.length) return;
       }
@@ -916,6 +922,12 @@ export default function GalleryPhotosPage() {
               {videoLimit?.used_minutes} / {videoLimit?.plan_limit_minutes} min
             </span>{" "}
             of video{videoLimit?.plan_name ? <> on your <span className="font-medium text-ink">{videoLimit.plan_name}</span> plan</> : ""}.
+            {videoLimit?.upload_minutes != null && (
+              <>
+                {" "}This upload adds{" "}
+                <span className="font-medium text-ink" data-testid="video-limit-batch">{videoLimit.upload_minutes} min</span>.
+              </>
+            )}{" "}
             Delete a video or view plans to upgrade.
             {videoLimit?.photosKept > 0 &&
               ` The other ${videoLimit.photosKept} file${videoLimit.photosKept === 1 ? " is" : "s are"} uploading.`}

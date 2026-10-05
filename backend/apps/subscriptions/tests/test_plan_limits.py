@@ -159,6 +159,25 @@ class AdminEditsApplyWithoutRestartTests(APITestCase):
         self.assertEqual(
             self.client.post(GALLERIES, {'title': 'E'}, format='json').status_code, status.HTTP_201_CREATED)
 
+    def test_admin_form_refuses_a_zero_cap_but_a_zero_row_still_reaches_the_empty_state_usage(self):
+        free = SubscriptionPlan.get_free()
+        before = free.max_collections
+        self.admin_client = self.client_class()
+        self.admin_client.force_login(make_user('boss0', is_staff=True, is_superuser=True))
+        refused = self.admin_client.post(
+            f'/admin/subscriptions/subscriptionplan/{free.pk}/change/',
+            {'name': free.name, 'price': str(free.price), 'is_active': 'on', 'storage_gb': free.storage_gb,
+             'max_collections': 0, 'video_minutes': free.video_minutes})
+        self.assertEqual(refused.status_code, 200)                       # form re-shown with its error, nothing saved
+        self.assertEqual(SubscriptionPlan.get_free().max_collections, before)
+
+        # What the empty-state button reads for an account with no collections on a cap-0 row.
+        SubscriptionPlan.objects.filter(pk=free.pk).update(max_collections=0)
+        stats = self.client.get(f'{GALLERIES}dashboard/stats/').data
+        self.assertEqual((stats['galleries_used'], stats['plan_gallery_limit'], stats['galleries_remaining']), (0, 0, 0))
+        blocked = self.client.post(GALLERIES, {'title': 'A'}, format='json')
+        self.assertEqual((blocked.status_code, blocked.data['plan_limit']), (status.HTTP_403_FORBIDDEN, 0))
+
     def test_capping_a_paid_plan_in_admin_applies_to_its_subscribers(self):
         pro = grant_plan(self.free, name='Pro')
         make_collections(self.free, 3)

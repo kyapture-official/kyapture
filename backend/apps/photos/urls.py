@@ -6,6 +6,7 @@ from .views import (
     PhotoBulkDeleteView,
     PhotoReorderView,
     PhotoBatchStatusView,
+    VideoPreflightView,
     PhotoSetListCreateView,
     PhotoSetDetailView,
     PhotoSetReorderView,
@@ -15,6 +16,14 @@ from .views import (
 )
 
 urlpatterns = [
+    # Route: POST pre-upload video-length check. Listed before the
+    # '<slug:gallery_slug>/' catch-all, which would otherwise take this path.
+    path(
+        'video-preflight/',
+        VideoPreflightView.as_view(),
+        name='video-preflight'
+    ),
+
     # ── Suffixed routes first (prevents routing collisions with the
     #    plain '<slug:gallery_slug>/' catch-all at the bottom) ────────────
 

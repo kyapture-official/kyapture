@@ -12,6 +12,7 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 from .tasks import process_photo_asset, process_video_asset
 from PIL import Image as PILImage
@@ -32,6 +33,7 @@ from .serializers import (
     PhotoSetWriteSerializer,
     PhotoSetReorderSerializer,
     PhotoSetAssignSerializer,
+    VideoPreflightSerializer,
 )
 
 
@@ -292,6 +294,44 @@ class PhotoListUploadView(APIView):
             MediaAssetSerializer(uploaded_assets, many=True, context={'request': request}).data,
             status=status.HTTP_202_ACCEPTED
         )
+
+
+class VideoPreflightRateThrottle(UserRateThrottle):
+    scope = 'video_preflight'
+
+
+class VideoPreflightView(APIView):
+    """
+    POST /api/v1/photos/video-preflight/ - "would these videos fit my plan?",
+    asked by the upload page BEFORE any file is sent.
+
+    Body: {"video_count": N, "durations": [seconds, ...]} (the browser's own
+    reading of each video; see VideoPreflightSerializer). Answers 200
+    {"allowed": true}, or the SAME 403 body the upload gives
+    (video_not_in_plan / video_minutes_exceeded with plan_limit_minutes and
+    used_minutes), from the same video_quota_violation rule. It only ever
+    reads the signed-in user's own usage. The client lengths are untrusted, so
+    this is advice: the upload still measures every video with ffprobe and
+    makes the authoritative decision.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [VideoPreflightRateThrottle]
+
+    def post(self, request):
+        serializer = VideoPreflightSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"error": "Invalid video details.", "code": "invalid_preflight", "details": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = request.user
+        if not (user.is_superuser or user.is_staff):
+            violation = video_quota_violation(
+                get_user_subscription_metrics(user), sum(serializer.validated_data['durations']),
+            )
+            if violation:
+                return Response(violation, status=status.HTTP_403_FORBIDDEN)
+        return Response({"allowed": True}, status=status.HTTP_200_OK)
 
 
 class PhotoBatchStatusView(APIView):

@@ -156,6 +156,20 @@ export const photosApi = {
   },
 
     /**
+   * WHAT: Ask whether videos the browser has read would fit the plan, BEFORE
+   *       any of them uploads.
+   * URI:  POST /api/v1/photos/video-preflight/
+   * BODY: { video_count, durations: [seconds, ...] } (durations may be shorter
+   *       than video_count: unreadable videos are counted, not measured)
+   * 200 { allowed: true }; refused: 403 with the same body the upload gives
+   * (code video_not_in_plan | video_minutes_exceeded + limit / used minutes).
+   */
+  videoPreflight: async (videoCount, durations, signal) => {
+    const { data } = await api.post('/photos/video-preflight/', { video_count: videoCount, durations }, { signal })
+    return data
+  },
+
+  /**
    * WHAT: Delete one or more photos in a single request.
    * URI:  POST /api/v1/photos/{gallery_slug}/delete-bulk/
    *

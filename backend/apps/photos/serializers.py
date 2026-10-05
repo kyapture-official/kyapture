@@ -1,5 +1,6 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/serializers.py
 import io
+import math
 import os
 from PIL import Image as PILImage, UnidentifiedImageError
 from PIL.ImageOps import exif_transpose
@@ -301,3 +302,41 @@ class PhotoSetAssignSerializer(serializers.Serializer):
         allow_empty=False,
         min_length=1
     )
+
+
+# VID-C pre-flight limits: a drop of more than this many videos, or a single
+# video longer than a day, is not a real browser answer.
+MAX_PREFLIGHT_VIDEOS = 200
+MAX_PREFLIGHT_SECONDS = 24 * 60 * 60
+
+
+class _DurationSeconds(serializers.FloatField):
+    """A positive, finite number of seconds (no booleans, NaN or Infinity)."""
+
+    def to_internal_value(self, data):
+        if isinstance(data, bool):
+            self.fail('invalid')
+        value = super().to_internal_value(data)
+        if not math.isfinite(value) or value <= 0:
+            raise serializers.ValidationError('Duration must be a positive number of seconds.')
+        if value > MAX_PREFLIGHT_SECONDS:
+            raise serializers.ValidationError(f'Duration cannot exceed {MAX_PREFLIGHT_SECONDS} seconds.')
+        return value
+
+
+class VideoPreflightSerializer(serializers.Serializer):
+    """
+    What the browser read from the chosen videos before uploading: how many
+    there are and the length of each one it could read. A video whose length
+    the browser cannot read (unsupported codec) is counted but has no entry in
+    `durations`, so `durations` may be shorter than `video_count`, never longer.
+    """
+    video_count = serializers.IntegerField(min_value=1, max_value=MAX_PREFLIGHT_VIDEOS)
+    durations = serializers.ListField(
+        child=_DurationSeconds(), allow_empty=True, max_length=MAX_PREFLIGHT_VIDEOS, required=False, default=list,
+    )
+
+    def validate(self, attrs):
+        if len(attrs['durations']) > attrs['video_count']:
+            raise serializers.ValidationError({'durations': 'More durations than videos.'})
+        return attrs

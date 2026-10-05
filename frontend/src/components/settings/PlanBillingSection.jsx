@@ -141,6 +141,9 @@ export default function PlanBillingSection() {
         <div className="space-y-4">
           <Meter label="Collections" used={stats.galleries_used ?? 0} limit={stats.plan_gallery_limit} />
           <Meter label="Storage" used={Number(stats.storage_used_gb ?? 0)} limit={stats.plan_storage_limit_gb ? Number(stats.plan_storage_limit_gb) : null} unit=" GB" />
+          {stats.video_minutes_limit > 0 && (
+            <Meter label="Video" used={Number(stats.video_minutes_used ?? 0)} limit={stats.video_minutes_limit} unit=" min" />
+          )}
           <p className="text-xs text-muted">
             {stats.photos_used ?? 0} photo{stats.photos_used === 1 ? '' : 's'} uploaded.
           </p>

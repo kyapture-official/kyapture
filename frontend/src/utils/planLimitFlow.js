@@ -31,30 +31,43 @@ export const cheapestVideoPlan = (plans) =>
 /** Server 403 body -> the video-limit modal state, or null when it is some other error. */
 export const videoLimitFromError = (data) =>
   data && VIDEO_LIMIT_CODES.includes(data.code)
-    ? { code: data.code, used_minutes: data.used_minutes, plan_limit_minutes: data.plan_limit_minutes }
+    ? {
+        code: data.code,
+        used_minutes: data.used_minutes,
+        plan_limit_minutes: data.plan_limit_minutes,
+        upload_minutes: data.upload_minutes,
+      }
     : null
 
+const READ_CHUNK = 4
+
 /**
- * Splits a selection into what may upload and what the plan already refuses,
- * BEFORE any upload. `usage` is the fresh usage-endpoint answer (null =
- * unknown: let the server decide). Two cases are certain from the usage alone:
- * the plan has no video (limit 0), or its video minutes are all used. A video
- * that merely might be too long is the server's call: its length is only known
- * there (ffprobe), and its video_minutes_exceeded 403 is the fallback.
+ * Splits a selection into what may upload and what the plan refuses, BEFORE any
+ * upload request. The browser reads each video's length (`readDuration`), the
+ * server judges them together (`preflight(videoCount, durations)`, the same rule
+ * and refusal as the upload): this module does no minute arithmetic and knows no
+ * limit. A length the browser cannot read is simply left out of `durations`; if
+ * the pre-flight itself fails (network, throttle, bad input) the files go ahead
+ * and the upload's own authoritative check decides.
  *
- * Returns { allowed: File[], block: null | { code, used_minutes, plan_limit_minutes, plan_name } }.
+ * Returns { allowed: File[], block: null | { code, used_minutes, plan_limit_minutes, upload_minutes } }.
+ * A refusal drops every video of the batch and keeps the photos.
  */
-export function planVideoFiles(files, usage) {
-  if (!usage || usage.video_minutes_limit == null || !files.some(isVideoFile)) {
-    return { allowed: files, block: null }
+export async function checkVideoBatch(files, { readDuration, preflight }) {
+  const videos = files.filter(isVideoFile)
+  if (!videos.length) return { allowed: files, block: null }
+
+  const lengths = []
+  for (let i = 0; i < videos.length; i += READ_CHUNK) {
+    lengths.push(...(await Promise.all(videos.slice(i, i + READ_CHUNK).map((file) => readDuration(file)))))
   }
-  const limit = usage.video_minutes_limit
-  const figures = { used_minutes: usage.video_minutes_used, plan_limit_minutes: limit, plan_name: usage.plan_name }
-  if (limit === 0) {
-    return { allowed: files.filter((file) => !isVideoFile(file)), block: { code: VIDEO_NOT_IN_PLAN, ...figures } }
-  }
-  if (usage.video_minutes_used >= limit) {
-    return { allowed: files.filter((file) => !isVideoFile(file)), block: { code: VIDEO_MINUTES_EXCEEDED, ...figures } }
+  const durations = lengths.filter((seconds) => Number.isFinite(seconds) && seconds > 0)
+
+  try {
+    await preflight(videos.length, durations)
+  } catch (error) {
+    const refusal = error?.response?.status === 403 ? videoLimitFromError(error.response.data) : null
+    if (refusal) return { allowed: files.filter((file) => !isVideoFile(file)), block: refusal }
   }
   return { allowed: files, block: null }
 }

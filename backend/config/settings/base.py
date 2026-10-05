@@ -117,6 +117,9 @@ REST_FRAMEWORK = {
         # stays tight on purpose: unlock attempts are a brute-force
         # target this scope is not.
         "public_gallery_browse": "120/minute",
+        # Per-user: the upload page asks once per dropped batch whether its
+        # videos fit the plan (photos/views.py::VideoPreflightView).
+        "video_preflight": "60/minute",
     }
 }
 
