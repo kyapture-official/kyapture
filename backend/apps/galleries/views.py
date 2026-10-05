@@ -102,14 +102,14 @@ class GalleryListCreateView(APIView):
         
         # 2. Skip limit check for administrative staff
         if not (photographer.is_superuser or photographer.is_staff):
-            if metrics["max_galleries"] is not None and metrics["current_galleries_count"] >= metrics["max_galleries"]:
+            if metrics["max_galleries"] is not None and metrics["live_galleries_count"] >= metrics["max_galleries"]:
                 return Response({
-                    "error": "Gallery limit reached for your current plan.",
+                    "error": "Collection limit reached for your current plan.",
                     "code": "gallery_limit_reached",
-                    "current_count": metrics["current_galleries_count"],
+                    "current_count": metrics["live_galleries_count"],
                     "plan_limit": metrics["max_galleries"],
                     "plan_name": metrics["plan_name"],
-                    "message": f"You have used {metrics['current_galleries_count']} of {metrics['max_galleries']} galleries on the {metrics['plan_name']} plan. Upgrade your plan to create more."
+                    "message": f"You have used {metrics['live_galleries_count']} of {metrics['max_galleries']} collections on the {metrics['plan_name']} plan. Delete a collection or upgrade your plan to create more."
                 }, status=status.HTTP_403_FORBIDDEN)
 
         # 3. Instantiate the serializer exactly once
@@ -306,6 +306,13 @@ class DashboardStatsView(APIView):
         #    media for active galleries, so neither is queried a second time here.
         metrics = get_user_subscription_metrics(photographer)
         photos_used = metrics["active_photos_count"]
+        # Collections are counted live (what the photographer sees), the same
+        # figure the plan's collection cap is enforced against.
+        galleries_used = metrics["live_galleries_count"]
+        galleries_remaining = (
+            None if metrics["max_galleries"] is None
+            else max(0, metrics["max_galleries"] - galleries_used)
+        )
 
         # 3. Resolve active subscription expiration parameters
         days_remaining = 0
@@ -323,13 +330,12 @@ class DashboardStatsView(APIView):
         # 4. Handle Admin Bypass case cleanly
         if photographer.is_superuser or photographer.is_staff:
             return Response({
-                'galleries_used': metrics["current_galleries_count"],
+                'galleries_used': galleries_used,
                 'photos_used': photos_used,
                 'storage_used_bytes': metrics["current_total_storage_bytes"],
                 'storage_used_gb': round(metrics["current_total_storage_bytes"] / (1024 ** 3), 2),
                 'plan_name': 'Admin',
                 'plan_gallery_limit': None,
-                'plan_photo_limit': None,
                 'plan_storage_limit_gb': None,
                 'plan_storage_limit_bytes': None,
                 'video_minutes_limit': None,
@@ -349,16 +355,15 @@ class DashboardStatsView(APIView):
                 max(0.0, (plan_storage_bytes - storage_used_bytes) / (1024 ** 3)), 2
             )
             return Response({
-                'galleries_used': metrics["current_galleries_count"],
+                'galleries_used': galleries_used,
                 'photos_used': photos_used,
                 'storage_used_bytes': storage_used_bytes,
                 'storage_used_gb': round(storage_used_bytes / (1024 ** 3), 2),
                 'plan_name': metrics["plan_name"],
                 'plan_gallery_limit': metrics["max_galleries"],
-                'plan_photo_limit': metrics["max_photos_per_gallery"],
                 'plan_storage_limit_gb': plan_storage_bytes / (1024 ** 3),
                 'plan_storage_limit_bytes': plan_storage_bytes,
-                'galleries_remaining': None,
+                'galleries_remaining': galleries_remaining,
                 'storage_remaining_gb': storage_remaining_gb,
                 'allow_video': metrics["allow_video"],
                 'video_minutes_limit': metrics["video_minutes_limit"],
@@ -372,10 +377,6 @@ class DashboardStatsView(APIView):
         storage_used_bytes = metrics["current_total_storage_bytes"]
         plan_storage_bytes = metrics["storage_bytes_limit"]
         
-        galleries_remaining = (
-            None if metrics["max_galleries"] is None
-            else max(0, metrics["max_galleries"] - metrics["current_galleries_count"])
-        )
         storage_remaining_gb = round(
             max(0.0, (plan_storage_bytes - storage_used_bytes) / (1024 ** 3)), 
             2
@@ -383,14 +384,13 @@ class DashboardStatsView(APIView):
 
         # 7. Deliver the structured JSON payload matching David's exact key mappings
         return Response({
-            'galleries_used': metrics["current_galleries_count"],
+            'galleries_used': galleries_used,
             'photos_used': photos_used,
             'storage_used_bytes': storage_used_bytes,
             'storage_used_gb': round(storage_used_bytes / (1024 ** 3), 2),
             
             'plan_name': metrics["plan_name"],
             'plan_gallery_limit': metrics["max_galleries"],
-            'plan_photo_limit': metrics["max_photos_per_gallery"],
             'plan_storage_limit_gb': metrics["storage_bytes_limit"] / (1024 ** 3),
             'plan_storage_limit_bytes': plan_storage_bytes,
             

@@ -142,8 +142,7 @@ export default function PlanBillingSection() {
           <Meter label="Collections" used={stats.galleries_used ?? 0} limit={stats.plan_gallery_limit} />
           <Meter label="Storage" used={Number(stats.storage_used_gb ?? 0)} limit={stats.plan_storage_limit_gb ? Number(stats.plan_storage_limit_gb) : null} unit=" GB" />
           <p className="text-xs text-muted">
-            {stats.photos_used ?? 0} photo{stats.photos_used === 1 ? '' : 's'} uploaded
-            {stats.plan_photo_limit ? ` (up to ${stats.plan_photo_limit} per collection)` : ''}.
+            {stats.photos_used ?? 0} photo{stats.photos_used === 1 ? '' : 's'} uploaded.
           </p>
         </div>
       </Card>

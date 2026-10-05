@@ -862,7 +862,7 @@ List Subscription Plans
 
 GET /api/v1/subscriptions/plans/
 
-Lists available platforms and billing rules.
+Lists available platforms and billing rules, all read from the plan table (Django admin). `max_collections` / `video_minutes`: null = unlimited (video 0 = none). `estimated_photos` is an estimate of photos that fit in `storage_gb` (average photo size = `average_photo_size_mb`).
 
 Authentication: None (authentication_classes = [])
 
@@ -871,12 +871,17 @@ Success Response — 200 OK
 [
   {
     "id": "0190106a-ef1a-7b3c-b2f2-10e82f1217e9",
-    "name": "Basic",
-    "price": "19.99",
-    "max_galleries": 3,
-    "max_photos_per_gallery": 100,
-    "storage_gb": 5,
-    "storage_bytes": 5368709120
+    "key": "free",
+    "name": "Free",
+    "price": "0.00",
+    "is_free": true,
+    "storage_gb": 3,
+    "storage_bytes": 3221225472,
+    "estimated_photos": 1000,
+    "average_photo_size_mb": 3,
+    "max_collections": 10,
+    "video_minutes": 0,
+    "features": [{"key": "watermark", "label": "Watermark", "included": false}]
   }
 ]
 

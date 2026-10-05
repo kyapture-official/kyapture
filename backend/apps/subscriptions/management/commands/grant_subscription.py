@@ -2,7 +2,6 @@
 from datetime import timedelta
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-from django.utils.text import slugify
 
 from apps.users.models import User
 from apps.subscriptions.models import SubscriptionPlan, UserSubscription
@@ -24,14 +23,13 @@ class Command(BaseCommand):
         except User.DoesNotExist:
             raise CommandError(f"No user found with email '{email}'")
 
-        # Dev helper: use the real plan row (edited in admin). Only an unknown
-        # plan name creates a bare-bones row, with no features.
+        # Dev helper: use the real plan row from the plan table (edited in
+        # admin). It never invents a plan or its limits.
         name = options["plan"].strip()
         plan = SubscriptionPlan.objects.filter(name__iexact=name).first()
         if plan is None:
-            plan = SubscriptionPlan.objects.create(
-                name=name, key=slugify(name) or 'dev-plan', price=0, storage_gb=50,
-            )
+            available = ", ".join(SubscriptionPlan.objects.values_list("name", flat=True)) or "none"
+            raise CommandError(f"No plan named '{name}'. Plans in the table: {available}")
 
         now = timezone.now()
         sub, _ = UserSubscription.objects.update_or_create(

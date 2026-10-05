@@ -21,6 +21,22 @@ def get_payment_proof_upload_path(instance, filename):
 
 FREE_PLAN_KEY = 'free'
 
+# The ONE place the "average photo" size lives. The Billing page's "about N
+# photos" figure under each plan's storage is an ESTIMATE:
+#     photos = storage_gb * 1000 MB / AVERAGE_PHOTO_SIZE_MB,
+# rounded down to 2 significant digits. It is served by the plans API
+# (`average_photo_size_mb`, `estimated_photos`); the frontend never hard-codes it.
+AVERAGE_PHOTO_SIZE_MB = 3
+
+
+def estimate_photo_count(storage_gb):
+    """Estimated photos that fit in `storage_gb`, rounded down to 2 significant digits (3 GB -> 1000)."""
+    photos = int(storage_gb * 1000 // AVERAGE_PHOTO_SIZE_MB)
+    if photos < 100:
+        return photos
+    step = 10 ** (len(str(photos)) - 2)
+    return photos // step * step
+
 
 class SubscriptionPlan(BaseModel):
     """
@@ -49,10 +65,6 @@ class SubscriptionPlan(BaseModel):
     max_collections = models.PositiveIntegerField(
         null=True, blank=True, validators=[MinValueValidator(1)],
         help_text="Maximum collections (galleries). Leave empty for unlimited.",
-    )
-    max_photos_per_gallery = models.PositiveIntegerField(
-        null=True, blank=True, validators=[MinValueValidator(1)],
-        help_text="Maximum photos per collection. Leave empty for unlimited.",
     )
     video_minutes = models.PositiveIntegerField(
         null=True, blank=True,
@@ -86,10 +98,8 @@ class SubscriptionPlan(BaseModel):
     @classmethod
     def get_free(cls):
         """The Free-tier row. Self-heals if an admin deleted it (editable afterwards)."""
-        plan, _ = cls.objects.get_or_create(
-            key=FREE_PLAN_KEY,
-            defaults={'name': 'Free', 'price': 0, 'storage_gb': 3, 'video_minutes': 0},
-        )
+        from .seed import PLAN_SEED
+        plan, _ = cls.objects.get_or_create(key=FREE_PLAN_KEY, defaults=PLAN_SEED[FREE_PLAN_KEY])
         return plan
 
     def __str__(self):

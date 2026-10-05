@@ -161,10 +161,6 @@ export default function PricingPage() {
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-brand-green-500 font-bold">✓</span>
-                      <span>Photos per Collection: <strong className="font-semibold">{plan.max_photos_per_gallery ?? 'Unlimited'}</strong></span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-brand-green-500 font-bold">✓</span>
                       <span>Cloud Storage: <strong className="font-semibold">{plan.storage_gb} GB</strong></span>
                     </li>
                     <li className="flex items-center gap-2">

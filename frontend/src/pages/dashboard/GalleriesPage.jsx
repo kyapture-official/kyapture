@@ -11,6 +11,7 @@ import CreateGalleryModal from "../../components/shared/CreateGalleryModal";
 import Spinner from "../../components/ui/Spinner";
 import ItemMenu from "../../components/shared/ItemMenu";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
+import PlanLimitModal from "../../components/shared/PlanLimitModal";
 import ShareLinkModal from "../../components/shared/ShareLinkModal";
 import ShareQrModal from "../../components/shared/ShareQrModal";
 import { buildShareMenuChildren, resolveShareUrl, shareText } from "../../utils/share";
@@ -34,6 +35,7 @@ export default function GalleriesPage() {
   const [qrGallery, setQrGallery] = useState(null); // collection whose QR code is shown
   const [pendingDelete, setPendingDelete] = useState(null); // collection awaiting the permanent-delete confirmation
   const [deleting, setDeleting] = useState(false);
+  const [limitInfo, setLimitInfo] = useState(null); // the server's refusal when the plan's collection cap is reached
 
   const defaultBrandingColor =
     useAuthStore((s) => s.user?.branding_color) ?? "#111827";
@@ -126,15 +128,13 @@ export default function GalleriesPage() {
       if (err.code === 'ERR_NETWORK' && !err.response) {
         toast("Cannot reach the server. Make sure the backend is running on port 8000.", "error");
         throw new Error("Backend unreachable");
+      } else if (err.response?.status === 403 && err.response?.data?.code === "gallery_limit_reached") {
+        setOpenCreate(false);
+        setLimitInfo(err.response.data);
       } else if (err.response?.status === 403) {
         const data = err.response?.data;
-        const message =
-          data?.message ||
-          data?.detail ||
-          "Upgrade your plan to create more galleries.";
-        toast(message, "warning");
+        toast(data?.message || data?.error || data?.detail || "You can't create a collection on your current plan.", "warning");
         setOpenCreate(false);
-        setTimeout(() => navigate("/dashboard/billing"), 2200);
       } else {
         const errorMsg =
           err.response?.data?.error ||
@@ -500,6 +500,19 @@ export default function GalleriesPage() {
           The client link stops working. This cannot be undone.
         </p>
       </ConfirmDialog>
+
+      <PlanLimitModal
+        open={limitInfo !== null}
+        title="Collection limit reached"
+        onClose={() => setLimitInfo(null)}
+      >
+        <p>
+          Your <span className="font-medium text-ink">{limitInfo?.plan_name}</span> plan includes{" "}
+          <span className="font-medium text-ink" data-testid="limit-count">{limitInfo?.plan_limit}</span>{" "}
+          collection{limitInfo?.plan_limit === 1 ? "" : "s"}, and you are using {limitInfo?.current_count}.
+          Delete a collection or view plans to upgrade.
+        </p>
+      </PlanLimitModal>
 
       {/* ── CREATE GALLERY MODAL ── */}
       <CreateGalleryModal

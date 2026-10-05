@@ -104,7 +104,6 @@ def get_user_subscription_metrics(user):
         "active_subscription": active_sub,
         "plan_name": plan.name,
         "max_galleries": plan.max_collections,
-        "max_photos_per_gallery": plan.max_photos_per_gallery,
         "storage_bytes_limit": plan.storage_gb * 1024 * 1024 * 1024,
         # Video allowance comes from the plan row: 0 = no video, None = unlimited,
         # N = N minutes (apps/subscriptions/entitlements.py::video_quota_violation).
@@ -112,6 +111,7 @@ def get_user_subscription_metrics(user):
         "allow_video": plan.video_minutes != 0,
         "current_video_seconds": 0,
         "current_galleries_count": 0,
+        "live_galleries_count": 0,
         "current_total_storage_bytes": 0,
     }
 
@@ -130,9 +130,17 @@ def get_user_subscription_metrics(user):
     # stops existing at all and naturally drops out of this count —
     # quota only frees up when the data is actually gone, not when it's
     # merely hidden.
-    limits["current_galleries_count"] = Gallery.objects.filter(
-        photographer=user,
-    ).count()
+    #
+    # The plan's COLLECTION CAP is checked against `live_galleries_count`
+    # instead: live (is_active) collections only, i.e. what the photographer
+    # sees. Deleting a collection is permanent now, so a delete removes the row
+    # and frees its slot at once; a legacy trashed row never blocks creation.
+    gallery_counts = Gallery.objects.filter(photographer=user).aggregate(
+        total=Count('id'),
+        live=Count('id', filter=Q(is_active=True)),
+    )
+    limits["current_galleries_count"] = gallery_counts['total']
+    limits["live_galleries_count"] = gallery_counts['live']
 
     # Same rationale as above — a trashed gallery's assets still occupy
     # real storage until the purge task actually deletes them.

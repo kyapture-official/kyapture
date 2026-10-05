@@ -269,13 +269,13 @@ class JsonCompressionTests(QueryBase):
 
 
 class RewrittenQueriesKeepTheirAnswersTests(QueryBase):
-    def test_stats_count_active_galleries_only_for_photos_but_all_for_galleries(self):
+    def test_stats_count_live_galleries_only(self):
         live = self.make_gallery('live', photos=2)
         trashed = self.make_gallery('trashed', photos=3)
         Gallery.objects.filter(pk=trashed.pk).update(is_active=False, trashed_at=timezone.now())
         count, response = self.queries('/api/v1/galleries/dashboard/stats/')
         self.assertEqual(response.data['photos_used'], 2)          # trashed gallery's photos are not "in use"
-        self.assertEqual(response.data['galleries_used'], 2)       # but it still occupies quota until purged
+        self.assertEqual(response.data['galleries_used'], 1)       # collections are counted live, same as the plan cap
         self.assertEqual(response.data['subscription_status'], 'active')
         self.assertGreater(response.data['days_remaining'], 0)
         self.assertEqual(response.data['plan_name'], 'Pro')

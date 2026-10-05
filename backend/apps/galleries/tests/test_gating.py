@@ -32,7 +32,6 @@ class SaaSResourceGatingTestCase(APITestCase):
             name="Strict Gating Plan",
             price=19.99,
             max_collections=2,
-            max_photos_per_gallery=2,
             storage_gb=1,
             is_active=True
         )
@@ -86,35 +85,22 @@ class SaaSResourceGatingTestCase(APITestCase):
         # Resilient payload search (handles standard DRF and global nested exceptions)
         self.assertIn("gallery_limit_reached", str(response_3.data))
 
-    def test_photo_upload_count_gating(self):
+    def test_there_is_no_per_collection_photo_cap(self):
         """
-        Verify that a photographer cannot exceed their plan's maximum photos per gallery limit.
-        Expected: Uploading up to 2 photos succeeds. Uploading the 3rd raises photo_limit_reached (400).
+        Storage (GB) is the only photo cap: a collection takes any number of photos
+        while the account is under its storage limit, and the plan has no such field.
         """
+        self.assertFalse(hasattr(SubscriptionPlan, "max_photos_per_gallery"))
         gallery = Gallery.objects.create(
             photographer=self.photographer,
             title="SaaS Test Gallery",
             slug="saas-test-gallery"
         )
         upload_url = f"/api/v1/photos/{gallery.slug}/upload/"
-
-        # Upload Photo 1 (Success)
-        img_1 = self.generate_dummy_image("file_1.jpg")
-        response_1 = self.client.post(upload_url, {"image": [img_1]}, format="multipart")
-
-        self.assertEqual(response_1.status_code, status.HTTP_202_ACCEPTED)  
-
-        # Upload Photo 2 (Success)
-        img_2 = self.generate_dummy_image("file_2.jpg")
-        response_2 = self.client.post(upload_url, {"image": [img_2]}, format="multipart")
-        self.assertEqual(response_2.status_code, status.HTTP_202_ACCEPTED)  
-
-        # Upload Photo 3 (Must Fail with Gating Violation)
-        img_3 = self.generate_dummy_image("file_3.jpg")
-        response_3 = self.client.post(upload_url, {"image": [img_3]}, format="multipart")
-
-        self.assertEqual(response_3.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("photo_limit_reached", str(response_3.data))
+        for n in range(3):
+            response = self.client.post(
+                upload_url, {"image": [self.generate_dummy_image(f"file_{n}.jpg")]}, format="multipart")
+            self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
 
     def test_storage_quota_gating(self):
         """

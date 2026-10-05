@@ -1,11 +1,10 @@
 // File Location: frontend/src/components/billing/PlanComparisonTable.jsx
 import { formatPlanPrice } from '../../utils/formatters'
+import { formatCollections, formatPhotoEstimate, formatStorage, formatVideoMinutes } from '../../utils/planLimits'
 
 // Rows are generated from the plans API (the plan table): limits come from the
 // plan's own fields, feature rows from each plan's `features` list. Nothing
 // here names a plan, price or feature.
-const gb = (n) => `${Number(n).toLocaleString('en-NP')} GB`
-const count = (n, noun) => (n == null ? 'Unlimited' : `${Number(n).toLocaleString('en-NP')} ${noun}`)
 
 function Mark({ on, label }) {
   return on ? (
@@ -20,19 +19,25 @@ function Mark({ on, label }) {
 export default function PlanComparisonTable({ plans, currentPlanId }) {
   if (!plans.length) return null
 
+  // The photo estimate and the average photo size behind it come from the API.
+  const averageMb = plans.find((p) => p.average_photo_size_mb != null)?.average_photo_size_mb
   const limitRows = [
-    { key: 'storage', label: 'Storage', cell: (p) => gb(p.storage_gb) },
-    { key: 'collections', label: 'Collections', cell: (p) => count(p.max_collections, 'collections') },
+    {
+      key: 'storage',
+      label: 'Photo storage',
+      cell: (p) => (
+        <>
+          {formatStorage(p.storage_gb)}
+          {formatPhotoEstimate(p) && (
+            <span className="mt-0.5 block whitespace-nowrap text-[11px] text-muted" data-testid="photo-estimate">{formatPhotoEstimate(p)}</span>
+          )}
+        </>
+      ),
+    },
+    { key: 'collections', label: 'Collections', cell: (p) => formatCollections(p.max_collections) },
+    // Always shown: 0 = no video, empty = unlimited, N = N minutes.
+    { key: 'video', label: 'Video', cell: (p) => formatVideoMinutes(p.video_minutes) },
   ]
-  if (plans.some((p) => p.max_photos_per_gallery != null)) {
-    limitRows.push({ key: 'photos', label: 'Photos per collection', cell: (p) => count(p.max_photos_per_gallery, 'photos') })
-  }
-  // Video minutes come from the plan row: 0 = no video, empty = unlimited, N = N minutes.
-  limitRows.push({
-    key: 'video',
-    label: 'Video',
-    cell: (p) => (p.video_minutes === 0 ? '—' : p.video_minutes == null ? 'Unlimited' : `${p.video_minutes} min`),
-  })
   const featureRows = plans[0].features || []
 
   return (
@@ -71,6 +76,11 @@ export default function PlanComparisonTable({ plans, currentPlanId }) {
           ))}
         </tbody>
       </table>
+      {averageMb != null && (
+        <p className="mt-3 text-[11px] text-muted" data-testid="photo-estimate-note">
+          Photo counts are estimates, based on an average photo of {averageMb} MB.
+        </p>
+      )}
     </div>
   )
 }

@@ -9,7 +9,6 @@ import { useAuthStore } from '../store/authStore'
 // that video upload is a paid-plan capability.
 const FREE_PLAN_LIMITS = {
   max_galleries: null,
-  max_photos_per_gallery: null,
   storage_gb: null,
   allow_video: false,
 }
@@ -98,7 +97,6 @@ export function useSubscription() {
     return isSubscribed && plan
       ? {
           max_galleries:          plan.max_collections,
-          max_photos_per_gallery: plan.max_photos_per_gallery,
           storage_gb:             plan.storage_gb,
           allow_video:            true,
         }

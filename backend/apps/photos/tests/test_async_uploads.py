@@ -34,7 +34,6 @@ class PhotoAsyncUploadTestCase(APITestCase):
             name="Async Pro Plan",
             price=29.99,
             max_collections=5,
-            max_photos_per_gallery=100,
             storage_gb=10,
             is_active=True
         )

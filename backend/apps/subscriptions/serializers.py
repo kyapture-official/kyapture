@@ -5,7 +5,10 @@ from django.utils import timezone
 from rest_framework import serializers
 from apps.photos.models import MediaAsset
 from .entitlements import FEATURES, feature_label, plan_feature_flags
-from .models import FREE_PLAN_KEY, SubscriptionPlan, UserSubscription, ManualPayment
+from .models import (
+    AVERAGE_PHOTO_SIZE_MB, FREE_PLAN_KEY, SubscriptionPlan, UserSubscription, ManualPayment,
+    estimate_photo_count,
+)
 from rest_framework.exceptions import ValidationError
 
 
@@ -16,9 +19,12 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
     pricing page and every locked-feature banner. `features` is generated from
     the entitlements.FEATURES registry + the plan's flag columns, so the
     comparison table needs no per-plan code. Prices are NPR; limits that are
-    null mean unlimited.
+    null mean unlimited. `estimated_photos` / `average_photo_size_mb` are the
+    storage-to-photos estimate (see models.AVERAGE_PHOTO_SIZE_MB).
     """
     storage_bytes = serializers.SerializerMethodField()
+    estimated_photos = serializers.SerializerMethodField()
+    average_photo_size_mb = serializers.SerializerMethodField()
     is_free = serializers.BooleanField(read_only=True)
     features = serializers.SerializerMethodField()
 
@@ -32,8 +38,9 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             'is_free',
             'storage_gb',
             'storage_bytes',
+            'estimated_photos',
+            'average_photo_size_mb',
             'max_collections',
-            'max_photos_per_gallery',
             'video_minutes',
             'features',
         ]
@@ -42,6 +49,12 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
     def get_storage_bytes(self, obj):
         # 1 GB = 1024^3 bytes (Binary base-2 representation) [1.1.2]
         return obj.storage_gb * (1024 ** 3)
+
+    def get_estimated_photos(self, obj):
+        return estimate_photo_count(obj.storage_gb)
+
+    def get_average_photo_size_mb(self, obj):
+        return AVERAGE_PHOTO_SIZE_MB
 
     def get_features(self, obj):
         flags = plan_feature_flags(obj)
@@ -119,7 +132,7 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
         from apps.core.utils import get_user_subscription_metrics
         if not hasattr(self, '_metrics_cache'):
             self._metrics_cache = get_user_subscription_metrics(obj.user)
-        return self._metrics_cache['current_galleries_count']
+        return self._metrics_cache['live_galleries_count']
 
     def get_photos_used(self, obj):
         from apps.core.utils import get_user_subscription_metrics

@@ -5,19 +5,23 @@ from datetime import timedelta
 from django.utils import timezone
 
 from .models import SubscriptionPlan, UserSubscription
+from .seed import PLAN_SEED
 
 
 def grant_plan(user, name='Pro', includes_branding_watermark=True, days=30,
                status=UserSubscription.SubscriptionStatus.ACTIVE):
-    """`includes_branding_watermark` switches all three paid-feature flags together."""
-    plan, _ = SubscriptionPlan.objects.update_or_create(
-        name=name,
-        defaults={
-            'key': name.lower(), 'price': 1499, 'max_collections': 20, 'max_photos_per_gallery': 500,
-            'storage_gb': 50, 'original_download': includes_branding_watermark,
-            'watermark': includes_branding_watermark, 'branding': includes_branding_watermark,
-        },
-    )
+    """
+    Subscribes `user` to the named plan ROW (price and limits come from the plan
+    table / seed, never from this helper; a seeded plan missing from the table is
+    re-created from the seed). `includes_branding_watermark` switches all three
+    paid-feature flags together.
+    """
+    plan = SubscriptionPlan.objects.filter(name__iexact=name).first()
+    if plan is None:
+        plan = SubscriptionPlan.objects.create(**PLAN_SEED[name.lower()])
+    for flag in ('original_download', 'watermark', 'branding'):
+        setattr(plan, flag, includes_branding_watermark)
+    plan.save()
     now = timezone.now()
     UserSubscription.objects.update_or_create(
         user=user,
