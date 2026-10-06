@@ -259,11 +259,14 @@ class PhotographerFavoriteActivityTests(FavBase):
         self.heart(d2, 'laptop', self.photos[2], email='FAN@example.com')
         self.heart(self.visitor(), 'other', self.photos[3], email='other@example.com', name='Olive')
         data = self.as_owner().get(self.activity, {'group': 'visitor'}).data
-        by_email = {g['email'].lower(): g for g in data['results']}
-        self.assertEqual(set(by_email), {'fan@example.com', 'other@example.com'})
+        by_email = {(g['email'] or 'guest').lower(): g for g in data['results']}
+        self.assertEqual(set(by_email), {'fan@example.com', 'other@example.com', 'guest'})
         fan = by_email['fan@example.com']
-        self.assertEqual((fan['total_photos'], fan['list_count']), (3, 1))       # 6.4-B: one email = ONE list
-        self.assertEqual([l['photo_count'] for l in fan['lists']], [3])
+        # 7-A: a typed email no longer joins two browsers (debt row 129). The phone's list
+        # keeps the email (one email = one default list); the laptop's own list is a Guest.
+        self.assertEqual((fan['total_photos'], fan['list_count']), (2, 1))
+        self.assertEqual([l['photo_count'] for l in fan['lists']], [2])
+        self.assertEqual(by_email['guest']['total_photos'], 1)
         self.assertTrue(all(l['thumbnail_url'] and l['created_at'] and l['updated_at'] for l in fan['lists']))
         self.assertEqual(by_email['other@example.com']['name'], 'Olive')
         self.assertNotIn('client_key', str(data))

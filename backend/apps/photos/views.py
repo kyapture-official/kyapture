@@ -1,6 +1,7 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/views.py
 import logging
 import os
+import uuid
 from decimal import Decimal
 from django.db import transaction, IntegrityError
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -441,7 +442,16 @@ class PhotoBatchStatusView(APIView):
         # tick needs more than a couple hundred ids at once.
         requested_ids = requested_ids[:200]
 
-        assets = MediaAsset.objects.filter(gallery=gallery, id__in=requested_ids)
+        # A malformed id is ignored like an unknown one (it used to reach the
+        # ORM and answer 500).
+        valid_ids = []
+        for raw_id in requested_ids:
+            try:
+                valid_ids.append(uuid.UUID(raw_id))
+            except ValueError:
+                continue
+
+        assets = MediaAsset.objects.filter(gallery=gallery, id__in=valid_ids)
         serializer = MediaAssetSerializer(assets, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 

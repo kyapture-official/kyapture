@@ -17,7 +17,7 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 
 | # | Gap | Raised in | Owner chunk |
 |---|-----|-----------|-------------|
-| 5 | Favorites are matched by typed email with no verification: anyone can see another person's favorite list in a gallery | 6.4-B | 7-A (add to its prompt) |
+| 5 | Favorites are matched by typed email with no verification: anyone can see another person's favorite list in a gallery | 6.4-B | 7-A (add to its prompt). **DONE in 7-A**: proven by failing tests first (`apps/clients/tests/test_tenancy_7a.py`, 14 failures before the fix), then fixed: a list belongs only to the key that made it (browser `client_uid`, else the unlock token); an email is a label, never a lookup. Cross-device gap: row 129 |
 | 6 | original_url is returned in the media API: check it against the private-storage rule (Free user must not reach Original) | VID-A | 7-B |
 | 7 | "Direct API refused" for Free users proven by tests and a raw 403 only (curl check failed on token format) | BILL-B | 7-B / 15-A |
 | 8 | Hard ceilings 25 MB per image and 5 GB per video are not plan values: owner decision | VID-A | 13-C (owner decides). **PARTLY DONE in UP-A**: they are now ONE admin-editable row (Subscriptions > Upload limits: images 100 MB and 144,000,000 px, video 2048 MB), global, not per plan. Still open: the owner decides the real values and whether any should differ per plan |
@@ -138,10 +138,10 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 
 | # | Gap | Raised in | Owner chunk |
 |---|-----|-----------|-------------|
-| 78 | SEC-01: `NUM_PROXIES` is a top-level setting (`production.py:242`) but DRF reads it only from `REST_FRAMEWORK`, so throttles key on the raw client-supplied `X-Forwarded-For`; a new header value per request bypasses login, unlock/PIN and reset throttles. `_get_client_ip` (`clients/views.py:135`, `clients/serializers.py:390`) also stores the left-most XFF as the client IP. Needs a proxy that overwrites XFF plus a test | SEC-0 | 7-A |
-| 79 | SEC-02 (widens row 5): a claimed `?email=` also lets any visitor rename, delete and add photos to another visitor's favorite lists (`favorite_lists.py:87-128, 217-222`; `clients/views.py:926-970`) | SEC-0 | 7-A |
-| 80 | SEC-03: "Restrict Downloads to Specific Contacts" accepts any typed, unverified email that is on the list (`download_access.py:224-229`) | SEC-0 | 7-A |
-| 81 | SEC-04: download PIN 4-8 digits and gallery password min 4 chars, with no per-gallery failed-attempt counter, backoff or alert; only the per-IP throttle (see row 78) | SEC-0 | 7-A |
+| 78 | SEC-01: `NUM_PROXIES` is a top-level setting (`production.py:242`) but DRF reads it only from `REST_FRAMEWORK`, so throttles key on the raw client-supplied `X-Forwarded-For`; a new header value per request bypasses login, unlock/PIN and reset throttles. `_get_client_ip` (`clients/views.py:135`, `clients/serializers.py:390`) also stores the left-most XFF as the client IP. Needs a proxy that overwrites XFF plus a test | SEC-0 | 7-A. **Not taken by 7-A (tenancy)**: the 7-A prompt was scoped to tenancy only; still OPEN for the 7-A auth/identity pass |
+| 79 | SEC-02 (widens row 5): a claimed `?email=` also lets any visitor rename, delete and add photos to another visitor's favorite lists (`favorite_lists.py:87-128, 217-222`; `clients/views.py:926-970`) | SEC-0 | 7-A. **DONE in 7-A** (with row 5): read, rename, delete, add-to-list, un-heart, guest-merge and list-name probing via a typed email or an unlock-session email all proven, then refused (404 / own empty list); one email still has one default list |
+| 80 | SEC-03: "Restrict Downloads to Specific Contacts" accepts any typed, unverified email that is on the list (`download_access.py:224-229`) | SEC-0 | 7-A. **Not taken by 7-A (tenancy)**: the 7-A prompt was scoped to tenancy only; still OPEN for the 7-A auth/identity pass |
+| 81 | SEC-04: download PIN 4-8 digits and gallery password min 4 chars, with no per-gallery failed-attempt counter, backoff or alert; only the per-IP throttle (see row 78) | SEC-0 | 7-A. **Not taken by 7-A (tenancy)**: the 7-A prompt was scoped to tenancy only; still OPEN for the 7-A auth/identity pass |
 | 82 | SEC-05: originals and public derivatives share one bucket and the same key prefix; the original's key is derivable from a public display URL, so privacy depends only on per-object ACL. Bucket policy / Block Public Access / Object Ownership not in repo; verify on staging | SEC-0 | 7-B (verify in 15-A) |
 | 83 | SEC-06: with `DEBUG=True`, `config/urls.py:37-38` serves all of `MEDIA_ROOT` without auth (originals, Download Masters, receipts) and compose publishes `:8000` on all interfaces | SEC-0 | 7-B |
 | 84 | SEC-07: `PublicVideoStreamView` redirects to a signed URL of the private original when no playback MP4 exists, and ignores `allow_download` (`clients/views.py:1742-1753`) | SEC-0 | 7-B |
@@ -149,10 +149,10 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | 86 | SEC-10: no `backend/.dockerignore`; `COPY . .` (`backend/Dockerfile:50`) puts `backend/.env`, `venv/`, `media/`, `logs/` into the image. Not inspected (no build in SEC-0) | SEC-0 | 13-C |
 | 87 | SEC-11: dev DB password hardcoded in `docker-compose.yml` (5 places) and `development.py:14`, equal to the DB name, in history since the first commit; Postgres, Redis (no auth), Mailpit and Django published on all host interfaces | SEC-0 | 13-C |
 | 88 | SEC-13: one `SECRET_KEY` signs JWTs, download/job/file tokens and reset links; no separate JWT key, no `SECRET_KEY_FALLBACKS`, no rotation runbook; S3 and SES share one AWS key pair | SEC-0 | 13-C |
-| 89 | SEC-14: gallery unlock tokens stored in plaintext (`clients/models.py:61`), visible in admin, and accepted in `?token=` URLs (logs, history) | SEC-0 | 7-A |
-| 90 | SEC-15: Django admin at the default `/admin/` with no login throttle/lockout, no MFA, no network restriction; gallery admin form shows password/PIN hashes | SEC-0 | 7-A |
-| 91 | SEC-16: no email verification at registration | SEC-0 | 7-A |
-| 92 | SEC-17: token refresh has no own throttle and falls under `anon` 100/day per IP (~96 refreshes/day per active user); several users behind one NAT can be logged out. Not runtime-tested | SEC-0 | 7-A |
+| 89 | SEC-14: gallery unlock tokens stored in plaintext (`clients/models.py:61`), visible in admin, and accepted in `?token=` URLs (logs, history) | SEC-0 | 7-A. **Not taken by 7-A (tenancy)**: the 7-A prompt was scoped to tenancy only; still OPEN for the 7-A auth/identity pass |
+| 90 | SEC-15: Django admin at the default `/admin/` with no login throttle/lockout, no MFA, no network restriction; gallery admin form shows password/PIN hashes | SEC-0 | 7-A. **Not taken by 7-A (tenancy)**: the 7-A prompt was scoped to tenancy only; still OPEN for the 7-A auth/identity pass |
+| 91 | SEC-16: no email verification at registration | SEC-0 | 7-A. **Not taken by 7-A (tenancy)**: the 7-A prompt was scoped to tenancy only; still OPEN for the 7-A auth/identity pass |
+| 92 | SEC-17: token refresh has no own throttle and falls under `anon` 100/day per IP (~96 refreshes/day per active user); several users behind one NAT can be logged out. Not runtime-tested | SEC-0 | 7-A. **Not taken by 7-A (tenancy)**: the 7-A prompt was scoped to tenancy only; still OPEN for the 7-A auth/identity pass |
 | 93 | SEC-18: ffmpeg poster/transcode `subprocess.run` has no timeout (`core/utils.py:868, 895`); no Celery time limits | SEC-0 | 7-B |
 | 94 | SEC-19: GPS strip fails open (`core/utils.py:329`); video location metadata is never stripped and video originals are served to clients | SEC-0 | 7-B |
 | 95 | SEC-20: one `nginx.conf` CSP for every build allows `http://localhost:8000` and `style-src 'unsafe-inline'`; no `server_tokens off` | SEC-0 | 15-A |
@@ -209,6 +209,16 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | 126 | Only Latin and Devanagari have a style font. Other scripts (Arabic, CJK, Thai, Cyrillic, Greek) and Latin letters outside the Latin subset (Polish ł, Vietnamese, Turkish ğ) still fall to the system font of the stack | 6.2-C | 9A-3 (add a subset when a photographer needs one; same unicode-range pattern) |
 | 127 | In the photographer's Design tab, a Devanagari title makes the browser fetch up to three Devanagari files (about 150 KB, cached afterwards) instead of one: the Live Preview first draws with the app-default look before the style list arrives (serif 400), and its `transition-all` animates the font weight from 400 to the style's weight (sans 400 then 600). The client gallery is not affected (exactly one) | 6.2-C | 9C-1 (Design page pass) |
 | 128 | Older browsers show the Devanagari slightly small (no `size-adjust`: Safari before 17) and lines of a mixed title uneven (no `:has()`: Chrome before 105, Firefox before 121). The span-level letter-spacing and line height still apply | 6.2-C | 13-C (browser support decision before release) |
+
+
+## Q. Raised by 7-A (tenancy, docs/security/threat-model.md section 9)
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 129 | Favorites no longer follow a typed email across devices (the price of rows 5/79): the same person on a second browser gets a separate list, and because one email keeps ONE default list, that second list is stored without the email, so the photographer sees it as a Guest (the favorites rows keep the typed email). Joining devices needs a verified email (one-time code or magic link) | 7-A | product decision, then 7-A auth pass (with row 91) |
+| 130 | Lists made on a protected gallery BEFORE 7-A are keyed by an old unlock token. They move to the browser's `client_uid` on the first call that carries both (same tab); once that tab is closed nothing links them to the visitor any more (the photographer still sees them). Also: an emailed ready link issued before 7-A on a gallery that has a password or PIN now reads as expired (no gate fingerprint): the visitor prepares the download again | 7-A | 13-C (release notes) |
+| 131 | A deactivated photographer's published galleries stay public: `PublicGalleryView` and the other public lookups do not check `photographer.is_active` (only the portfolio does). Their API tokens stop at once (tested). Whether suspension also takes galleries offline is an owner decision | 7-A | owner decision, then 7-A auth pass |
+| 132 | `GET /photos/{slug}/status/?ids=not-a-uuid` on one's OWN gallery answered 500 (ORM ValidationError); proven by `test_a_malformed_id_in_a_query_is_a_clean_answer_not_a_500` | 7-A | 7-A. **DONE in 7-A**: malformed ids are ignored like unknown ones |
 
 ## Accepted (no fix needed)
 

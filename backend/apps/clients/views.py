@@ -638,12 +638,26 @@ class GalleryUnlockView(APIView):
 def _claimed_email(request):
     """
     The email the visitor's browser remembered for this gallery and sent along
-    (`?email=` / body `email`), or None. It lets a returning visitor reach the lists
-    saved under that email even though their unlock token / browser id is new.
+    (`?email=` / body `email`), or None. It is typed, never verified: it only
+    LABELS the visitor's own lists for the photographer and never grants access
+    to a list (7-A, SEC-02).
     """
     raw = request.query_params.get('email') or (request.data.get('email') if hasattr(request.data, 'get') else None)
     email, _ = fav.clean_email(raw)
     return email
+
+
+def _client_uid(request):
+    """(uid, error Response | None): the browser's client_uid from the body or query; '' when absent."""
+    raw = request.data.get('client_uid') if hasattr(request.data, 'get') else None
+    raw = raw or request.query_params.get('client_uid', '')
+    uid = raw.strip() if isinstance(raw, str) else ''
+    if len(uid) > fav.MAX_CLIENT_KEY_LENGTH:
+        return '', Response(
+            {'error': 'client_uid is not valid.', 'code': 'client_uid_invalid'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    return uid, None
 
 
 def _resolve_client_identity(gallery, request):
@@ -652,20 +666,29 @@ def _resolve_client_identity(gallery, request):
     model (see apps/clients/models.py's Favorite docstring):
 
     - Password-protected gallery: the client MUST already hold a valid
-      unlock token (same gate every other protected-gallery view uses).
-      That token becomes the client_key, and its ClientSession is linked
-      so the photographer can see the associated email if one was given.
-      A client cannot invent an arbitrary identity for a gallery it
-      hasn't actually unlocked.
+      unlock token (same gate every other protected-gallery view uses), so
+      a client cannot reach favorites of a gallery it hasn't unlocked. The
+      visitor is the browser's `client_uid` when it sends one (it survives
+      closing the tab, the unlock token does not), else the token itself.
+      Lists made earlier under this token move to the client_uid (the
+      request proves it holds both). Its ClientSession is linked so the
+      photographer can see the associated email if one was given.
     - Open gallery: no password gate exists to piggyback on, so the
       frontend-generated `client_uid` (sent in the body for POST/DELETE,
       as a query param for GET) is the identity. Required — an empty/
       missing uid is rejected rather than silently bucketing every
       anonymous visitor into one shared "favorites" pile.
 
+    The returned email (unlock session, else the one the browser sent) is a
+    label only: lists are matched by client_key alone (7-A, SEC-02).
+
     Returns (client_key, client_session, email, error_response). Exactly
     one of (client_key, error_response) is non-None.
     """
+    client_uid, uid_error = _client_uid(request)
+    if uid_error:
+        return None, None, None, uid_error
+
     if gallery.is_password_protected:
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
         token = (
@@ -685,12 +708,12 @@ def _resolve_client_identity(gallery, request):
                 {'error': 'Invalid or expired access token.'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        return token, session, session.email or _claimed_email(request), None
+        client_key = token
+        if client_uid:
+            fav.adopt_lists(gallery, token, client_uid)
+            client_key = client_uid
+        return client_key, session, session.email or _claimed_email(request), None
 
-    client_uid = (
-        (request.data.get('client_uid') if hasattr(request.data, 'get') else None)
-        or request.query_params.get('client_uid', '')
-    ).strip()
     if not client_uid:
         return None, None, None, Response(
             {'error': 'client_uid is required for this gallery.', 'code': 'client_uid_required'},
@@ -738,7 +761,7 @@ class GalleryFavoritesView(APIView):
         if error:
             return error
 
-        favorited_ids = fav.visitor_favorites(gallery, client_key, email).values_list('media_asset_id', flat=True)
+        favorited_ids = fav.visitor_favorites(gallery, client_key).values_list('media_asset_id', flat=True)
         return Response(
             {
                 'favorited_ids': [str(i) for i in set(favorited_ids)],
@@ -783,7 +806,7 @@ class GalleryFavoritesView(APIView):
 
         list_id = request.data.get('list_id')
         if list_id:
-            favorite_list = fav.get_visitor_list(gallery, client_key, list_id, email)
+            favorite_list = fav.get_visitor_list(gallery, client_key, list_id)
             if favorite_list is None:
                 return error_response('Favorite list not found.', 'list_not_found', status.HTTP_404_NOT_FOUND)
             fav.remember_visitor(gallery, client_key, email, visitor_name)
@@ -814,12 +837,12 @@ class GalleryFavoritesView(APIView):
         if error:
             return error
 
-        removals = fav.visitor_favorites(gallery, client_key, email).filter(
+        removals = fav.visitor_favorites(gallery, client_key).filter(
             media_asset_id=serializer.validated_data['media_asset_id'],
         )
         list_id = request.data.get('list_id')
         if list_id:
-            favorite_list = fav.get_visitor_list(gallery, client_key, list_id, email)
+            favorite_list = fav.get_visitor_list(gallery, client_key, list_id)
             if favorite_list is None:
                 return error_response('Favorite list not found.', 'list_not_found', status.HTTP_404_NOT_FOUND)
             removals = removals.filter(favorite_list=favorite_list)
@@ -827,7 +850,7 @@ class GalleryFavoritesView(APIView):
         removals.delete()
         FavoriteList.objects.filter(pk__in=touched).update(updated_at=timezone.now())
         return Response({
-            'favorited': fav.visitor_favorites(gallery, client_key, email).filter(
+            'favorited': fav.visitor_favorites(gallery, client_key).filter(
                 media_asset_id=serializer.validated_data['media_asset_id'],
             ).exists(),
         }, status=status.HTTP_200_OK)
@@ -883,7 +906,7 @@ class GalleryFavoriteListsView(FavoriteListsAccessMixin, APIView):
         if error:
             return error
         sort = 'oldest' if request.query_params.get('sort') == 'oldest' else 'newest'
-        return Response({'results': [_list_payload(request, fl) for fl in fav.annotated_lists(gallery, client_key, sort, email)]})
+        return Response({'results': [_list_payload(request, fl) for fl in fav.annotated_lists(gallery, client_key, sort)]})
 
     def post(self, request, username, slug):
         gallery, client_key, _, known_email, error = self.resolve(request, username, slug)
@@ -899,14 +922,16 @@ class GalleryFavoriteListsView(FavoriteListsAccessMixin, APIView):
         visitor_name = fav.clean_visitor_name(request.data.get('visitor_name'))
         # A guest list is folded into the email's list before anything new is counted.
         fav.remember_visitor(gallery, client_key, email, visitor_name)
-        if fav.visitor_lists(gallery, client_key, email).count() >= fav.MAX_LISTS_PER_VISITOR:
+        if fav.visitor_lists(gallery, client_key).count() >= fav.MAX_LISTS_PER_VISITOR:
             return error_response(f'You can have up to {fav.MAX_LISTS_PER_VISITOR} favorite lists.', 'too_many_lists', status.HTTP_400_BAD_REQUEST)
-        if fav.visitor_lists(gallery, client_key, email).filter(name__iexact=name).exists():
+        if fav.visitor_lists(gallery, client_key).filter(name__iexact=name).exists():
             return error_response('You already have a list with that name.', 'list_name_taken', status.HTTP_409_CONFLICT)
         # A visitor's first list is their default one (an email has only ONE default list).
-        has_default = fav.visitor_lists(gallery, client_key, email).filter(is_default=True).exists()
+        has_default = fav.visitor_lists(gallery, client_key).filter(is_default=True).exists()
         favorite_list = FavoriteList.objects.create(
-            gallery=gallery, client_key=client_key, name=name, email=email,
+            gallery=gallery, client_key=client_key, name=name,
+            # one email = one default list: a default list only takes a free email
+            email=email if has_default else fav.default_list_email(gallery, email),
             visitor_name=visitor_name, is_default=not has_default,
         )
         favorite_list.photo_count = 0
@@ -924,10 +949,10 @@ class GalleryFavoriteListDetailView(FavoriteListsAccessMixin, APIView):
     """
 
     def _list(self, request, username, slug, list_id):
-        gallery, client_key, _, self.email, error = self.resolve(request, username, slug)
+        gallery, client_key, _, _, error = self.resolve(request, username, slug)
         if error:
             return None, None, None, error
-        favorite_list = fav.get_visitor_list(gallery, client_key, list_id, self.email)
+        favorite_list = fav.get_visitor_list(gallery, client_key, list_id)
         if favorite_list is None:
             return None, None, None, error_response('Favorite list not found.', 'list_not_found', status.HTTP_404_NOT_FOUND)
         return gallery, client_key, favorite_list, None
@@ -956,7 +981,7 @@ class GalleryFavoriteListDetailView(FavoriteListsAccessMixin, APIView):
         name = fav.clean_list_name(request.data.get('name'))
         if name is None:
             return error_response('Give your list a name (up to 80 characters).', 'invalid_list_name', status.HTTP_400_BAD_REQUEST)
-        if fav.visitor_lists(gallery, client_key, self.email).filter(name__iexact=name).exclude(pk=favorite_list.pk).exists():
+        if fav.visitor_lists(gallery, client_key).filter(name__iexact=name).exclude(pk=favorite_list.pk).exists():
             return error_response('You already have a list with that name.', 'list_name_taken', status.HTTP_409_CONFLICT)
         favorite_list.name = name
         favorite_list.save(update_fields=['name', 'updated_at'])

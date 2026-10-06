@@ -84,17 +84,18 @@ export default function ClientGalleryPage() {
   const [slideshowIndex, setSlideshowIndex] = useState(null);
   const [slideshowAutoplay, setSlideshowAutoplay] = useState(false);
 
-  // The client's identity for favorites: the verified unlock token for a
-  // protected gallery, or a per-browser generated id for an open one —
-  // see Favorite's docstring (backend apps/clients/models.py) for why.
+  // The client's identity for favorites: this browser's generated id (kept in
+  // localStorage, so a visitor's hearts survive closing the tab), plus the
+  // unlock token on a protected gallery, which the server still requires —
+  // see favorite_lists.py (backend apps/clients/) for why.
   // Built lazily inside event handlers/effects (never during render) since
-  // resolving the "open gallery" branch can write a freshly-generated uid
-  // into the client store.
-  // `email` is the one this browser remembered for the gallery: it lets a
-  // returning visitor (new unlock token / browser id) reach the lists saved under it.
+  // resolving the id can write a freshly-generated uid into the client store.
+  // `email` is the one this browser remembered for the gallery: a label for
+  // the photographer only; the server never finds lists by it (7-A).
   const getClientIdentity = useCallback(() => {
     const email = useVisitorStore.getState().getProfile(sessionKey)?.email || serverEmail || undefined;
-    return isPasswordProtected ? { token, email } : { clientUid: getOrCreateClientUid(sessionKey), email };
+    const clientUid = getOrCreateClientUid(sessionKey);
+    return isPasswordProtected ? { token, clientUid, email } : { clientUid, email };
   }, [isPasswordProtected, token, sessionKey, getOrCreateClientUid, serverEmail]);
 
   // Download is always an explicit action, never asked for on gallery entry.
@@ -297,9 +298,10 @@ export default function ClientGalleryPage() {
         // password-protected (identity depends on it) — fire-and-forget,
         // never blocks the gallery from rendering.
         const email = useVisitorStore.getState().getProfile(sessionKey)?.email || undefined;
+        const clientUid = getOrCreateClientUid(sessionKey);
         const identity = data.is_password_protected
-          ? { token: currentToken, email }
-          : { clientUid: getOrCreateClientUid(sessionKey), email };
+          ? { token: currentToken, clientUid, email }
+          : { clientUid, email };
         loadFavorites(currentToken, identity);
       } catch (err) {
         // Gracefully capture aborted controller events without throwing state anomalies

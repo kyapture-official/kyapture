@@ -394,7 +394,7 @@ STRIDE category in brackets. Likelihood: how easy the attack is with the current
 | ID | Title | Severity | Classification | Debt row |
 |---|---|---|---|---|
 | SEC-01 | XFF-chosen throttle identity | High | Needs verification | 78 |
-| SEC-02 | Favorites by typed email (read/edit/delete) | High | Needs verification | 5, 79 |
+| SEC-02 | Favorites by typed email (read/edit/delete) | High | **Confirmed, fixed in 7-A** | 5, 79 |
 | SEC-03 | Contact allow-list trusts typed email | Medium | Needs verification | 80 |
 | SEC-04 | Short PIN/password, no lockout | Medium | Weakness | 81 |
 | SEC-05 | Original key derivable, shared bucket | Medium | Needs verification | 82 |
@@ -423,3 +423,21 @@ STRIDE category in brackets. Likelihood: how easy the attack is with the current
 
 No finding is labelled **Confirmed vulnerability**: nothing was executed, and no committed production secret was found (see [secrets.md](secrets.md)).
 Existing debt rows that are security-relevant are cross-checked in [security-checklist.md](security-checklist.md) §21.
+
+---
+
+## 9. Chunk 7-A (tenancy) results
+
+Every claim below is a test in the repo that failed before the fix (or passes as proof that no fix was needed).
+
+| ID | Finding | Result | Test |
+|---|---|---|---|
+| SEC-02 | A typed `?email=` (or an unlock-session email) gave another visitor's favorite lists: read, rename, delete, add photos, un-heart, guest-list merge, list-name probing | **Confirmed** (14 failing tests), **fixed**: lists match the client key only (`apps/clients/favorite_lists.py`) | `apps/clients/tests/test_tenancy_7a.py` `FavoritesByTypedEmail*` |
+| SEC-30 | The emailed ready link (job `link_token`) and the file links minted from it kept working after the photographer changed the gallery password or the download PIN, so a share link outlived the gate it skips | **Confirmed** (3 failing tests), **fixed**: both carry password/PIN fingerprints (`apps/clients/download_access.py::_gates_unchanged`) | `ShareLinksNeverBypassGatesTests` |
+| SEC-31 | `client_uid` longer than 128 characters on favorite-list create was an unhandled `DataError` (500) | **Confirmed**, fixed (400 `client_uid_invalid`) | `test_an_oversized_client_uid_is_a_400_not_a_500` |
+| — | Privileged user fields (`is_staff`, `is_superuser`, `is_active`, `is_active_plan`, `email`, `password`, groups, ...) through profile PUT (JSON + multipart), PATCH, settings, change-password, register, gallery create/update | **Not exploitable**: read-only or absent from every writable serializer | `apps/users/tests/test_privilege_7a.py` |
+| — | Feedback `/mine/`, `/inbox/`, PATCH by id; staff-only API endpoints and Django admin for a normal user; deactivated user's access (cookie + bearer) and refresh tokens | **Not exploitable** | same file |
+| — | 26 owner endpoints with another photographer's slug/id (other photographer, staff without ownership, anonymous), foreign ids inside one's own gallery (move, bulk delete, reorder, sets, cover photo, favorites list) | **Not exploitable**: 404 (401 anonymous), nothing changed | `apps/galleries/tests/test_tenancy_7a.py` |
+| — | Unpublished / expired / deactivated / password-protected galleries on every public route; private paths in the public payload | **Not exploitable** | `GalleryStatesTests` |
+
+New gaps: debt rows 129-132.

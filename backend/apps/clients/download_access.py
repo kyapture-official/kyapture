@@ -345,6 +345,24 @@ def _pin_fingerprint(gallery):
     return hashlib.sha256(gallery.download_pin_hash.encode('utf-8')).hexdigest()[:16]
 
 
+def _password_fingerprint(gallery):
+    # The emailed ready link and its file links skip the unlock session, so
+    # they carry the password they were issued under: a new password (or a
+    # password added later) ends them, like it ends every unlock session.
+    if not gallery.is_password_protected or not gallery.password_hash:
+        return ''
+    return hashlib.sha256(gallery.password_hash.encode('utf-8')).hexdigest()[:16]
+
+
+def _gates_unchanged(payload, gallery):
+    """7-A: a grant that bypasses the unlock session never outlives a password or PIN change."""
+    if gallery.is_password_protected and payload.get('w', '') != _password_fingerprint(gallery):
+        return False
+    if download_pin_enforced(gallery) and payload.get('f', '') != _pin_fingerprint(gallery):
+        return False
+    return True
+
+
 def issue_download_token(gallery, email, pin_verified):
     return signing.dumps(
         {
@@ -392,9 +410,14 @@ def issue_job_link_token(job, gallery):
     Bound to ONE job of ONE gallery and nothing else: it carries no email and
     no PIN, never authorizes another job, and is only ever handed out by the
     authorized prepare POST (or the ready email built from that job). It does
-    not expire on its own -- the job does (job.expires_at, then the purge).
+    not expire on its own -- the job does (job.expires_at, then the purge) --
+    but it does end when the photographer changes the gallery password or the
+    download PIN (fingerprints 'w' / 'f', see _gates_unchanged).
     """
-    return signing.dumps({'j': str(job.id), 'g': str(gallery.id)}, salt=JOB_LINK_SALT, compress=True)
+    return signing.dumps(
+        {'j': str(job.id), 'g': str(gallery.id), 'w': _password_fingerprint(gallery), 'f': _pin_fingerprint(gallery)},
+        salt=JOB_LINK_SALT, compress=True,
+    )
 
 
 def job_link_token_is_valid(token, job, gallery):
@@ -409,6 +432,7 @@ def job_link_token_is_valid(token, job, gallery):
         isinstance(payload, dict)
         and payload.get('j') == str(job.id)
         and payload.get('g') == str(gallery.id)
+        and _gates_unchanged(payload, gallery)
     )
 
 
@@ -434,6 +458,7 @@ def issue_file_token(job, gallery, index):
             'i': int(index),
             'e': job.email or '',
             'f': _pin_fingerprint(gallery),
+            'w': _password_fingerprint(gallery),
         },
         salt=FILE_TOKEN_SALT,
         compress=True,
@@ -467,6 +492,9 @@ def file_token_state(token, job, gallery, index):
         return 'mismatch'
     # PIN changed or cleared since the grant was issued.
     if payload.get('f') != _pin_fingerprint(gallery):
+        return 'invalid'
+    # Gallery password changed (or added) since the grant was issued.
+    if not _gates_unchanged(payload, gallery):
         return 'invalid'
     # A contact removed from the allow-list no longer holds a working link.
     if not email_is_allowed(gallery, job.email):

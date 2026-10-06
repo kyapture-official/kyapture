@@ -6,9 +6,11 @@ CHUNK 6.4-B - four QA issues.
      DB unique constraint, data migration that merges existing duplicates)
   2. a download of several sets records and shows its set names in Download Activity
   3. a multi-part ZIP is ONE bell notification per download job ("N files")
-  4. a returning visitor (email remembered / on their unlock session) sees every
-     favorited photo filled and hearting again never makes a second list; a guest
-     list is merged into the email list once the same browser gives an email
+  4. a returning visitor on the SAME device (same client_uid, even with a new
+     unlock token) sees every favorited photo filled and hearting again never
+     makes a second list. 7-A (SEC-02) changed the rest: a typed email is only a
+     label, so another browser that types the same email gets its OWN list and
+     never reaches, merges into or edits the first one
 """
 import importlib
 
@@ -33,20 +35,24 @@ class OneListPerEmailTests(FavBase):
     def default_lists(self, email=EMAIL):
         return FavoriteList.objects.filter(gallery=self.gallery, email__iexact=email, is_default=True)
 
-    def test_same_email_from_two_browsers_is_one_default_list(self):            # repro: was 2 lists
+    def test_same_email_from_two_browsers_is_still_one_default_list(self):
         self.heart(self.visitor(), 'browser-a', self.photos[0], email=EMAIL)
-        self.heart(self.visitor(), 'browser-b', self.photos[1], email=EMAIL)
+        response = self.heart(self.visitor(), 'browser-b', self.photos[1], email=EMAIL)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(self.default_lists().count(), 1)
-        self.assertEqual(Favorite.objects.filter(favorite_list=self.default_lists().get()).count(), 2)
+        # 7-A: the typed email does not hand browser-b the first browser's list
+        self.assertEqual(Favorite.objects.filter(favorite_list=self.default_lists().get()).count(), 1)
+        self.assertEqual(FavoriteList.objects.get(client_key='browser-b').favorites.count(), 1)
 
     def test_the_email_is_matched_case_insensitively(self):
         self.heart(self.visitor(), 'browser-a', self.photos[0], email='Fan@Example.com')
         self.heart(self.visitor(), 'browser-b', self.photos[1], email='fan@example.COM')
-        self.assertEqual(FavoriteList.objects.count(), 1)
+        self.assertEqual(self.default_lists('fan@example.com').count(), 1)
 
-    def test_the_same_photo_from_two_browsers_is_stored_once(self):
-        self.heart(self.visitor(), 'browser-a', self.photos[0], email=EMAIL)
-        self.heart(self.visitor(), 'browser-b', self.photos[0], email=EMAIL)
+    def test_the_same_photo_from_one_browser_is_stored_once(self):
+        v = self.visitor()
+        self.heart(v, 'browser-a', self.photos[0], email=EMAIL)
+        self.heart(v, 'browser-a', self.photos[0], email=EMAIL)
         self.assertEqual(Favorite.objects.count(), 1)
 
     def test_another_gallery_or_another_email_gets_its_own_list(self):
@@ -62,18 +68,19 @@ class OneListPerEmailTests(FavBase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             FavoriteList.objects.create(gallery=self.gallery, client_key='b', email=EMAIL.upper(), is_default=True)
 
-    def test_a_guest_list_is_merged_into_the_email_list_when_the_browser_gives_an_email(self):
+    def test_a_guest_list_is_never_merged_into_another_browsers_email_list(self):
         v = self.visitor()
         self.heart(v, 'guest-browser', self.photos[0])                          # a guest list, no email
         self.heart(v, 'guest-browser', self.photos[1])
         self.heart(self.visitor(), 'other', self.photos[1], email=EMAIL)          # the email already has a list
-        self.heart(v, 'guest-browser', self.photos[2], email=EMAIL)               # same browser now gives it
-        favorite_list = self.default_lists().get()
-        self.assertEqual(FavoriteList.objects.count(), 1)                        # the guest list is gone, not duplicated
+        self.heart(v, 'guest-browser', self.photos[2], email=EMAIL)               # this browser types it too
         self.assertEqual(
-            set(favorite_list.favorites.values_list('media_asset_id', flat=True)),
-            {self.photos[0].id, self.photos[1].id, self.photos[2].id})
-        self.assertEqual(favorite_list.favorites.count(), 3)                     # photo 1 was in both: kept once
+            set(self.default_lists().get().favorites.values_list('media_asset_id', flat=True)), {self.photos[1].id})
+        guest = FavoriteList.objects.get(client_key='guest-browser')
+        self.assertEqual(set(guest.favorites.values_list('media_asset_id', flat=True)),
+                         {self.photos[0].id, self.photos[1].id, self.photos[2].id})
+        self.assertIsNone(guest.email)                                           # the email's one default list is taken
+        self.assertEqual(set(guest.favorites.values_list('email', flat=True)), {EMAIL})   # the favorites keep what was typed
 
     def test_a_guest_list_simply_gains_the_email_when_none_exists_yet(self):
         v = self.visitor()
@@ -83,8 +90,14 @@ class OneListPerEmailTests(FavBase):
         self.assertEqual((favorite_list.email, favorite_list.favorites.count()), (EMAIL, 2))
 
 
+DEVICE = 'device-1'
+
+
 class ReturningVisitorTests(FavBase):
-    """A protected gallery hands out a NEW unlock token on every visit - the old key is gone."""
+    """
+    A protected gallery hands out a NEW unlock token on every visit - the old key
+    is gone. The browser's client_uid (localStorage) is what stays the same.
+    """
 
     def setUp(self):
         super().setUp()
@@ -104,12 +117,13 @@ class ReturningVisitorTests(FavBase):
     def auth(self, token):
         return {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-    def heart_with(self, token, asset, **extra):
+    def heart_with(self, token, asset, client_uid=DEVICE, **extra):
         return self.client_class().post(
-            f'{self.base}favorites/', {'media_asset_id': str(asset.id), **extra}, format='json', **self.auth(token))
+            f'{self.base}favorites/', {'media_asset_id': str(asset.id), 'client_uid': client_uid, **extra},
+            format='json', **self.auth(token))
 
-    def favorited(self, token, **params):
-        response = self.client_class().get(f'{self.base}favorites/', params, **self.auth(token))
+    def favorited(self, token, client_uid=DEVICE, **params):
+        response = self.client_class().get(f'{self.base}favorites/', {'client_uid': client_uid, **params}, **self.auth(token))
         self.assertEqual(response.status_code, 200, response.data)
         return response.data
 
@@ -135,7 +149,8 @@ class ReturningVisitorTests(FavBase):
         self.heart_with(first, self.photos[0])
         second = self.unlock()
         response = self.client_class().delete(
-            f'{self.base}favorites/', {'media_asset_id': str(self.photos[0].id)}, format='json', **self.auth(second))
+            f'{self.base}favorites/', {'media_asset_id': str(self.photos[0].id), 'client_uid': DEVICE},
+            format='json', **self.auth(second))
         self.assertEqual((response.status_code, response.data['favorited']), (200, False))
         self.assertEqual(Favorite.objects.count(), 0)
 
@@ -143,31 +158,32 @@ class ReturningVisitorTests(FavBase):
         first = self.unlock()
         self.heart_with(first, self.photos[0])
         second = self.unlock()
-        lists = self.client_class().get(f'{self.base}favorites/lists/', **self.auth(second)).data['results']
+        lists = self.client_class().get(
+            f'{self.base}favorites/lists/', {'client_uid': DEVICE}, **self.auth(second)).data['results']
         self.assertEqual([(l['name'], l['photo_count']) for l in lists], [('My Favorites', 1)])
 
-    def test_a_remembered_email_alone_restores_the_hearts(self):
+    def test_a_remembered_email_alone_does_not_restore_the_hearts_on_another_device(self):   # 7-A, SEC-02
         first = self.unlock()                                                    # email on the session
         self.heart_with(first, self.photos[0])
-        anonymous_unlock = self.unlock(email=None)                               # unlocked without typing an email
-        self.assertEqual(self.favorited(anonymous_unlock)['favorited_ids'], [])
-        data = self.favorited(anonymous_unlock, email=EMAIL)                     # the browser remembered it
-        self.assertEqual(data['favorited_ids'], [str(self.photos[0].id)])
+        other_device = self.unlock(email=None)
+        self.assertEqual(self.favorited(other_device, client_uid='device-2')['favorited_ids'], [])
+        self.assertEqual(self.favorited(other_device, client_uid='device-2', email=EMAIL)['favorited_ids'], [])
 
     def test_another_email_never_sees_the_list(self):
         first = self.unlock()
         self.heart_with(first, self.photos[0])
         stranger = self.unlock(email='stranger@example.com')
-        self.assertEqual(self.favorited(stranger)['favorited_ids'], [])
+        self.assertEqual(self.favorited(stranger, client_uid='stranger-device')['favorited_ids'], [])
 
-    def test_open_gallery_return_with_a_new_browser_id_and_the_remembered_email(self):
+    def test_open_gallery_a_new_browser_id_with_the_email_sees_nothing(self):  # 7-A, SEC-02
         self.gallery.is_password_protected = False
         self.gallery.save(update_fields=['is_password_protected'])
         v = self.visitor()
         self.heart(v, 'old-uid', self.photos[0], email=EMAIL)
         got = v.get(f'{self.base}favorites/', {'client_uid': 'new-uid', 'email': EMAIL})
-        self.assertEqual(got.data['favorited_ids'], [str(self.photos[0].id)])
-        self.assertEqual(v.get(f'{self.base}favorites/', {'client_uid': 'new-uid'}).data['favorited_ids'], [])
+        self.assertEqual(got.data['favorited_ids'], [])
+        self.assertEqual(v.get(f'{self.base}favorites/', {'client_uid': 'old-uid'}).data['favorited_ids'],
+                         [str(self.photos[0].id)])
 
 
 class MergeDuplicateListsMigrationTests(FavBase):

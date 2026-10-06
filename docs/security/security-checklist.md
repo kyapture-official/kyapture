@@ -40,7 +40,7 @@ Status legend:
 | Every owner query scoped to `request.user` | ✅ | `apps/galleries/views.py:60, 159, 203-206, 406-409, 452-455, 558-561, 615-616, 708-709`; `apps/photos/views.py:429, 466, 503, 535, 719, 771, 813, 846`; notifications `notification_api.py:76-91` |
 | Public lookups scoped by photographer + slug + published/active/unexpired | ✅ | every `get_gallery` in `apps/clients/views.py` |
 | Child objects (asset, set, list, job) scoped to their gallery | ✅ | `apps/clients/views.py:216-228, 769-776, 1413, 1838` |
-| Favorites scoped to the visitor | ⚠️ | Typed email grants another visitor's lists (SEC-02, rows 5, 79) |
+| Favorites scoped to the visitor | ✅ | Fixed in 7-A: lists match the client key only; an email is a label (SEC-02, rows 5, 79; tests in `apps/clients/tests/test_tenancy_7a.py`) |
 | Contact allow-list for downloads | ⚠️ | Typed email, unverified (SEC-03, row 80) |
 | Plan entitlements enforced server-side | ✅ | `require_feature` (`apps/users/serializers.py:86-111`), upload metrics and row lock (`apps/photos/views.py:186-252`), `effective_high_res_mode` |
 | Entitlement edge cases | ⚠️ | Lapsed plan keeps limits up to 15 min (row 43, confirmed `apps/core/utils.py:97`); video minutes outside the lock (row 44, confirmed `apps/photos/views.py:240-252`) |

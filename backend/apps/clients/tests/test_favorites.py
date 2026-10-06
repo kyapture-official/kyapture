@@ -169,20 +169,25 @@ class ProtectedGalleryFavoritesTestCase(APITestCase):
 
     def test_client_cannot_fabricate_identity_for_protected_gallery(self):
         """
-        A client_uid in the body is simply ignored for a protected gallery
-        — identity always comes from the verified session token, never
-        from client-supplied input, even if both are present.
+        A client_uid never replaces the unlock: without a valid session token
+        it is refused. Behind a valid token it names this browser (7-A: the
+        browser's id survives closing the tab, the token does not), and naming
+        yourself gains nothing - another visitor's favorites stay out of reach.
         """
+        body = {"media_asset_id": str(self.asset.id), "client_uid": "attacker-supplied-id"}
+        self.assertEqual(self.client.post(self.url, body, format="json").status_code, 401)
+        self.assertEqual(self.client.post(self.url, body, format="json",
+                                          HTTP_AUTHORIZATION="Bearer forged").status_code, 401)
+        victim = self._unlock()
+        self.client.post(self.url, {"media_asset_id": str(self.asset.id)}, format="json",
+                         HTTP_AUTHORIZATION=f"Bearer {victim}")
         token = self._unlock()
-        self.client.post(
-            self.url,
-            {"media_asset_id": str(self.asset.id), "client_uid": "attacker-supplied-id"},
-            format="json",
-            HTTP_AUTHORIZATION=f"Bearer {token}",
-        )
-        favorite = Favorite.objects.get(gallery=self.gallery, media_asset=self.asset)
-        self.assertEqual(favorite.client_key, token)
-        self.assertNotEqual(favorite.client_key, "attacker-supplied-id")
+        got = self.client.get(self.url, {"client_uid": "attacker-supplied-id"}, HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(got.data["favorited_ids"], [])
+        self.client.post(self.url, body, format="json", HTTP_AUTHORIZATION=f"Bearer {token}")
+        mine = Favorite.objects.get(gallery=self.gallery, client_key="attacker-supplied-id")
+        self.assertEqual(mine.client_session.access_token, token)
+        self.assertEqual(Favorite.objects.get(gallery=self.gallery, client_key=victim).media_asset_id, self.asset.id)
 
 
 class PhotographerFavoriteActivityTestCase(APITestCase):

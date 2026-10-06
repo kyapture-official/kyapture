@@ -473,9 +473,9 @@ export const clientsApi = {
    *
    * @param {string} username
    * @param {string} slug
-   * @param {Object} identity - { clientUid } for open galleries, or { token } for protected ones;
-   *   `email` (the one this browser remembered for the gallery) reaches the lists saved under it
-   *   even when the unlock token / browser id is new
+   * @param {Object} identity - { clientUid } for open galleries, { token, clientUid } for protected
+   *   ones (the clientUid keeps this browser's hearts across unlocks); `email` only labels the
+   *   visitor's own lists, it never reaches another browser's lists (7-A)
    */
   getFavorites: async (username, slug, identity = {}, options = {}) => {
     const path = `${buildGalleryPath(username, slug)}favorites/`
