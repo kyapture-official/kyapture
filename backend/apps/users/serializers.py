@@ -32,9 +32,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'display_name',
             'bio', 'avatar', 'logo', 'branding_color',
-            'phone', 'website', 'is_active_plan', 'created_at'
+            'phone', 'website', 'is_active_plan', 'is_staff', 'created_at'
         ]
-        read_only_fields = ['id', 'email', 'is_active_plan', 'created_at']
+        # is_staff is shown only so the UI can offer the staff feedback inbox; it can
+        # never be written here, and the inbox endpoints enforce it server-side.
+        read_only_fields = ['id', 'email', 'is_active_plan', 'is_staff', 'created_at']
         # Uniqueness is enforced by validate_username below (case-normalized,
         # excluding the user's own row, with the app's own wording); the model's
         # generic UniqueValidator would answer first with "user with this

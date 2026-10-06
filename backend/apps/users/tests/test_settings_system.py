@@ -66,9 +66,10 @@ class ProfileTests(SettingsBase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['email'], 'settingsuser@kyapture.com')
         self.assertEqual(response.data['username'], 'settingsuser')
-        for field in ('password', 'is_staff', 'is_superuser', 'groups', 'user_permissions',
+        for field in ('password', 'is_superuser', 'groups', 'user_permissions',
                       'notify_downloads', 'collection_defaults', 'portfolio_public'):
             self.assertNotIn(field, response.data)
+        self.assertIs(response.data['is_staff'], False)       # read-only; only tells the UI whether to offer the staff inbox
 
     def test_updates_own_profile(self):
         response = self.client.put(ME, {

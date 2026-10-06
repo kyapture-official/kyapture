@@ -159,9 +159,11 @@ def notify_staff_feedback(feedback):
     """
     One bell notification per staff account (Django is_staff) for each new
     feedback. Not coalesced: each is a distinct message to triage. The text names
-    the category and subject only; the full message stays in the inbox.
+    the category and subject (when given) only; the full message stays in the inbox.
     """
-    message = f'New {feedback.get_category_display().lower()} feedback: {feedback.subject}'
+    message = f'New {feedback.get_category_display().lower()} feedback'
+    if feedback.subject:
+        message = f'{message}: {feedback.subject}'
     created = []
     for staff in User.objects.filter(is_staff=True, is_active=True):
         note = record_notification(staff, Kind.FEEDBACK, None, message=message)

@@ -118,7 +118,7 @@ class FeedbackRateThrottle(UserRateThrottle):
 class FeedbackCreateSerializer(serializers.Serializer):
     """Unknown keys (status, user, browser_class ...) are ignored, never applied."""
     category = serializers.ChoiceField(choices=Feedback.Category.choices)
-    subject = serializers.CharField(max_length=Feedback.SUBJECT_MAX)
+    subject = serializers.CharField(max_length=Feedback.SUBJECT_MAX, required=False, allow_blank=True, default='')
     message = serializers.CharField(max_length=Feedback.MESSAGE_MAX)
     route = serializers.JSONField(required=False)
     gallery_slug = serializers.JSONField(required=False)

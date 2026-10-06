@@ -235,8 +235,8 @@ function WorkspaceInner() {
         <div
           className={
             isPhotosRoute
-              ? "flex-1 w-full bg-surface-light px-4 md:px-10 pt-5 pb-24 md:pt-8 md:pb-10"
-              : "flex-1 max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-24 md:py-8 w-full"
+              ? "flex-1 w-full bg-surface-light px-4 md:px-10 pt-5 pb-48 md:pt-8 md:pb-24"
+              : "flex-1 max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-48 md:pt-8 md:pb-24 w-full"
           }
         >
           <Outlet

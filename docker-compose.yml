@@ -90,6 +90,9 @@ services:
       # ready" email, password-reset and notification links) use it; it defaults to the
       # Vite dev port (5173), which nothing listens on under compose.
       FRONTEND_URL: http://localhost:3000
+      # Stamped on each feedback row. The frontend build below gets the same ${APP_VERSION}
+      # (VITE_APP_VERSION), so the two cannot differ unless one side is built without it.
+      APP_VERSION: ${APP_VERSION:-dev}
       # Dev mail catcher (service `mailpit` below): emails are readable at http://localhost:8025.
       EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
       EMAIL_HOST: mailpit
@@ -213,6 +216,7 @@ services:
         # Browser-side URL of the API (the browser, not the container, calls
         # it) — the canonical dev backend published by the `backend` service.
         VITE_API_BASE_URL: http://localhost:8000/api/v1
+        VITE_APP_VERSION: ${APP_VERSION:-dev}
     ports:
       - "3000:80"
     healthcheck:

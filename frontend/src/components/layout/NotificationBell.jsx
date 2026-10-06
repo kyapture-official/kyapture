@@ -1,7 +1,7 @@
 // File Location: frontend/src/components/layout/NotificationBell.jsx
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, CheckCheck, CreditCard, Download, Heart, Image as ImageIcon, Rocket, TriangleAlert } from 'lucide-react'
+import { Bell, CheckCheck, CreditCard, Download, Heart, Image as ImageIcon, MessageSquare, Rocket, TriangleAlert } from 'lucide-react'
 import { notificationsApi } from '../../api/notificationsApi'
 import { timeAgo } from '../../utils/formatters'
 
@@ -19,6 +19,7 @@ const KIND_ICON = {
   published: Rocket,
   processing_done: ImageIcon,
   processing_failed: TriangleAlert,
+  feedback: MessageSquare,
 }
 
 /**

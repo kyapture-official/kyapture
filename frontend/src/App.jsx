@@ -5,6 +5,7 @@ import { useAuthStore } from "./store/authStore";
 import { ToastProvider } from "./components/ui/Toast";
 import ProtectedRoute from "./components/shared/ProtectedRoute";
 import DashboardLayout from "./components/layout/DashboardLayout";
+import FeedbackWidget from "./components/shared/FeedbackWidget";
 // Auth
 const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/auth/RegisterPage"));
@@ -16,6 +17,7 @@ const GalleriesPage = lazy(() => import("./pages/dashboard/GalleriesPage"));
 const FavoritesPage = lazy(() => import("./pages/dashboard/FavoritesPage"));
 const SettingsPage = lazy(() => import("./pages/dashboard/SettingsPage"));
 const BillingPage = lazy(() => import("./pages/subscription/BillingPage"));
+const FeedbackInboxPage = lazy(() => import("./pages/dashboard/FeedbackInboxPage"));
 // Gallery workspace (own shell — no DashboardLayout)
 const GalleryWorkspaceLayout = lazy(() => import("./pages/dashboard/GalleryWorkspaceLayout"));
 const GalleryPhotosPage = lazy(() => import("./pages/dashboard/GalleryPhotosPage"));
@@ -91,6 +93,8 @@ export default function App() {
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="settings/:section?" element={<SettingsPage />} />
               <Route path="billing" element={<BillingPage />} />
+              {/* Staff inbox: the link is shown to staff only, the API enforces it (403) */}
+              <Route path="feedback" element={<FeedbackInboxPage />} />
             </Route>
 
             {/* Gallery workspace — full takeover, its own sidebar/chrome.
@@ -120,6 +124,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
+        {/* After the routes so it is the LAST stop in tab order; signed-in photographer on /dashboard/* only */}
+        <FeedbackWidget />
       </BrowserRouter>
     </ToastProvider>
   );

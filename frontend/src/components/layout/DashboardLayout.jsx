@@ -32,6 +32,11 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
     </svg>
   ),
+  Feedback: (
+    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
+    </svg>
+  ),
   Bell: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
@@ -75,7 +80,7 @@ const FOCUSABLE = [
 ].join(', ')
 
 // Navigation config — keeps structure declarative and easily extensible
-const navigation = [
+const baseNavigation = [
   {
     name: 'Home',
     path: '/dashboard',
@@ -110,10 +115,17 @@ const navigation = [
 ]
 
 // Grouped nav sections for sidebar labels
-const navSections = [
+const baseNavSections = [
   { label: 'Overview', items: ['Home', 'Galleries', 'Favorites'] },
   { label: 'Account', items: ['Settings', 'Billing'] },
 ]
+
+// Staff only (user.is_staff from /auth/me/). Hiding the link is presentation:
+// the inbox endpoints return 403 to anyone else and the page handles that.
+const staffNavigation = [
+  { name: 'Feedback', path: '/dashboard/feedback', icon: Icons.Feedback, label: 'Feedback' },
+]
+const staffNavSections = [{ label: 'Staff', items: ['Feedback'] }]
 
 /**
  * WHAT: Photographer Dashboard Shell Layout
@@ -137,6 +149,10 @@ export default function DashboardLayout() {
   const closeButtonRef = useRef(null)
   const wasOpenRef = useRef(false)
   const userMenuRef = useRef(null)
+
+  const isStaff = user?.is_staff === true
+  const navigation = isStaff ? [...baseNavigation, ...staffNavigation] : baseNavigation
+  const navSections = isStaff ? [...baseNavSections, ...staffNavSections] : baseNavSections
 
   const displayName = user?.display_name || 'Photographer'
   const planLabel = user?.is_active_plan ? 'Pro Plan' : 'Free Plan'
@@ -496,7 +512,8 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="p-4 md:p-6 lg:p-8">
+          {/* bottom padding keeps the end of every page clear of the floating feedback button */}
+          <div className="p-4 pb-24 md:p-6 md:pb-24 lg:p-8 lg:pb-24">
             <Outlet />
           </div>
         </main>

@@ -12,6 +12,10 @@ COPY . .
 # pipeline for production) rather than whatever .env file is in the context.
 # Left unset, the app falls back to the relative '/api/v1'.
 ARG VITE_API_BASE_URL
+# The one build-time app version, sent with every feedback submit (src/utils/appVersion.js).
+# It must equal the backend's APP_VERSION (or be in FEEDBACK_ACCEPTED_APP_VERSIONS), else the
+# server stores 'unknown'. Unset = 'dev', which is also the backend default.
+ARG VITE_APP_VERSION
 RUN npm run build
 
 # Runtime stage

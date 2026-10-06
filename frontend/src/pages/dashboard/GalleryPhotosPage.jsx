@@ -890,7 +890,8 @@ export default function GalleryPhotosPage() {
       )}
 
       {uploadQueue.length > 0 && (
-        <div className="mt-4 space-y-2">
+        // data-hide-feedback-fab: the floating Send-feedback button steps aside while a file is still uploading
+        <div className="mt-4 space-y-2" data-hide-feedback-fab={uploadQueue.some((item) => !item.error) ? "true" : undefined}>
           {uploadQueue.map((item) => (
             <div key={item.id} className="flex items-center gap-3 rounded-lg bg-cream-100 p-2">
               <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded bg-cream-300">

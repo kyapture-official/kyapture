@@ -105,19 +105,27 @@ class ValidationTests(FeedbackBase):
             self.assertIn('category', response.data['details'])
         self.assertEqual(Feedback.objects.count(), 0)
 
-    def test_missing_category_subject_or_message_is_refused(self):
-        for missing in ('category', 'subject', 'message'):
+    def test_missing_category_or_message_is_refused(self):
+        for missing in ('category', 'message'):
             body = payload()
             del body[missing]
             response = self.client.post(URL, body, format='json')
             self.assertEqual(response.status_code, 400, missing)
             self.assertIn(missing, response.data['details'])
 
-    def test_empty_or_whitespace_text_is_refused(self):
-        for field in ('subject', 'message'):
-            for bad in ('', '   ', '\n\t  \n'):
-                self.assertEqual(self.submit_fresh(**{field: bad}).status_code, 400, (field, bad))
+    def test_empty_or_whitespace_message_is_refused(self):
+        for bad in ('', '   ', '\n\t  \n'):
+            self.assertEqual(self.submit_fresh(message=bad).status_code, 400, bad)
         self.assertEqual(Feedback.objects.count(), 0)
+
+    def test_subject_is_optional(self):
+        body = payload()
+        del body['subject']
+        self.assertEqual(self.client.post(URL, body, format='json').status_code, 201)
+        self.assertEqual(self.submit_fresh(subject='   ').status_code, 201)
+        self.assertEqual(list(Feedback.objects.values_list('subject', flat=True)), ['', ''])
+        notes = Notification.objects.filter(user=self.staff, kind='feedback')
+        self.assertEqual({n.message for n in notes}, {'New bug feedback'})          # no dangling colon
 
     def test_text_is_trimmed_and_subject_is_one_line(self):
         self.submit(subject='  Slow\n  gallery\t load  ', message='\n  hello there  \n')
@@ -380,6 +388,22 @@ class StaffInboxTests(FeedbackBase):
         self.assertEqual(self.client.post(INBOX, payload(), format='json').status_code, 405)
         self.assertEqual(self.client.delete(f'{INBOX}{self.rows[0].pk}/').status_code, 405)
         self.assertEqual(self.client.put(f'{INBOX}{self.rows[0].pk}/', {'status': 'new'}, format='json').status_code, 405)
+
+
+class StaffFlagTests(FeedbackBase):
+    """The UI offers the inbox only when /auth/me/ says is_staff; the inbox endpoints still enforce it."""
+    ME = '/api/v1/auth/me/'
+
+    def test_me_reports_is_staff_for_staff_and_not_for_others(self):
+        self.assertIs(self.client.get(self.ME).data['is_staff'], False)
+        self.as_user(self.staff)
+        self.assertIs(self.client.get(self.ME).data['is_staff'], True)
+
+    def test_profile_update_cannot_grant_is_staff(self):
+        self.client.put(self.ME, {'display_name': 'Me', 'is_staff': True}, format='json')
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_staff)
+        self.assertIs(self.client.get(self.ME).data['is_staff'], False)
 
 
 class XssSafetyTests(FeedbackBase):
