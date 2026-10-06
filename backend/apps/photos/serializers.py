@@ -15,17 +15,16 @@ from apps.core.utils import (
     sanitize_text,
     validate_video_magic_bytes,
 )
+from apps.subscriptions.upload_limits import (
+    FILE_TOO_LARGE, IMAGE_TOO_MANY_PIXELS, check_image_pixels, check_size, get_upload_limits,
+)
 from .models import MediaAsset, PhotoSet
 
-MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB Limit
 ALLOWED_IMAGE_FORMATS = {'JPEG', 'JPG', 'PNG', 'WEBP', 'TIFF'}
 ALLOWED_FORMAT_NAMES = 'JPEG, JPG, PNG, WEBP, TIFF'
 
-# Technical safety ceiling only — protects multipart parsing / temp-disk
-# spooling during FFmpeg processing. This is NOT a duration or quality
-# restriction; per product decision, storage quota (checked in the view,
-# before this serializer runs) is the only real gate on video uploads.
-MAX_VIDEO_FILE_SIZE_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB
+# The per-file size and pixel limits are NOT constants: they are the admin-edited
+# UploadLimits row (apps/subscriptions/upload_limits.py), read per request.
 ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.mov', '.m4v'}
 ALLOWED_VIDEO_FORMAT_NAMES = 'MP4, MOV, M4V'
 
@@ -144,12 +143,15 @@ class MediaAssetImageUploadSerializer(serializers.ModelSerializer):
 
     def validate_image(self, file):
         """Executes secure size-bound and Pillow binary header validations."""
-        # Layer 1: Enforce physical file size limits
-        if file.size > MAX_FILE_SIZE_BYTES:
-            size_mb = file.size / (1024 * 1024)
-            raise serializers.ValidationError(
-                f"File size too large ({size_mb:.1f} MB). Maximum allowed limit is 25 MB."
-            )
+        # Layer 1: the admin-set size limit, then the pixel limit from the header
+        # only (the view already refused both per file; this keeps the serializer safe on its own).
+        limits = self.context.get('upload_limits') or get_upload_limits()
+        refusal = check_size(file, 'image', limits)
+        if refusal:
+            raise serializers.ValidationError(refusal['message'], code=FILE_TOO_LARGE)
+        refusal = check_image_pixels(file, limits)
+        if refusal:
+            raise serializers.ValidationError(refusal['message'], code=IMAGE_TOO_MANY_PIXELS)
         # Layer 2: Enforce strict magic byte file signature validation (Security)
         validate_magic_bytes(file)
         
@@ -183,8 +185,8 @@ class MediaAssetVideoUploadSerializer(serializers.ModelSerializer):
     Deliberately enforces NO duration or resolution/quality limit — video
     length and quality are gated ONLY by the photographer's subscription
     storage quota (checked in the view, before this serializer ever runs).
-    MAX_VIDEO_FILE_SIZE_BYTES above is a technical ceiling, not a business
-    rule — see its comment.
+    The per-file size limit is a safety limit read from the admin-edited
+    UploadLimits row, not a business rule.
 
     NOTE: like MediaAssetImageUploadSerializer, this intentionally has no
     create() method. PhotoListUploadView validates via .is_valid() and
@@ -199,13 +201,10 @@ class MediaAssetVideoUploadSerializer(serializers.ModelSerializer):
         fields = ['video', 'title']
 
     def validate_video(self, file):
-        if file.size > MAX_VIDEO_FILE_SIZE_BYTES:
-            size_mb = file.size / (1024 * 1024)
-            limit_mb = MAX_VIDEO_FILE_SIZE_BYTES / (1024 * 1024)
-            raise serializers.ValidationError(
-                f"File too large ({size_mb:.0f} MB). This exceeds the {limit_mb:.0f} MB technical "
-                "upload ceiling for a single file — unrelated to your plan's storage quota."
-            )
+        limits = self.context.get('upload_limits') or get_upload_limits()
+        refusal = check_size(file, 'video', limits)
+        if refusal:
+            raise serializers.ValidationError(refusal['message'], code=FILE_TOO_LARGE)
 
         ext = os.path.splitext(file.name)[1].lower()
         if ext not in ALLOWED_VIDEO_EXTENSIONS:

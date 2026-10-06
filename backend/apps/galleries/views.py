@@ -15,6 +15,7 @@ from rest_framework.pagination import PageNumberPagination
 # Dynamic permission routing prevents the Storage Lockout Paradox
 from apps.core.utils import get_user_subscription_metrics
 from apps.subscriptions.entitlements import storage_figures
+from apps.subscriptions.upload_limits import get_upload_limits
 from apps.core.pagination import StandardResultsSetPagination
 from apps.photos.purge import purge_gallery
 from .models import Gallery
@@ -315,6 +316,9 @@ class DashboardStatsView(APIView):
             else max(0, metrics["max_galleries"] - galleries_used)
         )
 
+        # Per-file upload limits (admin-edited), so the browser can pre-check a file.
+        upload_limits = get_upload_limits().payload()
+
         # 3. Resolve active subscription expiration parameters
         days_remaining = 0
         expires_at = None
@@ -346,6 +350,7 @@ class DashboardStatsView(APIView):
                 'subscription_status': 'admin',
                 'expires_at': None,
                 'days_remaining': None,
+                'upload_limits': upload_limits,
             }, status=status.HTTP_200_OK)
 
         # 5. Handle Unsubscribed case cleanly (No crash, returns zero bounds)
@@ -363,6 +368,7 @@ class DashboardStatsView(APIView):
                 'subscription_status': 'no_subscription',
                 'expires_at': None,
                 'days_remaining': None,
+                'upload_limits': upload_limits,
             }, status=status.HTTP_200_OK)
 
         # 6. Deliver the structured JSON payload matching David's exact key mappings.
@@ -384,6 +390,7 @@ class DashboardStatsView(APIView):
             'subscription_status': subscription_status,
             'expires_at': expires_at,
             'days_remaining': days_remaining,
+            'upload_limits': upload_limits,
         }, status=status.HTTP_200_OK)
 
 class GalleryPublishView(APIView):

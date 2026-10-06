@@ -16,6 +16,7 @@ import {
   checkVideoBatch,
   isVideoFile,
   readUploadResponse,
+  splitByFileLimits,
   splitByStorage,
   storageLimitFromError,
   storageLimitInfo,
@@ -362,10 +363,40 @@ export default function GalleryPhotosPage() {
       return;
     }
 
-    // Storage first: files the plan's remaining space cannot take never upload;
+    // Per-file size limit first (the owner's upload limits, from the usage answer): a
+    // file over it is listed with its reason and never uploads; the rest of the drop
+    // goes on. The server checks again, and alone judges the pixel count.
+    let fresh = usage;
+    if (!USE_MOCK_DATA) {
+      fresh = (await refreshUsage()) ?? usage;
+      const { allowed, rejected } = splitByFileLimits(files, fresh);
+      if (rejected.length) {
+        setUploadQueue((previous) => [
+          ...previous,
+          ...rejected.map(({ file, message }) => {
+            const previewUrl = URL.createObjectURL(file);
+            blobUrlsRef.current.push(previewUrl);
+            return {
+              id: Math.random().toString(36).slice(2, 9),
+              file,
+              previewUrl,
+              progress: 0,
+              isVideo: isVideoFile(file),
+              setId: activeSetId,
+              error: true,
+              rejected: true,
+              errorMessage: message,
+            };
+          }),
+        ]);
+        files = allowed;
+        if (!files.length) return;
+      }
+    }
+
+    // Storage next: files the plan's remaining space cannot take never upload;
     // the rest of the drop does. The server checks again at upload time.
     if (!USE_MOCK_DATA) {
-      const fresh = (await refreshUsage()) ?? usage;
       const { allowed, refused } = splitByStorage(files, fresh);
       if (refused.length) {
         showStorageLimit(storageLimitInfo(fresh, refused.length), allowed.length);
@@ -887,9 +918,11 @@ export default function GalleryPhotosPage() {
               </div>
               {item.error ? (
                 <div className="flex flex-shrink-0 items-center gap-2 text-[10px] font-medium">
-                  <button type="button" onClick={() => handleRetryFailed(item.id)} className="cursor-pointer text-ink hover:underline">
-                    Retry
-                  </button>
+                  {!item.rejected && (
+                    <button type="button" onClick={() => handleRetryFailed(item.id)} className="cursor-pointer text-ink hover:underline">
+                      Retry
+                    </button>
+                  )}
                   <button type="button" onClick={() => handleDismissFailed(item.id)} className="cursor-pointer text-red-600 hover:text-red-700">
                     Dismiss
                   </button>

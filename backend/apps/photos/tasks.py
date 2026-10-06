@@ -6,6 +6,7 @@ from apps.photos.models import MediaAsset
 from apps.core.utils import process_image_pipeline, process_download_master, regenerate_display_derivatives
 from apps.core.watermark import build_watermark_spec, current_signature
 from apps.users.notification_service import notify_processing
+from apps.subscriptions.upload_limits import apply_pillow_pixel_guard
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,9 @@ def process_photo_asset(self, asset_id):
             # the gallery-level invariant without replacing a manual cover.
             _auto_assign_cover_if_missing(asset)
             return
+
+        # Pillow's decompression-bomb guard follows the admin-set pixel limit in the worker too.
+        apply_pillow_pixel_guard()
 
         # 3. Transition state to 'processing'
         asset.processing_status = MediaAsset.ProcessingStatus.PROCESSING

@@ -18,10 +18,13 @@ def generate_web_size(asset_id, px, expected_state=''):
     from apps.photos.models import MediaAsset
     from apps.core.watermark import build_watermark_spec
 
+    from apps.subscriptions.upload_limits import apply_pillow_pixel_guard
+
     from .web_size import WEB_PX_CHOICES, build_cached, watermark_state
 
     if px not in WEB_PX_CHOICES:
         return None
+    apply_pillow_pixel_guard()  # Pillow's decompression-bomb guard follows the admin-set pixel limit
     try:
         asset = MediaAsset.objects.select_related('gallery__photographer').get(id=asset_id)
     except MediaAsset.DoesNotExist:
@@ -106,8 +109,11 @@ def purge_old_download_logs(self):
 @shared_task(bind=True, max_retries=1)
 def prepare_download_job(self, job_id):
     """Builds the ZIP for one DownloadJob in the background. See download_jobs.run_download_job."""
+    from apps.subscriptions.upload_limits import apply_pillow_pixel_guard
+
     from .download_jobs import run_download_job
 
+    apply_pillow_pixel_guard()  # Pillow's decompression-bomb guard follows the admin-set pixel limit
     return run_download_job(job_id)
 
 

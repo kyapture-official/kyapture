@@ -6,6 +6,7 @@ import {
   collectionLimitReached,
   checkVideoBatch,
   readUploadResponse,
+  splitByFileLimits,
   splitByStorage,
   storageLimitFromError,
   storageLimitInfo,
@@ -180,4 +181,29 @@ test('storage click-time split: a 5 GB video against 6 GB left fits, against 4 G
   assert.equal(splitByStorage([sized('v', 5 * GB)], { storage_remaining_bytes: 6 * GB }).allowed.length, 1)
   assert.equal(splitByStorage([sized('v', 5 * GB)], { storage_remaining_bytes: 4 * GB }).refused.length, 1)
   assert.equal(splitByStorage([sized('v', 5 * GB)], { storage_remaining_bytes: 5 * GB }).refused.length, 0) // exactly the space left
+})
+
+test('file limits: exactly at the size limit goes, one byte over is refused with the reason, per kind', () => {
+  const MB = 1024 * 1024
+  const limits = { upload_limits: { max_image_mb: 100, max_image_pixels: 144000000, max_video_mb: 2048 } }
+  const photo = (name, size) => ({ name, size, type: 'image/jpeg' })
+  const clip = (name, size) => ({ name, size, type: 'video/mp4' })
+  const files = [photo('at.jpg', 100 * MB), photo('over.jpg', 100 * MB + 1), clip('at.mp4', 2048 * MB), clip('over.mp4', 2048 * MB + 1), photo('small.jpg', 5)]
+  const { allowed, rejected } = splitByFileLimits(files, limits)
+  assert.deepEqual(allowed.map((f) => f.name), ['at.jpg', 'at.mp4', 'small.jpg'])
+  assert.deepEqual(rejected.map((r) => [r.file.name, r.message]), [
+    ['over.jpg', 'Size exceeds 100 MB limit'],
+    ['over.mp4', 'Size exceeds 2048 MB limit'],
+  ])
+})
+
+test('file limits: no limits in the usage answer means everything goes (the server decides)', () => {
+  const files = [{ name: 'a.jpg', size: 10 ** 12, type: 'image/jpeg' }]
+  assert.deepEqual(splitByFileLimits(files, null), { allowed: files, rejected: [] })
+  assert.deepEqual(splitByFileLimits(files, {}), { allowed: files, rejected: [] })
+})
+
+test('upload answer with rejected files: stored assets kept, no storage refusal invented', () => {
+  const answer = { uploaded: [{ id: 1 }], rejected: [{ code: 'file_too_large' }] }
+  assert.deepEqual(readUploadResponse(answer), { assets: [{ id: 1 }], storageRefusal: null })
 })

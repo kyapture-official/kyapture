@@ -102,6 +102,34 @@ export const storageLimitInfo = (usage, refusedCount) => ({
   refused_count: refusedCount,
 })
 
+const MB = 1024 * 1024
+
+/**
+ * Click-time per-file size check against the limits the usage endpoint returns
+ * (`usage.upload_limits`: max_image_mb / max_image_pixels / max_video_mb, edited
+ * by the owner in admin). A file over its limit never uploads; its reason shows
+ * on that file and the rest of the batch goes ahead. 1 MB = 1024 * 1024 bytes,
+ * the same unit and wording the server uses. The pixel limit is NOT checked here
+ * (huge images are never decoded in the browser): the server refuses those from
+ * the image header. No limits in the answer: everything goes, the server decides.
+ * Returns { allowed: File[], rejected: { file, message }[] }.
+ */
+export const splitByFileLimits = (files, usage) => {
+  const limits = usage?.upload_limits
+  if (!limits) return { allowed: files, rejected: [] }
+  const allowed = []
+  const rejected = []
+  for (const file of files) {
+    const limitMb = isVideoFile(file) ? limits.max_video_mb : limits.max_image_mb
+    if (Number.isFinite(limitMb) && file.size > limitMb * MB) {
+      rejected.push({ file, message: `Size exceeds ${limitMb} MB limit` })
+    } else {
+      allowed.push(file)
+    }
+  }
+  return { allowed, rejected }
+}
+
 const READ_CHUNK = 4
 
 /**

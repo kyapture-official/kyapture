@@ -279,7 +279,7 @@ class RewrittenQueriesKeepTheirAnswersTests(QueryBase):
         self.assertEqual(response.data['subscription_status'], 'active')
         self.assertGreater(response.data['days_remaining'], 0)
         self.assertEqual(response.data['plan_name'], 'Pro')
-        self.assertLessEqual(count, 3)
+        self.assertLessEqual(count, 4)                              # 3 + the upload-limits row (UP-A), read per request
         self.assertTrue(live.pk)
 
     def test_stats_without_a_subscription_reports_no_subscription(self):

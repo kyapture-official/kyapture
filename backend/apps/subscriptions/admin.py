@@ -1,6 +1,6 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/admin.py
 from django.contrib import admin
-from .models import SubscriptionPlan, UserSubscription, ManualPayment
+from .models import SubscriptionPlan, UserSubscription, ManualPayment, UploadLimits
 
 
 @admin.register(SubscriptionPlan)
@@ -28,6 +28,27 @@ class PlanAdmin(admin.ModelAdmin):
         if obj is not None and obj.is_free:
             return False
         return super().has_delete_permission(request, obj)
+
+
+@admin.register(UploadLimits)
+class UploadLimitsAdmin(admin.ModelAdmin):
+    """The one row of per-file upload limits; read at request time, so an edit applies to the next upload."""
+    list_display = ['__str__', 'max_image_mb', 'max_image_pixels', 'max_video_mb', 'updated_at']
+    fields = ['max_image_mb', 'max_image_pixels', 'max_video_mb']
+
+    def changelist_view(self, request, extra_context=None):
+        UploadLimits.load()  # the row always exists, so there is always something to open
+        return super().changelist_view(request, extra_context)
+
+    def get_object(self, request, object_id, from_field=None):
+        UploadLimits.load()
+        return super().get_object(request, object_id, from_field)
+
+    def has_add_permission(self, request):
+        return not UploadLimits.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(UserSubscription)

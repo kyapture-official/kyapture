@@ -22,6 +22,10 @@ from apps.core.utils import get_user_subscription_metrics, get_insertion_order, 
 from apps.subscriptions.entitlements import (
     STORAGE_LIMIT_REACHED, storage_fits, storage_quota_violation, video_quota_violation,
 )
+from apps.subscriptions.upload_limits import (
+    apply_pillow_pixel_guard, check_image_pixels, check_size, get_upload_limits,
+    image_too_many_pixels,
+)
 from apps.galleries.models import Gallery
 from .models import MediaAsset, PhotoSet
 from .purge import purge_assets, purge_photo_set
@@ -71,6 +75,31 @@ def _split_by_storage(metrics, image_files, video_files):
         [f for f, ok in zip(video_files, fits[split:]) if ok],
         [f for f, ok in zip(files, fits) if not ok],
     )
+
+
+def _split_by_file_limits(image_files, video_files, limits):
+    """
+    (images within the limits, videos within the limits, refusals) for the admin-set
+    per-file limits. Cheapest check first: the size needs no file read; the pixel
+    count reads only the image header. A refused file never reaches storage or
+    processing, and the rest of the batch carries on.
+    """
+    rejected = []
+    images = []
+    for f in image_files:
+        refusal = check_size(f, 'image', limits) or check_image_pixels(f, limits)
+        if refusal:
+            rejected.append(refusal)
+        else:
+            images.append(f)
+    videos = []
+    for f in video_files:
+        refusal = check_size(f, 'video', limits)
+        if refusal:
+            rejected.append(refusal)
+        else:
+            videos.append(f)
+    return images, videos, rejected
 
 
 def _storage_refusal(metrics, refused_files):
@@ -151,6 +180,13 @@ class PhotoListUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Per-file safety limits (admin-edited, read now): before the plan check, ffprobe,
+        # storage or any decoding. Refused files are reported; the others carry on.
+        limits = apply_pillow_pixel_guard(get_upload_limits())
+        image_files, video_files, limit_rejected = _split_by_file_limits(image_files, video_files, limits)
+        if not image_files and not video_files:
+            return Response({**limit_rejected[0], 'rejected': limit_rejected}, status=status.HTTP_400_BAD_REQUEST)
+
         photographer = request.user
         metrics = get_user_subscription_metrics(photographer)
         metered = not (photographer.is_superuser or photographer.is_staff)
@@ -175,7 +211,8 @@ class PhotoListUploadView(APIView):
         video_durations = {}
         for file_data in video_files:
             # Extension / signature / size checks first: ffprobe only ever sees a plausible video.
-            checker = MediaAssetVideoUploadSerializer(data={'video': file_data}, context={'request': request})
+            checker = MediaAssetVideoUploadSerializer(
+                data={'video': file_data}, context={'request': request, 'upload_limits': limits})
             if not checker.is_valid():
                 return Response(
                     {"error": "Upload validation failed.", "details": checker.errors, "code": "upload_validation_failed"},
@@ -217,7 +254,7 @@ class PhotoListUploadView(APIView):
                     # Validate image size and magic-byte security first
                     serializer = MediaAssetImageUploadSerializer(
                         data={'image': file_data, 'title': request.data.get('title', '')},
-                        context={'request': request, 'gallery': gallery}
+                        context={'request': request, 'gallery': gallery, 'upload_limits': limits}
                     )
                     serializer.is_valid(raise_exception=True)
                     
@@ -256,7 +293,7 @@ class PhotoListUploadView(APIView):
                 for file_data in video_files:
                     serializer = MediaAssetVideoUploadSerializer(
                         data={'video': file_data, 'title': request.data.get('title', '')},
-                        context={'request': request, 'gallery': gallery}
+                        context={'request': request, 'gallery': gallery, 'upload_limits': limits}
                     )
                     serializer.is_valid(raise_exception=True)
 
@@ -294,6 +331,10 @@ class PhotoListUploadView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except PILImage.DecompressionBombError:
+            # Pillow's own guard (the pixel limit) fired somewhere after the header check.
+            refusal = image_too_many_pixels('', limits)
+            return Response({**refusal, 'rejected': limit_rejected + [refusal]}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError:
             logger.exception("Upload transaction failed due to a database integrity error.")
             return Response(
@@ -315,17 +356,16 @@ class PhotoListUploadView(APIView):
 
         # Return 202 Accepted immediately so David's frontend has the IDs to render skeleton loaders
         assets_data = MediaAssetSerializer(uploaded_assets, many=True, context={'request': request}).data
-        if not storage_refused:
+        if not storage_refused and not limit_rejected:
             return Response(assets_data, status=status.HTTP_202_ACCEPTED)
-        # Some of the batch did not fit: the uploaded rows plus a report of the rest.
-        return Response(
-            {
-                'uploaded': assets_data,
-                'refused': [{'name': f.name, 'size_bytes': f.size, 'code': STORAGE_LIMIT_REACHED} for f in storage_refused],
-                'storage': _storage_refusal(get_user_subscription_metrics(photographer), storage_refused),
-            },
-            status=status.HTTP_202_ACCEPTED,
-        )
+        # Part of the batch was refused: the uploaded rows plus a report of the rest.
+        body = {'uploaded': assets_data}
+        if limit_rejected:
+            body['rejected'] = limit_rejected  # over a per-file size or pixel limit
+        if storage_refused:
+            body['refused'] = [{'name': f.name, 'size_bytes': f.size, 'code': STORAGE_LIMIT_REACHED} for f in storage_refused]
+            body['storage'] = _storage_refusal(get_user_subscription_metrics(photographer), storage_refused)
+        return Response(body, status=status.HTTP_202_ACCEPTED)
 
 
 class VideoPreflightRateThrottle(UserRateThrottle):

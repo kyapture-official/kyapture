@@ -4,7 +4,7 @@ Chunk DB-A: byte counts are 64-bit.
 `MediaAsset.file_size` used to be a 32-bit column (max 2,147,483,647 bytes), so a
 2-5 GiB video made the insert fail and the upload answer 500. Covered here:
 the column type, save/load/serialize of a 4 GiB row, storage usage (an int in
-JSON, not a Decimal string), the 5 GB video ceiling and plan rules for a video
+JSON, not a Decimal string), the video size limit and plan rules for a video
 above 2 GiB (accepted or refused, never a 500), and ZIP/download job sizes
 above 2 GiB. A real file of that size is never created: the multipart file's
 reported size is patched, the stored bytes are a tiny real clip.
@@ -21,10 +21,11 @@ from rest_framework.test import APITestCase
 from apps.clients.download_jobs import size_limit_error
 from apps.clients.tests.test_download_jobs import JobBase
 from apps.photos.models import MediaAsset
-from apps.photos.serializers import MAX_VIDEO_FILE_SIZE_BYTES, MediaAssetSerializer
+from apps.photos.serializers import MediaAssetSerializer
 from apps.photos.tests.test_storage_limit import StorageBase
 from apps.photos.tests.test_video_pipeline import _make_video_bytes
 from apps.subscriptions.entitlements import GB
+from apps.subscriptions.models import UploadLimits
 
 INT32_MAX = 2 ** 31 - 1
 FOUR_GIB = 4 * GB
@@ -60,7 +61,7 @@ class BigSizeRowTests(StorageBase):
         self.assertIsInstance(data['file_size'], int)
 
     def test_the_largest_allowed_video_and_a_negative_size(self):
-        self.assertEqual(_row(self.gallery, MAX_VIDEO_FILE_SIZE_BYTES).file_size, FIVE_GB)
+        self.assertEqual(_row(self.gallery, FIVE_GB).file_size, FIVE_GB)
         from django.db import IntegrityError, transaction
         with self.assertRaises(IntegrityError), transaction.atomic():
             _row(self.gallery, -1, name='neg.mp4', order=2)
@@ -105,6 +106,13 @@ class _BigVideoUploadBase(StorageBase):
         super().setUpClass()
         cls.clip_bytes = _make_video_bytes(duration=2)
 
+    def setUp(self):
+        super().setUp()
+        # The video size limit is the admin row (default 2048 MB): these tests need 5 GB.
+        row = UploadLimits.load()
+        row.max_video_mb = 5 * 1024
+        row.save()
+
     def upload_video(self, size, name='big.mp4'):
         clip = SimpleUploadedFile(name, self.clip_bytes, content_type='video/mp4')
         # Only the server-side copy is parsed from the request, so patch what it reports.
@@ -124,13 +132,13 @@ class BigVideoUploadTests(_BigVideoUploadBase):
 
     def test_a_5_gb_video_passes_the_size_check_and_is_accepted_when_the_plan_has_room(self):
         self.plan(storage_gb=100)
-        response = self.upload_video(MAX_VIDEO_FILE_SIZE_BYTES)
+        response = self.upload_video(FIVE_GB)
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
         self.assertEqual(MediaAsset.objects.get(original_name='big.mp4').file_size, FIVE_GB)
 
     def test_a_5_gb_video_over_the_plan_storage_is_refused_403_not_500(self):
         self.plan(storage_gb=3)
-        response = self.upload_video(MAX_VIDEO_FILE_SIZE_BYTES)
+        response = self.upload_video(FIVE_GB)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data['code'], 'storage_limit_reached')
         self.assertEqual(response.data['refused_bytes'], FIVE_GB)
@@ -139,15 +147,18 @@ class BigVideoUploadTests(_BigVideoUploadBase):
 
     def test_a_video_that_fills_a_5_gb_plan_exactly_fits_and_one_byte_more_does_not(self):
         self.plan(storage_gb=5)
+        row = UploadLimits.load()
+        row.max_video_mb = 6 * 1024          # above the plan, so the plan's storage is what decides
+        row.save()
         self.assertEqual(self.upload_video(FIVE_GB).status_code, status.HTTP_202_ACCEPTED)
         MediaAsset.objects.all().delete()
         self.assertEqual(self.upload_video(FIVE_GB + 1).status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_above_the_5_gb_technical_ceiling_is_a_400_for_a_metered_account(self):
+    def test_above_the_video_size_limit_is_a_400_for_a_metered_account(self):
         self.plan(storage_gb=100)
-        response = self.upload_video(MAX_VIDEO_FILE_SIZE_BYTES + 1)
+        response = self.upload_video(FIVE_GB + 1)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['code'], 'upload_validation_failed')
+        self.assertEqual(response.data['code'], 'file_too_large')
         self.assertFalse(self.stored('big.mp4'))
 
     def test_the_free_plan_refuses_a_4_gib_video_and_never_answers_500(self):

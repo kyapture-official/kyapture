@@ -204,3 +204,54 @@ class ManualPayment(BaseModel):
 
     def __str__(self):
         return f"Payment #{str(self.id)[:8]} — {self.user.email} ({self.get_status_display()})"
+
+class UploadLimits(models.Model):
+    """
+    The ONE row of per-file upload limits that protect the server (chunk UP-A).
+    Edited in Django admin (Subscriptions -> Upload limits) and read at request
+    time through apps/subscriptions/upload_limits.py, so a change applies to the
+    next upload with no restart and no deploy. These are global safety limits,
+    not plan values (the plan's storage and video minutes are separate).
+
+    The defaults below are the only place a figure lives in code. 1 MB here is
+    1024 * 1024 bytes. max_video_mb must fit under the web server's request-body
+    limit (nginx client_max_body_size): see docs/KYAPTURE_UPLOAD_LIMITS.md.
+    """
+    id = models.PositiveSmallIntegerField(primary_key=True, editable=False)  # always 1, set in save()
+    max_image_mb = models.PositiveIntegerField(
+        default=100, validators=[MinValueValidator(1)],
+        verbose_name='Max image size (MB)',
+        help_text="A photo larger than this is refused before it is processed.",
+    )
+    max_image_pixels = models.PositiveBigIntegerField(
+        default=144_000_000, validators=[MinValueValidator(1)],
+        verbose_name='Max image pixels (width x height)',
+        help_text="A photo with more pixels than this is refused from its header, before it is decoded.",
+    )
+    max_video_mb = models.PositiveIntegerField(
+        default=2048, validators=[MinValueValidator(1)],
+        verbose_name='Max video size (MB)',
+        help_text="A video larger than this is refused. The web server's client_max_body_size must be at least "
+                  "this plus overhead (see docs/KYAPTURE_UPLOAD_LIMITS.md).",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'upload_limits'
+        verbose_name = 'Upload limits'
+        verbose_name_plural = 'Upload limits'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        """The single row; created with the defaults if missing."""
+        try:
+            return cls.objects.get(pk=1)
+        except cls.DoesNotExist:
+            return cls.objects.get_or_create(pk=1)[0]
+
+    def __str__(self):
+        return 'Upload limits'

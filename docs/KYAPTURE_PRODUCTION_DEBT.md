@@ -20,7 +20,7 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 | 5 | Favorites are matched by typed email with no verification: anyone can see another person's favorite list in a gallery | 6.4-B | 7-A (add to its prompt) |
 | 6 | original_url is returned in the media API: check it against the private-storage rule (Free user must not reach Original) | VID-A | 7-B |
 | 7 | "Direct API refused" for Free users proven by tests and a raw 403 only (curl check failed on token format) | BILL-B | 7-B / 15-A |
-| 8 | Hard ceilings 25 MB per image and 5 GB per video are not plan values: owner decision | VID-A | 13-C (owner decides) |
+| 8 | Hard ceilings 25 MB per image and 5 GB per video are not plan values: owner decision | VID-A | 13-C (owner decides). **PARTLY DONE in UP-A**: they are now ONE admin-editable row (Subscriptions > Upload limits: images 100 MB and 144,000,000 px, video 2048 MB), global, not per plan. Still open: the owner decides the real values and whether any should differ per plan |
 | 9 | Share by email is only a mailto: link (no email service) | 5.1-A | 7.5-D (decide: keep or real email) |
 
 ## C. UI and design (Wave 6)
@@ -118,15 +118,30 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 
 | # | Gap | Raised in | Owner chunk |
 |---|-----|-----------|-------------|
-| 64 | A Web Size of a photo already within the chosen px is re-encoded at Pillow q90 and can be BIGGER than the file it came from (720x1600, 124 KB original -> 178 KB Web Size at 2048; High Resolution for the same photo serves the 124 KB original). Pixels are right, bytes are not minimal | 6-D | owner decides (serve the master unchanged when no resize and no watermark is needed); no chunk assigned |
-| 65 | When no Download Master is made (source within 3600 px and every re-encode larger, 6-A rule) a Free client's High Resolution is the byte-identical original (same pixels, smaller file; keeps the camera's ICC/EXIF minus GPS). Seen on 1 of 9 acceptance photos. Product decision: accept, or force a master | 6-D | owner decision (13-A) |
-| 66 | Cold Web Size with no `websize` worker: the UI waits 4 tries x 25 s server wait + 3 s pauses = about 110 s before "Try again". Tune `PREPARING_MAX_ATTEMPTS` / `WEB_SIZE_WAIT_SECONDS` with staging numbers | 6-D | 15-B |
 | 67 | `clients.0012_download_job_variant` was applied to the Docker dev DB only; host dev DB and production are not migrated. Old READY jobs have variant '' and are simply never reused | 6-D | 13-C, 15-B |
 | 68 | The 2 GB multi-part split and its bell notification were not run in a real browser (rows 23/24). A photo with no usable source file is still skipped quietly when a ZIP is built (only a photo that fails while being written fails the job) | 6-D | QA-A / 15-A |
-| 69 | The favorites list has no download action, so "favorites download" has no separate path to test; if the owner expects one it is a feature, not a fix | 6-D | owner decision |
+| 69 | The favorites list has no download action, so "favorites download" has no separate path to test; if the owner expects one it is a feature, not a fix | 6-D | RS0-B |
+| 70 | 390 px layout of the ZIP preparing page and the Download Photo page not checked | 6-D | QA-A |
+
+## K. Raised by UP-A (per-file upload limits, docs/KYAPTURE_UPLOAD_LIMITS.md)
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 71 | Video disk space for processing is not checked or provisioned: a 2 GB upload needs the proxy's temp body, Django's temp file, the stored original and the FFmpeg output on disk at the same time (several times the file), and nothing refuses a video when the disk is short | UP-A | 11-D (disk alert / quota), 15-A (measure on staging) |
+| 72 | No real upload at the limits was run: a 100 MB image, a 144-megapixel image and a 2 GB video through the real proxy, gunicorn and worker. Tests use a PNG header with no pixel data and a tiny clip with a patched size. The gunicorn `--timeout` (Dockerfile uses the 30 s default) would cut a long upload, and is not set | UP-A | 15-A (real large upload on staging) |
+| 73 | The proxy that fronts Django is not in this repo, so `client_max_body_size` (must be at least `max_video_mb` + about 50 MB, 2100m for the default) is documented but not set or tested anywhere; raising `max_video_mb` in admin without raising it gives a bare nginx 413 | UP-A | 14-A (staging config), 16-A (production config) |
+| 74 | Decode memory at the pixel limit was not measured: a 144-megapixel RGB image is about 430 MB in Pillow before the resize and encode copies, per Celery worker process. The default 144,000,000 comes from the Pixieset reference, not from a measurement on our hardware | UP-A | 15-A (measure peak worker memory, then set the default) |
+| 75 | The server reads the whole body before it can judge a file, so an image over the pixel limit (up to the size limit) or a file over the size limit still costs its bandwidth up to the proxy limit. The browser pre-checks size only; it never decodes, so a too-large-in-pixels image uploads fully before the refusal | UP-A | 7-B (early body check for abusive clients; see rows 4, 31) |
+| 76 | Lowering `max_image_pixels` does not touch photos already stored: the worker, Web Size and ZIP code set Pillow's guard from the new value, which raises above twice it, so an old photo larger than that can fail to process or download after the edit | UP-A | owner decision (13-A), then 13-C |
+| 77 | `subscriptions.0009_upload_limits` was applied to the Docker dev DB only; the host dev DB and production are not migrated (the row is also created on first read) | UP-A | 13-C, 15-B |
 
 ## Accepted (no fix needed)
 
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 64 | A watermark or quality setting can make a small photo's Web Size larger; there is no upscaling | 6-D | Accepted (no fix needed) |
+| 65 | This only happens when the original is already within 3600 px, so High Resolution gives the same size | 6-D | Accepted (no fix needed) |
+| 66 | A stopped worker is an incident, with alerting handled in 11-D / 15-B | 6-D | Accepted (no fix needed) |
 - Row 32: The admin form cannot set a plan's `max_collections` to 0; empty = unlimited, and the minimum cap is 1 by design.
 - Old download rows show "-" for set names (no data existed).
 - Video short-preview file does not exist (dead code removed earlier); poster + 1080p MP4 is enough.
