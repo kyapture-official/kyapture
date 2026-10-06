@@ -135,6 +135,37 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | 76 | Lowering `max_image_pixels` does not touch photos already stored: the worker, Web Size and ZIP code set Pillow's guard from the new value, which raises above twice it, so an old photo larger than that can fail to process or download after the edit | UP-A | owner decision (13-A), then 13-C |
 | 77 | `subscriptions.0009_upload_limits` was applied to the Docker dev DB only; the host dev DB and production are not migrated (the row is also created on first read) | UP-A | 13-C, 15-B |
 
+## L. Raised by SEC-0 (security docs, docs/security/; SEC-xx ids in docs/security/threat-model.md)
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 78 | SEC-01: `NUM_PROXIES` is a top-level setting (`production.py:242`) but DRF reads it only from `REST_FRAMEWORK`, so throttles key on the raw client-supplied `X-Forwarded-For`; a new header value per request bypasses login, unlock/PIN and reset throttles. `_get_client_ip` (`clients/views.py:135`, `clients/serializers.py:390`) also stores the left-most XFF as the client IP. Needs a proxy that overwrites XFF plus a test | SEC-0 | 7-A |
+| 79 | SEC-02 (widens row 5): a claimed `?email=` also lets any visitor rename, delete and add photos to another visitor's favorite lists (`favorite_lists.py:87-128, 217-222`; `clients/views.py:926-970`) | SEC-0 | 7-A |
+| 80 | SEC-03: "Restrict Downloads to Specific Contacts" accepts any typed, unverified email that is on the list (`download_access.py:224-229`) | SEC-0 | 7-A |
+| 81 | SEC-04: download PIN 4-8 digits and gallery password min 4 chars, with no per-gallery failed-attempt counter, backoff or alert; only the per-IP throttle (see row 78) | SEC-0 | 7-A |
+| 82 | SEC-05: originals and public derivatives share one bucket and the same key prefix; the original's key is derivable from a public display URL, so privacy depends only on per-object ACL. Bucket policy / Block Public Access / Object Ownership not in repo; verify on staging | SEC-0 | 7-B (verify in 15-A) |
+| 83 | SEC-06: with `DEBUG=True`, `config/urls.py:37-38` serves all of `MEDIA_ROOT` without auth (originals, Download Masters, receipts) and compose publishes `:8000` on all interfaces | SEC-0 | 7-B |
+| 84 | SEC-07: `PublicVideoStreamView` redirects to a signed URL of the private original when no playback MP4 exists, and ignores `allow_download` (`clients/views.py:1742-1753`) | SEC-0 | 7-B |
+| 85 | SEC-09: public derivatives (WebP tiers, posters, playback MP4) are public-read with permanent URLs and 1-year immutable cache; adding a password, unpublishing or expiry does not revoke URLs already seen | SEC-0 | 7-B |
+| 86 | SEC-10: no `backend/.dockerignore`; `COPY . .` (`backend/Dockerfile:50`) puts `backend/.env`, `venv/`, `media/`, `logs/` into the image. Not inspected (no build in SEC-0) | SEC-0 | 13-C |
+| 87 | SEC-11: dev DB password hardcoded in `docker-compose.yml` (5 places) and `development.py:14`, equal to the DB name, in history since the first commit; Postgres, Redis (no auth), Mailpit and Django published on all host interfaces | SEC-0 | 13-C |
+| 88 | SEC-13: one `SECRET_KEY` signs JWTs, download/job/file tokens and reset links; no separate JWT key, no `SECRET_KEY_FALLBACKS`, no rotation runbook; S3 and SES share one AWS key pair | SEC-0 | 13-C |
+| 89 | SEC-14: gallery unlock tokens stored in plaintext (`clients/models.py:61`), visible in admin, and accepted in `?token=` URLs (logs, history) | SEC-0 | 7-A |
+| 90 | SEC-15: Django admin at the default `/admin/` with no login throttle/lockout, no MFA, no network restriction; gallery admin form shows password/PIN hashes | SEC-0 | 7-A |
+| 91 | SEC-16: no email verification at registration | SEC-0 | 7-A |
+| 92 | SEC-17: token refresh has no own throttle and falls under `anon` 100/day per IP (~96 refreshes/day per active user); several users behind one NAT can be logged out. Not runtime-tested | SEC-0 | 7-A |
+| 93 | SEC-18: ffmpeg poster/transcode `subprocess.run` has no timeout (`core/utils.py:868, 895`); no Celery time limits | SEC-0 | 7-B |
+| 94 | SEC-19: GPS strip fails open (`core/utils.py:329`); video location metadata is never stripped and video originals are served to clients | SEC-0 | 7-B |
+| 95 | SEC-20: one `nginx.conf` CSP for every build allows `http://localhost:8000` and `style-src 'unsafe-inline'`; no `server_tokens off` | SEC-0 | 15-A |
+| 96 | SEC-21: backend container runs as root; base images by tag not digest (`redis:alpine`, `mailpit:latest` float); `bcrypt` and `django-ses` unpinned; no CI dependency audit; CVE status of current versions not checked | SEC-0 | 15-A |
+| 97 | SEC-22: no security event logging (failed login/unlock/PIN, 429s, payment approvals), no off-host log shipping, no error tracking or alerting | SEC-0 | 15-A |
+| 98 | SEC-23: no account deletion or data export; client IP + email kept 365 days (DownloadLog) and 30 days (ClientSession); retention not decided by the owner | SEC-0 | 13-C |
+| 99 | SEC-27: single-photo download does not require READY; for a non-READY image `resolution=web` can fall back to the original (`clients/views.py:1838, 1919-1922`). Needs the asset UUID; not reproduced | SEC-0 | 7-B |
+| 100 | SEC-28: JWT and CSRF cookies are scoped to `.kyapture.com` (every subdomain) and `ALLOWED_HOSTS` falls back to `.kyapture.com`; verify no subdomain serves untrusted content | SEC-0 | 15-A |
+| 101 | SEC-29: 11 `docs/pixieset-ref` screenshots are tracked and already on `origin/feature/landing-page-redesign` (row 39 assumed they were not pushed yet); contents not opened in SEC-0. Owner checks for IP/emails and decides on history rewrite before any merge to main | SEC-0 | 13-C |
+| 102 | SEC-25/26: QA gallery password and PIN in plaintext in `docs/qa-1r5e/qa-script.js:1, 11, 12`; an old `backend/.env.example` (commit `aecfb94`, line 10) held a non-placeholder-looking `SECRET_KEY` literal: confirm it was never used; `test_s3_connection` prints a presigned URL | SEC-0 | 13-C |
+| 103 | DB hardening: every container runs `migrate` with the runtime DB credentials (runtime user has DDL rights) and `DATABASES` sets no `sslmode`; verify on the production DB | SEC-0 | 15-A |
+
 ## Accepted (no fix needed)
 
 | # | Gap | Raised in | Owner chunk |
