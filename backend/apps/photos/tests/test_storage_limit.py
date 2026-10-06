@@ -59,7 +59,7 @@ class StorageBase(APITestCase):
         return plan
 
     def fill(self, total_bytes):
-        """Existing usage of exactly `total_bytes` (rows are capped by the column's 32-bit range)."""
+        """Existing usage of exactly `total_bytes`, in rows of at most 1 GB each."""
         order = 1
         while total_bytes > 0:
             chunk = min(total_bytes, GB)

@@ -33,3 +33,13 @@ test('storage usage reads in bytes-aware units, figures from a refusal in GB', a
   assert.equal(formatStorageFigures(2.994, 3), '2.99 / 3 GB')
   assert.equal(formatStorageFigures(3.4, 1), '3.4 / 1 GB')
 })
+
+test('byte sizes above 2^31 are shown in full, not truncated to 32 bits (DB-A)', async () => {
+  const { formatStorageUsage } = await import('./planLimits.js')
+  const { formatBytes } = await import('./formatters.js')
+  const GB = 1024 ** 3
+  assert.equal(formatBytes(4 * GB), '4.00 GB')
+  assert.equal(formatBytes(5 * GB), '5.00 GB')
+  assert.equal(formatBytes(2 ** 31 + 1), '2.00 GB')
+  assert.equal(formatStorageUsage({ storage_used_bytes: 8 * GB, plan_storage_limit_gb: 10 }), '8.00 GB / 10 GB')
+})

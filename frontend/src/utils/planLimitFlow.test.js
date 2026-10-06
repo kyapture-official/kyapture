@@ -173,3 +173,11 @@ test('upload response: a list is all stored; { uploaded, refused, storage } repo
   assert.deepEqual(partial.assets, [{ id: 1 }])
   assert.deepEqual(partial.storageRefusal, { plan_name: 'P', used_gb: 3, plan_limit_gb: 3, refused_count: 2 })
 })
+
+// DB-A: byte counts above 2^31 (a 2-5 GB video) stay exact numbers end to end
+test('storage click-time split: a 5 GB video against 6 GB left fits, against 4 GiB left does not', () => {
+  const GB = 1024 ** 3
+  assert.equal(splitByStorage([sized('v', 5 * GB)], { storage_remaining_bytes: 6 * GB }).allowed.length, 1)
+  assert.equal(splitByStorage([sized('v', 5 * GB)], { storage_remaining_bytes: 4 * GB }).refused.length, 1)
+  assert.equal(splitByStorage([sized('v', 5 * GB)], { storage_remaining_bytes: 5 * GB }).refused.length, 0) // exactly the space left
+})

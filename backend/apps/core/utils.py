@@ -157,7 +157,9 @@ def get_user_subscription_metrics(user):
         video_seconds=Sum('duration', filter=Q(media_type=MediaAsset.MediaType.VIDEO)),
     )
 
-    limits["current_total_storage_bytes"] = asset_aggregation['total_bytes'] or 0
+    # Postgres SUM() of a bigint column is numeric, which psycopg returns as Decimal;
+    # DRF would render that as a JSON string, so hand back a plain int.
+    limits["current_total_storage_bytes"] = int(asset_aggregation['total_bytes'] or 0)
     limits["current_video_seconds"] = asset_aggregation['video_seconds'] or 0
     limits["current_photos_count"] = asset_aggregation['total_count'] or 0
     limits["active_photos_count"] = asset_aggregation['active_count'] or 0

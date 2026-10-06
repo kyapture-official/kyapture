@@ -193,8 +193,9 @@ class MediaAsset(BaseModel):
     # ─── Shared Common Attributes ───
     title = models.CharField(max_length=200, blank=True)
     original_name = models.CharField(max_length=255)
-    file_size = models.PositiveIntegerField()
-    
+    # Bytes. 64-bit: a video can be up to 5 GB, past the 2^31-1 of a 32-bit column.
+    file_size = models.PositiveBigIntegerField()
+
     # NEW: Decimal field replaces PositiveIntegerField to enable O(1) drag-and-drop insertions
     order = models.DecimalField(
         max_digits=20,

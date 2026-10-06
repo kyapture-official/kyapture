@@ -73,7 +73,7 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 | 39 | docs/pixieset-ref screenshots show an IP address and emails: blur before committing | start | owner, before the first push of that folder |
 | 40 | Photo storage (GB) limit: is it enforced at upload with an upgrade modal, and what happens to a user already over a lowered limit | BILL-C | BILL-C. **DONE in BILL-C** (403 `storage_limit_reached`, shared modal, partial batches, over-limit state; gaps in rows 41-46) |
 | 41 | Usage counts only the original (`MediaAsset.file_size`). The private Download Master, the WebP derivatives, the video poster and the playback MP4 are stored but not metered, so real storage cost is higher than the plan number. Counting them needs their sizes recorded per row | BILL-C | 13-A (owner decides what "storage" means, then a size column + backfill) |
-| 42 | `MediaAsset.file_size` is a 32-bit `integer` column (max 2,147,483,647 bytes, checked in Postgres). A video between 2 GiB and the 5 GB ceiling (row 8) fails the insert and the upload answers 500 `upload_processing_error`; such a file also could not be counted. Needs a BigInteger migration (not run against the host dev DB) | BILL-C | 13-C (with row 8) |
+| 42 | `MediaAsset.file_size` is a 32-bit `integer` column (max 2,147,483,647 bytes, checked in Postgres). A video between 2 GiB and the 5 GB ceiling (row 8) fails the insert and the upload answers 500 `upload_processing_error`; such a file also could not be counted. Needs a BigInteger migration (not run against the host dev DB) | BILL-C | 13-C (with row 8). **DONE in DB-A**: migration `photos.0008` -> `PositiveBigIntegerField`, run on the Docker dev DB only (rows 61-62 for what is left) |
 | 43 | `get_user_subscription_metrics` selects a subscription by `status='active'` only, while entitlements also require `expires_at` in the future. A lapsed plan keeps its paid storage limit until the sweep flips it (runs every 15 minutes) | BILL-C | 7-B |
 | 44 | Only the storage check is repeated under the per-account row lock. The video-minutes check still uses usage read before it, so two parallel direct-API video uploads can pass it together and exceed the minutes by one batch | BILL-C | 7-B |
 | 45 | The warning state shows on Billing and Settings only. The dashboard home and the workspace show nothing until an upload is refused, and nobody is told when an admin lowers a plan below their usage (no email or notification) | BILL-C | 9A-2 (dashboard) / 9C-1 |
@@ -105,6 +105,14 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 Row 36 note: The sidebar label comes from `frontend/src/components/layout/DashboardLayout.jsx`, which maps `user?.is_active_plan` to "Pro Plan" or "Free Plan".
 Plan & Billing gets the plan and subscription from `frontend/src/hooks/useSubscription.js` and checks for an active subscription before showing the plan.
 Yes, a real paid user can see different labels if the auth-store flag and the live subscription response disagree or one is stale.
+
+## I. Raised by DB-A (64-bit byte counts)
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 61 | `photos.0008` was applied to the Docker dev DB only (2 rows). The host dev DB and production are not migrated. On a large production table it is one `ALTER COLUMN ... TYPE bigint`, a full table rewrite under an ACCESS EXCLUSIVE lock; the length of that lock was not measured on a large table. Run in a quiet window after a backup | DB-A | 13-C, 15-B (real restore + timed run on a production-size copy) |
+| 62 | No real upload above 2 GiB has been run. Tests store a tiny clip whose reported size is patched to 4 GiB / 5 GB; the DB, plan rules, serializers and JSON are proven, but the web server, ASGI/gunicorn timeouts, temp disk and storage backend limits for a real 2-5 GB body are not | DB-A | 15-A (staging: one real 5 GB upload and ZIP) |
+| 63 | Only `MediaAsset.file_size` held a byte count in an integer column. ZIP/download part sizes live in `DownloadJob.files` JSON (no 32-bit limit); the other integer columns are counts, pixels or seconds. A future byte column must be 64-bit | DB-A | rules file (check on every new size field) |
 
 ## Accepted (no fix needed)
 
