@@ -21,3 +21,4 @@ QA cleanup: delete ONLY rows by exact id/email created in this session. Never de
 No "good enough for beta". If you leave any known gap, add a row to docs/KYAPTURE_PRODUCTION_DEBT.md (gap, chunk that raised it, owning chunk). Never write "beta is fine" in a report.
 
 Before starting any chunk, read docs/KYAPTURE_PRODUCTION_DEBT.md and handle every OPEN row whose owning chunk is your chunk id (fix it, or explain in the report why it is not fixable now). Do not skip these rows.
+Any new column that stores a byte count must be a 64-bit integer (BigIntegerField / PositiveBigIntegerField). When summing it, cast the aggregate to int before serializing.
