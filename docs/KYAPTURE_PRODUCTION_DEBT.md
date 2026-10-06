@@ -95,11 +95,12 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 
 | # | Gap | Raised in | Owner chunk |
 |---|-----|-----------|-------------|
-| 54 | A cold single Web Size needs a `celery_websize` worker (own queue, `--concurrency=2`, added to docker-compose). With no such worker the request waits `WEB_SIZE_WAIT_SECONDS` (25) and answers 503 `web_size_preparing`; there is deliberately no encode in the request thread. The production deploy manifest must run this worker | 6-C | 15-A |
-| 55 | A ZIP job encodes its cold Web Sizes inline in its own Celery task, serially, so that CPU is bounded by the default worker's concurrency and not by the `websize` queue's 2 slots | 6-C | 11-D (decide whether ZIP cold sizes should fan out to the websize queue) |
-| 56 | Cached Web Sizes are private-storage objects that are not metered in the plan storage number (adds to row 41). A superseded entry (watermark edited, master re-encoded) is removed only when that photo/px is next written; until then it stays, at most one stale file per (photo, px). Purge of the photo/set/collection removes all of them | 6-C | 13-A / 11-D |
-| 57 | The cache key reads the source file's size (one storage stat) and then `exists` (second call); on S3 that is two requests per warm download. Measured only on local disk (warm single download 34-47 ms) | 6-C | 15-A |
-| 58 | The cold-ZIP timing had unexplained outliers (27-63 s task time) during a host memory shortage; clean runs were 5.3-8.9 s. Not reproduced afterwards | 6-C | 15-A (re-measure on staging hardware) |
+| 54 | A cold single Web Size needs a `celery_websize` worker (own queue, `--concurrency=2`, added to docker-compose). With no such worker the request waits `WEB_SIZE_WAIT_SECONDS` (25) and answers 503 `web_size_preparing`; there is deliberately no encode in the request thread. The production deploy manifest must run this worker | 6-C | 14-A (staging compose/service config) and 16-A (production) |
+| 55 | A ZIP job encodes its cold Web Sizes inline in its own Celery task, serially, so that CPU is bounded by the default worker's concurrency and not by the `websize` queue's 2 slots | 6-C | 15-B (decide only if staging numbers need it) |
+| 56 | Cached Web Sizes are private-storage objects that are not metered in the plan storage number (adds to row 41). A superseded entry (watermark edited, master re-encoded) is removed only when that photo/px is next written; until then it stays, at most one stale file per (photo, px). Purge of the photo/set/collection removes all of them | 6-C | 11-D (lifecycle rule: purge old cached Web Sizes) |
+| 57 | The cache key reads the source file's size (one storage stat) and then `exists` (second call); on S3 that is two requests per warm download. Measured only on local disk (warm single download 34-47 ms) | 6-C | 15-B |
+| 58 | The cold-ZIP timing had unexplained outliers (27-63 s task time) during a host memory shortage; clean runs were 5.3-8.9 s. Not reproduced afterwards | 6-C | 15-B (re-measure on staging hardware) |
+| 59 | Cold single Web Size can return 503 web_size_preparing; the client UI shows a generic error | 6-C | 6-D (Preparing state + Retry-After auto-retry) |
 
 Row 36 note: The sidebar label comes from `frontend/src/components/layout/DashboardLayout.jsx`, which maps `user?.is_active_plan` to "Pro Plan" or "Free Plan".
 Plan & Billing gets the plan and subscription from `frontend/src/hooks/useSubscription.js` and checks for an active subscription before showing the plan.
