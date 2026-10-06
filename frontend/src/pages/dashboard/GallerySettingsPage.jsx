@@ -168,7 +168,6 @@ export default function GallerySettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
 
   const [title, setTitle] = useState(gallery.title);
-  const [brandingColor, setBrandingColor] = useState(gallery.branding_color);
   const [eventDate, setEventDate] = useState(toDateInputValue(gallery.event_date));
   const [expiresAt, setExpiresAt] = useState(toDateInputValue(gallery.expires_at));
   // ── Privacy tab: Collection Password only. The server never returns it,
@@ -273,7 +272,6 @@ export default function GallerySettingsPage() {
 
     const payload = {
       title: title.trim(),
-      branding_color: brandingColor,
       event_date: eventDate || null,
       expires_at: expiresAt || null,
     };
@@ -287,7 +285,6 @@ export default function GallerySettingsPage() {
       }
       setGallery(updated);
       setTitle(updated.title);
-      setBrandingColor(updated.branding_color);
       toast("Settings saved successfully", "success");
     } catch (err) {
       if (isMountedRef.current) {
@@ -1090,7 +1087,7 @@ export default function GallerySettingsPage() {
           {gallery.cover_url ? (
             <img src={gallery.cover_url} alt="" className="w-24 h-24 rounded-full object-cover border border-cream-200 mb-4 shadow-sm" />
           ) : (
-            <div className="w-16 h-16 rounded-full flex items-center justify-center text-white/30" style={{ backgroundColor: brandingColor }}>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center text-white/30" style={{ backgroundColor: gallery.branding_color }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                 <circle cx="12" cy="13" r="4" />

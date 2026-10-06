@@ -1,6 +1,7 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\components\shared\CoverPreview.jsx
 import { formatDate } from "../../utils/formatters";
 import { resolveDesignSettings } from "../../utils/designSettings";
+import { typographyVars } from "../../utils/typography";
 
 /**
  * WHAT: Live cover page preview — renders a scaled-down representation of
@@ -8,14 +9,19 @@ import { resolveDesignSettings } from "../../utils/designSettings";
  * WHY:  Instant visual feedback as the photographer adjusts layout, typography,
  *       colors, and grid options in the design builder.
  *
- * The layout/typography/color option → class mapping lives in
+ * The layout/color option → class mapping lives in
  * ../../utils/designSettings.js, shared with the real public client
  * gallery (ClientGalleryPage.jsx) so this preview and what a guest
- * actually sees stay in lockstep.
+ * actually sees stay in lockstep. The title font comes from the server's
+ * typography style (`typographyStyle`, via CSS variables on `.ky-type`),
+ * exactly like the client hero.
+ *
+ * `device` frames the same cover as a desktop (4:3) or phone (9:16) screen.
  */
 
-export default function CoverPreview({ settings, gallery }) {
-  const { layoutClass: layout, typographyClass: typo, theme } = resolveDesignSettings(settings);
+export default function CoverPreview({ settings, gallery, typographyStyle, device = "desktop" }) {
+  const { layoutClass: layout, theme } = resolveDesignSettings(settings);
+  const phone = device === "phone";
 
   const title = gallery?.title || "Collection Title";
   const date = gallery?.event_date || gallery?.created_at;
@@ -35,7 +41,10 @@ export default function CoverPreview({ settings, gallery }) {
   );
 
   return (
-    <div className={`relative w-full aspect-[4/3] rounded-2xl overflow-hidden border border-cream-200 ${theme.bg} transition-all duration-300`}>
+    <div
+      data-device={device}
+      className={`relative mx-auto w-full ${phone ? "max-w-[220px] aspect-[9/16]" : "aspect-[4/3]"} rounded-2xl overflow-hidden border border-cream-200 ${theme.bg} transition-all duration-300`}
+    >
       {/* Background image / blur overlay */}
       {coverSrc && (
         <>
@@ -49,7 +58,7 @@ export default function CoverPreview({ settings, gallery }) {
       )}
 
       {/* Content */}
-      <div className={`relative z-10 flex flex-col justify-center h-full ${layout} gap-3 px-6`}>
+      <div className={`relative z-10 flex flex-col justify-center h-full ${layout} gap-3 ${phone ? "px-4" : "px-6"}`}>
         {/* Accent bar (stripe layout) */}
         {settings.layout === "stripe" && (
           <div className={`w-8 h-1 rounded-full ${theme.accent} mb-2`} />
@@ -57,8 +66,10 @@ export default function CoverPreview({ settings, gallery }) {
 
         {/* Title */}
         <h2
-          className={`text-2xl font-semibold ${typo} ${
-            coverSrc ? "text-white" : theme.text
+          data-testid="cover-preview-title"
+          style={typographyVars(typographyStyle)}
+          className={`ky-type max-w-full ${phone ? "text-xl" : "text-2xl"} ${
+            coverSrc ? "text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)]" : theme.text
           } transition-all duration-300`}
         >
           {title}

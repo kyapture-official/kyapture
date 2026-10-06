@@ -97,6 +97,19 @@ export const galleriesApi = {
 
 
   /**
+   * WHAT: The six typography styles with the server's presentation mapping.
+   * URI:  GET /api/v1/galleries/typography-styles/
+   *
+   * @returns {Promise<{default: string, styles: Array<{id, label, description,
+   *          family_key, font_family, weight, font_style, letter_spacing,
+   *          text_transform}>}>}
+   */
+  getTypographyStyles: async () => {
+    const { data } = await api.get('/galleries/typography-styles/')
+    return data
+  },
+
+  /**
    * WHAT: Fetch the full configuration of one specific gallery.
    * URI:  GET /api/v1/galleries/{slug}/
    *

@@ -4,13 +4,15 @@ import { useSubscription } from '../../hooks/useSubscription'
 import { useToast } from '../ui/Toast'
 import Button from '../ui/Button'
 import UpgradePrompt from '../shared/UpgradePrompt'
-import { COLOR_THEMES, LAYOUT_CLASSES, TYPOGRAPHY_CLASSES } from '../../utils/designSettings'
+import { COLOR_THEMES, LAYOUT_CLASSES } from '../../utils/designSettings'
+import { TYPOGRAPHY_IDS } from '../../utils/typography'
+import { useTypographyStyles } from '../../hooks/useTypographyStyles'
 import { Card, ErrorBlock, InlineStatus, LoadingBlock, Switch } from './SettingsUI'
 import { useUserSettings } from './useUserSettings'
 
 const cap = (text) => text.charAt(0).toUpperCase() + text.slice(1)
 const DESIGN_OPTIONS = {
-  typography: { label: 'Typography', values: Object.keys(TYPOGRAPHY_CLASSES) },
+  typography: { label: 'Typography', values: TYPOGRAPHY_IDS },
   colorPalette: { label: 'Colour palette', values: Object.keys(COLOR_THEMES) },
   layout: { label: 'Cover layout', values: Object.keys(LAYOUT_CLASSES) },
   gridStyle: { label: 'Grid style', values: ['vertical', 'horizontal'] },
@@ -56,6 +58,10 @@ export default function CollectionDefaultsSection() {
   const toast = useToast()
   const { settings, loading, loadError, reload, save } = useUserSettings()
   const { entitlements, loading: planLoading } = useSubscription()
+  const { styles: typographyStyles } = useTypographyStyles()
+  // Typography names come from the server's table once it has answered.
+  const optionLabel = (key, value) =>
+    (key === 'typography' && typographyStyles.find((style) => style.id === value)?.label) || cap(value)
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -201,7 +207,7 @@ export default function CollectionDefaultsSection() {
                     className={selectClass}
                   >
                     <option value="">App default</option>
-                    {values.map((value) => <option key={value} value={value}>{cap(value)}</option>)}
+                    {values.map((value) => <option key={value} value={value}>{optionLabel(key, value)}</option>)}
                   </select>
                   {errors[`design.${key}`] && <p role="alert" className="text-xs text-red-600">{errors[`design.${key}`]}</p>}
                 </div>

@@ -1,9 +1,13 @@
 // C:\Users\David\Desktop\kyapture\frontend\src\pages\dashboard\GalleryDesignPage.jsx
 import { useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { Monitor, Smartphone } from "lucide-react";
 import { galleriesApi } from "../../api/galleriesApi";
 import CoverPreview from "../../components/shared/CoverPreview";
 import { useToast } from "../../components/ui/Toast";
+import { useTypographyStyles } from "../../hooks/useTypographyStyles";
+import { normalizeDesignSettings } from "../../utils/designSettings";
+import { pickStyle, typographyVars } from "../../utils/typography";
 
 const COVER_LAYOUTS = [
   { id: "center", label: "Center", desc: "Centered text overlay" },
@@ -12,15 +16,6 @@ const COVER_LAYOUTS = [
   { id: "vintage", label: "Vintage", desc: "Warm grain overlay" },
   { id: "frame", label: "Frame", desc: "Subtle border frame" },
   { id: "stripe", label: "Stripe", desc: "Accent bar above title" },
-];
-
-const TYPOGRAPHY_OPTIONS = [
-  { id: "sans", label: "Sans", preview: "Aa" },
-  { id: "serif", label: "Serif", preview: "Aa" },
-  { id: "modern", label: "Modern", preview: "Aa" },
-  { id: "timeless", label: "Timeless", preview: "Aa" },
-  { id: "bold", label: "Bold", preview: "Aa" },
-  { id: "subtle", label: "Subtle", preview: "Aa" },
 ];
 
 const COLOR_PALETTES = [
@@ -32,29 +27,16 @@ const COLOR_PALETTES = [
   { id: "olive", label: "Olive", color: "#f7fee7" },
 ];
 
-const TYPOGRAPHY_CLASSES = {
-  sans: "font-sans",
-  serif: "font-serif",
-  modern: "font-sans tracking-tight",
-  timeless: "font-serif italic",
-  bold: "font-sans font-bold",
-  subtle: "font-sans font-light tracking-wide",
-};
-
 export default function GalleryDesignPage() {
   const { gallery, setGallery, slug, isMountedRef } = useOutletContext();
   const toast = useToast();
 
-  const saved = gallery?.design_settings || {};
-  const initialDesign = {
-    layout: saved.layout || "center",
-    typography: saved.typography || "serif",
-    colorPalette: saved.colorPalette || "light",
-    thumbSize: saved.thumbSize || "regular",
-    gridSpacing: saved.gridSpacing ?? 16,
-    gridStyle: saved.gridStyle || "vertical",
-    coverPhoto: saved.coverPhoto || null,
-  };
+  // Every key is checked against the fixed vocabulary: a missing or invalid
+  // stored value (typography included) shows the app default as selected, and
+  // the next save sends only valid values.
+  const initialDesign = normalizeDesignSettings(gallery?.design_settings);
+  const { styles: typographyStyles, loading: stylesLoading, error: stylesError, retry: retryStyles } = useTypographyStyles();
+  const [previewDevice, setPreviewDevice] = useState("desktop");
   const [design, setDesign] = useState(initialDesign);
   const latestDesignRef = useRef(initialDesign);
   // A stored coverPhoto is useful for showing the current picker selection,
@@ -92,7 +74,7 @@ export default function GalleryDesignPage() {
           if (settings === latestDesignRef.current) {
             if (isMountedRef?.current !== false) {
               setGallery((prev) => ({ ...prev, ...updated }));
-              toast("Design settings saved", "success");
+              toast("Collection updated", "success");
             }
             return;
           }
@@ -202,37 +184,54 @@ export default function GalleryDesignPage() {
 
         {/* Typography Tab */}
         {activeTab === "typography" && (
-          <div className="space-y-8">
-            <Section title="Font Family">
-              <div className="grid grid-cols-3 gap-3">
-                {TYPOGRAPHY_OPTIONS.map((typo) => (
-                  <button
-                    key={typo.id}
-                    onClick={() => update("typography", typo.id)}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all cursor-pointer ${
-                      design.typography === typo.id
-                        ? "bg-brand-green-500/10 border-brand-green-500/30 text-brand-green-700"
-                        : "bg-surface-light border-cream-200 text-muted hover:border-cream-300 hover:text-ink"
-                    }`}
-                  >
-                    <span className={`text-2xl ${TYPOGRAPHY_CLASSES[typo.id]}`}>{typo.preview}</span>
-                    <span className="text-xs font-medium">{typo.label}</span>
-                  </button>
-                ))}
+          <div>
+            <h3 className="mb-5 font-serif text-xl text-ink">Typography</h3>
+            {stylesLoading ? (
+              <p role="status" className="text-xs text-muted">Loading styles…</p>
+            ) : stylesError || typographyStyles.length === 0 ? (
+              <div role="alert" className="text-xs text-muted">
+                {stylesError || "No typography styles are available."}{" "}
+                <button type="button" onClick={retryStyles} className="cursor-pointer underline underline-offset-2 hover:text-ink">
+                  Try again
+                </button>
               </div>
-            </Section>
-
-            <Section title="Typography Preview">
-              <div className="bg-cream-100 rounded-xl p-6 border border-cream-200">
-                <h3 className={`text-2xl mb-2 ${TYPOGRAPHY_CLASSES[design.typography]} text-ink`}>
-                  {gallery?.title || "Collection Title"}
-                </h3>
-                <div className="h-px w-8 bg-ink/15 mb-3" />
-                <p className={`text-xs uppercase tracking-[0.2em] text-muted ${TYPOGRAPHY_CLASSES[design.typography]}`}>
-                  {gallery?.event_date || "Event Date"}
-                </p>
+            ) : (
+              <div role="radiogroup" aria-label="Typography" className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4">
+                {typographyStyles.map((style) => {
+                  const selected = design.typography === style.id;
+                  return (
+                    <div key={style.id} className="flex min-w-0 flex-col items-stretch gap-2 text-center">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        data-typography-card={style.id}
+                        onClick={() => { if (!selected) update("typography", style.id); }}
+                        className={`flex h-28 min-w-0 flex-col justify-center gap-1.5 border bg-surface-light px-3 text-left transition-colors cursor-pointer sm:h-32 sm:px-4 ${
+                          selected
+                            ? "border-2 border-brand-green-600"
+                            : "border-cream-200 hover:border-cream-300"
+                        }`}
+                      >
+                        <span
+                          style={typographyVars(style)}
+                          className="ky-type block text-xl leading-tight text-ink sm:text-2xl"
+                        >
+                          {style.label}
+                        </span>
+                        <span
+                          style={{ ...typographyVars(style), "--ky-letter-spacing": "0em", "--ky-text-transform": "none" }}
+                          className="ky-type block text-[11px] leading-snug text-muted sm:text-xs"
+                        >
+                          {style.description}
+                        </span>
+                      </button>
+                      <span className="text-xs text-ink/80">{style.label}</span>
+                    </div>
+                  );
+                })}
               </div>
-            </Section>
+            )}
           </div>
         )}
 
@@ -347,13 +346,34 @@ export default function GalleryDesignPage() {
       <div className="space-y-4">
         <div className="sticky top-24">
           <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Live Preview</h3>
-          <CoverPreview 
-  settings={design} 
-  gallery={{
-    ...gallery,
-    photos: gallery?.photos || [] 
-  }} 
-/>
+          <CoverPreview
+            settings={design}
+            gallery={{
+              ...gallery,
+              photos: gallery?.photos || [],
+            }}
+            typographyStyle={pickStyle(typographyStyles, design.typography)}
+            device={previewDevice}
+          />
+          <div className="mt-3 flex items-center justify-center gap-2" role="group" aria-label="Preview device">
+            {[
+              { id: "desktop", label: "Desktop preview", Icon: Monitor },
+              { id: "phone", label: "Phone preview", Icon: Smartphone },
+            ].map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-label={label}
+                aria-pressed={previewDevice === id}
+                onClick={() => setPreviewDevice(id)}
+                className={`rounded-lg p-2 transition-colors cursor-pointer ${
+                  previewDevice === id ? "bg-cream-100 text-ink" : "text-muted hover:text-ink"
+                }`}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
           <p className="text-[10px] text-muted mt-2 text-center">This is how clients will see your gallery cover</p>
         </div>
       </div>

@@ -5,10 +5,18 @@ import { formatDate } from "../../utils/formatters";
 import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../ui/Toast";
 import { copyText, resolveShareUrl } from "../../utils/share";
+import { useTypographyStyles } from "../../hooks/useTypographyStyles";
+import { normalizeDesignSettings } from "../../utils/designSettings";
+import { pickStyle, typographyVars } from "../../utils/typography";
 
 export default function ClientPreviewModal({ open, onClose, gallery }) {
   const toast = useToast();
   const username = useAuthStore((state) => state.user?.username);
+  // Same title look as the client gallery: the server's style for the saved id.
+  const { styles: typographyStyles } = useTypographyStyles();
+  const titleTypeVars = typographyVars(
+    pickStyle(typographyStyles, normalizeDesignSettings(gallery?.design_settings).typography),
+  );
   const [showGrid, setShowGrid] = useState(false);
   const [scrolledPastHero, setScrolledPastHero] = useState(false);
   const [favorites, setFavorites] = useState(new Set());
@@ -181,7 +189,11 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
               <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-white/50 font-light mb-5">
                 {photographer}
               </p>
-              <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-white font-medium tracking-tight mb-4">
+              <h1
+                data-testid="preview-hero-title"
+                style={titleTypeVars}
+                className="ky-type max-w-full text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.1] text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.5)] mb-4"
+              >
                 {title}
               </h1>
               <div className="h-px w-12 my-5 bg-white/30" />
@@ -221,7 +233,7 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
         {/* PHOTO GRID SECTION */}
         <section ref={gridRef} className="min-h-screen bg-[#FDFBF7] px-4 sm:px-8 md:px-12 lg:px-20 py-16">
           <div className="max-w-6xl mx-auto mb-10">
-            <h2 className="font-serif text-3xl text-ink mb-2">{title}</h2>
+            <h2 style={titleTypeVars} className="ky-type text-3xl text-ink mb-2">{title}</h2>
             <div className="h-px w-8 bg-ink/15" />
           </div>
 

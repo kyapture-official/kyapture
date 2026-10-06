@@ -1,6 +1,7 @@
 /* C:/Users/LENOVO/Desktop/kyapture/frontend/src/styles/index.css */
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Outfit:wght@300;400;500;600&display=swap');
+/* Self-hosted fonts (see fonts.css); nothing is loaded from Google. */
+@import './fonts.css';
 
 @tailwind base;
 @tailwind components;
@@ -1206,4 +1207,20 @@ input, textarea, select {
 }
 @media (max-width: 768px) {
   .dash__stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ===== COLLECTION TYPOGRAPHY (client gallery hero/title + Design preview) =====
+   The five --ky-* variables are set ONLY on the element that shows the title,
+   from the server's typography_style mapping (see utils/typography.js). They
+   are never set on body/:root, so dashboard UI keeps its own fonts. The
+   fallbacks below apply when no style has arrived (the app default look). */
+.ky-type {
+  font-family: var(--ky-font-family, "Libre Baskerville", Georgia, "Times New Roman", Times, serif);
+  font-weight: var(--ky-font-weight, 400);
+  font-style: var(--ky-font-style, normal);
+  letter-spacing: var(--ky-letter-spacing, 0em);
+  text-transform: var(--ky-text-transform, none);
+  /* Long or unbroken titles wrap inside the box instead of overflowing it. */
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }

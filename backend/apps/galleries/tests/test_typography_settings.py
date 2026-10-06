@@ -48,7 +48,7 @@ class TypographyTableTests(APITestCase):
     def test_every_style_is_complete_and_has_a_system_fallback(self):
         for style_id, style in TYPOGRAPHY_STYLES.items():
             self.assertEqual(
-                set(style) - {'label', 'family', 'family_key'},
+                set(style) - {'label', 'description', 'family', 'family_key'},
                 {'font_family', 'weight', 'font_style', 'letter_spacing', 'text_transform'}, style_id)
             self.assertTrue(style['font_family'].startswith(f'"{style["family"]}", '), style_id)
             self.assertRegex(style['font_family'], r'(sans-serif|serif)$', style_id)
@@ -63,6 +63,39 @@ class TypographyTableTests(APITestCase):
         for bad in (None, '', 'comic-sans', 'SERIF', 5, ['bold'], {'a': 1}, 'bold; color:red'):
             self.assertEqual(resolve_typography(bad)['id'], DEFAULT_TYPOGRAPHY, bad)
         self.assertEqual(resolve_typography('bold')['id'], 'bold')
+
+
+class TypographyCatalogEndpointTests(TypographyBase):
+    """CHUNK 6.2-B: the Design page / Collection Defaults / Preview read the six styles from the server."""
+    CATALOG = '/api/v1/galleries/typography-styles/'
+
+    def test_returns_all_six_in_order_with_label_description_and_mapping(self):
+        response = self.client.get(self.CATALOG)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['default'], DEFAULT_TYPOGRAPHY)
+        styles = response.data['styles']
+        self.assertEqual([s['id'] for s in styles], list(SIX))
+        for style in styles:
+            table = TYPOGRAPHY_STYLES[style['id']]
+            self.assertEqual(style['label'], table['label'])
+            self.assertTrue(style['description'].startswith('A ') and style['description'].endswith(' font'))
+            for key in ('family_key', 'font_family', 'weight', 'font_style', 'letter_spacing', 'text_transform'):
+                self.assertEqual(style[key], table[key])
+            self.assertNotIn('family', style)
+
+    def test_is_static_and_ignores_any_stored_value(self):
+        Gallery.objects.filter(pk=self.gallery.pk).update(design_settings={'typography': 'x; color:red'})
+        self.assertEqual(self.client.get(self.CATALOG).data['styles'], self.client.get(self.CATALOG).data['styles'])
+        self.assertNotIn('color:red', str(self.client.get(self.CATALOG).data))
+
+    def test_requires_sign_in(self):
+        self.client.force_authenticate(user=None)
+        self.assertEqual(self.client.get(self.CATALOG).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_public_gallery_payload_does_not_carry_the_blurb(self):
+        style = self.client.get(self.public_url).data['typography_style']
+        self.assertNotIn('description', style)
+        self.assertNotIn('label', style)
 
 
 class TypographySaveTests(TypographyBase):

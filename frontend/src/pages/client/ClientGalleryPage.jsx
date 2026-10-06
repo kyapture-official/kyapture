@@ -19,6 +19,7 @@ import Spinner from "../../components/ui/Spinner";
 import { useToast } from "../../components/ui/Toast";
 import { formatDate } from "../../utils/formatters";
 import { resolveDesignSettings } from "../../utils/designSettings";
+import { typographyVars } from "../../utils/typography";
 import { Download, Heart, Play } from "lucide-react";
 
 /**
@@ -154,6 +155,11 @@ export default function ClientGalleryPage() {
   // light theme, vertical masonry, regular thumbnails).
   const [designSettings, setDesignSettings] = useState(null);
   const resolvedDesign = resolveDesignSettings(designSettings);
+  // The title font: the server's resolved style (family stack, weight, style,
+  // letter-spacing, case) as CSS variables on the title elements only. A
+  // missing style leaves `.ky-type` at the app default look.
+  const [typographyStyle, setTypographyStyle] = useState(null);
+  const titleTypeVars = typographyVars(typographyStyle);
 
   // UI state-machine properties
   const [loading, setLoading] = useState(true);
@@ -196,6 +202,7 @@ export default function ClientGalleryPage() {
     setPhotosHasMore(Boolean(data.photos_has_more));
     nextPageRef.current = 2;
     setDesignSettings(data.design_settings || null);
+    setTypographyStyle(data.typography_style || null);
     setLocked(false);
     setPhotoSets(data.photo_sets || []);
     setHasDownloadPin(Boolean(data.has_download_pin));
@@ -668,7 +675,7 @@ export default function ClientGalleryPage() {
             />
           )}
           {/* Overlay keeps the editorial cover readable without introducing a second visual system. */}
-          <div className="absolute inset-0 bg-black/35" />
+          <div className="absolute inset-0 bg-black/45" />
         </div>
 
         {/* Hero Content */}
@@ -689,7 +696,12 @@ export default function ClientGalleryPage() {
             </p>
           )}
 
-          <h1 className={`${resolvedDesign.typographyClass} text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-white font-medium tracking-tight mb-4`}>
+          <h1
+            data-testid="hero-title"
+            data-typography={typographyStyle?.id}
+            style={titleTypeVars}
+            className="ky-type max-w-full text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.1] text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.5)] mb-4"
+          >
             {galleryTitle}
           </h1>
 
@@ -730,7 +742,11 @@ export default function ClientGalleryPage() {
                 {photographerName}
               </p>
             )}
-            <h2 className={`${resolvedDesign.typographyClass} truncate text-2xl ${resolvedDesign.theme.text} sm:text-3xl`}>
+            <h2
+              data-testid="toolbar-title"
+              style={titleTypeVars}
+              className={`ky-type truncate text-2xl ${resolvedDesign.theme.text} sm:text-3xl`}
+            >
               {galleryTitle}
             </h2>
           </div>

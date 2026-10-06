@@ -17,6 +17,7 @@ from apps.core.utils import get_user_subscription_metrics
 from apps.subscriptions.entitlements import storage_figures
 from apps.subscriptions.upload_limits import get_upload_limits
 from apps.core.pagination import StandardResultsSetPagination
+from apps.core.typography import DEFAULT_TYPOGRAPHY, typography_catalog
 from apps.photos.purge import purge_gallery
 from .models import Gallery
 from .serializers import (
@@ -127,6 +128,22 @@ class GalleryListCreateView(APIView):
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class TypographyStylesView(APIView):
+    """
+    GET /api/v1/galleries/typography-styles/
+
+    The six typography styles (apps/core/typography.py) for the Design page
+    picker, the Collection Defaults dropdown and the dashboard Preview: id,
+    name, one-line description and the server's presentation mapping (family
+    stack, weight, style, letter-spacing, case). Static server constants, so it
+    carries no gallery data and no stored value is ever turned into CSS.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'default': DEFAULT_TYPOGRAPHY, 'styles': typography_catalog()})
+
 
 class GallerySearchView(APIView):
     """

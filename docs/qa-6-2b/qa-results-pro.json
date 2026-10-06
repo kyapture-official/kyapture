@@ -1,0 +1,1456 @@
+{
+ "kind": "pro",
+ "checks": [
+  {
+   "name": "six cards",
+   "pass": true,
+   "extra": [
+    "sans",
+    "serif",
+    "modern",
+    "timeless",
+    "bold",
+    "subtle"
+   ]
+  },
+  {
+   "name": "order sans,serif,modern,timeless,bold,subtle",
+   "pass": true
+  },
+  {
+   "name": "2 x 3 grid (desktop)",
+   "pass": true,
+   "extra": {
+    "rows": 3,
+    "cols": 2
+   }
+  },
+  {
+   "name": "default selected = serif when nothing stored",
+   "pass": true,
+   "extra": [
+    "false",
+    "true",
+    "false",
+    "false",
+    "false",
+    "false"
+   ]
+  },
+  {
+   "name": "plain label under each card",
+   "pass": true,
+   "extra": [
+    "Sans",
+    "Serif",
+    "Modern",
+    "Timeless",
+    "Bold",
+    "Subtle"
+   ]
+  },
+  {
+   "name": "one-line description (desktop)",
+   "pass": true,
+   "extra": [
+    {
+     "t": "A neutral font",
+     "lines": 1
+    },
+    {
+     "t": "A classic font",
+     "lines": 1
+    },
+    {
+     "t": "A sophisticated font",
+     "lines": 1
+    },
+    {
+     "t": "A light and airy font",
+     "lines": 1
+    },
+    {
+     "t": "A punchy font",
+     "lines": 1
+    },
+    {
+     "t": "A minimal font",
+     "lines": 1
+    }
+   ]
+  },
+  {
+   "name": "card sans drawn in Inter",
+   "pass": true,
+   "extra": {
+    "id": "sans",
+    "ff": "Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none"
+   }
+  },
+  {
+   "name": "card serif drawn in Libre Baskerville",
+   "pass": true,
+   "extra": {
+    "id": "serif",
+    "ff": "\"Libre Baskerville\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none"
+   }
+  },
+  {
+   "name": "card modern drawn in Jost",
+   "pass": true,
+   "extra": {
+    "id": "modern",
+    "ff": "Jost, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "2.88px",
+    "tt": "uppercase"
+   }
+  },
+  {
+   "name": "card timeless drawn in Cormorant Garamond",
+   "pass": true,
+   "extra": {
+    "id": "timeless",
+    "ff": "\"Cormorant Garamond\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "300",
+    "fs": "italic",
+    "ls": "0.48px",
+    "tt": "none"
+   }
+  },
+  {
+   "name": "card bold drawn in Oswald",
+   "pass": true,
+   "extra": {
+    "id": "bold",
+    "ff": "Oswald, Impact, \"Arial Narrow Bold\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "600",
+    "fs": "normal",
+    "ls": "0.48px",
+    "tt": "uppercase"
+   }
+  },
+  {
+   "name": "card subtle drawn in Work Sans",
+   "pass": true,
+   "extra": {
+    "id": "subtle",
+    "ff": "\"Work Sans\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "300",
+    "fs": "normal",
+    "ls": "1.2px",
+    "tt": "none"
+   }
+  },
+  {
+   "name": "select sans: PATCH typography=sans",
+   "pass": true,
+   "extra": {
+    "patches": 1,
+    "sentTypo": "sans"
+   }
+  },
+  {
+   "name": "sans: toast \"Collection updated\"",
+   "pass": true
+  },
+  {
+   "name": "sans: exactly one card selected",
+   "pass": true,
+   "extra": [
+    "sans"
+   ]
+  },
+  {
+   "name": "sans: preview title uses Inter",
+   "pass": true,
+   "extra": {
+    "ff": "Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "sans: preview weight/style/case = 400,normal,none",
+   "pass": true,
+   "extra": {
+    "ff": "Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "select serif: PATCH typography=serif",
+   "pass": true,
+   "extra": {
+    "patches": 1,
+    "sentTypo": "serif"
+   }
+  },
+  {
+   "name": "serif: toast \"Collection updated\"",
+   "pass": true
+  },
+  {
+   "name": "serif: exactly one card selected",
+   "pass": true,
+   "extra": [
+    "serif"
+   ]
+  },
+  {
+   "name": "serif: preview title uses Libre Baskerville",
+   "pass": true,
+   "extra": {
+    "ff": "\"Libre Baskerville\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "serif: preview weight/style/case = 400,normal,none",
+   "pass": true,
+   "extra": {
+    "ff": "\"Libre Baskerville\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "select modern: PATCH typography=modern",
+   "pass": true,
+   "extra": {
+    "patches": 1,
+    "sentTypo": "modern"
+   }
+  },
+  {
+   "name": "modern: toast \"Collection updated\"",
+   "pass": true
+  },
+  {
+   "name": "modern: exactly one card selected",
+   "pass": true,
+   "extra": [
+    "modern"
+   ]
+  },
+  {
+   "name": "modern: preview title uses Jost",
+   "pass": true,
+   "extra": {
+    "ff": "Jost, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "2.88px",
+    "tt": "uppercase",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "modern: preview weight/style/case = 400,normal,uppercase",
+   "pass": true,
+   "extra": {
+    "ff": "Jost, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "2.88px",
+    "tt": "uppercase",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "select timeless: PATCH typography=timeless",
+   "pass": true,
+   "extra": {
+    "patches": 1,
+    "sentTypo": "timeless"
+   }
+  },
+  {
+   "name": "timeless: toast \"Collection updated\"",
+   "pass": true
+  },
+  {
+   "name": "timeless: exactly one card selected",
+   "pass": true,
+   "extra": [
+    "timeless"
+   ]
+  },
+  {
+   "name": "timeless: preview title uses Cormorant Garamond",
+   "pass": true,
+   "extra": {
+    "ff": "\"Cormorant Garamond\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "300",
+    "fs": "italic",
+    "ls": "0.48px",
+    "tt": "none",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "timeless: preview weight/style/case = 300,italic,none",
+   "pass": true,
+   "extra": {
+    "ff": "\"Cormorant Garamond\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "300",
+    "fs": "italic",
+    "ls": "0.48px",
+    "tt": "none",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "select bold first time: PATCH typography=bold",
+   "pass": true,
+   "extra": {
+    "patches": 1,
+    "sentTypo": "bold"
+   }
+  },
+  {
+   "name": "bold: toast \"Collection updated\"",
+   "pass": true
+  },
+  {
+   "name": "bold: exactly one card selected",
+   "pass": true,
+   "extra": [
+    "bold"
+   ]
+  },
+  {
+   "name": "bold: preview title uses Oswald",
+   "pass": true,
+   "extra": {
+    "ff": "Oswald, Impact, \"Arial Narrow Bold\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "600",
+    "fs": "normal",
+    "ls": "0.48px",
+    "tt": "uppercase",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "bold: preview weight/style/case = 600,normal,uppercase",
+   "pass": true,
+   "extra": {
+    "ff": "Oswald, Impact, \"Arial Narrow Bold\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "600",
+    "fs": "normal",
+    "ls": "0.48px",
+    "tt": "uppercase",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "select subtle: PATCH typography=subtle",
+   "pass": true,
+   "extra": {
+    "patches": 1,
+    "sentTypo": "subtle"
+   }
+  },
+  {
+   "name": "subtle: toast \"Collection updated\"",
+   "pass": true
+  },
+  {
+   "name": "subtle: exactly one card selected",
+   "pass": true,
+   "extra": [
+    "subtle"
+   ]
+  },
+  {
+   "name": "subtle: preview title uses Work Sans",
+   "pass": true,
+   "extra": {
+    "ff": "\"Work Sans\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "300",
+    "fs": "normal",
+    "ls": "1.2px",
+    "tt": "none",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "subtle: preview weight/style/case = 300,normal,none",
+   "pass": true,
+   "extra": {
+    "ff": "\"Work Sans\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "300",
+    "fs": "normal",
+    "ls": "1.2px",
+    "tt": "none",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "select bold first time: PATCH typography=bold",
+   "pass": true,
+   "extra": {
+    "patches": 1,
+    "sentTypo": "bold"
+   }
+  },
+  {
+   "name": "bold: toast \"Collection updated\"",
+   "pass": true
+  },
+  {
+   "name": "bold: exactly one card selected",
+   "pass": true,
+   "extra": [
+    "bold"
+   ]
+  },
+  {
+   "name": "bold: preview title uses Oswald",
+   "pass": true,
+   "extra": {
+    "ff": "Oswald, Impact, \"Arial Narrow Bold\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "600",
+    "fs": "normal",
+    "ls": "0.48px",
+    "tt": "uppercase",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "bold: preview weight/style/case = 600,normal,uppercase",
+   "pass": true,
+   "extra": {
+    "ff": "Oswald, Impact, \"Arial Narrow Bold\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "600",
+    "fs": "normal",
+    "ls": "0.48px",
+    "tt": "uppercase",
+    "cls": "ky-type max-w-full text-2xl text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)] transition-all duration-300"
+   }
+  },
+  {
+   "name": "dashboard body/headings do not use the collection font (Bold/Oswald)",
+   "pass": true,
+   "extra": {
+    "body": "Outfit, sans-serif",
+    "h": [
+     "Outfit, sans-serif",
+     "\"Cormorant Garamond\", Georgia, serif",
+     "Outfit, sans-serif"
+    ],
+    "tabs": "Outfit, sans-serif",
+    "root": ""
+   }
+  },
+  {
+   "name": "phone preview is 9:16",
+   "pass": true,
+   "extra": {
+    "d": "phone",
+    "w": 220,
+    "h": 391
+   }
+  },
+  {
+   "name": "reload: Bold still selected",
+   "pass": true,
+   "extra": [
+    "bold"
+   ]
+  },
+  {
+   "name": "390: 2 x 3 grid inside the viewport",
+   "pass": true,
+   "extra": {
+    "rows": 3,
+    "cols": 2,
+    "minLeft": 16,
+    "maxRight": 374
+   }
+  },
+  {
+   "name": "390: one-line description, not clipped",
+   "pass": true,
+   "extra": [
+    {
+     "t": "A neutral font",
+     "lines": 1,
+     "clipped": false
+    },
+    {
+     "t": "A classic font",
+     "lines": 1,
+     "clipped": false
+    },
+    {
+     "t": "A sophisticated font",
+     "lines": 1,
+     "clipped": false
+    },
+    {
+     "t": "A light and airy font",
+     "lines": 1,
+     "clipped": false
+    },
+    {
+     "t": "A punchy font",
+     "lines": 1,
+     "clipped": false
+    },
+    {
+     "t": "A minimal font",
+     "lines": 1,
+     "clipped": false
+    }
+   ]
+  },
+  {
+   "name": "390: no horizontal page scroll on Design",
+   "pass": true,
+   "extra": {
+    "sw": 390,
+    "iw": 390
+   }
+  },
+  {
+   "name": "api set sans",
+   "pass": true,
+   "extra": 200
+  },
+  {
+   "name": "client sans @desktop: hero uses Inter",
+   "pass": true,
+   "extra": {
+    "ff": "Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none",
+    "id": "sans",
+    "left": 24,
+    "right": 1416,
+    "h": 144,
+    "sw": 1392,
+    "cw": 1392,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client sans @desktop: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     1416,
+     1392,
+     1392
+    ],
+    "page": {
+     "sw": 1440,
+     "iw": 1440,
+     "fonts": [
+      "Inter 400 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client sans @desktop: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client sans @desktop: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "inter-latin-400-normal-C38fXH4l.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "inter-latin-400-normal-C38fXH4l.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "client sans @390: hero uses Inter",
+   "pass": true,
+   "extra": {
+    "ff": "Inter, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none",
+    "id": "sans",
+    "left": 24,
+    "right": 366,
+    "h": 119,
+    "sw": 342,
+    "cw": 342,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client sans @390: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     366,
+     342,
+     342
+    ],
+    "page": {
+     "sw": 390,
+     "iw": 390,
+     "fonts": [
+      "Inter 400 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client sans @390: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client sans @390: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "inter-latin-400-normal-C38fXH4l.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "inter-latin-400-normal-C38fXH4l.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "api set serif",
+   "pass": true,
+   "extra": 200
+  },
+  {
+   "name": "client serif @desktop: hero uses Libre Baskerville",
+   "pass": true,
+   "extra": {
+    "ff": "\"Libre Baskerville\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none",
+    "id": "serif",
+    "left": 24,
+    "right": 1416,
+    "h": 144,
+    "sw": 1392,
+    "cw": 1392,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client serif @desktop: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     1416,
+     1392,
+     1392
+    ],
+    "page": {
+     "sw": 1440,
+     "iw": 1440,
+     "fonts": [
+      "Libre Baskerville 400 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client serif @desktop: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client serif @desktop: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "libre-baskerville-latin-400-normal-C42RasBZ.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "libre-baskerville-latin-400-normal-C42RasBZ.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "client serif @390: hero uses Libre Baskerville",
+   "pass": true,
+   "extra": {
+    "ff": "\"Libre Baskerville\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "normal",
+    "tt": "none",
+    "id": "serif",
+    "left": 24,
+    "right": 366,
+    "h": 119,
+    "sw": 342,
+    "cw": 342,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client serif @390: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     366,
+     342,
+     342
+    ],
+    "page": {
+     "sw": 390,
+     "iw": 390,
+     "fonts": [
+      "Libre Baskerville 400 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client serif @390: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client serif @390: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "libre-baskerville-latin-400-normal-C42RasBZ.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "libre-baskerville-latin-400-normal-C42RasBZ.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "api set modern",
+   "pass": true,
+   "extra": 200
+  },
+  {
+   "name": "client modern @desktop: hero uses Jost",
+   "pass": true,
+   "extra": {
+    "ff": "Jost, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "8.64px",
+    "tt": "uppercase",
+    "id": "modern",
+    "left": 24,
+    "right": 1416,
+    "h": 144,
+    "sw": 1392,
+    "cw": 1392,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client modern @desktop: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     1416,
+     1392,
+     1392
+    ],
+    "page": {
+     "sw": 1440,
+     "iw": 1440,
+     "fonts": [
+      "Jost 400 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client modern @desktop: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client modern @desktop: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "jost-latin-400-normal-q-RKOgPK.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "jost-latin-400-normal-q-RKOgPK.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "client modern @390: hero uses Jost",
+   "pass": true,
+   "extra": {
+    "ff": "Jost, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "400",
+    "fs": "normal",
+    "ls": "4.32px",
+    "tt": "uppercase",
+    "id": "modern",
+    "left": 24,
+    "right": 366,
+    "h": 158,
+    "sw": 342,
+    "cw": 342,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client modern @390: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     366,
+     342,
+     342
+    ],
+    "page": {
+     "sw": 390,
+     "iw": 390,
+     "fonts": [
+      "Jost 400 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client modern @390: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client modern @390: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "jost-latin-400-normal-q-RKOgPK.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "jost-latin-400-normal-q-RKOgPK.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "api set timeless",
+   "pass": true,
+   "extra": 200
+  },
+  {
+   "name": "client timeless @desktop: hero uses Cormorant Garamond",
+   "pass": true,
+   "extra": {
+    "ff": "\"Cormorant Garamond\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "300",
+    "fs": "italic",
+    "ls": "1.44px",
+    "tt": "none",
+    "id": "timeless",
+    "left": 120,
+    "right": 1320,
+    "h": 72,
+    "sw": 1199,
+    "cw": 1199,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client timeless @desktop: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     120,
+     1320,
+     1199,
+     1199
+    ],
+    "page": {
+     "sw": 1440,
+     "iw": 1440,
+     "fonts": [
+      "Cormorant Garamond 300 italic",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client timeless @desktop: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client timeless @desktop: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "cormorant-garamond-latin-300-italic-qkwBXYHn.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "cormorant-garamond-latin-300-italic-qkwBXYHn.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "client timeless @390: hero uses Cormorant Garamond",
+   "pass": true,
+   "extra": {
+    "ff": "\"Cormorant Garamond\", Georgia, \"Times New Roman\", Times, serif",
+    "fw": "300",
+    "fs": "italic",
+    "ls": "0.72px",
+    "tt": "none",
+    "id": "timeless",
+    "left": 24,
+    "right": 366,
+    "h": 79,
+    "sw": 342,
+    "cw": 342,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client timeless @390: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     366,
+     342,
+     342
+    ],
+    "page": {
+     "sw": 390,
+     "iw": 390,
+     "fonts": [
+      "Cormorant Garamond 300 italic",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client timeless @390: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client timeless @390: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "cormorant-garamond-latin-300-italic-qkwBXYHn.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "cormorant-garamond-latin-300-italic-qkwBXYHn.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "api set bold",
+   "pass": true,
+   "extra": 200
+  },
+  {
+   "name": "client bold @desktop: hero uses Oswald",
+   "pass": true,
+   "extra": {
+    "ff": "Oswald, Impact, \"Arial Narrow Bold\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "600",
+    "fs": "normal",
+    "ls": "1.44px",
+    "tt": "uppercase",
+    "id": "bold",
+    "left": 24,
+    "right": 1416,
+    "h": 144,
+    "sw": 1392,
+    "cw": 1392,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client bold @desktop: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     1416,
+     1392,
+     1392
+    ],
+    "page": {
+     "sw": 1440,
+     "iw": 1440,
+     "fonts": [
+      "Oswald 600 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client bold @desktop: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client bold @desktop: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "oswald-latin-600-normal-plFmSr5g.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "oswald-latin-600-normal-plFmSr5g.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "client bold @390: hero uses Oswald",
+   "pass": true,
+   "extra": {
+    "ff": "Oswald, Impact, \"Arial Narrow Bold\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "600",
+    "fs": "normal",
+    "ls": "0.72px",
+    "tt": "uppercase",
+    "id": "bold",
+    "left": 24,
+    "right": 366,
+    "h": 119,
+    "sw": 342,
+    "cw": 342,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client bold @390: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     366,
+     342,
+     342
+    ],
+    "page": {
+     "sw": 390,
+     "iw": 390,
+     "fonts": [
+      "Oswald 600 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client bold @390: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client bold @390: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "oswald-latin-600-normal-plFmSr5g.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "oswald-latin-600-normal-plFmSr5g.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "api set subtle",
+   "pass": true,
+   "extra": 200
+  },
+  {
+   "name": "client subtle @desktop: hero uses Work Sans",
+   "pass": true,
+   "extra": {
+    "ff": "\"Work Sans\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "300",
+    "fs": "normal",
+    "ls": "3.6px",
+    "tt": "none",
+    "id": "subtle",
+    "left": 24,
+    "right": 1416,
+    "h": 144,
+    "sw": 1392,
+    "cw": 1392,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client subtle @desktop: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     1416,
+     1392,
+     1392
+    ],
+    "page": {
+     "sw": 1440,
+     "iw": 1440,
+     "fonts": [
+      "Work Sans 300 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client subtle @desktop: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client subtle @desktop: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "work-sans-latin-300-normal-DD7pq2q9.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "work-sans-latin-300-normal-DD7pq2q9.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "client subtle @390: hero uses Work Sans",
+   "pass": true,
+   "extra": {
+    "ff": "\"Work Sans\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "fw": "300",
+    "fs": "normal",
+    "ls": "1.8px",
+    "tt": "none",
+    "id": "subtle",
+    "left": 24,
+    "right": 366,
+    "h": 119,
+    "sw": 342,
+    "cw": 342,
+    "color": "rgb(255, 255, 255)",
+    "shadow": true
+   }
+  },
+  {
+   "name": "client subtle @390: title inside viewport, no overflow",
+   "pass": true,
+   "extra": {
+    "t": [
+     24,
+     366,
+     342,
+     342
+    ],
+    "page": {
+     "sw": 390,
+     "iw": 390,
+     "fonts": [
+      "Work Sans 300 normal",
+      "Cormorant Garamond 400 normal",
+      "Outfit 300 normal",
+      "Outfit 400 normal",
+      "Outfit 500 normal"
+     ]
+    }
+   }
+  },
+  {
+   "name": "client subtle @390: no request to Google",
+   "pass": true,
+   "extra": []
+  },
+  {
+   "name": "client subtle @390: only ITS style font among the six is fetched",
+   "pass": true,
+   "extra": {
+    "sixFontReqs": [
+     "work-sans-latin-300-normal-DD7pq2q9.woff2"
+    ],
+    "woff": [
+     "outfit-latin-400-normal-BGsTXAXT.woff2",
+     "outfit-latin-300-normal-CRYTwY6m.woff2",
+     "work-sans-latin-300-normal-DD7pq2q9.woff2",
+     "outfit-latin-500-normal-DKnIMDSk.woff2",
+     "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+    ]
+   }
+  },
+  {
+   "name": "blocked font (bold): 5 woff2 request(s) blocked, title still rendered with fallback stack",
+   "pass": true,
+   "extra": {
+    "blocked": 5,
+    "t": {
+     "text": "SUPERCALIFRAGILISTICEXPIALIDOCIOUS CELEBRATION",
+     "ff": "Oswald, Impact, \"Arial Narrow Bold\", system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+     "visible": true,
+     "color": "rgb(255, 255, 255)"
+    },
+    "loadedFaces": 0
+   }
+  },
+  {
+   "name": "blocked font (timeless): 5 woff2 request(s) blocked, title still rendered with fallback stack",
+   "pass": true,
+   "extra": {
+    "blocked": 5,
+    "t": {
+     "text": "Supercalifragilisticexpialidocious Celebration",
+     "ff": "\"Cormorant Garamond\", Georgia, \"Times New Roman\", Times, serif",
+     "visible": true,
+     "color": "rgb(255, 255, 255)"
+    },
+    "loadedFaces": 0
+   }
+  }
+ ],
+ "fails": [],
+ "designTabFonts": [
+  "Inter 400 normal",
+  "Libre Baskerville 400 normal",
+  "Jost 400 normal",
+  "Cormorant Garamond 300 italic",
+  "Oswald 600 normal",
+  "Work Sans 300 normal",
+  "Cormorant Garamond 400 normal",
+  "Outfit 300 normal",
+  "Outfit 400 normal",
+  "Outfit 500 normal",
+  "Outfit 600 normal"
+ ],
+ "clientFontRequests": {
+  "sans@desktop": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "inter-latin-400-normal-C38fXH4l.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "sans@390": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "inter-latin-400-normal-C38fXH4l.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "serif@desktop": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "libre-baskerville-latin-400-normal-C42RasBZ.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "serif@390": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "libre-baskerville-latin-400-normal-C42RasBZ.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "modern@desktop": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "jost-latin-400-normal-q-RKOgPK.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "modern@390": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "jost-latin-400-normal-q-RKOgPK.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "timeless@desktop": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "cormorant-garamond-latin-300-italic-qkwBXYHn.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "timeless@390": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "cormorant-garamond-latin-300-italic-qkwBXYHn.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "bold@desktop": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "oswald-latin-600-normal-plFmSr5g.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "bold@390": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "oswald-latin-600-normal-plFmSr5g.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "subtle@desktop": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "work-sans-latin-300-normal-DD7pq2q9.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ],
+  "subtle@390": [
+   "outfit-latin-400-normal-BGsTXAXT.woff2",
+   "outfit-latin-300-normal-CRYTwY6m.woff2",
+   "work-sans-latin-300-normal-DD7pq2q9.woff2",
+   "outfit-latin-500-normal-DKnIMDSk.woff2",
+   "cormorant-garamond-latin-400-normal-B-1hWBU7.woff2"
+  ]
+ },
+ "needInvalid": true,
+ "allGoogle": []
+}

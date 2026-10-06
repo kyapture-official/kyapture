@@ -10,6 +10,7 @@ from .views import (
     GallerySetDownloadPinView,
     GalleryFavoriteActivityView,
     GalleryDownloadLogsView,
+    TypographyStylesView,
 )
 
 urlpatterns = [
@@ -27,6 +28,13 @@ urlpatterns = [
         name='gallery-search'
     ),
     
+    # Static Route: GET /api/v1/galleries/typography-styles/
+    path(
+        'typography-styles/',
+        TypographyStylesView.as_view(),
+        name='typography-styles'
+    ),
+
     # Static Route: GET /api/v1/galleries/dashboard/stats/
     path(
         'dashboard/stats/',
