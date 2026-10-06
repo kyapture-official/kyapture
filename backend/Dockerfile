@@ -1,6 +1,30 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/Dockerfile
 # backend/Dockerfile
 
+# ─── Stage 1: pinned cjpegli (jpegli) build — Download Master encoder ─────
+# Chunk 6-B. Built from the exact google/jpegli commit measured in 6-A
+# (docs/KYAPTURE_COMPRESSION_CALIBRATION.md). The commit pins every
+# submodule too, so the build is reproducible. Build tools stay in this
+# stage; only the stripped static binary is copied to the runtime image.
+FROM python:3.12-slim AS jpegli-build
+ARG JPEGLI_COMMIT=031a0077f5799a6041004267fc12b956c1f52a20
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git cmake ninja-build g++ \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/google/jpegli.git /src/jpegli \
+    && cd /src/jpegli \
+    && git checkout "$JPEGLI_COMMIT" \
+    && git submodule update --init --recursive --depth 1 third_party \
+    && test "$(git rev-parse HEAD)" = "$JPEGLI_COMMIT"
+RUN cmake -S /src/jpegli -B /src/jpegli/build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF \
+    -DJPEGXL_ENABLE_BENCHMARK=OFF -DJPEGXL_ENABLE_MANPAGES=OFF \
+    -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_SJPEG=OFF \
+    && cmake --build /src/jpegli/build --target cjpegli \
+    && strip /src/jpegli/build/tools/cjpegli \
+    && test -x /src/jpegli/build/tools/cjpegli
+
+# ─── Stage 2: runtime ─────────────────────────────────────────────────────
 FROM python:3.12-slim
 
 # Set strict Python environment parameters
@@ -15,6 +39,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+
+# Pinned Download Master encoder (see jpegli-build stage); apps/core/utils.py
+# calls it by this fixed absolute path and falls back to Pillow if it is absent.
+COPY --from=jpegli-build /src/jpegli/build/tools/cjpegli /usr/local/bin/cjpegli
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

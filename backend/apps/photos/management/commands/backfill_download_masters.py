@@ -70,10 +70,13 @@ class Command(BaseCommand):
         failed = classification_failures
         for asset in eligible:
             try:
-                original_size = asset.original_file.size
                 replacement = process_download_master(asset.original_file)
 
-                if replacement is None or replacement.size >= original_size:
+                # Eligible assets have a master above the 3600 px cap, so their
+                # original is above it too: a capped master is kept even when it
+                # is larger than the original (serving that original to a Free
+                # client would leak the resolution the cap promises).
+                if replacement is None:
                     old_name = asset.download_file.name
                     storage = asset.download_file.storage
                     asset.download_file = None

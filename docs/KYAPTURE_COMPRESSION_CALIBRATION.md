@@ -66,6 +66,23 @@ Pro Original stays untouched. PNG sources keep the current lossless path.
 
 Implementation notes for the next chunk (6-B, not done here): multi-stage `Dockerfile` that builds `cjpegli` at the pinned commit (build stage only, copy the stripped binary to the runtime stage); call it with `subprocess.run([...], timeout=60)` on a temp PPM; on missing binary, non-zero exit or timeout, log a warning and fall back to Pillow `quality=86, optimize, progressive, subsampling=4:2:0` (measured: SS2 84.38 mean, +15.8% bytes vs jpegli, ~170 ms); tests must cover the fallback.
 
+## 5. 6-B result (encoder implemented)
+
+Implemented as recommended in section 4: `apps/core/utils.py` `_make_download_master` -> `_make_jpeg_master_bytes` -> `_encode_jpegli` (cjpegli at `/usr/local/bin/cjpegli`, fixed argv, `shell=False`, 60 s timeout, private temp dir removed in `finally`, stderr logged server-side only). q90 -> q85 once -> (uncapped source: no master, original served; capped source: keep the q85 master). Unusable cjpegli (missing, non-zero exit, timeout, undecodable or wrong-size output) -> one Pillow q86 encode under the same rule. PNG stays lossless; a PNG above 3600 px now also keeps its capped master (same leak as row 50). The 11-encode + PSNR search is gone.
+
+Measured in the rebuilt `kyapture-backend` image (Linux, dev host), 12 real JPEGs (`benchmark/data/jpeg_real`, every 9th file, copied out read-only), entry point `process_download_master` as the Celery task path calls it; old = the helper at `HEAD`; SSIMULACRA2 against the oriented, sRGB, 3600 px Lanczos reference:
+
+| | old helper | new (jpegli q90) |
+|---|---|---|
+| Total size (12 files) | 11102 KB | 10835 KB (-2.4%; originals 25317 KB, -57.2%) |
+| SSIMULACRA2 mean / min | 82.94 / 80.60 | 84.66 / 82.55 |
+| SS2 delta per image | - | min +0.37, mean +1.73, max +2.84 (no image worse) |
+| Encode time median / max | 6113 / 9222 ms | 484 / 1492 ms (median of 3) |
+
+Per image the size moves from -33.2% to +7.0% (two files grew: +6.6% at SS2 +2.45, +7.0% at SS2 +1.68). Every master is at least as good as the old one and 12.6x faster at the median.
+
+Limits: 12 files, largest 3648 px, no 24 MP+ DSLR; Linux dev-host timings (row 51). No visual crop review was repeated in 6-B; the 6-A 100% skin-crop check used the same encoder settings.
+
 ## Appendix A: per-image, jpegli q90 vs current (KB / SS2)
 
 | Image | Source px -> master | Original KB | Current | jpegli q90 | Pillow q85 |

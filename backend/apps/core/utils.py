@@ -1,16 +1,16 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/core/utils.py
 import io
 import logging
-import math
 import piexif
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import tempfile
 from decimal import Decimal
 
-from PIL import Image, ImageDraw, ImageFont, ImageCms, ImageChops, ImageStat
+from PIL import Image, ImageDraw, ImageFont, ImageCms
 from PIL.ImageOps import exif_transpose
 from PIL import Image as PILImage
 
@@ -464,20 +464,14 @@ def _normalize_to_srgb(img):
 
 
 DOWNLOAD_MAX_EDGE = 3600
-DOWNLOAD_MIN_PSNR = 35.0
-JPEG_DOWNLOAD_STRATEGIES = (
-    (84, 2),  # 4:2:0
-    (86, 2),
-    (88, 2),  # 4:2:0
-    (90, 2),
-    (92, 2),
-    (88, 1),  # 4:2:2
-    (90, 1),
-    (92, 1),
-    (88, 0),  # 4:4:4
-    (90, 0),
-    (92, 0),
-)
+
+# Download Master encoder (chunk 6-B, calibrated in 6-A): one fixed jpegli
+# encode, no quality search. cjpegli is built from a pinned commit in the
+# backend Dockerfile and called by its absolute path with a fixed argv.
+CJPEGLI_BIN = os.environ.get('CJPEGLI_PATH', '/usr/local/bin/cjpegli')
+CJPEGLI_TIMEOUT_SECONDS = 60
+JPEGLI_QUALITIES = (90, 85)       # q90 first; q85 once if q90 is larger than the source
+PILLOW_FALLBACK_QUALITY = 86      # SS2-equivalent to jpegli q90 (6-A), used if cjpegli is unusable
 
 
 def _file_size(file_obj):
@@ -491,56 +485,126 @@ def _file_size(file_obj):
     return size
 
 
-def _jpeg_psnr(source, candidate):
-    candidate_rgb = candidate.convert('RGB')
-    difference = ImageChops.difference(source, candidate_rgb)
-    channel_rms = ImageStat.Stat(difference).rms
-    mean_square_error = sum(value ** 2 for value in channel_rms) / len(channel_rms)
-    if mean_square_error == 0:
-        return float('inf')
-    return 20 * math.log10(255 / math.sqrt(mean_square_error))
+def _encode_jpegli(image, quality):
+    """
+    One cjpegli encode of an sRGB RGB image (4:2:0, progressive level 2).
+    Returns the JPEG bytes, or None on ANY failure (missing binary, non-zero
+    exit, timeout, empty/undecodable/mis-sized output). Fixed argv,
+    shell=False, timeout, private temp dir removed in `finally`; the encoder's
+    own error text is logged server-side only and never returned.
+    """
+    tmp_dir = tempfile.mkdtemp(prefix='kyapture-master-')
+    try:
+        src_path = os.path.join(tmp_dir, 'in.ppm')
+        out_path = os.path.join(tmp_dir, 'out.jpg')
+        image.save(src_path, format='PPM')
+        argv = [
+            CJPEGLI_BIN, src_path, out_path,
+            '-q', str(int(quality)),
+            '--chroma_subsampling=420',
+            '--progressive_level=2',
+            '--quiet',
+        ]
+        try:
+            result = subprocess.run(
+                argv,
+                shell=False,
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=CJPEGLI_TIMEOUT_SECONDS,
+                cwd=tmp_dir,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("cjpegli timed out after %ss; using Pillow fallback", CJPEGLI_TIMEOUT_SECONDS)
+            return None
+        except OSError as exc:
+            logger.warning("cjpegli could not be started (%s); using Pillow fallback", exc.__class__.__name__)
+            return None
+        if result.returncode != 0:
+            logger.warning(
+                "cjpegli exited %s: %s; using Pillow fallback",
+                result.returncode, result.stderr[-300:].decode('utf-8', 'replace'),
+            )
+            return None
+        try:
+            with open(out_path, 'rb') as handle:
+                encoded = handle.read()
+            with Image.open(io.BytesIO(encoded)) as check:
+                check.load()
+                if check.format != 'JPEG' or check.size != image.size:
+                    raise ValueError('unexpected cjpegli output')
+        except Exception:
+            logger.warning("cjpegli produced unusable output; using Pillow fallback")
+            return None
+        return encoded
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _encode_jpeg_pillow(image, quality=PILLOW_FALLBACK_QUALITY):
+    stream = io.BytesIO()
+    image.save(stream, format='JPEG', quality=quality, optimize=True, progressive=True, subsampling=2)
+    return stream.getvalue()
+
+
+def _make_jpeg_master_bytes(source, original_size, capped):
+    """
+    Deterministic guard (6-A): encode q90; if larger than the original, q85
+    once. If still larger: a source that was not capped gets no master (the
+    original is served, same pixels and smaller); a capped source keeps the
+    q85 master, because the 3600 px cap is what Free clients are promised and
+    serving a >3600 px original would leak resolution (debt row 50).
+    If cjpegli is unusable, a single Pillow q86 encode takes its place under
+    the same rule.
+    """
+    def fits(data):
+        return original_size is None or len(data) <= original_size
+
+    encoded = None
+    for quality in JPEGLI_QUALITIES:
+        encoded = _encode_jpegli(source, quality)
+        if encoded is None:
+            break
+        if fits(encoded):
+            return encoded
+    if encoded is None:                       # cjpegli unusable
+        encoded = _encode_jpeg_pillow(source)
+        if fits(encoded):
+            return encoded
+    return encoded if capped else None
 
 
 def _make_download_master(image, source_format, base_name, original_size=None):
-    """Encode a bounded, private client-download derivative."""
+    """
+    Encode a bounded, private client-download derivative. `image` must already
+    be EXIF-oriented. JPEG: sRGB -> long edge <= 3600 (never upscaled) -> one
+    fixed jpegli encode. PNG stays lossless. The preserved original is never
+    written to here.
+    """
     stream = io.BytesIO()
     if source_format in ('JPEG', 'JPG'):
         source = _normalize_to_srgb(image)
+        if source is image:
+            source = source.copy()   # thumbnail() resizes in place; never mutate the caller's image
+        capped = max(source.size) > DOWNLOAD_MAX_EDGE
         source.thumbnail((DOWNLOAD_MAX_EDGE, DOWNLOAD_MAX_EDGE), Image.Resampling.LANCZOS)
-        candidates = []
-        for quality, subsampling in JPEG_DOWNLOAD_STRATEGIES:
-            candidate_stream = io.BytesIO()
-            source.save(
-                candidate_stream,
-                format='JPEG',
-                quality=quality,
-                optimize=True,
-                progressive=True,
-                subsampling=subsampling,
-            )
-            candidate_bytes = candidate_stream.getvalue()
-            if original_size is not None and len(candidate_bytes) > original_size:
-                continue
-            candidate = Image.open(io.BytesIO(candidate_bytes))
-            psnr = _jpeg_psnr(source, candidate)
-            if psnr >= DOWNLOAD_MIN_PSNR:
-                candidates.append((len(candidate_bytes), -psnr, candidate_bytes))
-
-        if not candidates:
+        encoded_bytes = _make_jpeg_master_bytes(source, original_size, capped)
+        if encoded_bytes is None:
             return None
-
-        _, _, encoded_bytes = min(candidates)
         stream.write(encoded_bytes)
         filename = f"{base_name}_download.jpg"
         content_type = 'image/jpeg'
     elif source_format == 'PNG':
         source = image.copy()
+        capped = max(source.size) > DOWNLOAD_MAX_EDGE
         source.thumbnail((DOWNLOAD_MAX_EDGE, DOWNLOAD_MAX_EDGE), Image.Resampling.LANCZOS)
         png_kwargs = {'format': 'PNG', 'optimize': True}
         if source.info.get('icc_profile'):
             png_kwargs['icc_profile'] = source.info['icc_profile']
         source.save(stream, **png_kwargs)
-        if original_size is not None and stream.tell() > original_size:
+        if original_size is not None and stream.tell() > original_size and not capped:
             return None
         filename = f"{base_name}_download.png"
         content_type = 'image/png'
