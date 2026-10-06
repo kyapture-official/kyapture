@@ -29,10 +29,12 @@ from datetime import timedelta
 
 from django.utils import timezone
 
+from apps.core.typography import TYPOGRAPHY_IDS
+
 # Mirrors frontend/src/utils/designSettings.js — the fixed MVP vocabulary
 # (docs/KYAPTURE_PRODUCT_DECISIONS.md #6: a small fixed set, not a theme builder).
 DESIGN_CHOICES = {
-    'typography': ('sans', 'serif', 'modern', 'timeless', 'bold', 'subtle'),
+    'typography': TYPOGRAPHY_IDS,         # the six named styles (apps/core/typography.py)
     'colorPalette': ('light', 'gold', 'rose', 'terracotta', 'sand', 'olive', 'agave', 'sea', 'dark'),
     'layout': ('center', 'left', 'novel', 'vintage', 'frame', 'stripe'),
     'gridStyle': ('vertical', 'horizontal'),
@@ -46,6 +48,32 @@ ALLOWED_KEYS = set(BOOLEAN_KEYS) | {'expires_in_days', 'design'}
 
 def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def validate_presentation(design):
+    """
+    Validates the presentation keys (typography, colorPalette, layout,
+    gridStyle, thumbSize, gridSpacing) of a design dict against the fixed
+    vocabulary. Shared by Collection Defaults and the gallery Design save, so
+    both accept exactly the same values. Any other key is an error here.
+    Returns (clean, errors) with errors keyed by the bare key.
+    """
+    clean, errors = {}, {}
+    for key, value in design.items():
+        if key in DESIGN_CHOICES:
+            if isinstance(value, str) and value in DESIGN_CHOICES[key]:
+                clean[key] = value
+            else:
+                errors[key] = f"Must be one of: {', '.join(DESIGN_CHOICES[key])}."
+        elif key == 'gridSpacing':
+            low, high = GRID_SPACING_RANGE
+            if _is_int(value) and low <= value <= high:
+                clean[key] = value
+            else:
+                errors[key] = f'Must be a whole number between {low} and {high}.'
+        else:
+            errors[key] = 'Unknown design default.'
+    return clean, errors
 
 
 def validate_collection_defaults(raw):
@@ -83,21 +111,8 @@ def validate_collection_defaults(raw):
         if not isinstance(design, dict):
             errors['design'] = 'Design defaults must be an object.'
         else:
-            clean_design = {}
-            for key, value in design.items():
-                if key in DESIGN_CHOICES:
-                    if value in DESIGN_CHOICES[key]:
-                        clean_design[key] = value
-                    else:
-                        errors[f'design.{key}'] = f"Must be one of: {', '.join(DESIGN_CHOICES[key])}."
-                elif key == 'gridSpacing':
-                    low, high = GRID_SPACING_RANGE
-                    if _is_int(value) and low <= value <= high:
-                        clean_design[key] = value
-                    else:
-                        errors['design.gridSpacing'] = f'Must be a whole number between {low} and {high}.'
-                else:
-                    errors[f'design.{key}'] = 'Unknown design default.'
+            clean_design, design_errors = validate_presentation(design)
+            errors.update({f'design.{key}': msg for key, msg in design_errors.items()})
             clean['design'] = clean_design
 
     return (None, errors) if errors else (clean, {})

@@ -186,6 +186,16 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | 113 | A person can send feedback but cannot see their own past messages or their status: `GET /feedback/mine/` exists and has no screen. The staff inbox has no search, no per-message page and no reply (no email either, rows 107) | 6.3-B | product decision, then 13-C |
 | 114 | 6.3-B browser QA ran as throwaway puppeteer scripts outside the repo (same pattern as row 38); only the pure helpers (`feedbackFlow.js`) are covered by repo tests | 6.3-B | QA-A |
 
+## O. Raised by 6.2-A (typography backend, docs/KYAPTURE_TYPOGRAPHY.md)
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 115 | `frontend/index.html` loads Cormorant Garamond, Outfit and Plus Jakarta Sans from fonts.googleapis.com / fonts.gstatic.com, so every client gallery visit already sends the visitor's IP to Google. The six typography fonts must be self-hosted instead (CSP `font-src 'self'` already allows it); the existing three should move too, and the two Google hosts can then leave `style-src` / `font-src` | 6.2-A | 13-B (privacy), with 6.2-B for the six new fonts |
+| 116 | No font file exists yet: until 6.2-B bundles the six OFL families, `typography_style.font_family` falls back to the system part of each stack (the gallery works, but the chosen look is not shown). The OFL licence of each family is recorded from the Google Fonts catalogue, not yet checked against a downloaded `OFL.txt` | 6.2-A | 6.2-B |
+| 117 | The Design page and the Collection Defaults screen still draw the six styles with Tailwind classes (`TYPOGRAPHY_CLASSES`, `font-serif`/`font-sans`), not from the API table, so their preview does not match `typography_style` until 6.2-B | 6.2-A | 6.2-B |
+| 118 | The gallery Design save validates the presentation keys but still stores any other unknown key a photographer's client sends (never public: the public payload is an allowlist). A stricter "reject unknown keys" needs the frontend blocks (watermark, downloads, privacy, coverPhoto) listed first | 6.2-A | 9C-1 |
+| 119 | A gallery that already holds an out-of-vocabulary value for a presentation key (the API accepted anything before 6.2-A) cannot save the Design page until the photographer picks a valid value, because the page re-sends every key. No such row is known; not queried in production | 6.2-A | 13-C (data check before release) |
+
 ## Accepted (no fix needed)
 
 | # | Gap | Raised in | Owner chunk |

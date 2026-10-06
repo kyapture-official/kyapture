@@ -176,11 +176,11 @@ class WatermarkWriteGateTests(EntitlementBase):
     def test_design_page_save_without_the_block_preserves_the_stored_watermark(self):
         self.patch_gallery(self.pro, self.pro_gallery,
                            {'design_settings': {'watermark': {'type': 'text', 'text': 'Keep Me'}}})
-        response = self.patch_gallery(self.pro, self.pro_gallery, {'design_settings': {'colorPalette': 'noir'}})
+        response = self.patch_gallery(self.pro, self.pro_gallery, {'design_settings': {'colorPalette': 'dark'}})
         self.assertEqual(response.status_code, 200)
         self.pro_gallery.refresh_from_db()
         self.assertEqual(self.pro_gallery.design_settings['watermark']['text'], 'Keep Me')
-        self.assertEqual(self.pro_gallery.design_settings['colorPalette'], 'noir')
+        self.assertEqual(self.pro_gallery.design_settings['colorPalette'], 'dark')
 
     def test_lapsed_user_can_save_design_settings_that_echo_the_unchanged_block(self):
         self.patch_gallery(self.pro, self.pro_gallery,

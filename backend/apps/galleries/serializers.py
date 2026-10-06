@@ -3,7 +3,9 @@ import bcrypt
 from rest_framework import serializers
 from apps.core.share import build_gallery_share_url
 from apps.core.watermark import validate_watermark_config
-from apps.users.collection_defaults import apply_collection_defaults
+from apps.users.collection_defaults import (
+    DESIGN_CHOICES, apply_collection_defaults, validate_presentation,
+)
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email as django_validate_email
 
@@ -31,6 +33,8 @@ WEB_PX_VALUES = {2048, 1024, 640}
 LEGACY_WEB_PX = {1280: 1024}
 HIGH_RES_MODES = {'3600', 'original'}
 MAX_ALLOWED_EMAILS = 500
+# The presentation keys of design_settings (Collection Defaults' `design` vocabulary).
+PRESENTATION_KEYS = frozenset(DESIGN_CHOICES) | {'gridSpacing'}
 
 
 def normalize_download_settings(value, *, instance=None, user=None):
@@ -505,6 +509,38 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_design_settings(self, value):
+        """
+        Nested merge: a save only changes the keys it names. Presentation keys
+        (typography, colorPalette, layout, gridStyle, thumbSize, gridSpacing)
+        are checked against the fixed vocabulary shared with Collection
+        Defaults (null resets one to the app default). Every other stored key
+        (watermark, downloads, privacy, coverPhoto, anything else) survives a
+        save that does not mention it; only an explicit `watermark: null`
+        removes a block. Blocks are validated by _normalize_blocks.
+        """
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('design_settings must be an object.')
+        existing = (self.instance.design_settings or {}) if self.instance else {}
+        existing = existing if isinstance(existing, dict) else {}
+
+        sent = {key: value[key] for key in PRESENTATION_KEYS if key in value}
+        reset = {key for key, item in sent.items() if item is None}
+        clean, errors = validate_presentation({k: v for k, v in sent.items() if v is not None})
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        merged = self._normalize_blocks(value)
+        merged.update(clean)
+        for key in reset:
+            merged.pop(key, None)
+        watermark_cleared = 'watermark' in value and value['watermark'] is None
+        for key, stored in existing.items():
+            if key in merged or key in reset or (key == 'watermark' and watermark_cleared):
+                continue
+            merged[key] = stored
+        return merged
+
+    def _normalize_blocks(self, value):
         """
         design_settings is the gallery's small fixed set of look-and-feel
         choices plus the private `watermark` block (type/text/position/
