@@ -166,6 +166,16 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | 102 | SEC-25/26: QA gallery password and PIN in plaintext in `docs/qa-1r5e/qa-script.js:1, 11, 12`; an old `backend/.env.example` (commit `aecfb94`, line 10) held a non-placeholder-looking `SECRET_KEY` literal: confirm it was never used; `test_s3_connection` prints a presigned URL | SEC-0 | 13-C |
 | 103 | DB hardening: every container runs `migrate` with the runtime DB credentials (runtime user has DDL rights) and `DATABASES` sets no `sslmode`; verify on the production DB | SEC-0 | 15-A |
 
+## M. Raised by 6.3-A (feedback backend and staff inbox API, docs/KYAPTURE_FEEDBACK.md)
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 104 | The staff bell notification links to `/dashboard/feedback`, a route that does not exist until the inbox page is built; until then a click lands on the catch-all redirect | 6.3-A | 6.3-B (create the route) |
+| 105 | The route is cleaned on the server (path only, UUID and long-token segments masked), but the masking is a heuristic. The submit form must send only `location.pathname` (a route pattern is better), never a full URL or a signed link. The frontend also sends no `app_version` yet, and `APP_VERSION` is not set in compose, so rows read `dev`/`unknown` | 6.3-A | 6.3-B (send pathname + version); 14-A (set `APP_VERSION` per build) |
+| 106 | `users.0007_feedback` was applied to the Docker dev DB only; the host dev DB and production are not migrated | 6.3-A | 13-C, 15-B |
+| 107 | No retention rule for feedback rows (they are kept until the user is deleted; deleting the user cascades to their feedback) and no purge task. Staff are told only through the bell, never by email, so nobody is told if no staff account is signed in | 6.3-A | 13-C (with row 98) |
+| 108 | The per-user feedback throttle (and every other DRF throttle) uses Django's default cache. No `CACHES` is configured, so it is the per-process local-memory cache: with several gunicorn workers each worker counts separately, so the real limit is higher than `feedback: 5/hour`. Needs a shared cache (Redis is already in the stack) | 6.3-A | 15-A (also fixes the other throttles, see row 78) |
+
 ## Accepted (no fix needed)
 
 | # | Gap | Raised in | Owner chunk |

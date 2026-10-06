@@ -164,6 +164,7 @@ class Notification(BaseModel):
         PUBLISHED = 'published', 'Gallery published'
         PROCESSING_DONE = 'processing_done', 'Processing complete'
         PROCESSING_FAILED = 'processing_failed', 'Processing failed'
+        FEEDBACK = 'feedback', 'New feedback'     # sent to staff (see apps/users/feedback_api.py)
 
     user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='notifications')
     kind = models.CharField(max_length=20, choices=Kind.choices)
@@ -187,3 +188,66 @@ class Notification(BaseModel):
 
     def __str__(self):
         return f'{self.get_kind_display()} for {self.user_id}: {self.message}'
+
+
+class Feedback(BaseModel):
+    """
+    A message a signed-in user sent to the KYAPTURE team (POST /api/v1/feedback/).
+
+    Everything the client sends is untrusted and is cleaned in
+    apps/users/feedback_api.py before it lands here. `message` and `subject` are
+    stored and returned as plain text and must be rendered escaped by any UI.
+    The auto-captured context is limited to `route` (path only, no query or
+    fragment), `gallery_slug`, `app_version` and `browser_class`; the last two
+    only ever hold allowlisted values. No attachments: a feedback row is text.
+    """
+
+    class Category(models.TextChoices):
+        BUG = 'bug', 'Bug'
+        FEATURE_REQUEST = 'feature_request', 'Feature request'
+        DESIGN = 'design', 'Design'
+        PERFORMANCE = 'performance', 'Performance'
+        DOWNLOAD = 'download', 'Download'
+        UPLOAD = 'upload', 'Upload'
+        SECURITY_PRIVACY = 'security_privacy', 'Security / privacy'
+        OTHER = 'other', 'Other'
+
+    class Status(models.TextChoices):
+        NEW = 'new', 'New'
+        REVIEWED = 'reviewed', 'Reviewed'
+        IN_PROGRESS = 'in_progress', 'In progress'
+        RESOLVED = 'resolved', 'Resolved'
+        DISMISSED = 'dismissed', 'Dismissed'
+
+    class Browser(models.TextChoices):
+        CHROME = 'chrome', 'Chrome'
+        EDGE = 'edge', 'Edge'
+        FIREFOX = 'firefox', 'Firefox'
+        SAFARI = 'safari', 'Safari'
+        OPERA = 'opera', 'Opera'
+        OTHER = 'other', 'Other'
+
+    SUBJECT_MAX = 120
+    MESSAGE_MAX = 4000
+    ROUTE_MAX = 200
+
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='feedback')
+    category = models.CharField(max_length=20, choices=Category.choices)
+    subject = models.CharField(max_length=SUBJECT_MAX)
+    message = models.TextField()
+    route = models.CharField(max_length=ROUTE_MAX, blank=True, default='')
+    gallery_slug = models.CharField(max_length=225, blank=True, default='')
+    app_version = models.CharField(max_length=32, blank=True, default='')
+    browser_class = models.CharField(max_length=10, choices=Browser.choices, default=Browser.OTHER)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.NEW)
+
+    class Meta:
+        db_table = 'feedback'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at'], name='idx_feedback_status_created'),
+            models.Index(fields=['user', '-created_at'], name='idx_feedback_user_created'),
+        ]
+
+    def __str__(self):
+        return f'{self.get_category_display()} from {self.user_id}: {self.subject}'

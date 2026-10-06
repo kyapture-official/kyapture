@@ -14,6 +14,7 @@ Only events that really exist are wired in:
   payment               apps/subscriptions/views.py (admin approves/rejects)
   published             apps/galleries (publish toggle / gallery update)
   processing done/failed apps/photos/tasks.py (image + video pipelines)
+  feedback              apps/users/feedback_api.py (a user submits feedback; staff only)
 
 Burst events coalesce: while a notification of the same kind for the same
 gallery is still UNREAD and recent, the next event bumps its `count` and
@@ -25,7 +26,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Notification
+from .models import Notification, User
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,21 @@ def notify_payment_event(payment):
     )
 
 
+def notify_staff_feedback(feedback):
+    """
+    One bell notification per staff account (Django is_staff) for each new
+    feedback. Not coalesced: each is a distinct message to triage. The text names
+    the category and subject only; the full message stays in the inbox.
+    """
+    message = f'New {feedback.get_category_display().lower()} feedback: {feedback.subject}'
+    created = []
+    for staff in User.objects.filter(is_staff=True, is_active=True):
+        note = record_notification(staff, Kind.FEEDBACK, None, message=message)
+        if note:
+            created.append(note)
+    return created
+
+
 def notify_published(gallery):
     record_notification(
         gallery.photographer, Kind.PUBLISHED, gallery,
@@ -184,6 +200,8 @@ def notify_processing(asset, ok):
 def notification_link(notification):
     gallery = notification.gallery
     kind = notification.kind
+    if kind == Kind.FEEDBACK:
+        return '/dashboard/feedback'
     if kind == Kind.PAYMENT or gallery is None:
         return '/dashboard/billing'
     base = f'/dashboard/galleries/{gallery.slug}'

@@ -125,8 +125,17 @@ REST_FRAMEWORK = {
         # Per-user: the upload page asks once per dropped batch whether its
         # videos fit the plan (photos/views.py::VideoPreflightView).
         "video_preflight": "60/minute",
+        # Per-user (authenticated user id, never the IP): POST /api/v1/feedback/.
+        "feedback": "5/hour",
     }
 }
+
+# Feedback (apps/users/feedback_api.py). APP_VERSION is stamped on each feedback;
+# a client-sent app_version is kept only when it is in this allowlist, else "unknown".
+APP_VERSION = os.getenv("APP_VERSION", "dev")
+FEEDBACK_ACCEPTED_APP_VERSIONS = [
+    v.strip() for v in os.getenv("FEEDBACK_ACCEPTED_APP_VERSIONS", "").split(",") if v.strip()
+]
 
 # SimpleJWT Configuration for scale-safe session management
 SIMPLE_JWT = {
