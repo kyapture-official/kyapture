@@ -28,9 +28,9 @@ from apps.core.utils import sanitize_download_filename
 from apps.core.watermark import build_watermark_spec
 from apps.photos.models import MediaAsset
 
-from .download_access import web_px_for_gallery
+from .download_access import effective_high_res_mode, web_px_for_gallery
 from .models import DownloadJob
-from .web_size import build_cached, read_cached
+from .web_size import build_cached, read_cached, watermark_state
 
 logger = logging.getLogger(__name__)
 
@@ -71,16 +71,30 @@ def size_limit_error(assets):
     return None
 
 
+def job_variant(gallery, resolution):
+    """
+    The settings a job's files depend on, as one short string: Web Size px and
+    the gallery's current watermark state, or the effective High Resolution mode
+    (3600 px master / true original). A request is only answered by an earlier
+    job made under the same variant, so switching the watermark, the px or the
+    mode never hands back a ZIP built under the old setting.
+    """
+    if resolution == 'web':
+        return f'web:{web_px_for_gallery(gallery)}:{watermark_state(build_watermark_spec(gallery))}'
+    return f'{resolution}:{effective_high_res_mode(gallery)}'
+
+
 def find_reusable_job(gallery, *, photo_set, resolution, asset_ids, email):
     """
-    An identical request (same gallery, scope, size, selection and visitor)
-    that is still preparing, or ready and unexpired, is reused — a page
-    refresh or a double click must not queue a second multi-GB ZIP.
+    An identical request (same gallery, scope, size, selection, visitor and
+    settings variant) that is still preparing, or ready and unexpired, is
+    reused — a page refresh or a double click must not queue a second multi-GB ZIP.
     """
     now = timezone.now()
     candidates = DownloadJob.objects.filter(
         gallery=gallery, photo_set=photo_set, resolution=resolution,
         asset_ids=sorted(str(i) for i in asset_ids), email=email,
+        variant=job_variant(gallery, resolution),
     )
     stale_cutoff = now - timedelta(seconds=settings.DOWNLOAD_JOB_STALE_SECONDS)
     for job in candidates.order_by('-created_at')[:5]:
@@ -230,8 +244,11 @@ def run_download_job(job_id):
                 if set_name and set_name not in parts[-1]['sets']:
                     parts[-1]['sets'].append(set_name)
             except Exception:
+                # A photo that cannot be written must not be dropped quietly: the
+                # ZIP would reach the client short of what was asked for. The
+                # outer handler fails the whole job and removes every part.
                 logger.exception('Failed to add asset %s to download job %s', asset.id, job.id)
-                used_names.discard(entry_name.lower())
+                raise
             finally:
                 if source_field is not None:
                     source_field.close()

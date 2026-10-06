@@ -41,6 +41,9 @@ def _ready_image(gallery, original_name, file_size=1024, content=b"BYTES"):
         processing_status=MediaAsset.ProcessingStatus.READY,
     )
     asset.original_file.save(original_name.split('/')[-1] or "file", ContentFile(content), save=False)
+    # A READY photo always has a master or a decodable original; these fixtures use placeholder
+    # bytes, so they carry a (placeholder) master like a processed upload does.
+    asset.download_file.save("master.jpg", ContentFile(content), save=False)
     asset.save()
     return asset
 

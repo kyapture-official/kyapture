@@ -1,6 +1,6 @@
 // File Location: frontend/src/pages/client/DownloadPage.jsx
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { clientsApi } from "../../api/clientsApi";
 import { useClientStore } from "../../store/clientStore";
@@ -8,7 +8,10 @@ import DownloadAuthStep from "../../components/client/DownloadAuthStep";
 import DownloadChooseStep from "../../components/client/DownloadChooseStep";
 import DownloadExpired from "../../components/client/DownloadExpired";
 import DownloadShell, { useDownloadGallery } from "../../components/client/DownloadShell";
-import { blockedMessage, gateNeeds, initialStep, isBlockedCode, jobPagePath } from "../../utils/downloadFlow.js";
+import {
+  PREPARING_GAVE_UP_MESSAGE, blockedMessage, gateNeeds, initialStep, isBlockedCode, isPreparingError, jobPagePath,
+  withPreparingRetry,
+} from "../../utils/downloadFlow.js";
 
 /**
  * Full-page gallery download for /g/:username/:slug/download — opened in a new
@@ -38,7 +41,12 @@ export default function DownloadPage() {
   const [step, setStep] = useState(null);
   const [access, setAccess] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [notice, setNotice] = useState("");
+  const abortRef = useRef(null);
+
+  // Leaving the page stops any retry still waiting for the server.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const policy = data?.download_policy;
   const hasPin = Boolean(data?.has_download_pin);
@@ -72,14 +80,20 @@ export default function DownloadPage() {
     if (starting) return;
     setStarting(true);
     setNotice("");
+    setPreparing(false);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const job = await clientsApi.prepareGalleryDownload(username, slug, {
-        downloadToken: access?.token, token: galleryToken, ...choice,
-      });
+      const job = await withPreparingRetry(() => clientsApi.prepareGalleryDownload(username, slug, {
+        downloadToken: access?.token, token: galleryToken, signal: controller.signal, ...choice,
+      }), { onPreparing: () => setPreparing(true), signal: controller.signal });
       navigate(jobPagePath(username, slug, job.job_id, job.link_token), { replace: true, state: { justPrepared: true } });
     } catch (err) {
+      if (controller.signal.aborted) return;
       setStarting(false);
+      setPreparing(false);
       if (err?.code === "download_access_expired") sessionExpired();
+      else if (isPreparingError(err)) setNotice(PREPARING_GAVE_UP_MESSAGE);
       else if (err?.status === 429) setNotice("Too many attempts. Please wait a minute and try again.");
       else if (isBlockedCode(err?.code)) setNotice(blockedMessage(err.code, studio, err.message));
       else setNotice(err?.message || "We couldn't start preparing your photos. Please try again.");
@@ -121,6 +135,7 @@ export default function DownloadPage() {
           studio={studio}
           notice={notice}
           starting={starting}
+          preparing={preparing}
           onStart={startDownload}
         />
       )}

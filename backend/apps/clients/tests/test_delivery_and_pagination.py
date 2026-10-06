@@ -62,6 +62,12 @@ def _make_ready_asset(gallery, index, media_type=MediaAsset.MediaType.IMAGE):
         ContentFile(b"\xff\xd8\xff\xe0-not-a-real-jpeg-but-real-bytes"),
         save=False,
     )
+    if media_type == MediaAsset.MediaType.IMAGE:
+        # Placeholder bytes cannot be decoded, so a processed upload's master stands in (6-D: the
+        # original only replaces a missing master when it is a readable image within 3600 px).
+        asset.download_file.save(
+            f"photo{index}.master.jpg", ContentFile(b"\xff\xd8\xff\xe0-placeholder-master"), save=False,
+        )
     asset.save()
     asset.display_file = f"{base}/display/photo{index}_display.webp"
     asset.medium_file = f"{base}/medium/photo{index}_medium.webp"

@@ -1,8 +1,8 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { clientsApi } from "../../api/clientsApi";
 import {
-  blockedMessage, defaultSize, isBlockedCode, photoPrefsKey, photoSizeOptions, readRememberedSize,
-  writeRememberedSize,
+  PREPARING_GAVE_UP_MESSAGE, PREPARING_LABEL, blockedMessage, defaultSize, isBlockedCode, isPreparingError,
+  photoPrefsKey, photoSizeOptions, readRememberedSize, withPreparingRetry, writeRememberedSize,
 } from "../../utils/downloadFlow.js";
 import { pageButtonClass } from "./DownloadShell";
 
@@ -33,8 +33,14 @@ export default function PhotoDownloadChoose({
   const [resolution, setResolution] = useState(() => remembered || defaultSize(options));
   const [remember, setRemember] = useState(Boolean(remembered));
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [gaveUp, setGaveUp] = useState(false);
   const [error, setError] = useState("");
+  const abortRef = useRef(null);
   const limitReached = Boolean(policy?.limit_reached);
+
+  // Closing the dialog stops any retry still waiting for the server.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const startDownload = (href) => {
     // No `download` attribute: the server's attachment header names the file.
@@ -51,14 +57,29 @@ export default function PhotoDownloadChoose({
     event.preventDefault();
     if (busy || limitReached) return;
     setBusy(true);
+    setPreparing(false);
+    setGaveUp(false);
     setError("");
-    const opts = { token: galleryToken, downloadToken: access?.token, resolution };
+    const controller = new AbortController();
+    abortRef.current = controller;
+    // A warm photo answers in milliseconds; only a slow answer reads as "preparing".
+    const slowTimer = setTimeout(() => setPreparing(true), 1000);
+    const opts = { token: galleryToken, downloadToken: access?.token, resolution, signal: controller.signal };
     try {
-      await clientsApi.checkPhotoDownload(photo.download_url, opts);
+      await withPreparingRetry(() => clientsApi.checkPhotoDownload(photo.download_url, opts), {
+        onPreparing: () => setPreparing(true),
+        signal: controller.signal,
+      });
     } catch (err) {
+      clearTimeout(slowTimer);
+      if (controller.signal.aborted) return;
       setBusy(false);
+      setPreparing(false);
       if (err?.code === "download_access_expired" || err?.code === "download_access_required") {
         onNeedAccess?.("Your download session has expired. Please confirm your details again.");
+      } else if (isPreparingError(err)) {
+        setGaveUp(true);
+        setError(PREPARING_GAVE_UP_MESSAGE);
       } else if (isBlockedCode(err?.code)) {
         setError(blockedMessage(err.code, studio, err.message));
       } else if (err?.code === "resolution_not_allowed") {
@@ -68,6 +89,7 @@ export default function PhotoDownloadChoose({
       }
       return;
     }
+    clearTimeout(slowTimer);
     const href = clientsApi.buildPhotoDownloadHref(photo.download_url, opts);
     writeRememberedSize(storage, prefsKey, resolution, remember);
     startDownload(href);
@@ -87,7 +109,7 @@ export default function PhotoDownloadChoose({
               type="button"
               role="radio"
               aria-checked={resolution === option.value}
-              onClick={() => { setResolution(option.value); setError(""); }}
+              onClick={() => { setResolution(option.value); setError(""); setGaveUp(false); }}
               className={optionClass(resolution === option.value)}
             >
               {resolution === option.value && <CheckIcon className="absolute left-5 h-4 w-4" />}
@@ -120,6 +142,8 @@ export default function PhotoDownloadChoose({
         Remember my selection
       </label>
 
+      {busy && preparing && <p role="status" className="text-center text-sm text-muted">Getting your photo ready. The first time can take a few seconds.</p>}
+
       {(limitReached || error) && (
         <p role="alert" className="bg-red-50 px-3 py-2 text-sm text-red-700">
           {limitReached ? blockedMessage("download_limit_reached", studio) : error}
@@ -127,7 +151,7 @@ export default function PhotoDownloadChoose({
       )}
 
       <button type="submit" disabled={busy || limitReached} className={`${pageButtonClass} !w-full`}>
-        {busy ? "Starting…" : "Download Photo"}
+        {busy ? (preparing ? PREPARING_LABEL : "Starting…") : gaveUp ? "Try again" : "Download Photo"}
       </button>
     </form>
   );

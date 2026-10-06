@@ -119,6 +119,50 @@ Single photo (2048 px, through the real `websize` worker): cold preflight 131-27
 
 Cold is the same as before within noise (+3% at the median); warm is 44x faster. Outliers, reported as measured: four warm runs taken in the same shortage window read 0.37, 0.83, 0.94 and 2.61 s (not in the table); the first three cold runs right after the worker restart took 27, 46 and 63 s of task time, and one later run took 41 s end to end with a 6.9 s task, while the host was short on memory (Claude Code killed a background docker build for it in the same period). Direct in-container timing of the same 20 cold builds was 7.43 s, and 5 clean runs afterwards were 5.3-8.9 s. I did not find another cause.
 
+## 7. 6-D result (all download paths with the new master + acceptance)
+
+Scope: proof, plus the fixes the proof forced. Encoder unchanged from 6-B/6-C.
+
+### 7.1 Acceptance: 9 real photos, old vs new Download Master
+
+Photos: `benchmark/data/jpeg_real` (copied out read-only): skin/hair/jewellery, long hair on a portrait, EXIF-rotated phone shots (orientation 6), a water reflection with hard edges, two ICC-tagged scans above 3600 px, a 2988x5312 tall file, a 720x1600 sky/tea-garden gradient, a wire cage on sand (thin lines), a low-light child shot. Script: `backend/scripts/acceptance_download_master.py` (run in the backend container; old = `apps/core/utils.py` at 9e17cdc, the helper before 6-B). Idle dev host, Linux container. Encode time = `process_download_master` end to end (decode, sRGB, resize, encode, output check): new = median of 3, old = one run. SS2 = SSIMULACRA2 of the oriented sRGB 3600 px reference vs the file.
+
+| # | Photo | Original KB / px | Old KB | New KB | New px | New ms (old ms) | SS2 old / new | Pillow fallback KB / ms |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Copy of Picture 450.jpg | 2712 / 3648x2736 | 1546 | 1533 | 3600x2700 | 1200 (9033) | 82.71 / 84.59 | 1669 / 617 |
+| 2 | Copy of Picture 354.jpg | 2632 / 2736x3648 | 1215 | 1101 | 2700x3600 | 945 (7319) | 82.82 / 84.07 | 1330 / 635 |
+| 3 | 20241004_055321.jpg | 1931 / 3264x2448 | 767 | 732 | 2448x3264 | 418 (5040) | 83.9 / 85.71 | 834 / 241 |
+| 4 | DSC04784.JPG | 2251 / 4248x2898 | 893 | 810 | 3600x2456 | 1243 (6318) | 81.95 / 83.38 | 989 / 1092 |
+| 5 | DSC04790.JPG | 1989 / 2888x3968 | 893 | 786 | 2620x3600 | 1090 (6834) | 82.81 / 83.56 | 990 / 994 |
+| 6 | 20150508_130700.jpg | 2534 / 2988x5312 | 861 | 789 | 2025x3600 | 676 (5210) | 83.72 / 84.69 | 942 / 635 |
+| 7 | FB_IMG_1688025554368.jpg | 124 / 720x1600 | none | none (original served) | 720x1600 | 110 (294) | - | none |
+| 8 | 20240511_184817.jpg | 3078 / 3264x2448 | 1280 | 1275 | 2448x3264 | 487 (6326) | 80.8 / 83.35 | 1405 / 368 |
+| 9 | 20230605_154750.jpg | 2078 / 3264x2448 | 779 | 647 | 2448x3264 | 341 (5450) | 82.78 / 83.56 | 864 / 245 |
+
+Totals over the 8 photos that get a master: old 8233 KB, new 7673 KB (-6.8%). SSIMULACRA2 new > old on all 8 (+0.7 to +2.5). Encode time: median 676 ms vs 5450 ms (old 5.0-9.0 s, new 0.34-1.24 s).
+
+Gate results:
+- Originals intact: SHA-256 of every source file identical before/after (9/9, `original_intact: true`); in the browser run the Pro Original downloads are byte-identical to the uploads (4/4 single and ZIP).
+- 3600 rule / no upscale: every new master is <= 3600 px on the long edge and never larger than its source. Orientation: both EXIF-6 files come out upright (2448x3264) with no orientation tag left.
+- Colour: mean RGB shift against the reference is -0.04 to +0.08 levels per channel on all 8 (mean abs diff 0.9-1.6); the two ICC scans are in sRGB with no shift.
+- Fallbacks: with cjpegli pointed at nothing, all 8 still produce a valid <= 3600 px master through the Pillow q86 path (1.1-1.4x bigger than jpegli, 241-1092 ms). A source whose re-encode is larger than itself (photo 7) gets no master; the 124 KB original is served (same pixels, smaller).
+- Reproducible: three runs of the new encoder gave byte-identical output on 8/8; the same bytes (1,533,111 B for photo 1, 809,538 B for photo 4) came out of the live Docker stack through the upload pipeline and the browser download.
+- Visual (100% crops, reference | old | new, 4 tiles per photo: most detail, smoothest gradient, darkest area, hardest edge; 32 tiles reviewed by eye): no difference visible between the three columns in skin, hair, foliage, gradients, shadows, thin wires, jewellery edges; no ringing, blocking, banding or colour shift seen; the stripes in photo 3's reflection are in the source and identical in all three. This is my own viewing of the crops, not a blind panel; the SS2 and shift numbers are the objective check. The crop strips stay out of the repo (they show people).
+
+### 7.2 What the proof forced (fixed in 6-D)
+
+1. Job reuse ignored the settings: an identical request (same gallery/size/email) reused a READY ZIP for 7 days, so after the watermark was switched on, a Web Size px was changed, or a Pro plan lapsed, a returning visitor got the old ZIP (found by the new tests). `DownloadJob.variant` (migration `clients.0012`) now records Web px + watermark state, or the High Resolution mode; only a job with the same variant is reused.
+2. A ZIP could ship short: a photo that failed while being written was skipped quietly. Now the job fails (`prepare_failed`), every stored part and temp file is removed, and nothing is served.
+3. `render_web_jpeg` falls back to a stored tier only when no source can be DECODED; a failure after a good decode (resize, watermark, JPEG save) raises, so a ZIP fails cleanly and a single download answers 503 `web_size_preparing`, never a differently sized file.
+4. A failed master re-encode used to fall back to the original even above 3600 px (a Free client would get the full-size file). The original now stands in only when it is itself <= 3600 px; otherwise 503 `download_master_unavailable` (single, preflight too) or a failed job (ZIP).
+5. `Retry-After` was invisible to the browser (cross-origin): `CORS_EXPOSE_HEADERS = ['Retry-After']`; its value is `WEB_SIZE_RETRY_AFTER_SECONDS` (3). The single-photo preflight timeout (15 s) was shorter than the server's 25 s worker wait, so a cold size read as a network error; that call now waits 40 s.
+
+### 7.3 Browser run (real Chrome, Docker stack, real worker; the 2 QA users were deleted by exact id afterwards)
+
+Free gallery, 4 photos (3648x2736, 4248x2898 ICC, EXIF-rotated 3264x2448, the 720x1600 sky): single download and ZIP at High Resolution and at Web Size 2048 / 1024 / 640, files opened and measured. High Resolution: 3600x2700 / 3600x2456 / 2448x3264 / 720x1600 (original served, no master). Web Size long edge exactly 2048 / 1024 / 640 (a 720x1600 photo stays 720x1600 at 2048). Every single file equals its ZIP entry byte for byte; ZIPs pass `testzip`. Pro gallery: High Resolution single and ZIP = the uploads byte for byte (SHA-256, 4/4, up to 4248x2898); watermark ON: Web Size single and ZIP carry "KYAPTURE QA" and differ from the clean files, Original unchanged; OFF again: the ZIP is the clean one again (same hashes as the Free run). Free account: saving Original in settings -> 403 `original_download_requires_upgrade`; `resolution=original` on the public API -> 400; `resolution=download` -> the 3600 px master (1,533,111 B).
+
+503 UI (websize worker stopped, cold Web Size 2048, single photo, desktop): "Preparing your download…" at 1.2 s, worker started at about 41 s, download completed at 42.7 s with no click. Worker stopped throughout (390 px): "Preparing your download…" for 109 s (4 tries, `PREPARING_MAX_ATTEMPTS`), then "Your download is taking longer than usual to prepare. Please try again." and a "Try again" button; worker started, "Try again" delivered the file in 3.8 s. A ZIP Web Size with the websize worker stopped still finished (a ZIP job encodes inside its own Celery task). The set-download page handles the same 503 through the same helper; the real ZIP prepare never answers it, so that path was proven with an intercepted response (2x 503 then success; always 503 -> 4 tries, then the same message and "Start Download" back). The favorites list has no download control (nothing to cover); a photo opened from the grid or lightbox uses the single-photo flow.
+
 ## Appendix A: per-image, jpegli q90 vs current (KB / SS2)
 
 | Image | Source px -> master | Original KB | Current | jpegli q90 | Pillow q85 |

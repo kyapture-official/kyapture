@@ -224,3 +224,61 @@ export function writeRememberedSize(storage, key, resolution, remember) {
     // blocked/full storage: the download still works, it just is not remembered
   }
 }
+
+// ── 503 web_size_preparing: "Preparing your download…" and automatic retry ──
+//
+// A cold Web Size is encoded by a worker; when it is not ready in time the server
+// answers 503 { code: 'web_size_preparing' } with a Retry-After header. The page
+// shows "Preparing your download…", asks again after that many seconds, and gives
+// up after this many tries in total (the one limit for every download path).
+export const PREPARING_MAX_ATTEMPTS = 4
+export const PREPARING_CODE = 'web_size_preparing'
+export const PREPARING_LABEL = 'Preparing your download…'
+export const PREPARING_GAVE_UP_MESSAGE = 'Your download is taking longer than usual to prepare. Please try again.'
+
+const PREPARING_DEFAULT_DELAY_MS = 3000
+const PREPARING_MIN_DELAY_MS = 1000
+const PREPARING_MAX_DELAY_MS = 30000
+
+export function isPreparingError(error) {
+  return error?.code === PREPARING_CODE
+}
+
+/** How long to wait before asking again: the server's Retry-After seconds, kept within 1-30 s; 3 s without one. */
+export function retryDelayMs(retryAfterSeconds) {
+  const seconds = Number(retryAfterSeconds)
+  if (!Number.isFinite(seconds) || seconds <= 0) return PREPARING_DEFAULT_DELAY_MS
+  return Math.min(PREPARING_MAX_DELAY_MS, Math.max(PREPARING_MIN_DELAY_MS, Math.round(seconds * 1000)))
+}
+
+const wait = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) return reject(signal.reason ?? new DOMException('Aborted', 'AbortError'))
+  const timer = setTimeout(resolve, ms)
+  signal?.addEventListener('abort', () => {
+    clearTimeout(timer)
+    reject(signal.reason ?? new DOMException('Aborted', 'AbortError'))
+  }, { once: true })
+})
+
+/**
+ * Runs `task()` and, while the server says the file is still being prepared,
+ * asks again after its Retry-After, at most PREPARING_MAX_ATTEMPTS times in all.
+ * `onPreparing(attempt)` is called each time a 503 arrives (show the Preparing
+ * state). Any other error is thrown at once. When the limit is reached the last
+ * error is thrown with `gaveUp = true`. `sleep(ms, signal)` is injectable for tests.
+ */
+export async function withPreparingRetry(task, { onPreparing, signal, sleep = wait, maxAttempts = PREPARING_MAX_ATTEMPTS } = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await task()
+    } catch (error) {
+      if (!isPreparingError(error)) throw error
+      if (attempt >= maxAttempts) {
+        error.gaveUp = true
+        throw error
+      }
+      onPreparing?.(attempt)
+      await sleep(retryDelayMs(error.retryAfter), signal)
+    }
+  }
+}

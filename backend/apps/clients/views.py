@@ -52,9 +52,12 @@ def parse_set_id(raw):
         return uuid.UUID(raw)
     except ValueError:
         return INVALID_SET
+from PIL import Image
+
 from apps.core.utils import (
     sanitize_download_filename,
     ALREADY_COMPRESSED_EXTS,
+    DOWNLOAD_MAX_EDGE,
     process_download_master,
 )
 from .download_access import (
@@ -86,6 +89,7 @@ from .download_jobs import (
     find_reusable_job,
     is_expired,
     job_assets,
+    job_variant,
     job_files_exist,
     mark_file_missing,
     size_limit_error,
@@ -258,10 +262,32 @@ def _get_client_download_source(asset, gallery):
         # intentional for unsupported historic media.
         logger.warning('Download-master backfill skipped for asset %s', asset.id)
 
-    # Formats intentionally left un-reencoded (or a transient storage/Pillow
-    # failure) retain the authorized original rather than returning corrupt
-    # bytes or making the file unavailable.
+    # No master exists: either the original is smaller than any re-encode of the
+    # same pixels (6-A: it is then the better High Resolution file), or the
+    # re-encode just failed. Either way the original may only stand in for the
+    # master when it is itself within the 3600 px cap -- a larger one would hand
+    # a Free client more resolution than the plan allows, so the download is
+    # refused (503) instead and nothing is served.
+    if not _original_within_cap(asset):
+        raise DownloadMasterUnavailable()
     return asset.original_file, DownloadLog.Resolution.ORIGINAL
+
+
+class DownloadMasterUnavailable(Exception):
+    """A High Resolution file cannot be produced right now and the original may not stand in for it."""
+
+
+def _original_within_cap(asset):
+    """True when the stored original's long edge is at most DOWNLOAD_MAX_EDGE (header read only; False if unreadable)."""
+    try:
+        asset.original_file.open('rb')
+        try:
+            with Image.open(asset.original_file) as opened:
+                return max(opened.size) <= DOWNLOAD_MAX_EDGE
+        finally:
+            asset.original_file.close()
+    except Exception:
+        return False
 # ─────────────────────────────────────────────────────────────
 # CUSTOM SECURITY THROTTLE (Password brute-force protection)
 # ─────────────────────────────────────────────────────────────
@@ -1282,6 +1308,7 @@ class PublicGalleryDownloadView(APIView):
         if job is None:
             job = DownloadJob.objects.create(
                 gallery=gallery, photo_set=photo_set, resolution=resolution, asset_ids=normalized_ids,
+                variant=job_variant(gallery, resolution),
                 email=email, pin_verified=pin_verified, requester_ip=requester_ip(request),
             )
             try:
@@ -1849,7 +1876,23 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
                         'code': 'web_size_preparing',
                     },
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    headers={'Retry-After': '3'},
+                    headers={'Retry-After': str(settings.WEB_SIZE_RETRY_AFTER_SECONDS)},
+                )
+
+        # High Resolution: resolved before the preflight answers, so a photo whose
+        # master cannot be produced is refused here (503) and not after the
+        # browser has already been handed the link.
+        high_res = None
+        if resolution == 'download':
+            try:
+                high_res = _get_client_download_source(asset, gallery)
+            except DownloadMasterUnavailable:
+                return Response(
+                    {
+                        'error': 'This photo could not be prepared for download. Please try again in a moment.',
+                        'code': 'download_master_unavailable',
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
 
         # 1R.5-D preflight: the browser downloads this URL as a plain link, so a
@@ -1878,7 +1921,7 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
                 if source_field is asset.original_file:
                     resolution = 'original'
         elif resolution == 'download':
-            source_field, resolution = _get_client_download_source(asset, gallery)
+            source_field, resolution = high_res
 
         if derived is None and not source_field:
             return Response({'error': 'File unavailable.'}, status=status.HTTP_404_NOT_FOUND)

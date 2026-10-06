@@ -77,6 +77,11 @@ CORS_ALLOWED_ORIGINS = [origin.strip() for origin in raw_cors_origins.split(",")
 # to save and transmit our secure HttpOnly access_token/refresh_token cookies.
 CORS_ALLOW_CREDENTIALS = True
 
+# The app calls the API cross-origin (frontend :3000 -> API :8000), where a script
+# can only read the CORS-safelisted response headers. The download UI honours
+# `Retry-After` on a 503 web_size_preparing, so that header must be exposed.
+CORS_EXPOSE_HEADERS = ["Retry-After"]
+
 # REST Framework Configuration (Versioned globally)
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -251,6 +256,8 @@ CELERY_TASK_ROUTES = {
 # How long a single-photo request waits for a cold Web Size to be encoded
 # before answering 503 "still preparing" (a warm request never waits).
 WEB_SIZE_WAIT_SECONDS = int(os.getenv("WEB_SIZE_WAIT_SECONDS", "25"))
+# `Retry-After` sent with that 503: when the client should ask again.
+WEB_SIZE_RETRY_AFTER_SECONDS = int(os.getenv("WEB_SIZE_RETRY_AFTER_SECONDS", "3"))
 
 # ─────────────────────────────────────────────────────────────
 # TRASH / PURGE RETENTION (Phase 4 — storage-leak fix, F-30)

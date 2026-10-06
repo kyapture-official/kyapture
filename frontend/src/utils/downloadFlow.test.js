@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   allSetIds, blockedMessage, defaultSize, formatBytes, gateIntro, gateNeeds, initialStep, isAllSelected, isBlockedCode,
   jobPagePath, jobViewFor, photoLabel, pollDelay, remainingPreparingMs, scopeModel, selectionRequest, sizeOptions, toggleAll, toggleSet,
+  PREPARING_MAX_ATTEMPTS, isPreparingError, retryDelayMs, withPreparingRetry,
 } from './downloadFlow.js'
 
 const sets = [
@@ -205,4 +206,65 @@ test('remembered selection survives blocked or corrupt storage', () => {
   assert.equal(readRememberedSize(blocked, 'k', options), null)
   assert.doesNotThrow(() => writeRememberedSize(blocked, 'k', 'web', true))
   assert.equal(readRememberedSize({ getItem: () => '{not json' }, 'k', options), null)
+})
+
+// ── 503 web_size_preparing: retry, Retry-After, one limit ───────────────────
+const preparingError = (retryAfter = 3) => Object.assign(new Error('preparing'), { code: 'web_size_preparing', status: 503, retryAfter })
+
+test('only the web_size_preparing code counts as "still preparing"', () => {
+  assert.equal(isPreparingError(preparingError()), true)
+  assert.equal(isPreparingError({ code: 'download_limit_reached' }), false)
+  assert.equal(isPreparingError({ status: 503, code: 'prepare_unavailable' }), false)
+  assert.equal(isPreparingError(null), false)
+})
+
+test('Retry-After is honoured, kept within 1-30 s, and 3 s when absent or unusable', () => {
+  assert.equal(retryDelayMs(3), 3000)
+  assert.equal(retryDelayMs(7), 7000)
+  assert.equal(retryDelayMs(0.2), 1000)
+  assert.equal(retryDelayMs(600), 30000)
+  for (const bad of [null, undefined, '', 'soon', -5, 0, NaN]) assert.equal(retryDelayMs(bad), 3000)
+})
+
+test('a 503 is retried after its Retry-After and the call then succeeds', async () => {
+  const waits = []
+  const shown = []
+  let calls = 0
+  const result = await withPreparingRetry(async () => {
+    calls += 1
+    if (calls < 3) throw preparingError(calls === 1 ? 2 : 5)
+    return { ok: true }
+  }, { sleep: async (ms) => { waits.push(ms) }, onPreparing: (n) => shown.push(n) })
+  assert.deepEqual(result, { ok: true })
+  assert.equal(calls, 3)
+  assert.deepEqual(waits, [2000, 5000])
+  assert.deepEqual(shown, [1, 2])
+})
+
+test('the retry limit is ONE constant: that many tries, then the error comes back marked gaveUp', async () => {
+  let calls = 0
+  const waits = []
+  await assert.rejects(
+    withPreparingRetry(async () => { calls += 1; throw preparingError() }, { sleep: async (ms) => { waits.push(ms) } }),
+    (error) => error.code === 'web_size_preparing' && error.gaveUp === true,
+  )
+  assert.equal(calls, PREPARING_MAX_ATTEMPTS)
+  assert.equal(waits.length, PREPARING_MAX_ATTEMPTS - 1)    // no pointless wait after the last try
+})
+
+test('any other error is thrown at once, without a retry', async () => {
+  let calls = 0
+  const boom = Object.assign(new Error('limit'), { code: 'download_limit_reached', status: 403 })
+  await assert.rejects(withPreparingRetry(async () => { calls += 1; throw boom }, { sleep: async () => {} }), (error) => error === boom && !error.gaveUp)
+  assert.equal(calls, 1)
+})
+
+test('leaving the page (abort) stops a retry that is waiting', async () => {
+  const controller = new AbortController()
+  let calls = 0
+  const pending = withPreparingRetry(async () => { calls += 1; throw preparingError(30) }, { signal: controller.signal })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  controller.abort()
+  await assert.rejects(pending)
+  assert.equal(calls, 1)
 })

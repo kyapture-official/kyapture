@@ -45,7 +45,7 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 | 20 | Leftover QA video files on the Docker media disk | VID-A | 11-D |
 | 21 | Empty galleries/ directory left after user delete | 5.1-0 (D6) | 7.5-E |
 | 22 | Two 401 console errors never traced | 5.1-0 | QA-A |
-| 23 | Multi-part ZIP bell notification only covered by tests, never seen in a browser | 6.4-B | 6-D and QA-A |
+| 23 | Multi-part ZIP bell notification only covered by tests, never seen in a browser | 6.4-B | 6-D and QA-A. **6-D: parts proven by tests (split, names, every photo once), NOT run in a browser** (needs a forced small `DOWNLOAD_ZIP_PART_MAX_BYTES` in the stack); stays OPEN for QA-A (row 68) |
 | 24 | Multi-part ZIP: 2 GB limit in dev prevented a real run | 6.4-B | 15-A (staging) |
 
 ## E. Release (Waves 9-10)
@@ -100,7 +100,7 @@ Put this file in docs/ and commit it. Agents must add a row for any gap they lea
 | 56 | Cached Web Sizes are private-storage objects that are not metered in the plan storage number (adds to row 41). A superseded entry (watermark edited, master re-encoded) is removed only when that photo/px is next written; until then it stays, at most one stale file per (photo, px). Purge of the photo/set/collection removes all of them | 6-C | 11-D (lifecycle rule: purge old cached Web Sizes) |
 | 57 | The cache key reads the source file's size (one storage stat) and then `exists` (second call); on S3 that is two requests per warm download. Measured only on local disk (warm single download 34-47 ms) | 6-C | 15-B |
 | 58 | The cold-ZIP timing had unexplained outliers (27-63 s task time) during a host memory shortage; clean runs were 5.3-8.9 s. Not reproduced afterwards | 6-C | 15-B (re-measure on staging hardware) |
-| 59 | Cold single Web Size can return 503 web_size_preparing; the client UI shows a generic error | 6-C | 6-D (Preparing state + Retry-After auto-retry) |
+| 59 | Cold single Web Size can return 503 web_size_preparing; the client UI shows a generic error | 6-C | 6-D (Preparing state + Retry-After auto-retry). **DONE in 6-D** (single-photo dialog and set-download page: "Preparing your download…", retry after Retry-After, `PREPARING_MAX_ATTEMPTS` = 4, then "Try again"; browser-tested with the worker stopped, then started; see row 66) |
 
 Row 36 note: The sidebar label comes from `frontend/src/components/layout/DashboardLayout.jsx`, which maps `user?.is_active_plan` to "Pro Plan" or "Free Plan".
 Plan & Billing gets the plan and subscription from `frontend/src/hooks/useSubscription.js` and checks for an active subscription before showing the plan.
@@ -113,6 +113,17 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | 61 | `photos.0008` was applied to the Docker dev DB only (2 rows). The host dev DB and production are not migrated. On a large production table it is one `ALTER COLUMN ... TYPE bigint`, a full table rewrite under an ACCESS EXCLUSIVE lock; the length of that lock was not measured on a large table. Run in a quiet window after a backup | DB-A | 13-C, 15-B (real restore + timed run on a production-size copy) |
 | 62 | No real upload above 2 GiB has been run. Tests store a tiny clip whose reported size is patched to 4 GiB / 5 GB; the DB, plan rules, serializers and JSON are proven, but the web server, ASGI/gunicorn timeouts, temp disk and storage backend limits for a real 2-5 GB body are not | DB-A | 15-A (staging: one real 5 GB upload and ZIP) |
 | 63 | Only `MediaAsset.file_size` held a byte count in an integer column. ZIP/download part sizes live in `DownloadJob.files` JSON (no 32-bit limit); the other integer columns are counts, pixels or seconds. A future byte column must be 64-bit | DB-A | rules file (check on every new size field) |
+
+## J. Raised by 6-D (all download paths + acceptance)
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 64 | A Web Size of a photo already within the chosen px is re-encoded at Pillow q90 and can be BIGGER than the file it came from (720x1600, 124 KB original -> 178 KB Web Size at 2048; High Resolution for the same photo serves the 124 KB original). Pixels are right, bytes are not minimal | 6-D | owner decides (serve the master unchanged when no resize and no watermark is needed); no chunk assigned |
+| 65 | When no Download Master is made (source within 3600 px and every re-encode larger, 6-A rule) a Free client's High Resolution is the byte-identical original (same pixels, smaller file; keeps the camera's ICC/EXIF minus GPS). Seen on 1 of 9 acceptance photos. Product decision: accept, or force a master | 6-D | owner decision (13-A) |
+| 66 | Cold Web Size with no `websize` worker: the UI waits 4 tries x 25 s server wait + 3 s pauses = about 110 s before "Try again". Tune `PREPARING_MAX_ATTEMPTS` / `WEB_SIZE_WAIT_SECONDS` with staging numbers | 6-D | 15-B |
+| 67 | `clients.0012_download_job_variant` was applied to the Docker dev DB only; host dev DB and production are not migrated. Old READY jobs have variant '' and are simply never reused | 6-D | 13-C, 15-B |
+| 68 | The 2 GB multi-part split and its bell notification were not run in a real browser (rows 23/24). A photo with no usable source file is still skipped quietly when a ZIP is built (only a photo that fails while being written fails the job) | 6-D | QA-A / 15-A |
+| 69 | The favorites list has no download action, so "favorites download" has no separate path to test; if the owner expects one it is a feature, not a fix | 6-D | owner decision |
 
 ## Accepted (no fix needed)
 

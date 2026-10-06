@@ -31,8 +31,11 @@ Cache: one private-storage object per (photo, px, watermark state, source),
     `generate_web_size` Celery task (own queue, bounded concurrency), a ZIP job
     is already a Celery task and encodes inline
 
-Returns None when the source cannot be decoded; callers then fall back to the
-nearest stored tier rather than failing the download.
+Returns None when no source can be DECODED; callers then fall back to the
+nearest stored tier rather than failing the download. A failure after a
+successful decode (resize / watermark / JPEG encode) raises instead: a ZIP job
+then fails cleanly (nothing partial is stored or served) and a single download
+answers 503 web_size_preparing.
 """
 import hashlib
 import io
@@ -65,8 +68,8 @@ def _flatten_alpha(img):
     return Image.alpha_composite(background, rgba).convert('RGB')
 
 
-def render_web_jpeg(asset, px, spec=None):
-    """JPEG bytes of `asset` with its long edge at most `px`, or None if it cannot be decoded."""
+def _decode_source(asset):
+    """The oriented, sRGB, alpha-flattened pixels of the Download Master (else the original), or None if neither decodes."""
     for field in (asset.download_file, asset.original_file):
         if not field:
             continue
@@ -78,18 +81,32 @@ def render_web_jpeg(asset, px, spec=None):
                     img.load()
             finally:
                 field.close()
-            img = _normalize_to_srgb(_flatten_alpha(img))
-            img.thumbnail((px, px), Image.Resampling.LANCZOS)
-            if spec is not None:
-                img = apply_watermark(img, spec)
-            out = io.BytesIO()
-            img.convert('RGB').save(
-                out, format='JPEG', quality=WEB_JPEG_QUALITY, optimize=True, progressive=False,
-            )
-            return out.getvalue()
+            return _normalize_to_srgb(_flatten_alpha(img))
         except Exception as exc:
             logger.warning('Web Size derivation from %s failed for asset %s: %s', field.name, asset.id, exc)
     return None
+
+
+def render_web_jpeg(asset, px, spec=None):
+    """
+    JPEG bytes of `asset` with its long edge at most `px`.
+
+    Returns None only when NO source can be decoded (callers then fall back to
+    the nearest stored tier). Once a source is decoded, a failure while
+    resizing, watermarking or encoding RAISES: it must never be turned into a
+    differently-sized stored tier, a ZIP job fails cleanly instead.
+    """
+    img = _decode_source(asset)
+    if img is None:
+        return None
+    img.thumbnail((px, px), Image.Resampling.LANCZOS)
+    if spec is not None:
+        img = apply_watermark(img, spec)
+    out = io.BytesIO()
+    img.convert('RGB').save(
+        out, format='JPEG', quality=WEB_JPEG_QUALITY, optimize=True, progressive=False,
+    )
+    return out.getvalue()
 
 
 def derive_web_jpeg(asset, px, gallery=None):

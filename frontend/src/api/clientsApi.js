@@ -10,6 +10,9 @@ import api from './axiosInstance'
  *       staff/photographer auth state.
  */
 
+// Longer than the server's WEB_SIZE_WAIT_SECONDS (25) so its 503 reaches us, not a timeout.
+const CHECK_TIMEOUT_MS = 40000
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PRIVATE HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -86,6 +89,10 @@ function normalizeError(error, { authMessage, notFoundMessage } = {}) {
   const normalized = new Error(message)
   normalized.status = status
   normalized.code = data?.code ?? null
+  // Seconds from a Retry-After header (the API exposes it to the browser via CORS).
+  const headers = error?.response?.headers
+  const retryAfter = Number(headers?.get?.('retry-after') ?? headers?.['retry-after'])
+  normalized.retryAfter = Number.isFinite(retryAfter) ? retryAfter : null
   normalized.cause = error
   return normalized
 }
@@ -408,7 +415,9 @@ export const clientsApi = {
     const href = clientsApi.buildPhotoDownloadHref(downloadUrl, { ...opts, check: true })
     if (!href) return null
     try {
-      const res = await api.get(href, { signal: opts.signal })
+      // A cold Web Size makes the server wait up to 25 s for its worker before it
+      // answers 503, longer than the shared 15 s timeout.
+      const res = await api.get(href, { signal: opts.signal, timeout: CHECK_TIMEOUT_MS })
       return res.data
     } catch (error) {
       handleRequestError(error, {

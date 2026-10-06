@@ -372,6 +372,10 @@ class DownloadJob(BaseModel):
         'photos.PhotoSet', null=True, blank=True, on_delete=models.SET_NULL, related_name='download_jobs'
     )
     resolution = models.CharField(max_length=10, default='download')
+    # What the files were made from when the job was created (Web Size px + watermark
+    # state, or the High Resolution mode). An identical request is only reused while
+    # this still matches the gallery's current settings (download_jobs.job_variant).
+    variant = models.CharField(max_length=80, blank=True, default='')
     # Optional explicit selection (validated UUIDs); empty = the whole gallery/set.
     asset_ids = models.JSONField(default=list, blank=True)
 
