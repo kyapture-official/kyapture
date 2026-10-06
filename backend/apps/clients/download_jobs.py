@@ -25,11 +25,12 @@ from django.utils import timezone
 
 from apps.core.storage import PrivateMediaStorage
 from apps.core.utils import sanitize_download_filename
+from apps.core.watermark import build_watermark_spec
 from apps.photos.models import MediaAsset
 
 from .download_access import web_px_for_gallery
 from .models import DownloadJob
-from .web_size import derive_web_jpeg
+from .web_size import build_cached, read_cached
 
 logger = logging.getLogger(__name__)
 
@@ -138,18 +139,21 @@ def _source_size(field):
         return 0
 
 
-def _prepare_entry(asset, job, gallery, used_names):
+def _prepare_entry(asset, job, gallery, used_names, web_spec=None):
     """
     What goes into the archive for `asset`: (entry_name, size, data, field).
-    'data' is set for a Web Size image derived at the exact chosen px (see
-    web_size.py); otherwise 'field' is the stored file to stream. None when
-    the asset has no usable source.
+    'data' is set for a Web Size image at the exact chosen px (cached per
+    photo/px/watermark state, see web_size.py -- encoded here only on a miss,
+    and this already runs inside the job's Celery task); otherwise 'field' is
+    the stored file to stream. None when the asset has no usable source.
+    `web_spec` is the gallery's watermark, resolved once per job.
     """
     # Imported here to avoid a views <-> download_jobs import cycle.
     from .views import _resolve_zip_source, _unique_zip_entry_name, _zip_entry_base_name
 
     if job.resolution == 'web' and asset.media_type == MediaAsset.MediaType.IMAGE:
-        data = derive_web_jpeg(asset, web_px_for_gallery(gallery), gallery)
+        key = build_cached(asset, web_px_for_gallery(gallery), web_spec)
+        data = read_cached(key) if key else None
         if data is not None:
             stem = os.path.splitext(sanitize_download_filename(asset.original_name, fallback=str(asset.id)))[0]
             return _unique_zip_entry_name(f'{stem}.jpg', used_names), len(data), data, None
@@ -193,6 +197,7 @@ def run_download_job(job_id):
     archive = None
     try:
         used_names = set()
+        web_spec = build_watermark_spec(gallery) if job.resolution == 'web' else None
 
         def start_part():
             fd, path = tempfile.mkstemp(suffix='.zip')
@@ -201,7 +206,7 @@ def run_download_job(job_id):
             return zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_STORED)
 
         for asset in assets:
-            prepared = _prepare_entry(asset, job, gallery, used_names)
+            prepared = _prepare_entry(asset, job, gallery, used_names, web_spec)
             if prepared is None:
                 continue
             entry_name, size, data, source_field = prepared

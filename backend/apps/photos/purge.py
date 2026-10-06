@@ -10,7 +10,8 @@ signal for any cascade):
   1. the rows are deleted inside a transaction;
   2. the storage objects they owned are collected (original, Download Master,
      display / medium / thumbnail derivatives - which carry the watermark -,
-     video poster / preview / playback, and any prepared download ZIPs);
+     video poster / preview / playback, the cached Web Size sizes, and any
+     prepared download ZIPs);
   3. transaction.on_commit queues ONE idempotent Celery task that deletes them.
      A rolled-back delete therefore never loses a file, and a committed delete
      never leaves a file behind even if the web request dies right after.
@@ -69,6 +70,19 @@ def asset_refs(asset):
         if name:
             refs.append({'s': kind, 'n': name})
     return refs
+
+
+def web_size_prefix(asset):
+    """
+    Private-storage prefix that holds the cached Web Size files of ONE photo
+    (apps/clients/web_size.py), or None for an original stored outside the
+    standard photographers/<id>/galleries/<id>/ layout. Derived from the
+    original's own key, so it also works while the asset is being deleted.
+    """
+    parts = (getattr(asset.original_file, 'name', '') or '').split('/')
+    if len(parts) < 5 or parts[0] != 'photographers' or parts[2] != 'galleries':
+        return None
+    return '/'.join(parts[:4]) + f'/web_size/{asset.pk}/'
 
 
 def gallery_prefix(gallery):
@@ -134,10 +148,13 @@ def schedule_purge(refs, prefixes=()):
 def queue_asset_files(asset):
     """Called from MediaAsset's post_delete signal for every deleted asset."""
     refs = asset_refs(asset)
+    cache_prefix = web_size_prefix(asset)      # cached Web Size sizes die with their photo
     if _collector.stack:
         _collector.stack[-1].add_refs(refs)
+        if cache_prefix:
+            _collector.stack[-1].add_prefix(PRIVATE, cache_prefix)
     else:
-        schedule_purge(refs)
+        schedule_purge(refs, [{'s': PRIVATE, 'n': cache_prefix}] if cache_prefix else ())
 
 
 # ─── deleting storage objects (runs in the Celery task) ──────────────────────

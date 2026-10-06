@@ -7,6 +7,31 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+@shared_task(acks_late=True, soft_time_limit=90, time_limit=120)
+def generate_web_size(asset_id, px, expected_state=''):
+    """
+    Encodes (and caches) one photo's exact-px Web Size -- see apps/clients/web_size.py.
+    Routed to its own queue (settings.CELERY_TASK_ROUTES) so the worker's
+    --concurrency is the CPU bound for this work. Returns the cache key, or None
+    when the photo cannot be decoded. Idempotent: an already cached size is a no-op.
+    """
+    from apps.photos.models import MediaAsset
+    from apps.core.watermark import build_watermark_spec
+
+    from .web_size import WEB_PX_CHOICES, build_cached, watermark_state
+
+    if px not in WEB_PX_CHOICES:
+        return None
+    try:
+        asset = MediaAsset.objects.select_related('gallery__photographer').get(id=asset_id)
+    except MediaAsset.DoesNotExist:
+        return None
+    spec = build_watermark_spec(asset.gallery)
+    if watermark_state(spec) != expected_state:
+        logger.info('Web Size for asset %s: watermark changed since the request; encoding the current state', asset_id)
+    return build_cached(asset, px, spec)
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
 def purge_expired_client_sessions(self):
     """

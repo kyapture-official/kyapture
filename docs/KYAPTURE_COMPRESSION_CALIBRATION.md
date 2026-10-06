@@ -83,6 +83,42 @@ Per image the size moves from -33.2% to +7.0% (two files grew: +6.6% at SS2 +2.4
 
 Limits: 12 files, largest 3648 px, no 24 MP+ DSLR; Linux dev-host timings (row 51). No visual crop review was repeated in 6-B; the 6-A 100% skin-crop check used the same encoder settings.
 
+## 6. 6-C result (Web Size: encoder decision, exact-px cache)
+
+### 6.1 Encoder decision (debt row 49): Pillow q90 stays
+
+Method: the 12-file sample of 6-B (`benchmark/data/jpeg_real`, every 9th file, copied out read-only). Each file went through `process_download_master` (the real jpegli q90 master), then the master was resized with Lanczos to 2048 / 1024 / 640 px (what Web Size does). Reference = that resized RGB image (PPM). Candidates: the current Pillow q90 baseline (`optimize`, not progressive) and `cjpegli` (Linux, backend image, 4:2:0, progressive level 2) at q78-q96. Score: SSIMULACRA2 (benchmark build). Rule: use jpegli only at a quality whose score is >= the Pillow q90 score on EVERY image and saves >= 10% bytes.
+
+| px | Pillow q90 total KB / SS2 mean / min | lowest jpegli q with SS2 >= Pillow on all 12 | its size vs Pillow | smaller jpegli rows |
+|---|---|---|---|---|
+| 2048 | 6903 / 87.01 / 83.93 | q95 (min delta +0.07) | **+12.3%** (7751 KB) | q94 +0.1% (worse on 1, min -1.66), q93 -6.1% (worse on 1, min -2.42), q92 -14.2% (worse on 6), q90 -23.7% (worse on 10, min -4.96) |
+| 1024 | 2227 / 85.04 / 81.09 | q96 (q95 is -0.02 on one image) | **+30.7%** (2911 KB) | q93 -1.7% (worse on 1), q92 -10.6% (worse on 2, min -3.87), q90 -21.4% (worse on 11) |
+| 640 | 967 / 84.48 / 80.34 | q95 (min delta +0.17) | **+20.6%** (1167 KB) | q93 +0.7%, q92 -8.2% (worse on 2), q90 -18.9% (worse on 10) |
+
+Median encode time per image: Pillow 40 / 11 / 5 ms (2048 / 1024 / 640); cjpegli 168-204 / 52-62 / 26-31 ms (process start + PPM write included).
+
+Result: no jpegli quality satisfies "not worse on any image" AND "saves >= 10%". The only qualities that are not worse anywhere are LARGER than Pillow q90 (+12% to +31%). Row 49's earlier "-28%" compared jpegli q90 at a lower SSIMULACRA2 (84.60 vs 86.18). **Decision: Web Size keeps Pillow q90 baseline; no cjpegli call and therefore no cjpegli fallback path exists for Web Size.** Pillow is also 4-6x faster per image.
+
+### 6.2 Exact-px cache
+
+`apps/clients/web_size.py`: one private-storage object per (photo, px, watermark state, source), `photographers/<id>/galleries/<id>/web_size/<asset id>/<px>-<watermark signature or "clean">-<source fingerprint>.jpg`. The source fingerprint is the Download Master (or original when no master) name + byte size + encoder settings, so a master re-encoded in place never serves a stale size. Derived from the Download Master, at the exact px (never upscaled), standard baseline JPEG. A single download asks the `generate_web_size` Celery task on a miss (queue `websize`, worker `--concurrency=2`, so at most 2 encodes at a time); a ZIP job is already a Celery task and encodes inline on a miss. A worker that does not answer within `WEB_SIZE_WAIT_SECONDS` (25) gives 503 `web_size_preparing`, never a wrong-size file.
+
+Which downloads are watermarked: **Web Size: yes** (the gallery's current watermark, the same as the web tiers; cache key changes with the watermark state). **High Resolution: no** (the 3600 px Download Master is the clean deliverable, `apps/core/watermark.py` contract, unchanged). **Original (Pro): never** (byte-identical file).
+
+### 6.3 Cold vs warm, 20-photo Web Size ZIP (2048 px)
+
+Docker dev stack, 12 cores, 20 real JPEGs from `jpeg_real` (41.2 MB uploaded through the real API, real masters), Free plan, time from the prepare POST until the job reports `ready` (poll every 50 ms), ZIP = 20 entries / 10.38 MB in every run.
+
+| | runs (s) | median |
+|---|---|---|
+| Before 6-C (HEAD, every ZIP re-encodes) | 6.54, 6.66, 7.00 | 6.66 |
+| 6-C cold (cache emptied) | 5.28, 6.15, 6.85, 7.33, 8.87 | 6.85 |
+| 6-C warm (cache hit) | 0.12, 0.13, 0.15, 0.21, 0.23 | 0.15 |
+
+Single photo (2048 px, through the real `websize` worker): cold preflight 131-276 ms (3 runs), warm preflight 20-26 ms, warm download 34-47 ms; worker task 97-164 ms.
+
+Cold is the same as before within noise (+3% at the median); warm is 44x faster. Outliers, reported as measured: four warm runs taken in the same shortage window read 0.37, 0.83, 0.94 and 2.61 s (not in the table); the first three cold runs right after the worker restart took 27, 46 and 63 s of task time, and one later run took 41 s end to end with a 6.9 s task, while the host was short on memory (Claude Code killed a background docker build for it in the same period). Direct in-container timing of the same 20 cold builds was 7.43 s, and 5 clean runs afterwards were 5.3-8.9 s. I did not find another cause.
+
 ## Appendix A: per-image, jpegli q90 vs current (KB / SS2)
 
 | Image | Source px -> master | Original KB | Current | jpegli q90 | Pillow q85 |

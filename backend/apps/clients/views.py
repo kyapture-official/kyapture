@@ -92,7 +92,8 @@ from .download_jobs import (
 )
 from .ready_email import requester_ip
 from .tasks import prepare_download_job
-from .web_size import derive_web_jpeg
+from .web_size import WebSizeNotReady, open_cached, request_cached
+from apps.core.watermark import build_watermark_spec
 from apps.core.storage import PrivateMediaStorage
 
 import io
@@ -1834,6 +1835,23 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Web Size is encoded by Celery (never here) and cached per photo / px /
+        # watermark state: the preflight is where a cold size gets prepared, so
+        # the plain-link GET that follows is a storage read.
+        web_key = None
+        if resolution == 'web' and asset.media_type == MediaAsset.MediaType.IMAGE:
+            try:
+                web_key = request_cached(asset, web_px_for_gallery(gallery), build_watermark_spec(gallery))
+            except WebSizeNotReady:
+                return Response(
+                    {
+                        'error': 'Your photo is still being prepared. Please try again in a moment.',
+                        'code': 'web_size_preparing',
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    headers={'Retry-After': '3'},
+                )
+
         # 1R.5-D preflight: the browser downloads this URL as a plain link, so a
         # refusal (limit hit since the page loaded, a set switched off, ...) would
         # otherwise replace the gallery tab with a JSON error. The modal asks first
@@ -1848,10 +1866,13 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
         source_field = asset.original_file
         derived = None
         if resolution == 'web':
-            if asset.media_type == MediaAsset.MediaType.IMAGE:
+            if web_key:
                 # Exact chosen px, standard JPEG (see web_size.py) -- never a
                 # neighbouring stored tier under the wrong label.
-                derived = derive_web_jpeg(asset, web_px_for_gallery(gallery), gallery)
+                try:
+                    derived = open_cached(web_key)
+                except Exception:
+                    logger.warning('Cached Web Size %s could not be opened', web_key)
             if derived is None:
                 source_field = _resolve_web_source(asset, web_px_for_gallery(gallery))
                 if source_field is asset.original_file:
@@ -1916,7 +1937,7 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
         )
 
         response = FileResponse(
-            io.BytesIO(derived) if derived is not None else source_field,
+            derived if derived is not None else source_field,
             as_attachment=True,
             filename=download_filename,
             content_type='image/jpeg' if derived is not None else 'application/octet-stream',

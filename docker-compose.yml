@@ -145,6 +145,32 @@ services:
       redis:
         condition: service_healthy
 
+  # 4a. WEB SIZE WORKER (Celery, own queue). Encodes the exact-px Web Size
+  # derivatives (apps/clients/web_size.py). Its --concurrency IS the CPU bound
+  # for that work: at most 2 encodes at a time, whatever the request load.
+  celery_websize:
+    build: ./backend
+    command: celery -A config worker -l info -Q websize --concurrency=2 -n websize@%h
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_HOST: db
+      DB_NAME: photodelivery
+      DB_USER: photodelivery
+      DB_PASSWORD: photodelivery
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
       # 4b. PERIODIC TASK SCHEDULER (Celery Beat)
       # Ticks the schedule defined in config/celery.py's beat_schedule and
       # hands due tasks off to celery_worker above. This is a SEPARATE process

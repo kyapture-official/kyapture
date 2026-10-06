@@ -241,6 +241,17 @@ CELERY_TASK_ACKS_LATE = True
 # Limits active worker prefetching to prevent RAM spikes on large media transcodes
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
+# Web Size derivatives (apps/clients/web_size.py) are encoded by their own
+# queue so the CPU they may use is bounded by that worker's --concurrency
+# (docker-compose `celery_websize`), never by the web request threads.
+WEB_SIZE_QUEUE = "websize"
+CELERY_TASK_ROUTES = {
+    "apps.clients.tasks.generate_web_size": {"queue": WEB_SIZE_QUEUE},
+}
+# How long a single-photo request waits for a cold Web Size to be encoded
+# before answering 503 "still preparing" (a warm request never waits).
+WEB_SIZE_WAIT_SECONDS = int(os.getenv("WEB_SIZE_WAIT_SECONDS", "25"))
+
 # ─────────────────────────────────────────────────────────────
 # TRASH / PURGE RETENTION (Phase 4 — storage-leak fix, F-30)
 # ─────────────────────────────────────────────────────────────
