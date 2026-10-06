@@ -1215,7 +1215,7 @@ input, textarea, select {
    are never set on body/:root, so dashboard UI keeps its own fonts. The
    fallbacks below apply when no style has arrived (the app default look). */
 .ky-type {
-  font-family: var(--ky-font-family, "Libre Baskerville", Georgia, "Times New Roman", Times, serif);
+  font-family: var(--ky-font-family, "Libre Baskerville", "Noto Serif Devanagari", Georgia, "Times New Roman", Times, serif);
   font-weight: var(--ky-font-weight, 400);
   font-style: var(--ky-font-style, normal);
   letter-spacing: var(--ky-letter-spacing, 0em);
@@ -1223,4 +1223,23 @@ input, textarea, select {
   /* Long or unbroken titles wrap inside the box instead of overflowing it. */
   overflow-wrap: anywhere;
   text-wrap: balance;
+}
+/* `text-wrap: balance` above resets text-wrap-mode to wrap, which would undo the nowrap of Tailwind's
+   `truncate` (the sticky toolbar title) and let a long title grow the toolbar to several lines. */
+.ky-type.truncate {
+  text-wrap: nowrap;
+}
+
+/* Devanagari inside a title (CHUNK 6.2-C, wrapped by components/shared/TypeText.jsx).
+   letter-spacing would cut the headline (shirorekha) into dashes, so it is 0 here, and the
+   vowel marks above and below the line need more room than Latin: the span and, where
+   :has() is supported, the whole title use a taller line so lines stay even and the top
+   marks are not clipped (truncate / overflow:hidden boxes included). The :has() rule (specificity
+   0,2,0) beats Tailwind's single-class leading-* utilities. */
+.ky-type .ky-deva {
+  letter-spacing: 0;
+  line-height: 1.6;
+}
+.ky-type:has(.ky-deva) {
+  line-height: 1.6;
 }

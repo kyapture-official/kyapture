@@ -8,6 +8,7 @@ import { copyText, resolveShareUrl } from "../../utils/share";
 import { useTypographyStyles } from "../../hooks/useTypographyStyles";
 import { normalizeDesignSettings } from "../../utils/designSettings";
 import { pickStyle, typographyVars } from "../../utils/typography";
+import TypeText from "./TypeText";
 
 export default function ClientPreviewModal({ open, onClose, gallery }) {
   const toast = useToast();
@@ -194,7 +195,7 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
                 style={titleTypeVars}
                 className="ky-type max-w-full text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.1] text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.5)] mb-4"
               >
-                {title}
+                <TypeText text={title} />
               </h1>
               <div className="h-px w-12 my-5 bg-white/30" />
               {date && (
@@ -233,7 +234,7 @@ export default function ClientPreviewModal({ open, onClose, gallery }) {
         {/* PHOTO GRID SECTION */}
         <section ref={gridRef} className="min-h-screen bg-[#FDFBF7] px-4 sm:px-8 md:px-12 lg:px-20 py-16">
           <div className="max-w-6xl mx-auto mb-10">
-            <h2 style={titleTypeVars} className="ky-type text-3xl text-ink mb-2">{title}</h2>
+            <h2 style={titleTypeVars} className="ky-type text-3xl text-ink mb-2"><TypeText text={title} /></h2>
             <div className="h-px w-8 bg-ink/15" />
           </div>
 

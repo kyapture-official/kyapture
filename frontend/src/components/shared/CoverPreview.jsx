@@ -2,6 +2,7 @@
 import { formatDate } from "../../utils/formatters";
 import { resolveDesignSettings } from "../../utils/designSettings";
 import { typographyVars } from "../../utils/typography";
+import TypeText from "./TypeText";
 
 /**
  * WHAT: Live cover page preview — renders a scaled-down representation of
@@ -72,7 +73,7 @@ export default function CoverPreview({ settings, gallery, typographyStyle, devic
             coverSrc ? "text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)]" : theme.text
           } transition-all duration-300`}
         >
-          {title}
+          <TypeText text={title} />
         </h2>
 
         {/* Divider */}

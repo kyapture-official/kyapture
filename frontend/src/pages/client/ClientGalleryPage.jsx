@@ -20,6 +20,7 @@ import { useToast } from "../../components/ui/Toast";
 import { formatDate } from "../../utils/formatters";
 import { resolveDesignSettings } from "../../utils/designSettings";
 import { typographyVars } from "../../utils/typography";
+import TypeText from "../../components/shared/TypeText";
 import { Download, Heart, Play } from "lucide-react";
 
 /**
@@ -702,7 +703,7 @@ export default function ClientGalleryPage() {
             style={titleTypeVars}
             className="ky-type max-w-full text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.1] text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.5)] mb-4"
           >
-            {galleryTitle}
+            <TypeText text={galleryTitle} />
           </h1>
 
           <div className="h-px w-12 my-5 bg-white/30" />
@@ -747,7 +748,7 @@ export default function ClientGalleryPage() {
               style={titleTypeVars}
               className={`ky-type truncate text-2xl ${resolvedDesign.theme.text} sm:text-3xl`}
             >
-              {galleryTitle}
+              <TypeText text={galleryTitle} />
             </h2>
           </div>
 

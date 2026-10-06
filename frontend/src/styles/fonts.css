@@ -1,6 +1,6 @@
 /* frontend/src/styles/fonts.css
  *
- * Self-hosted fonts: woff2 only, Latin subset, served from our own origin
+ * Self-hosted fonts: woff2 only, Latin subset (plus the Devanagari-only companions below), served from our own origin
  * (nginx CSP font-src 'self'; nothing is requested from Google). Each rule
  * is declared once and a browser downloads a file only when text on the page
  * actually renders with that family + weight + style, so a client gallery
@@ -62,6 +62,69 @@
   font-display: swap;
   src: url('../assets/fonts/work-sans-latin-300-normal.woff2') format('woff2');
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* Devanagari companions of the six styles (CHUNK 6.2-C). Devanagari subset only, one file per weight a
+ * style uses. unicode-range keeps each file out of the page until a character in U+0900-097F (etc.)
+ * is actually drawn with the family, so a Latin-only gallery downloads none of them. Sans styles
+ * (sans, modern, bold, subtle) use Noto Sans Devanagari 400/400/600/300; serif styles (serif, timeless)
+ * use Noto Serif Devanagari 400/300. Devanagari has no italic: the italic rule points at the upright
+ * file so the browser does not slant it artificially (timeless is 300 italic).
+ * size-adjust: Devanagari is drawn smaller than the Latin capitals next to it. Measured from the font
+ * files (height of the letter ka above the baseline / Latin cap height): Inter .85, Jost .89, Oswald 600
+ * .77, Work Sans 300 .94, Libre Baskerville .81, Cormorant Garamond 300 1.00. Each weight face serves
+ * the styles that use it, so: sans 400 (Inter, Jost) 108%, sans 600 (Oswald) 115%, serif 400 (Baskerville)
+ * 115%, the 300 faces (Work Sans, Cormorant) 100%. That brings the ratio to .89-1.00. */
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../assets/fonts/noto-sans-devanagari-devanagari-300-normal.woff2') format('woff2');
+  unicode-range: U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+25CC,U+A8E0-A8FF;
+}
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/noto-sans-devanagari-devanagari-400-normal.woff2') format('woff2');
+  size-adjust: 108%;
+  unicode-range: U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+25CC,U+A8E0-A8FF;
+}
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/noto-sans-devanagari-devanagari-600-normal.woff2') format('woff2');
+  size-adjust: 115%;
+  unicode-range: U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+25CC,U+A8E0-A8FF;
+}
+@font-face {
+  font-family: 'Noto Serif Devanagari';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../assets/fonts/noto-serif-devanagari-devanagari-300-normal.woff2') format('woff2');
+  unicode-range: U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+25CC,U+A8E0-A8FF;
+}
+@font-face {
+  font-family: 'Noto Serif Devanagari';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/noto-serif-devanagari-devanagari-400-normal.woff2') format('woff2');
+  size-adjust: 115%;
+  unicode-range: U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+25CC,U+A8E0-A8FF;
+}
+@font-face {
+  font-family: 'Noto Serif Devanagari';
+  font-style: italic;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../assets/fonts/noto-serif-devanagari-devanagari-300-normal.woff2') format('woff2');
+  unicode-range: U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+25CC,U+A8E0-A8FF;
 }
 
 /* Dashboard and landing page (the weights the app already used from Google Fonts) */

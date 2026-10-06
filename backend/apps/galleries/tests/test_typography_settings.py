@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.core.typography import (
-    DEFAULT_TYPOGRAPHY, TYPOGRAPHY_IDS, TYPOGRAPHY_STYLES, resolve_typography,
+    DEFAULT_TYPOGRAPHY, TYPOGRAPHY_IDS, TYPOGRAPHY_STYLES, resolve_typography, typography_catalog,
 )
 from apps.galleries.models import Gallery
 
@@ -58,6 +58,29 @@ class TypographyTableTests(APITestCase):
             # Nothing that could break out of a declaration if it ever reached a stylesheet.
             for value in (style['font_family'], style['letter_spacing']):
                 self.assertNotRegex(value, r'[;{}<>\\]|url\(|@import')
+
+    def test_every_stack_has_its_devanagari_family_between_the_latin_family_and_the_system_fallback(self):
+        """CHUNK 6.2-C: sans styles use Noto Sans Devanagari, serif styles Noto Serif Devanagari."""
+        expected = {'sans': 'Sans', 'modern': 'Sans', 'bold': 'Sans', 'subtle': 'Sans',
+                    'serif': 'Serif', 'timeless': 'Serif'}
+        self.assertEqual(set(expected), set(TYPOGRAPHY_STYLES))
+        for style_id, style in TYPOGRAPHY_STYLES.items():
+            names = [part.strip() for part in style['font_family'].split(',')]
+            deva = f'"Noto {expected[style_id]} Devanagari"'
+            self.assertEqual(names.count(deva), 1, style_id)
+            other = '"Noto Serif Devanagari"' if expected[style_id] == 'Sans' else '"Noto Sans Devanagari"'
+            self.assertNotIn(other, names, style_id)
+            self.assertEqual(names[0], f'"{style["family"]}"', style_id)
+            self.assertGreater(names.index(deva), 0, style_id)
+            # system fonts only after the Devanagari family
+            self.assertTrue(all(not n.startswith('"Noto') and not n.startswith('"' + style['family']) for n in names[names.index(deva) + 1:]), style_id)
+            self.assertRegex(style['font_family'], r'(sans-serif|serif)$', style_id)
+
+    def test_devanagari_stack_reaches_the_catalog_and_the_public_payload(self):
+        for style in typography_catalog():
+            self.assertIn('Devanagari', style['font_family'], style['id'])
+        for style_id in SIX:
+            self.assertIn('Devanagari', resolve_typography(style_id)['font_family'], style_id)
 
     def test_resolve_never_raises_and_falls_back_to_the_default(self):
         for bad in (None, '', 'comic-sans', 'SERIF', 5, ['bold'], {'a': 1}, 'bold; color:red'):
