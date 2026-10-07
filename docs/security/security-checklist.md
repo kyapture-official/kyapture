@@ -22,15 +22,15 @@ Status legend:
 |---|---|---|
 | Passwords hashed with a slow hasher | ✅ | Django default PBKDF2 (no `PASSWORD_HASHERS` override) |
 | Password policy (length 8, common, numeric, similarity) on register, change, reset | ✅ | `base.py:150-155`; `apps/users/serializers.py:174-186, 241-251`; `apps/users/views.py:547-553` |
-| Login throttled | ⚠️ | `login` 5/min per IP (`apps/users/views.py:103-122`), but the IP bucket is client-chosen (SEC-01) |
-| Per-account lockout / backoff after failures | ❌ | None (SEC-01, row 78) |
+| Login throttled | ✅ | `login` 5/min per address (no longer client-chosen, 7-B) + `login_account` 20/h per account; Redis-shared (`apps/users/tests/test_security_7b.py`) |
+| Per-account lockout / backoff after failures | ✅ | `login_account` 20/h per email (7-B) |
 | Generic login error | ✅ | "Invalid email or password." (`apps/users/serializers.py:217`) |
 | Reset is anti-enumeration and rate-limited | ✅ | `apps/users/views.py:422-501`, `password_reset` 5/h |
 | Reset/change revokes other sessions | ✅ | `apps/users/views.py:555-563`; change via serializer `save()` |
 | Email verification at sign-up | ❌ | SEC-16, row 91 |
 | MFA (at least for staff) | ❌ | SEC-15, row 90 |
 | Gallery password hashed (bcrypt, ≤ 72 bytes) | ✅ | `apps/galleries/views.py:459-521`, `apps/clients/serializers.py:349-366` |
-| Gallery password / PIN strength | ⚠️ | ≥ 4 chars; PIN 4-8 digits; no failure lockout (SEC-04, row 81) |
+| Gallery password / PIN strength | ⚠️ | ≥ 4 chars; PIN 4-8 digits; failure lockout per client and per gallery since 7-B (`apps/clients/lockout.py`); minimum lengths unchanged (row 135) |
 
 ## 2. Authorization / RBAC
 
@@ -41,9 +41,9 @@ Status legend:
 | Public lookups scoped by photographer + slug + published/active/unexpired | ✅ | every `get_gallery` in `apps/clients/views.py` |
 | Child objects (asset, set, list, job) scoped to their gallery | ✅ | `apps/clients/views.py:216-228, 769-776, 1413, 1838` |
 | Favorites scoped to the visitor | ✅ | Fixed in 7-A: lists match the client key only; an email is a label (SEC-02, rows 5, 79; tests in `apps/clients/tests/test_tenancy_7a.py`) |
-| Contact allow-list for downloads | ⚠️ | Typed email, unverified (SEC-03, row 80) |
+| Contact allow-list for downloads | ✅ | One-time emailed code before a token (7-B, row 80) |
 | Plan entitlements enforced server-side | ✅ | `require_feature` (`apps/users/serializers.py:86-111`), upload metrics and row lock (`apps/photos/views.py:186-252`), `effective_high_res_mode` |
-| Entitlement edge cases | ⚠️ | Lapsed plan keeps limits up to 15 min (row 43, confirmed `apps/core/utils.py:97`); video minutes outside the lock (row 44, confirmed `apps/photos/views.py:240-252`) |
+| Entitlement edge cases | ✅ | Fixed in 7-B: metrics need `expires_at` in the future (row 43); minutes re-checked under the row lock (row 44) |
 | Staff-only endpoints use `IsAdminUser` | ✅ | `apps/subscriptions/views.py:154, 189` |
 | Staff bypass of plan limits is intended | 💡 | `apps/galleries/views.py:106`, `apps/photos/views.py:192` — document it |
 
@@ -58,10 +58,10 @@ Status legend:
 | Logout clears cookies and blacklists refresh | ⚠️ | Requires a valid access token (`IsAuthenticated`, `views.py:151`); with an expired access cookie the refresh token is not blacklisted |
 | Cookie domain scope | ❓ | `.kyapture.com` for JWT + CSRF cookies (SEC-28, row 100) |
 | Unlock tokens: random, expiring, revoked on password change | ✅ | `apps/clients/models.py:10-15`; 30 days; `apps/galleries/views.py:500-537` |
-| Unlock tokens hashed at rest, kept out of URLs | ❌ | SEC-14, row 89 |
+| Unlock tokens hashed at rest, kept out of URLs | ⚠️ | SHA-256 at rest since 7-B; still accepted in `?token=` for `<a href>`/`<video src>` (row 133) |
 | Signed download tokens bound to gallery + PIN fingerprint, 2 h | ✅ | `apps/clients/download_access.py:340-387` |
-| Signing key separated / rotatable | ❌ | SEC-13, row 88 |
-| Refresh endpoint throttle sized for real use | ❓ | SEC-17, row 92 |
+| Signing key separated / rotatable | ✅ | `JWT_SIGNING_KEY`, `SECRET_KEY_FALLBACKS` (7-B; runbook secrets.md §7.1) |
+| Refresh endpoint throttle sized for real use | ✅ | `token_refresh` 60/h per verified user (7-B) |
 
 ## 4. Input validation
 
@@ -80,7 +80,7 @@ Status legend:
 |---|---|---|
 | SQL: ORM only | ✅ | Only `SELECT 1` raw (`config/urls.py:15`) |
 | OS command: argv lists, no shell, fixed binaries | ✅ | `apps/core/utils.py:180, 511, 864-895` |
-| Media parser abuse (ffmpeg/Pillow) | ⚠️ | Signature + size + pixel checks ✅; ffmpeg without timeout (SEC-18, row 93); decode memory not measured (row 74) |
+| Media parser abuse (ffmpeg/Pillow) | ⚠️ | Signature + size + pixel checks ✅; every ffmpeg call has a timeout (7-B); decode memory not measured (row 74) |
 | Email header injection | ✅ | Django mail API; studio name control chars stripped (`apps/clients/ready_email.py:51-54`) |
 | Template injection | ✅ | No user-supplied templates; autoescape on HTML emails |
 
@@ -102,7 +102,7 @@ Status legend:
 | Consistent JSON error shape, no stack traces | ✅ | `apps/core/exceptions.py`, `apps/core/middleware.py:41-61` |
 | Enumeration-resistant 404s | ✅ | Owner and public lookups answer 404 for "not yours" |
 | Pagination on list endpoints | ✅ | `PAGE_SIZE` 20, gallery/media paginators |
-| Private storage paths never in public payloads | ⚠️ | Public serializer clean; video stream redirect (SEC-07, row 84) and owner `original_url` (SEC-08, row 6) expose them |
+| Private storage paths never in public payloads | ✅ | Video stream serves the playback copy only (7-B); owner `original_url` is a 1 h signed URL to a random key |
 | Bearer secrets out of URLs | ⚠️ | Several by design (`link_token`, `file_token`, `?token=`): SEC-14 |
 | API versioning | ✅ | `/api/v1/` |
 
@@ -111,12 +111,12 @@ Status legend:
 | Check | Status | Evidence / finding |
 |---|---|---|
 | Scoped throttles exist for login, unlock/PIN, reset, change, browse, preflight | ✅ | `base.py:98-128` |
-| Client identity for throttles is trustworthy | ❌ | `NUM_PROXIES` outside `REST_FRAMEWORK` (SEC-01, row 78) |
+| Client identity for throttles is trustworthy | ✅ | `REST_FRAMEWORK['NUM_PROXIES']` (7-B); counts shared in Redis (row 108) |
 | Proxy overwrites `X-Forwarded-For` | ❓ | Proxy not in repo (row 73) |
 | Email abuse limits | ✅ | Ready email per email/IP/gallery (`base.py:298-304`); reset 5/h |
 | Download/PIN limits per gallery | ✅ | `download_limit_reached`, `pin_limit_reached` (`download_access.py:232-284`) — successes only |
-| Upload body refused before it is received | ❌ | Rows 4, 31, 75 (owned by 7-B) — confirmed: Django parses the multipart body before the view runs |
-| `/health/` and `/admin/` throttled | ❌ | Plain Django views (SEC-15) |
+| Upload body refused before it is received | ⚠️ | 7-B: oversized / storage-full refused from headers before the body is read; the proxy limit is the real stop (plan in `docs/KYAPTURE_UPLOAD_LIMITS.md`); row 31 open |
+| `/health/` and `/admin/` throttled | ⚠️ | Admin login throttled and locks (7-B); `/health/` unthrottled (cheap `SELECT 1`) |
 | Registration abuse (anon 100/day only) | ⚠️ | No CAPTCHA/verification (SEC-16) |
 
 ## 9. File uploads
@@ -127,9 +127,9 @@ Status legend:
 | Size and pixel limits before decoding; editable in admin | ✅ | `apps/photos/views.py:184-188`, `apps/subscriptions/upload_limits.py:40-53` (rows 8, 76 for the owner decisions) |
 | Storage names generated server-side | ✅ | UUID-based paths (`apps/photos/models.py:13-97`); receipts `payment_proofs/{user}/{uuid}{ext}` |
 | Original filename only used after sanitizing | ✅ | `sanitize_download_filename` (`apps/core/utils.py:385`) |
-| Metadata privacy | ⚠️ | JPEG GPS stripped, fail-open; video metadata kept (SEC-19, row 94) |
+| Metadata privacy | ✅ | Fail closed; EXIF, XMP and PNG eXIf GPS; video location removed (7-B) |
 | Proxy body limit / timeouts sized for limits | ❓ | Rows 72, 73 |
-| Processing timeouts | ⚠️ | ffprobe 60 s, cjpegli timeout ✅; ffmpeg none (SEC-18) |
+| Processing timeouts | ✅ | ffprobe, ffmpeg, cjpegli all time-limited; photo task Celery limits (7-B) |
 | Disk-space guard for video processing | ❌ | Row 71 |
 | Antivirus / content scanning | 💡 | Not present; consider for receipts and any future non-image upload |
 
@@ -151,8 +151,8 @@ Status legend:
 | `.env` ignored and never committed | ✅ | `.gitignore:16-21`; history scan ([secrets.md](secrets.md) §5) |
 | No cloud credentials in tree or history | ✅ | 0 high-signal hits across 171 commits |
 | Production refuses insecure defaults | ✅ | `production.py:23-125` |
-| `.env` kept out of images | ❌ | No `backend/.dockerignore` (SEC-10, row 86) |
-| Rotation runbook / fallbacks | ❌ | SEC-13, row 88 |
+| `.env` kept out of images | ✅ | `backend/.dockerignore` (7-B; rebuilt image checked) |
+| Rotation runbook / fallbacks | ✅ | secrets.md §7.1 (7-B) |
 | Separate IAM principals for S3 and SES | ❌ | `production.py:130-136` (row 88) |
 | QA/test secrets not in tracked files | ⚠️ | `docs/qa-1r5e/qa-script.js:1, 11, 12` (SEC-25, row 102) |
 
@@ -173,7 +173,7 @@ Status legend:
 |---|---|---|
 | Explicit origin allow-list, no wildcard | ✅ | `development.py:21-26`; `production.py:163-168` |
 | Credentials only with explicit origins | ✅ | `CORS_ALLOW_CREDENTIALS = True` (`base.py:78`) with lists above |
-| Env parsing robust | ⚠️ | `production.py:163, 179` split on `,` without stripping spaces (a space after a comma silently breaks that origin) |
+| Env parsing robust | ✅ | Spaces stripped (7-B, tested in `ProductionHeaderSettingsTests`) |
 | Exposed headers minimal | ✅ | Only `Retry-After` (`base.py:83`) |
 
 ## 14. Dependency security
@@ -203,10 +203,10 @@ Status legend:
 | Check | Status | Evidence / finding |
 |---|---|---|
 | Admin requires staff | ✅ | Django admin; `IsAdminUser` API |
-| Admin login rate-limited / lockout | ❌ | SEC-15, row 90 |
-| MFA for staff | ❌ | SEC-15 |
+| Admin login rate-limited / lockout | ✅ | `apps/core/admin_login.py` (7-B) |
+| MFA for staff | ❌ | Plan in secrets.md §7.2 (row 90) |
 | Admin path/network restricted | ❌ | Default `/admin/` (`config/urls.py:25`) |
-| Hashes and tokens hidden in admin forms | ⚠️ | Session tokens shown read-only (`apps/clients/admin.py:37`); gallery form shows every field (no `fields`/`exclude` in `apps/galleries/admin.py`) |
+| Hashes and tokens hidden in admin forms | ✅ | Excluded (7-B) |
 | Payment approval audited | ⚠️ | `verified_by` stored (`apps/subscriptions/views.py:215-218`); no alert/log stream |
 
 ## 17. Deployment / infrastructure
@@ -231,8 +231,8 @@ Status legend:
 | Account deletion / data export | ❌ | No endpoint (row 98) |
 | Terms / Privacy / Cookies pages | ❌ | Row 25 |
 | Protected galleries hidden from portfolio; private portfolio = 404 | ✅ | `apps/clients/views.py:2020-2049` |
-| Location data removed from delivered photos | ⚠️ | SEC-19 |
-| Public derivative URLs revocable | ❌ | SEC-09, row 85 |
+| Location data removed from delivered photos | ✅ | 7-B (photos and videos) |
+| Public derivative URLs revocable | ⚠️ | Moved to new keys on password / unpublish (7-B); not on expiry, caches not purged (row 134) |
 | Screenshots with PII kept out of git | ❓ | 11 files already pushed (SEC-29, row 101; contradicts row 39's precondition) |
 | Third-party requests disclosed (Google Fonts, Unsplash) | 💡 | Mention in the privacy policy |
 
@@ -243,7 +243,7 @@ Status legend:
 | API errors are JSON, generic on 500 | ✅ | `apps/core/middleware.py:41-61`; frontend normalises HTML errors (`axiosInstance.js:58-75`) |
 | Reset flow never leaks via exceptions | ✅ | `apps/users/views.py:467-501` |
 | Error text does not reveal secrets or private paths | ✅ | Reviewed messages in `apps/clients/views.py` |
-| Fail-closed on security helpers | ⚠️ | `strip_exif_gps` fails open (SEC-19); `_original_within_cap` fails closed ✅ (`apps/clients/views.py:280-290`) |
+| Fail-closed on security helpers | ✅ | `strip_exif_gps` fails closed since 7-B; `_original_within_cap` fails closed |
 
 ## 20. Backup / recovery
 

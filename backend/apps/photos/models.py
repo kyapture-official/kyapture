@@ -1,5 +1,6 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/models.py
 import os
+import secrets
 from decimal import Decimal
 from django.db import models
 from apps.core.models import BaseModel
@@ -9,26 +10,46 @@ from apps.core.storage import PrivateMediaStorage, PublicMediaStorage
 # ─────────────────────────────────────────────────────────────
 # DYNAMIC MULTI-TENANT STORAGE PATH GENERATORS
 # ─────────────────────────────────────────────────────────────
+#
+# 7-B (SEC-05 / debt row 82): every PRIVATE key (original, Download Master)
+# carries a random part that is stored only in the database and never appears
+# in any URL a visitor gets, so a public display URL no longer tells anyone the
+# original's key (it used to be the same path with `_display.webp` swapped for
+# `_original.jpg`). Privacy no longer rests on the per-object ACL alone.
+# Every PUBLIC derivative key carries the gallery's `media_token` (row 85), which
+# is replaced when the gallery is closed to visitors (apps/photos/public_media.py).
+# All keys stay under photographers/<id>/galleries/<id>/, which the purge relies on.
+
+def _private_part():
+    return secrets.token_hex(16)
+
+
+def _gallery_dir(instance):
+    gallery = instance.gallery
+    return f"photographers/{gallery.photographer_id}/galleries/{gallery.id}"
+
+
+def _public_dir(instance, folder):
+    token = getattr(instance.gallery, 'media_token', '') or ''
+    return f"{_gallery_dir(instance)}/{token}/{folder}" if token else f"{_gallery_dir(instance)}/{folder}"
+
 
 def get_original_asset_path(instance, filename):
     """
     Generates S3/local paths for original, full-res lossless source files.
-    Dynamically routes to 'photos' or 'videos' subdirectories.
+    Dynamically routes to 'photos' or 'videos' subdirectories. The extension is
+    the one the upload view derived from the file's real type, never the
+    client's choice for an image (apps/photos/views.py).
     """
     ext = os.path.splitext(filename)[1].lower()
-    photographer_id = instance.gallery.photographer.id
-    gallery_id = instance.gallery.id
-    
     # Dynamic folder segmentation based on choice field
     folder = "photos" if instance.media_type == MediaAsset.MediaType.IMAGE else "videos"
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/{folder}/{instance.id}_original{ext}"
+    return f"{_gallery_dir(instance)}/{folder}/{instance.id}_{_private_part()}_original{ext}"
 
 
 def get_display_photo_path(instance, filename):
     """Generates paths for 2048px WebP full-screen/lightbox display images (null for videos)."""
-    photographer_id = instance.gallery.photographer.id
-    gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/photos/{instance.id}_display.webp"
+    return f"{_public_dir(instance, 'photos')}/{instance.id}_display.webp"
 
 
 def get_medium_photo_path(instance, filename):
@@ -38,24 +59,18 @@ def get_medium_photo_path(instance, filename):
     widths land here; avoids forcing a phone-sized 640px view or a
     full 2048px lightbox load for an ordinary in-page gallery view).
     """
-    photographer_id = instance.gallery.photographer.id
-    gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/photos/{instance.id}_medium.webp"
+    return f"{_public_dir(instance, 'photos')}/{instance.id}_medium.webp"
 
 
 def get_thumbnail_photo_path(instance, filename):
     """Generates paths for 640px WebP grid thumbnails (null for videos)."""
-    photographer_id = instance.gallery.photographer.id
-    gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/thumbnails/{instance.id}_thumb.webp"
+    return f"{_public_dir(instance, 'thumbnails')}/{instance.id}_thumb.webp"
 
 
 def get_download_photo_path(instance, filename):
     """Generates a private, full-resolution client download-master path."""
     ext = os.path.splitext(filename)[1].lower() or '.jpg'
-    photographer_id = instance.gallery.photographer.id
-    gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/photos/{instance.id}_download{ext}"
+    return f"{_gallery_dir(instance)}/photos/{instance.id}_{_private_part()}_download{ext}"
 
 
 def get_video_poster_path(instance, filename):
@@ -67,9 +82,7 @@ def get_video_poster_path(instance, filename):
     extension (S3 via django-storages) to serve real JPEG bytes labeled
     image/webp, which browsers can fail to render (F-25b).
     """
-    photographer_id = instance.gallery.photographer.id
-    gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_poster.jpg"
+    return f"{_public_dir(instance, 'videos')}/{instance.id}_poster.jpg"
 
 
 def get_video_preview_path(instance, filename):
@@ -80,9 +93,7 @@ def get_video_preview_path(instance, filename):
     new ones — confirmed unused by any frontend UI (nothing reads
     preview_url), so generating it was pure wasted processing/storage.
     """
-    photographer_id = instance.gallery.photographer.id
-    gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_preview.webm"
+    return f"{_public_dir(instance, 'videos')}/{instance.id}_preview.webm"
 
 
 def get_video_playback_path(instance, filename):
@@ -92,9 +103,7 @@ def get_video_playback_path(instance, filename):
     viewing, so an original MOV/HEVC/variable-codec upload always has a
     guaranteed-playable derivative regardless of the source codec.
     """
-    photographer_id = instance.gallery.photographer.id
-    gallery_id = instance.gallery.id
-    return f"photographers/{photographer_id}/galleries/{gallery_id}/videos/{instance.id}_playback.mp4"
+    return f"{_public_dir(instance, 'videos')}/{instance.id}_playback.mp4"
 
 
 # ─────────────────────────────────────────────────────────────

@@ -1,11 +1,12 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/users/views.py
+import hashlib
 import logging
 
 from django.conf import settings
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle, UserRateThrottle
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
@@ -20,7 +21,7 @@ from django.template.loader import render_to_string
 
 
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.exceptions import TokenBackendError, TokenError
 from .models import User
 from .serializers import (
     RegisterSerializer,
@@ -74,6 +75,11 @@ def set_auth_cookies(response, access_token, refresh_token):
 # ─────────────────────────────────────────────────────────────
 # VIEW CONTROLLERS
 # ─────────────────────────────────────────────────────────────
+class RegisterRateThrottle(AnonRateThrottle):
+    """7-B: sign-ups per address get their own tight scope (was the shared anon 100/day)."""
+    scope = 'register'
+
+
 @method_decorator(ensure_csrf_cookie, name='dispatch')
 class RegisterView(APIView):
     """
@@ -82,6 +88,7 @@ class RegisterView(APIView):
     """
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [RegisterRateThrottle]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data, context={'request': request})
@@ -111,6 +118,25 @@ class LoginRateThrottle(AnonRateThrottle):
     scope = 'login'
 
 
+class LoginAccountRateThrottle(SimpleRateThrottle):
+    """
+    7-B: login attempts per ACCOUNT (the typed email), on top of the per-address
+    `login` scope, so many addresses together still get only `login_account`
+    tries on one account. Keyed on a hash of the normalised email (no address
+    is stored in the cache key).
+    """
+    scope = 'login_account'
+
+    def get_cache_key(self, request, view):
+        email = request.data.get('email') if hasattr(request.data, 'get') else None
+        if not isinstance(email, str) or not email.strip():
+            return None
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': hashlib.sha256(email.strip().lower().encode('utf-8')).hexdigest(),
+        }
+
+
 @method_decorator(ensure_csrf_cookie, name='dispatch')
 class LoginView(APIView):
     """
@@ -119,7 +145,7 @@ class LoginView(APIView):
     """
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [LoginRateThrottle]
+    throttle_classes = [LoginRateThrottle, LoginAccountRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data, context={'request': request})
@@ -172,6 +198,35 @@ class LogoutView(APIView):
         return response
 
 
+class TokenRefreshRateThrottle(SimpleRateThrottle):
+    """
+    7-B (SEC-17 / debt row 92): refreshes are counted per USER, read from the
+    refresh cookie's verified signature (a forged id cannot spend another
+    user's allowance). Before, refresh fell under the anonymous 100/day bucket
+    per address, so a few people behind one NAT (one active tab refreshes
+    ~96 times a day) logged each other out. An invalid/expired cookie is
+    counted per address instead.
+    """
+    scope = 'token_refresh'
+
+    def get_cache_key(self, request, view):
+        from rest_framework_simplejwt.state import token_backend
+
+        ident = None
+        raw = request.COOKIES.get('refresh_token')
+        if raw:
+            try:
+                payload = token_backend.decode(raw, verify=True)
+                user_id = payload.get(getattr(settings, 'SIMPLE_JWT', {}).get('USER_ID_CLAIM', 'user_id'))
+                if user_id is not None:
+                    ident = f'user:{user_id}'
+            except TokenBackendError:
+                ident = None
+        if ident is None:
+            ident = f'ip:{self.get_ident(request)}'
+        return self.cache_format % {'scope': self.scope, 'ident': ident}
+
+
 class CookieTokenRefreshView(APIView):
     """
     POST /api/v1/auth/token/refresh/
@@ -179,6 +234,7 @@ class CookieTokenRefreshView(APIView):
     """
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [TokenRefreshRateThrottle]
 
     def post(self, request):
         refresh_token = request.COOKIES.get('refresh_token')

@@ -44,8 +44,8 @@ class ClientSessionExpiryTestCase(APITestCase):
         self.gallery.password_hash = bcrypt.hashpw(b"secret123", bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=["password_hash"])
 
-        self.fresh_session = ClientSession.objects.create(gallery=self.gallery)
-        self.expired_session = ClientSession.objects.create(gallery=self.gallery)
+        self.fresh_session = ClientSession.objects.issue(gallery=self.gallery)
+        self.expired_session = ClientSession.objects.issue(gallery=self.gallery)
         # created_at is auto_now_add — backdate it directly at the DB level.
         ClientSession.objects.filter(id=self.expired_session.id).update(
             created_at=timezone.now() - timedelta(days=31)
@@ -57,14 +57,14 @@ class ClientSessionExpiryTestCase(APITestCase):
     @override_settings(CLIENT_SESSION_TTL_DAYS=30)
     def test_fresh_session_still_grants_access(self):
         response = self.client.get(
-            self.gallery_url, HTTP_AUTHORIZATION=f"Bearer {self.fresh_session.access_token}"
+            self.gallery_url, HTTP_AUTHORIZATION=f"Bearer {self.fresh_session.raw_token}"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
 
     @override_settings(CLIENT_SESSION_TTL_DAYS=30)
     def test_expired_session_is_rejected(self):
         response = self.client.get(
-            self.gallery_url, HTTP_AUTHORIZATION=f"Bearer {self.expired_session.access_token}"
+            self.gallery_url, HTTP_AUTHORIZATION=f"Bearer {self.expired_session.raw_token}"
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 

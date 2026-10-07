@@ -1,5 +1,8 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/photos/tasks.py
+import os
+
 from celery import shared_task
+from django.core.files import File
 import logging
 # Defer imports to task execution time to completely bypass circular imports
 from apps.photos.models import MediaAsset
@@ -139,7 +142,10 @@ def regenerate_gallery_watermarks(gallery_id):
     return queued
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+# 7-B (row 93): a photo never holds a worker for long. The slowest measured
+# processing is a few seconds (docs/KYAPTURE_COMPRESSION_CALIBRATION.md); the soft
+# limit raises inside the task (-> FAILED, then retry), the hard one kills it.
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=600, time_limit=660)
 def process_photo_asset(self, asset_id):
     """
     Asynchronously processes uploaded high-res photographs in the background.
@@ -282,8 +288,23 @@ def process_video_asset(self, asset_id):
 
         logger.info(f"[Task] Initiating FFmpeg subprocess pipeline for video asset {asset_id}...")
 
-        # 4. Execute the secure FFmpeg and FFprobe subprocess transcoding pipeline
-        poster_file, playback_file, duration = process_video_pipeline(asset.original_file)
+        # 4. Execute the secure FFmpeg and FFprobe subprocess transcoding pipeline.
+        # 7-B (row 94): a location in the original is removed first (stream copy);
+        # the clean copy replaces the stored original before anything is derived.
+        def replace_original(clean_file, size):
+            old_name = asset.original_file.name
+            storage = asset.original_file.storage
+            asset.original_file.save(os.path.basename(old_name), File(clean_file), save=False)
+            asset.file_size = size
+            asset.save(update_fields=['original_file', 'file_size'])
+            try:
+                storage.delete(old_name)
+            except Exception:
+                logger.warning('[Task] Old original %s of video %s could not be deleted', old_name, asset_id)
+
+        poster_file, playback_file, duration = process_video_pipeline(
+            asset.original_file, on_location_removed=replace_original,
+        )
 
         # 5. Populate the processed video fields and transition status to 'ready'
         asset.poster_image = poster_file
@@ -340,3 +361,18 @@ def purge_storage_objects(self, refs, prefixes=None):
         )
         return len(failed_refs) + len(failed_prefixes)
     raise self.retry(args=[failed_refs, failed_prefixes], countdown=min(60 * 2 ** self.request.retries, 900))
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, acks_late=True)
+def rotate_public_media(self, gallery_id):
+    """
+    7-B (row 85): moves a closed gallery's public derivatives to new random keys
+    so URLs visitors already saw stop working (apps/photos/public_media.py).
+    """
+    from .public_media import rotate_gallery_public_media
+
+    try:
+        return rotate_gallery_public_media(gallery_id)
+    except Exception as exc:
+        logger.exception('[Task] Public-media rotation failed for gallery %s', gallery_id)
+        raise self.retry(exc=exc)

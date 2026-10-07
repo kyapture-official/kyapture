@@ -448,8 +448,8 @@ def issue_file_token(job, gallery, index):
     presented a valid download access token, so it is tied to that verified
     visitor: it carries the job, the gallery, the file index, the verified
     email and the PIN fingerprint, and the file endpoint re-checks all of
-    them. It expires with the job (DOWNLOAD_FILE_URL_TTL_SECONDS, 7 days
-    by default) and works for that one job only.
+    them. It expires after DOWNLOAD_FILE_URL_TTL_SECONDS (1 hour since 7-B;
+    the ready page fetches a fresh one per click) and works for that one job only.
     """
     return signing.dumps(
         {
@@ -544,3 +544,90 @@ def authorize_download(gallery, *, pin, download_token, denied_status=status.HTT
     return None, error_response(
         'Confirm your download details before downloading.', 'download_access_required', denied_status,
     )
+
+
+# ─── "Restrict Downloads to Specific Contacts": prove the address (7-B, row 80) ─
+# The allow-list used to trust a typed email, so anyone who knew one listed
+# address got that contact's downloads. Now an allowed address first receives a
+# one-time 6-digit code by email; only the code earns a download token. The code
+# lives in the shared cache as a hash, for EMAIL_CODE_TTL_SECONDS, and dies after
+# EMAIL_CODE_MAX_TRIES wrong entries; at most EMAIL_CODE_MAX_SENDS codes are sent
+# to one address for one gallery per TTL (no mail-bombing through the form).
+EMAIL_CODE_TTL_SECONDS = 10 * 60
+EMAIL_CODE_MAX_TRIES = 5
+EMAIL_CODE_MAX_SENDS = 3
+
+
+def contacts_restricted(gallery):
+    return _effective_downloads(gallery)['restrict_contacts']
+
+
+def _email_code_key(gallery, email):
+    digest = hashlib.sha256(email.strip().lower().encode('utf-8')).hexdigest()
+    return f'dlcode:{gallery.pk}:{digest}'
+
+
+def _code_digest(code):
+    return hashlib.sha256(code.encode('utf-8')).hexdigest()
+
+
+def send_email_code(gallery, email):
+    """
+    Emails a new one-time code to `email`. Returns 'sent', 'too_many' (send limit
+    for this address and gallery reached) or 'failed' (mail could not be sent).
+    """
+    import re
+    import secrets
+
+    from django.core.cache import cache
+    from django.core.mail import send_mail
+
+    key = _email_code_key(gallery, email)
+    sends_key = f'{key}:sends'
+    cache.add(sends_key, 0, timeout=EMAIL_CODE_TTL_SECONDS)
+    if cache.incr(sends_key) > EMAIL_CODE_MAX_SENDS:
+        return 'too_many'
+    code = f'{secrets.randbelow(10 ** 6):06d}'
+    cache.set(key, {'h': _code_digest(code), 'tries': 0}, timeout=EMAIL_CODE_TTL_SECONDS)
+    photographer = gallery.photographer
+    studio = re.sub(r'[\x00-\x1f\x7f]+', ' ', photographer.display_name or photographer.username).strip()
+    title = re.sub(r'[\x00-\x1f\x7f]+', ' ', gallery.title).strip()
+    minutes = EMAIL_CODE_TTL_SECONDS // 60
+    try:
+        send_mail(
+            f'Your download code: {code}',
+            (
+                f'Your code to download photos from "{title}" by {studio} is:\n\n    {code}\n\n'
+                f'It works for {minutes} minutes. If you did not ask to download these photos, '
+                'you can ignore this email.\n'
+            ),
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+        )
+    except Exception:
+        logger.exception('Download code email could not be sent for gallery %s', gallery.pk)
+        cache.delete(key)
+        return 'failed'
+    return 'sent'
+
+
+def check_email_code(gallery, email, code):
+    """True once for the right, fresh code for this address and gallery (it is then used up)."""
+    from django.core.cache import cache
+    from django.utils.crypto import constant_time_compare
+
+    code = as_clean_str(code)
+    key = _email_code_key(gallery, email)
+    entry = cache.get(key)
+    if not code or not isinstance(entry, dict):
+        return False
+    if entry.get('tries', 0) >= EMAIL_CODE_MAX_TRIES:
+        cache.delete(key)
+        return False
+    if constant_time_compare(_code_digest(code), entry.get('h', '')):
+        cache.delete(key)
+        cache.delete(f'{key}:sends')
+        return True
+    entry['tries'] = entry.get('tries', 0) + 1
+    cache.set(key, entry, timeout=EMAIL_CODE_TTL_SECONDS)
+    return False

@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Q
 from django.utils import timezone
-from django.core.files.storage import default_storage
+from django.core.files.storage import FileSystemStorage, default_storage
 from rest_framework import status, serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -64,6 +64,8 @@ from .download_access import (
     as_clean_str,
     asset_set_is_enabled_for_download,
     authorize_download,
+    check_email_code,
+    contacts_restricted,
     download_access_ttl,
     download_limit_reached,
     effective_high_res_mode,
@@ -79,6 +81,7 @@ from .download_access import (
     pin_limit_reached,
     record_pin_use,
     resolution_is_allowed,
+    send_email_code,
     set_is_enabled_for_download,
     validate_client_email,
     verify_pin,
@@ -95,6 +98,8 @@ from .download_jobs import (
     size_limit_error,
 )
 from .ready_email import requester_ip
+from . import lockout
+from apps.core.request_ip import client_ip
 from .tasks import prepare_download_job
 from .web_size import WebSizeNotReady, open_cached, request_cached
 from apps.core.watermark import build_watermark_spec
@@ -133,10 +138,9 @@ def _validate_download_resolution(gallery, resolution):
 
 
 def _get_client_ip(request):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
+    # The address the throttles see (REST_FRAMEWORK NUM_PROXIES), never the
+    # left-most client-sent X-Forwarded-For entry (7-B, row 78).
+    return client_ip(request)
 
 
 def _studio_name(gallery):
@@ -151,19 +155,19 @@ def _resolve_web_source(asset, px):
     at the gallery's configured px tier (2048/1024/640). The pipeline's
     real tiers are 2048/1280/640 (apps/core/utils.py::_DISPLAY_TIERS), so
     1024 is served from the 1280px medium tier. Video has no sized
-    derivative, so 'web' serves the H.264 playback file. Falls back down the chain, then to the
-    original, rather than ever returning nothing for an asset still
-    processing.
+    derivative, so 'web' serves the H.264 playback file. Falls back down the
+    chain of derivatives, and returns None when there is none: a Web Size is
+    never the original (7-B, SEC-27 / row 99).
     """
     if asset.media_type != MediaAsset.MediaType.IMAGE:
-        return getattr(asset, 'playback_file', None) or asset.original_file
+        return getattr(asset, 'playback_file', None) or None
     preferred = {2048: 'display_file', 1024: 'medium_file', 640: 'thumbnail_file'}.get(px, 'display_file')
     ordered = [preferred] + [f for f in ('display_file', 'medium_file', 'thumbnail_file') if f != preferred]
     for field_name in ordered:
         field = getattr(asset, field_name, None)
         if field:
             return field
-    return asset.original_file
+    return None
 
 
 def _resolve_zip_source(asset, resolution, gallery):
@@ -434,10 +438,7 @@ class PublicGalleryView(APIView):
         """Verifies if the client's local session token is active for this gallery [1.1.2]."""
         if not token:
             return False
-        return ClientSession.objects.not_expired().filter(
-            access_token=token,
-            gallery=gallery
-        ).exists()
+        return ClientSession.objects.for_token(token).filter(gallery=gallery).exists()
 
     def get(self, request, username, slug):
         # 1. Fetch gallery with strict multi-tenant constraints [1.1.2]
@@ -538,7 +539,7 @@ class PublicGalleryPhotosView(APIView):
     def validate_session_token(self, token, gallery):
         if not token:
             return False
-        return ClientSession.objects.not_expired().filter(access_token=token, gallery=gallery).exists()
+        return ClientSession.objects.for_token(token).filter(gallery=gallery).exists()
 
     def get(self, request, username, slug):
         gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
@@ -617,6 +618,11 @@ class GalleryUnlockView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # 7-B (row 81): a locked client / gallery is refused before the password is even checked.
+        locked = lockout.check(gallery, lockout.PASSWORD, request)
+        if locked is not None:
+            return locked
+
         # Pass context into the serializer to support transactional creation [1.1.2]
         serializer = GalleryUnlockSerializer(
             data=request.data,
@@ -627,11 +633,14 @@ class GalleryUnlockView(APIView):
         )
 
         if serializer.is_valid():
+            lockout.record_success(gallery, lockout.PASSWORD, request)
             # Triggers create() and returns the session instance [1.1.2]
             session = serializer.save()
             # Returns the formatted token payload from to_representation() [1.1.2]
             return Response(serializer.data, status=status.HTTP_200_OK)
 
+        if 'password' in serializer.errors and as_clean_str(request.data.get('password')):
+            lockout.record_failure(gallery, lockout.PASSWORD, request)
         return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
 
 
@@ -702,15 +711,17 @@ def _resolve_client_identity(gallery, request):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         try:
-            session = ClientSession.objects.not_expired().get(access_token=token, gallery=gallery)
+            session = ClientSession.objects.for_token(token).get(gallery=gallery)
         except ClientSession.DoesNotExist:
             return None, None, None, Response(
                 {'error': 'Invalid or expired access token.'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        client_key = token
+        # Without a client_uid the visitor is the session: keyed by the stored
+        # token HASH, so no plaintext token is written to the favorites tables.
+        client_key = session.access_token
         if client_uid:
-            fav.adopt_lists(gallery, token, client_uid)
+            fav.adopt_lists(gallery, session.access_token, client_uid)
             client_key = client_uid
         return client_key, session, session.email or _claimed_email(request), None
 
@@ -1050,9 +1061,7 @@ class PublicDownloadAccessView(APIView):
                 if auth_header.startswith('Bearer ')
                 else as_clean_str(request.data.get('token'))
             )
-            session = ClientSession.objects.not_expired().filter(
-                access_token=token, gallery=gallery
-            ).first() if token else None
+            session = ClientSession.objects.for_token(token).filter(gallery=gallery).first()
             if session is None:
                 return error_response(
                     'An active unlocked session is required to download this gallery.',
@@ -1070,6 +1079,10 @@ class PublicDownloadAccessView(APIView):
                     f'Download limit reached. Contact {_studio_name(gallery)}.', 'pin_limit_reached',
                     status.HTTP_403_FORBIDDEN,
                 )
+            # 7-B (row 81): a locked client / gallery is refused before the PIN is even checked.
+            locked = lockout.check(gallery, lockout.PIN, request)
+            if locked is not None:
+                return locked
             raw_pin = request.data.get('pin')
             if not as_clean_str(raw_pin):
                 return error_response(
@@ -1077,11 +1090,12 @@ class PublicDownloadAccessView(APIView):
                     status.HTTP_401_UNAUTHORIZED,
                 )
             if not verify_pin(gallery, raw_pin):
+                lockout.record_failure(gallery, lockout.PIN, request)
                 return error_response(
                     'Incorrect download PIN.', 'invalid_pin', status.HTTP_401_UNAUTHORIZED,
                 )
+            lockout.record_success(gallery, lockout.PIN, request)
             pin_verified = True
-            record_pin_use(gallery)
 
         policy = get_download_policy(gallery)
         email = None
@@ -1102,6 +1116,38 @@ class PublicDownloadAccessView(APIView):
                 f'This email is not authorized to download. Contact {_studio_name(gallery)}.',
                 'email_not_authorized', status.HTTP_403_FORBIDDEN,
             )
+
+        # 7-B (SEC-03 / row 80): an address on the allow-list is proven, not just
+        # typed: it first gets a one-time code by email; only that code earns the
+        # token. (A not-listed address was answered above and gets no email.)
+        if contacts_restricted(gallery):
+            code = as_clean_str(request.data.get('email_code'))
+            if not code:
+                sent = send_email_code(gallery, email)
+                if sent == 'too_many':
+                    return error_response(
+                        'We already sent you several codes. Check your inbox, or try again in 10 minutes.',
+                        'too_many_codes', status.HTTP_429_TOO_MANY_REQUESTS,
+                    )
+                if sent == 'failed':
+                    return error_response(
+                        'We could not send your code. Please try again in a moment.',
+                        'email_code_unavailable', status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
+                return Response({
+                    'code': 'email_verification_required',
+                    'email': email,
+                    'message': f'We sent a 6-digit code to {email}. Enter it to continue.',
+                }, status=status.HTTP_202_ACCEPTED)
+            if not check_email_code(gallery, email, code):
+                return error_response(
+                    'That code is not right or has expired.', 'invalid_email_code', status.HTTP_401_UNAUTHORIZED,
+                )
+
+        # "Limit PIN usage" counts granted downloads only: one per token issued,
+        # never the extra request of the email-code step.
+        if pin_verified:
+            record_pin_use(gallery)
 
         # Remember the email on the unlock session (never overwriting one
         # the client already gave) so downloads and favorite activity for
@@ -1177,10 +1223,7 @@ class PublicGalleryDownloadView(APIView):
             token = as_clean_str(request.data.get('token')) or request.query_params.get('token', '').strip()
 
             # Assert a valid, non-expired ClientSession has been registered for this guest token
-            valid_session = ClientSession.objects.not_expired().filter(
-                access_token=token,
-                gallery=gallery
-            ).exists()
+            valid_session = ClientSession.objects.for_token(token).filter(gallery=gallery).exists()
 
             if not valid_session:
                 return Response(
@@ -1444,9 +1487,7 @@ class DownloadJobGateMixin:
                 if auth_header.startswith('Bearer ')
                 else request.query_params.get('token', '').strip()
             )
-            unlocked = bool(token) and ClientSession.objects.not_expired().filter(
-                access_token=token, gallery=gallery
-            ).exists()
+            unlocked = ClientSession.objects.for_token(token).filter(gallery=gallery).exists()
             if not unlocked and not (job is not None and self.holds_job_grant(request, job, gallery)):
                 failure = self.grant_failure(request, job, gallery)
                 if failure is not None:
@@ -1732,7 +1773,7 @@ class PublicVideoStreamView(APIView):
     def validate_session_token(self, token, gallery):
         if not token:
             return False
-        return ClientSession.objects.not_expired().filter(access_token=token, gallery=gallery).exists()
+        return ClientSession.objects.for_token(token).filter(gallery=gallery).exists()
 
     def get(self, request, username, slug, asset_id):
         gallery = self.get_gallery(username.strip().lower(), slug.strip().lower())
@@ -1756,25 +1797,22 @@ class PublicVideoStreamView(APIView):
         except MediaAsset.DoesNotExist:
             return Response({'error': 'Video not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Prefer the processed, browser-guaranteed-compatible H.264/AAC MP4
-        # derivative (faststart, capped at 1080p — see process_video_pipeline)
-        # over the original: it's smaller, starts playing sooner, and
-        # decodes reliably in every modern browser regardless of the
-        # source codec/container (MOV/HEVC included). Falls back to the
-        # original file only while processing hasn't completed yet
-        # (PENDING/PROCESSING) or failed, so playback still works —
-        # just unoptimized — rather than breaking until a retry succeeds.
-        video_field = asset.playback_file if asset.playback_file else asset.original_file
+        # Only the processed H.264/AAC playback MP4 (1080p max, public storage,
+        # no location metadata) is ever streamed. 7-B (SEC-07, row 84): this used
+        # to fall back to the ORIGINAL while processing was pending or had
+        # failed, handing any visitor the private original (and its storage
+        # key in the redirect), whatever the gallery's download settings.
+        video_field = asset.playback_file
         if not video_field:
-            return Response({'error': 'Video file is not available.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': 'This video is still being prepared. Please try again in a moment.',
+                 'code': 'video_processing'},
+                status=status.HTTP_409_CONFLICT,
+            )
 
-        # Check the storage actually backing THIS field, not one
-        # project-wide default — original_file (PrivateMediaStorage) and
-        # playback_file (PublicMediaStorage) are independent storage
-        # classes as of Phase 2 (apps/core/storage.py), so the choice of
-        # "redirect to remote URL" vs "stream from local disk" must be
-        # made per-field.
-        if video_field.storage.__class__.__name__ != 'FileSystemStorage':
+        # Object storage (S3): redirect to the public playback URL, which
+        # supports Range natively. Local disk (dev): stream it from here.
+        if not isinstance(video_field.storage, FileSystemStorage):
             return HttpResponseRedirect(video_field.url)
 
         # Local disk (dev) — FileResponse handles Range headers automatically
@@ -1841,10 +1879,7 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
 
         if gallery.is_password_protected:
             token = request.query_params.get('token', '').strip()
-            valid_session = ClientSession.objects.not_expired().filter(
-                access_token=token,
-                gallery=gallery
-            ).exists()
+            valid_session = ClientSession.objects.for_token(token).filter(gallery=gallery).exists()
             if not valid_session:
                 return Response(
                     {'error': 'An active unlocked session is required to download this photo.'},
@@ -1859,8 +1894,12 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
         if auth_error:
             return auth_error
 
+        # READY only (7-B, SEC-27 / row 99), like every public listing: a photo
+        # still processing (or failed) has no derivatives yet and is not offered.
         try:
-            asset = MediaAsset.objects.get(id=photo_id, gallery=gallery)
+            asset = MediaAsset.objects.get(
+                id=photo_id, gallery=gallery, processing_status=MediaAsset.ProcessingStatus.READY,
+            )
         except MediaAsset.DoesNotExist:
             return Response({'error': 'Photo not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1928,9 +1967,8 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
             return Response({'ok': True})
 
         # 'web' ("Web Size") serves the gallery's configured derivative
-        # tier for an image, the H.264 playback MP4 for a video -- over
-        # re-serving the original. Falls back to the original when no
-        # such derivative exists yet (still processing).
+        # tier for an image, the H.264 playback MP4 for a video -- never the
+        # original (7-B, row 99): with no derivative there is nothing to serve.
         source_field = asset.original_file
         derived = None
         if resolution == 'web':
@@ -1943,8 +1981,6 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
                     logger.warning('Cached Web Size %s could not be opened', web_key)
             if derived is None:
                 source_field = _resolve_web_source(asset, web_px_for_gallery(gallery))
-                if source_field is asset.original_file:
-                    resolution = 'original'
         elif resolution == 'download':
             source_field, resolution = high_res
 

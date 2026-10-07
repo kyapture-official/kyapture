@@ -65,6 +65,16 @@ class Gallery(BaseModel):
     # gallery password above.
     download_pin_hash = models.CharField(max_length=255, null=True, blank=True)
 
+    # 7-B (SEC-09 / debt row 85): a random path segment in every PUBLIC
+    # derivative key of this gallery (display/medium/thumbnail WebP, video
+    # poster and playback MP4; apps/photos/models.py). Public files are
+    # public-read with permanent URLs, so a URL a visitor once saw kept working
+    # after the gallery got a password or was unpublished. When access is
+    # tightened the token is replaced and every public file moves to the new
+    # segment (apps/photos/public_media.py): the old URLs stop resolving. ''
+    # = the original layout (files uploaded before the first rotation).
+    media_token = models.CharField(max_length=32, blank=True, default='', editable=False)
+
     # Performance & Download Toggles
     allow_download = models.BooleanField(default=False)
     watermark_enabled = models.BooleanField(default=False)

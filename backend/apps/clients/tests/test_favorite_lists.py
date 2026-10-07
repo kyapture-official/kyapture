@@ -134,8 +134,8 @@ class HeartStoresEmailAndListTests(FavBase):
         self.gallery.is_password_protected = True
         self.gallery.password_hash = bcrypt.hashpw(b'pw-pw-pw', bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=['is_password_protected', 'password_hash'])
-        session = ClientSession.objects.create(gallery=self.gallery, email='session@example.com')
-        auth = {'HTTP_AUTHORIZATION': f'Bearer {session.access_token}'}
+        session = ClientSession.objects.issue(gallery=self.gallery, email='session@example.com')
+        auth = {'HTTP_AUTHORIZATION': f'Bearer {session.raw_token}'}
         response = self.visitor().post(f'{self.base}favorites/', {'media_asset_id': str(self.photos[0].id)}, format='json', **auth)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(FavoriteList.objects.get().email, 'session@example.com')

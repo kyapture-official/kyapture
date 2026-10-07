@@ -19,6 +19,7 @@ from apps.subscriptions.upload_limits import get_upload_limits
 from apps.core.pagination import StandardResultsSetPagination
 from apps.core.typography import DEFAULT_TYPOGRAPHY, typography_catalog
 from apps.photos.purge import purge_gallery
+from .access import access_snapshot, after_access_change
 from .models import Gallery
 from .serializers import (
     GalleryListSerializer,
@@ -437,8 +438,11 @@ class GalleryPublishView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         was_published = gallery.is_published
+        before = access_snapshot(gallery)
         gallery.is_published = is_published
         gallery.save(update_fields=['is_published'])
+        # 7-B (row 85): unpublishing moves the public files, so seen URLs stop working.
+        after_access_change(gallery, before)
         if is_published and not was_published:
             notify_published(gallery)
 
@@ -506,7 +510,8 @@ class GallerySetPasswordView(APIView):
         # between apps.galleries.views and apps.clients.models (the two
         # apps don't otherwise import each other at import time).
         
-        from apps.clients.models import ClientSession
+        # 7-B: one rule set for every access change (apps/galleries/access.py).
+        before = access_snapshot(gallery)
 
 
         # 1. If password is empty, interpret as removing password-protection entirely
@@ -520,7 +525,7 @@ class GallerySetPasswordView(APIView):
             # clear these anyway so a stale access_token is never treated
             # as meaningful once the password state has changed underneath it.
             
-            revoked_count, _ = ClientSession.objects.filter(gallery=gallery).delete()
+            revoked_count = after_access_change(gallery, before)
 
             
             return Response({
@@ -542,8 +547,9 @@ class GallerySetPasswordView(APIView):
         # Revoke every session issued under the OLD password. This is the
         # actual security fix (H-4): without it, everyone who already
         # unlocked the gallery keeps their access_token valid indefinitely —
-        # the password change accomplishes nothing for them.
-        revoked_count, _ = ClientSession.objects.filter(gallery=gallery).delete()
+        # the password change accomplishes nothing for them. 7-B: the public
+        # derivative URLs visitors already saw move to new keys as well.
+        revoked_count = after_access_change(gallery, before)
         
 
         

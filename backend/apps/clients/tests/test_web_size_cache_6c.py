@@ -244,6 +244,8 @@ class CeleryBoundaryTests(WebSizeBase):
             result.get.return_value = None
             return result
 
+        # A processed photo has its stored tiers; with none, nothing is served (7-B: never the original).
+        self.photo.display_file.save('big.webp', ContentFile(b'DISPLAY-TIER'), save=True)
         with mock.patch('apps.clients.tasks.generate_web_size.apply_async', side_effect=fake_apply_async), \
                 self.counting_render() as render:
             response = self.web()
@@ -251,6 +253,7 @@ class CeleryBoundaryTests(WebSizeBase):
         self.assertEqual(calls[0][1:], [1024, web_size.CLEAN])
         self.assertEqual(render.call_count, 0)                # the view itself never encoded
         self.assertEqual(response.status_code, status.HTTP_200_OK)   # None = undecodable -> legacy tier fallback
+        self.assertEqual(b''.join(response.streaming_content), b'DISPLAY-TIER')
 
     def test_a_worker_that_does_not_answer_is_a_503_not_a_wrong_size_file(self):
         result = mock.Mock()

@@ -1,4 +1,5 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/clients/models.py
+import hashlib
 import secrets
 from django.conf import settings
 from django.db import models
@@ -15,7 +16,34 @@ def generate_secure_token():
     return secrets.token_hex(32)
 
 
+def hash_unlock_token(raw_token):
+    """
+    What is stored for an unlock token (7-B, SEC-14 / debt row 89): its SHA-256
+    hex digest, never the token. The token itself is 256 random bits, so a fast
+    hash is enough (nothing to brute-force); a database read, a backup or the
+    admin no longer yields a working gallery key.
+    """
+    return hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+
+
 class ClientSessionQuerySet(models.QuerySet):
+    def issue(self, gallery, **fields):
+        """
+        Create an unlock session and return it with `.raw_token`: the token the
+        browser gets, available only here (the row stores its hash).
+        """
+        raw_token = generate_secure_token()
+        session = self.create(gallery=gallery, access_token=hash_unlock_token(raw_token), **fields)
+        session.raw_token = raw_token
+        return session
+
+    def for_token(self, raw_token):
+        """Live sessions for the token a browser presented (compared by its hash)."""
+        raw_token = (raw_token or '').strip() if isinstance(raw_token, str) else ''
+        if not raw_token:
+            return self.none()
+        return self.not_expired().filter(access_token=hash_unlock_token(raw_token))
+
     def not_expired(self):
         """
         Phase 4 (auth hardening) — a ClientSession previously never
@@ -57,7 +85,9 @@ class ClientSession(BaseModel):
         help_text="Optional email provided by client for download tracking or newsletter leads."
     )
     
-    # Secure, auto-generated token. Mark editable=False to protect DB-level state.
+    # SHA-256 of the unlock token (hash_unlock_token); the token itself is only
+    # ever returned once, by the unlock response. editable=False keeps it out of
+    # every form. The default is a random value nobody holds a token for.
     access_token = models.CharField(
         max_length=64, 
         unique=True,
@@ -256,8 +286,8 @@ class Favorite(BaseModel):
     favorites reuse the two identity mechanisms that already exist for
     gallery access rather than inventing a third:
 
-    - Password-protected galleries: `client_key` is the same
-      ClientSession.access_token already issued at unlock — the
+    - Password-protected galleries: `client_key` is the unlock session's
+      stored token HASH (ClientSession.access_token, 7-B) — the
       strongest identity available here, since it was only handed out
       after a correct password check. `client_session` links back to
       that row (and its optional email) for photographer-side visibility.
@@ -297,9 +327,9 @@ class Favorite(BaseModel):
     )
     client_key = models.CharField(
         max_length=128,
-        help_text="Stable per-client identifier: the gallery's access_token "
-                  "for protected galleries, or a client-generated anonymous "
-                  "id for open galleries.",
+        help_text="Stable per-client identifier: the browser's client_uid, or "
+                  "for a protected gallery without one the unlock session's "
+                  "stored token hash (never the token itself).",
     )
     email = models.EmailField(
         null=True,

@@ -1,0 +1,19 @@
+# backend/.dockerignore (7-B, SEC-10 / debt row 86)
+# `COPY . .` in the Dockerfile copies the build context into the image. Keep
+# local secrets, data and caches out of every image layer: the image is built
+# from the repo, configured only through runtime env / secrets.
+.env
+.env.*
+venv/
+.venv/
+media/
+logs/
+staticfiles/
+celerybeat-schedule*
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.coverage
+# A stray Windows path folder in the working tree (not code).
+C:
+.dockerignore

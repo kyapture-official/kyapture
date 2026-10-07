@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   allSetIds, blockedMessage, defaultSize, formatBytes, gateIntro, gateNeeds, initialStep, isAllSelected, isBlockedCode,
   jobPagePath, jobViewFor, photoLabel, pollDelay, remainingPreparingMs, scopeModel, selectionRequest, sizeOptions, toggleAll, toggleSet,
-  PREPARING_MAX_ATTEMPTS, isPreparingError, retryDelayMs, withPreparingRetry,
+  PREPARING_MAX_ATTEMPTS, isPreparingError, retryDelayMs, withPreparingRetry, tooManyAttemptsMessage,
 } from './downloadFlow.js'
 
 const sets = [
@@ -267,4 +267,14 @@ test('leaving the page (abort) stops a retry that is waiting', async () => {
   controller.abort()
   await assert.rejects(pending)
   assert.equal(calls, 1)
+})
+
+test('7-B: a PIN lockout shows the server message (how long, or whom to contact)', () => {
+  const clientLock = { status: 429, code: 'too_many_attempts', message: 'Too many incorrect attempts. Try again in 15 minutes.' }
+  const galleryLock = { status: 429, code: 'gallery_locked', message: 'Downloads from this gallery are paused after too many incorrect download PIN attempts. Contact Kroman.' }
+  assert.equal(tooManyAttemptsMessage(clientLock), clientLock.message)
+  assert.equal(tooManyAttemptsMessage(galleryLock), galleryLock.message)
+  // A plain per-minute throttle keeps the short generic text.
+  assert.equal(tooManyAttemptsMessage({ status: 429, code: null, message: 'Request was throttled.' }),
+    'Too many attempts. Please wait a minute and try again.')
 })

@@ -15,6 +15,7 @@ from PIL.ImageOps import exif_transpose
 from PIL import Image as PILImage
 
 from django.core.files.base import ContentFile
+from django.utils import timezone
 from django.utils.text import slugify
 from django.db.models import Sum, Count, Q
 from django.core.files.uploadedfile import SimpleUploadedFile, InMemoryUploadedFile
@@ -92,9 +93,13 @@ def get_user_subscription_metrics(user):
     # 1. Limits come from the plan table only: the photographer's active plan,
     # else the Free-tier row (owner-editable in admin). NULL limits = unlimited.
     try:
+        # Same rule as apps/subscriptions/entitlements.py::_active_plan: an
+        # 'active' row whose expires_at has passed is a lapsed plan, even before
+        # the 15-minute sweep flips its status (7-B, debt row 43).
         active_sub = UserSubscription.objects.select_related('plan').get(
             user=user,
-            status='active'
+            status='active',
+            expires_at__gt=timezone.now(),
         )
         plan = active_sub.plan
     except UserSubscription.DoesNotExist:
@@ -269,66 +274,173 @@ def validate_magic_bytes(file_obj):
         code="invalid_file_signature"
     )
     
+class LocationStripError(Exception):
+    """Location metadata is present (or cannot be ruled out) and could not be removed."""
+
+
+_XMP_HEADERS = (b'http://ns.adobe.com/xap/1.0/\x00', b'http://ns.adobe.com/xmp/extension/\x00')
+_XMP_LOCATION_MARKERS = (b'GPSLatitude', b'GPSLongitude', b'GPSPosition', b'GPSAltitude')
+_PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+
+
+def _xmp_has_location(payload):
+    return any(marker in payload for marker in _XMP_LOCATION_MARKERS)
+
+
+def _exif_without_gps(exif_bytes):
+    """EXIF (TIFF, or 'Exif\0\0'+TIFF) without its GPS IFD; raises LocationStripError when unreadable."""
+    try:
+        exif_dict = piexif.load(exif_bytes)
+    except Exception as exc:
+        raise LocationStripError('unreadable EXIF') from exc
+    if not exif_dict.get('GPS'):
+        return None
+    exif_dict['GPS'] = {}
+    try:
+        return piexif.dump(exif_dict)
+    except Exception as exc:
+        raise LocationStripError('EXIF could not be rewritten') from exc
+
+
+def _jpeg_segments(raw):
+    """[(marker, segment bytes incl. marker+length)] up to SOS, plus the rest of the file."""
+    if not raw.startswith(b'\xff\xd8'):
+        raise LocationStripError('not a JPEG')
+    pos, segments = 2, []
+    while pos + 4 <= len(raw):
+        if raw[pos] != 0xFF:
+            raise LocationStripError('malformed JPEG marker')
+        marker = raw[pos + 1]
+        if marker == 0xDA or 0xD0 <= marker <= 0xD9 or marker == 0x01:   # SOS / RSTn / EOI / TEM: data follows
+            break
+        length = int.from_bytes(raw[pos + 2:pos + 4], 'big')
+        if length < 2 or pos + 2 + length > len(raw):
+            raise LocationStripError('truncated JPEG segment')
+        segments.append((marker, raw[pos:pos + 2 + length]))
+        pos += 2 + length
+    return segments, raw[pos:]
+
+
+def _strip_jpeg(raw):
+    segments, rest = _jpeg_segments(raw)
+    changed = False
+    out = [b'\xff\xd8']
+    for marker, segment in segments:
+        payload = segment[4:]
+        if marker == 0xE1 and payload.startswith(b'Exif\x00\x00'):
+            clean = _exif_without_gps(payload)
+            if clean is not None:
+                out.append(b'\xff\xe1' + (len(clean) + 2).to_bytes(2, 'big') + clean)
+                changed = True
+                continue
+        elif marker == 0xE1 and payload.startswith(_XMP_HEADERS) and _xmp_has_location(payload):
+            changed = True                  # the XMP packet carries coordinates: drop that packet only
+            continue
+        out.append(segment)
+    out.append(rest)
+    return b''.join(out), changed
+
+
+def _png_chunk(kind, data):
+    import zlib
+    return len(data).to_bytes(4, 'big') + kind + data + (zlib.crc32(kind + data) & 0xFFFFFFFF).to_bytes(4, 'big')
+
+
+def _strip_png(raw):
+    import zlib
+    pos, out, changed = len(_PNG_SIGNATURE), [_PNG_SIGNATURE], False
+    while pos + 8 <= len(raw):
+        length = int.from_bytes(raw[pos:pos + 4], 'big')
+        kind = raw[pos + 4:pos + 8]
+        end = pos + 12 + length
+        if end > len(raw):
+            raise LocationStripError('truncated PNG chunk')
+        data = raw[pos + 8:pos + 8 + length]
+        chunk = raw[pos:end]
+        pos = end
+        if kind == b'eXIf':
+            clean = _exif_without_gps(data)
+            if clean is not None:
+                out.append(_png_chunk(b'eXIf', clean[6:] if clean.startswith(b'Exif\x00\x00') else clean))
+                changed = True
+                continue
+        elif kind in (b'iTXt', b'tEXt', b'zTXt') and data.startswith(b'XML:com.adobe.xmp\x00'):
+            text = data
+            if kind == b'zTXt':
+                try:
+                    text = zlib.decompress(data.split(b'\x00', 1)[1][1:])
+                except Exception as exc:
+                    raise LocationStripError('unreadable compressed XMP') from exc
+            if _xmp_has_location(text):
+                changed = True
+                continue
+        out.append(chunk)
+        if kind == b'IEND':
+            break
+    return b''.join(out), changed
+
+
+def _has_location(data):
+    """Independent re-check of the result (fail closed if anything is left)."""
+    if data.startswith(b'\xff\xd8'):
+        segments, _ = _jpeg_segments(data)
+        for marker, segment in segments:
+            payload = segment[4:]
+            if marker == 0xE1 and payload.startswith(b'Exif\x00\x00') and _exif_without_gps(payload) is not None:
+                return True
+            if marker == 0xE1 and payload.startswith(_XMP_HEADERS) and _xmp_has_location(payload):
+                return True
+        return False
+    if data.startswith(_PNG_SIGNATURE):
+        return _strip_png(data)[1]
+    return False
+
+
 def strip_exif_gps(file_obj):
     """
-    Strips raw GPS location coordinates from JPEG EXIF metadata to protect
-    client privacy, while leaving every other byte of the file — pixel
-    data, ICC color profile, quality, and all non-GPS metadata (camera,
-    lens, aperture, shutter speed) — completely untouched.
+    Removes location data from an uploaded photo, leaving every other byte of
+    the file — pixel data, ICC profile, quality, and all non-location metadata
+    (camera, lens, aperture, shutter speed) — untouched. The pixel data is never
+    decoded or recompressed: only metadata segments are rewritten or dropped.
 
-    This result becomes MediaAsset.original_file: the private, permanent
-    master copy Phase 2 requires to be byte-preserved. The previous
-    implementation decoded the image with PIL and re-saved it (even at
-    quality=100), which always fully recompresses JPEG pixel data and
-    silently drops the ICC profile — that re-encode was happening to
-    every uploaded original, not just a derivative. piexif.insert()
-    instead rewrites only the JPEG's APP1/EXIF segment directly in the
-    raw byte stream: pixel data is never decoded or recompressed.
+    This result becomes MediaAsset.original_file: the private, permanent master
+    copy that must stay byte-preserved apart from its location.
+
+    Covered: the JPEG EXIF GPS IFD (piexif), an XMP packet carrying GPS
+    coordinates (JPEG APP1, PNG iTXt/tEXt/zTXt: that packet is dropped), and the
+    PNG eXIf chunk.
+
+    7-B (SEC-19 / debt row 94): fails CLOSED. It used to log a warning and keep
+    the original bytes (GPS included) whenever anything went wrong; now it raises
+    LocationStripError when location data is present, or cannot be ruled out
+    (unreadable EXIF), and was not removed. The upload view refuses that file.
     """
-    try:
-        file_obj.seek(0)
-        raw_bytes = file_obj.read()
-        file_obj.seek(0)
+    file_obj.seek(0)
+    raw_bytes = file_obj.read()
+    file_obj.seek(0)
 
-        # Only JPEGs carry EXIF the way piexif understands it; PNGs (and
-        # anything else) pass through completely untouched, exactly as
-        # before.
-        if not raw_bytes.startswith(b'\xff\xd8'):
-            return file_obj
+    if raw_bytes.startswith(b'\xff\xd8'):
+        clean_bytes, changed = _strip_jpeg(raw_bytes)
+        content_type = 'image/jpeg'
+    elif raw_bytes.startswith(_PNG_SIGNATURE):
+        clean_bytes, changed = _strip_png(raw_bytes)
+        content_type = 'image/png'
+    else:
+        return file_obj                 # not an image type this app stores (refused by validation)
 
-        try:
-            exif_dict = piexif.load(raw_bytes)
-        except Exception:
-            # No parseable EXIF segment — nothing to strip, original
-            # bytes already carry no GPS data.
-            return file_obj
+    if not changed:
+        return file_obj                 # no location: the original bytes, untouched
+    if _has_location(clean_bytes):      # independent re-check of the result
+        raise LocationStripError('location still present after stripping')
 
-        if not exif_dict.get('GPS'):
-            # No GPS tags present — return the original bytes completely
-            # untouched instead of doing a needless rewrite.
-            file_obj.seek(0)
-            return file_obj
-
-        exif_dict['GPS'] = {}
-        clean_exif_bytes = piexif.dump(exif_dict)
-
-        output_stream = io.BytesIO()
-        piexif.insert(clean_exif_bytes, raw_bytes, output_stream)
-        clean_bytes = output_stream.getvalue()
-
-        return InMemoryUploadedFile(
-            file=io.BytesIO(clean_bytes),
-            field_name=None,
-            name=file_obj.name,
-            content_type=getattr(file_obj, 'content_type', None) or 'image/jpeg',
-            size=len(clean_bytes),
-            charset=None
-        )
-    except Exception:
-        # Log warning so failure rate is monitorable instead of silent
-        logger.warning("strip_exif_gps failed for %s — uploading with EXIF intact", file_obj.name)
-        file_obj.seek(0)
-        return file_obj
+    return InMemoryUploadedFile(
+        file=io.BytesIO(clean_bytes),
+        field_name=None,
+        name=file_obj.name,
+        content_type=getattr(file_obj, 'content_type', None) or content_type,
+        size=len(clean_bytes),
+        charset=None
+    )
 
 def get_insertion_order(gallery_id, insert_after_id=None):
     """
@@ -790,7 +902,72 @@ def process_image_pipeline(image_file, watermark_text=None, watermark=None):
 
     return display_file, medium_file, thumbnail_file, download_file, blurhash_str
 
-def process_video_pipeline(video_file):
+# ffmpeg time limits (7-B, SEC-18 / debt row 93). A crafted or pathological
+# video must never hold a worker forever: every call has a timeout, the
+# transcode one in proportion to the video's length.
+FFMPEG_POSTER_TIMEOUT_SECONDS = 120
+FFMPEG_TRANSCODE_BASE_SECONDS = 600
+FFMPEG_TRANSCODE_SECONDS_PER_VIDEO_SECOND = 3
+FFMPEG_REMUX_BASE_SECONDS = 300
+
+_LOCATION_TAG = re.compile(r'location|iso6709|xyz|gps', re.IGNORECASE)
+
+
+def video_location_tags(path):
+    """
+    The container/stream tags of a video that carry a location (QuickTime
+    `©xyz` and `com.apple.quicktime.location.ISO6709` both surface as
+    `location...`), plus whether it has a timed-metadata track (`mebx`, used
+    by phones for per-frame location). Raises on an unreadable file.
+    """
+    result = subprocess.run(
+        ['ffprobe', '-v', 'error', '-show_entries', 'format_tags:stream=codec_type,codec_tag_string:stream_tags',
+         '-of', 'json', path],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=60,
+    )
+    import json
+    data = json.loads(result.stdout or '{}')
+    tags = {k: v for k, v in (data.get('format', {}).get('tags') or {}).items() if _LOCATION_TAG.search(k)}
+    timed_metadata = False
+    for stream in data.get('streams', []):
+        tags.update({k: v for k, v in (stream.get('tags') or {}).items() if _LOCATION_TAG.search(k)})
+        if stream.get('codec_type') == 'data' and stream.get('codec_tag_string') == 'mebx':
+            timed_metadata = True
+    return tags, timed_metadata
+
+
+def remove_video_location(source_path, duration_seconds):
+    """
+    A copy of the video at `source_path` with its location removed, or None when
+    it carries none. Stream copy (`-c copy`): the video and audio packets are
+    byte-identical; only the container's metadata changes (all global/stream
+    metadata is dropped, as are data/timed-metadata tracks). Raises on failure:
+    the caller fails closed (7-B, SEC-19 / debt row 94).
+    """
+    tags, timed_metadata = video_location_tags(source_path)
+    if not tags and not timed_metadata:
+        return None
+    ext = os.path.splitext(source_path)[1] or '.mp4'
+    fd, clean_path = tempfile.mkstemp(suffix=ext)
+    os.close(fd)
+    try:
+        subprocess.run(
+            ['ffmpeg', '-y', '-i', source_path, '-map', '0:v?', '-map', '0:a?', '-c', 'copy',
+             '-map_metadata', '-1', '-map_metadata:s:v', '-1', '-map_metadata:s:a', '-1', '-map_chapters', '-1',
+             clean_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+            timeout=FFMPEG_REMUX_BASE_SECONDS + int(duration_seconds),
+        )
+        left, _ = video_location_tags(clean_path)
+        if left:
+            raise RuntimeError('location metadata survived the remux')
+        return clean_path
+    except Exception:
+        os.remove(clean_path)
+        raise
+
+
+def process_video_pipeline(video_file, on_location_removed=None):
     """
     Video-derivative pipeline: PRIVATE ORIGINAL VIDEO (untouched here —
     only ever read) → ASYNC PROCESSING → BROWSER-FRIENDLY DERIVATIVE.
@@ -828,11 +1005,19 @@ def process_video_pipeline(video_file):
     Guarantees filesystem hygiene by unlinking every temp file from disk
     inside a 'finally' block regardless of success or failure.
 
+    7-B: location metadata never reaches a client. When the original carries a
+    location, a stream-copied clean original is made first; it is handed to
+    `on_location_removed(open_file, size)` (the task stores it as the new
+    original) and the poster and playback copy are made from it. The poster and
+    playback commands also drop all metadata (`-map_metadata -1`). Any failure
+    raises, so the asset fails closed. Every ffmpeg call has a timeout.
+
     Returns tuple: (poster_file, playback_file, duration_seconds)
     """
     temp_video_path = None
     temp_poster_path = None
     temp_playback_path = None
+    clean_video_path = None
 
     try:
         # 1. Stream the original to a temp disk file in bounded chunks —
@@ -850,6 +1035,13 @@ def process_video_pipeline(video_file):
         duration_float = _ffprobe_duration(temp_video_path)
         duration = round(duration_float)
 
+        clean_video_path = remove_video_location(temp_video_path, duration_float)
+        if clean_video_path is not None:
+            if on_location_removed is not None:
+                with open(clean_video_path, 'rb') as clean:
+                    on_location_removed(clean, os.path.getsize(clean_video_path))
+            temp_video_path, clean_video_path = clean_video_path, temp_video_path
+
         # 3. Extract a poster frame (JPEG) at a SAFE timestamp — the
         #    clip's midpoint, capped at 2s, so it reliably lands inside
         #    both very short and ordinary-length videos (never seeks
@@ -862,10 +1054,12 @@ def process_video_pipeline(video_file):
         ffmpeg_poster_cmd = [
             'ffmpeg', '-y', '-ss', f'{poster_ts:.3f}',
             '-i', temp_video_path,
+            '-map_metadata', '-1',
             '-vframes', '1', '-f', 'image2',
             temp_poster_path
         ]
-        subprocess.run(ffmpeg_poster_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(ffmpeg_poster_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+                       timeout=FFMPEG_POSTER_TIMEOUT_SECONDS)
 
         with open(temp_poster_path, 'rb') as f:
             poster_data = f.read()
@@ -888,11 +1082,15 @@ def process_video_pipeline(video_file):
             '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac', '-b:a', '128k',
+            '-map_metadata', '-1', '-map_metadata:s:v', '-1', '-map_metadata:s:a', '-1', '-map_chapters', '-1',
             '-movflags', '+faststart',
             '-f', 'mp4',
             temp_playback_path
         ]
-        subprocess.run(ffmpeg_playback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(
+            ffmpeg_playback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+            timeout=FFMPEG_TRANSCODE_BASE_SECONDS + FFMPEG_TRANSCODE_SECONDS_PER_VIDEO_SECOND * duration,
+        )
 
         with open(temp_playback_path, 'rb') as f:
             playback_data = f.read()
@@ -906,7 +1104,7 @@ def process_video_pipeline(video_file):
 
     finally:
         # Strict filesystem hygiene: clean up all disk remnants regardless of success or failure
-        for path in [temp_video_path, temp_poster_path, temp_playback_path]:
+        for path in [temp_video_path, temp_poster_path, temp_playback_path, clean_video_path]:
             if path and os.path.exists(path):
                 try:
                     os.remove(path)

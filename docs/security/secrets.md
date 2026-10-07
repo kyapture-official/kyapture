@@ -44,8 +44,8 @@ None is a secret; all are baked into the public bundle. Rule to keep: **never** 
 | Photographer passwords | `users.User.password` | Django PBKDF2 hasher (default) + validators (`base.py:150-155`) |
 | Gallery password | `Gallery.password_hash` (`apps/galleries/models.py:56`) | bcrypt (`apps/galleries/views.py:518`) |
 | Download PIN | `Gallery.download_pin_hash` (`models.py:66`) | bcrypt (`views.py:591`); 4-8 digits (SEC-04) |
-| JWT access/refresh | HttpOnly cookies; refresh JTIs in `token_blacklist` tables | HS256 signed with `SECRET_KEY` (SEC-13) |
-| Gallery unlock token | `ClientSession.access_token`, **plaintext** (`apps/clients/models.py:61`) | 64 hex chars from `secrets` (SEC-14) |
+| JWT access/refresh | HttpOnly cookies; refresh JTIs in `token_blacklist` tables | HS256 signed with `JWT_SIGNING_KEY` (default `SECRET_KEY`, 7-B) |
+| Gallery unlock token | `ClientSession.access_token` holds its **SHA-256** since 7-B (`hash_unlock_token`, migration `clients.0013`) | 256 random bits from `secrets`; returned once by the unlock response (SEC-14) |
 | Download / job-link / file tokens | Not stored; `django.core.signing` | Salted, `SECRET_KEY`-signed, TTL 2 h / job TTL / file TTL (`download_access.py:348-460`) |
 | Password-reset tokens | Not stored | `default_token_generator` (`apps/users/views.py:473`) |
 | S3 presigned URLs | Not stored | 1 h expiry; URL carries the access key ID (by SigV4 design) |
@@ -152,13 +152,42 @@ are already on `origin/feature/landing-page-redesign`: SEC-29). Whether the GitH
 
 | Secret | Rotate when | Blast radius of rotation | Current support |
 |---|---|---|---|
-| `SECRET_KEY` | Suspected leak; staff departure; before first production launch if it was ever in a dev `.env` shared with others | Invalidates all JWTs (everyone logged out), all download/job/file tokens (emailed "ready" links break), all reset links | **No** `SECRET_KEY_FALLBACKS`, JWT key not separated (SEC-13). Needs a runbook |
+| `SECRET_KEY` | Suspected leak; staff departure; before first production launch if it was ever in a dev `.env` shared with others | With `SECRET_KEY_FALLBACKS` none (links signed with the old key keep verifying); without, every signed link breaks | `SECRET_KEY_FALLBACKS` and a separate `JWT_SIGNING_KEY` since 7-B; runbook §7.1 |
 | `DB_PASSWORD` | Leak; staff change | Requires coordinated restart of web, workers, beat (all read it) | Env-only; fine |
 | AWS key pair (S3 + SES) | Every 90 days or on leak | Media upload/download and all email | One pair for both services; recommend two least-privilege IAM principals and role-based credentials (no static keys) on the host |
 | Redis | When a password is introduced | Broker URL in every Celery process | No auth today (SEC-11) |
 | Gallery password / PIN | Photographer's choice | Password change deletes every `ClientSession` of the gallery (`apps/galleries/views.py:500-537`); PIN change invalidates download tokens via the fingerprint (`download_access.py:340-372`) | Implemented |
 | Photographer password | User choice / reset | Revokes every refresh token (`apps/users/views.py:555-563`, `apps/users/serializers.py:260-275`); access tokens live up to 15 min | Implemented |
 | Dev DB password in history | Only if that value is used outside local dev, or the remote is public | — | Owner decision (debt row 87) |
+
+### 7.1 Rotating `SECRET_KEY` (runbook, 7-B, debt row 88)
+
+Since 7-B: `SECRET_KEY_FALLBACKS` is read from the environment (comma-separated, `base.py`), and JWTs are signed with their own
+`JWT_SIGNING_KEY` (falls back to `SECRET_KEY` when unset, `SIMPLE_JWT['SIGNING_KEY']`). Django verifies `signing` values (download,
+job-link and file tokens, password-reset links) with the current key **or** a fallback, and signs only with the current key
+(`backend/apps/users/tests/test_security_7b.py::KeyRotationSettingsTests`).
+
+1. Generate a new key: `python -c "import secrets; print(secrets.token_urlsafe(64))"`.
+2. Deploy with `SECRET_KEY=<new>` and `SECRET_KEY_FALLBACKS=<old>` on **every** process (web, Celery worker, websize worker, beat) at once.
+   Emailed ready links (job TTL 7 days) and reset links keep working; new ones use the new key.
+3. Set `JWT_SIGNING_KEY` once (if it is unset, JWTs follow `SECRET_KEY`: step 2 then logs everyone out once; SimpleJWT has no
+   fallback list). Rotate `JWT_SIGNING_KEY` on its own when needed: everyone signs in again, nothing else breaks.
+4. After the longest-lived signed value has expired (7 days: ready links), remove the old key from `SECRET_KEY_FALLBACKS` and redeploy.
+5. On a suspected **leak**, skip the fallback (step 2 without `SECRET_KEY_FALLBACKS`) and rotate `JWT_SIGNING_KEY` too: every link and
+   session made with the leaked key must die now.
+
+Still open (13-C, row 88): separate IAM principals for S3 and SES, and a secret manager instead of env files.
+
+### 7.2 Django admin: throttle now, MFA plan (7-B, debt row 90)
+
+Done in 7-B: `/admin/login/` goes through `apps/core/admin_login.py` (failed sign-ins per address and per account, in the shared
+cache; the form answers 429 for the rest of the window, even to the right password), and the admin never renders gallery
+password/PIN hashes or unlock-token hashes.
+
+MFA plan (not built; needs a dependency decision by the owner): `django-otp` with the TOTP device plugin, `OTPAdminSite` as
+`admin.site`, a TOTP device enrolled for every staff user before the switch (a management command prints the provisioning URI once),
+and static backup codes kept offline. Until then: staff accounts use long unique passwords, and the production proxy restricts
+`/admin/` to the operators' addresses (`allow <office/VPN>; deny all;`).
 
 ---
 
@@ -170,13 +199,13 @@ are already on `origin/feature/landing-page-redesign`: SEC-29). Whether the GitH
 - Risk: dev `SECRET_KEY` and DB credentials (and local `media/`, `logs/`, `venv/`) readable from any copy of the image.
 - Location: `backend/Dockerfile:50`.
 - Why it matters: images get pushed to registries and CI caches that more people can read than the source repo.
-- Fix: add `backend/.dockerignore`; inspect the next image's layers. Debt row 86.
+- Fix: add `backend/.dockerignore`; inspect the next image's layers. Debt row 86. **Confirmed and fixed in 7-B**: the image built from the old context held `/app/.env` (with its `SECRET_KEY=` line) and `/app/logs/django.log`; an image built with `backend/.dockerignore` has no `.env`, `venv/`, `media/`, `logs/`, `celerybeat-schedule` or `C:` (checked with `docker run ... ls`).
 
 **S-2 (SEC-13) — single signing key, no rotation path**
 - Severity: Medium · Classification: Missing control
 - Evidence: `base.py:14, 132-142`; `download_access.py:348-460`; no `SECRET_KEY_FALLBACKS`.
 - Risk: key leak = forge any user's JWT and any gallery's download token; rotation = global logout and dead email links.
-- Fix: separate JWT signing key, `SECRET_KEY_FALLBACKS`, rotation runbook. Debt row 88.
+- Fix: separate JWT signing key, `SECRET_KEY_FALLBACKS`, rotation runbook. Debt row 88. **Done in 7-B** (§7.1); the IAM split stays with 13-C.
 
 **S-3 (SEC-11) — dev DB password hardcoded and in history**
 - Severity: Low · Classification: Weakness
@@ -187,7 +216,7 @@ are already on `origin/feature/landing-page-redesign`: SEC-29). Whether the GitH
 **S-4 (SEC-14) — unlock tokens in plaintext and in URLs**
 - Severity: Low · Classification: Weakness
 - Evidence: `apps/clients/models.py:61`; `apps/clients/admin.py:37`; `?token=` handling in `apps/clients/views.py`.
-- Fix: hash at rest; header-only transport where possible. Debt row 89.
+- Fix: hash at rest; header-only transport where possible. Debt row 89. **Hashed at rest in 7-B**; the `?token=` transport remains for `<a href>` / `<video src>` (debt row 133).
 
 **S-5 (SEC-25/26) — secret hygiene in docs, history and tooling**
 - Severity: Info · Classification: Weakness

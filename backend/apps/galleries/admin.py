@@ -34,3 +34,8 @@ class GalleryAdmin(admin.ModelAdmin):
     
     # Performance Isolation: Replaces database-heavy select dropdowns [1.1.2]
     raw_id_fields = ['photographer', 'cover_photo']
+
+    # 7-B (SEC-15): the bcrypt hashes of the gallery password and download PIN
+    # are never shown or editable here; the photographer sets them in the app
+    # (set-password / set-download-pin), which also ends old sessions.
+    exclude = ['password_hash', 'download_pin_hash']

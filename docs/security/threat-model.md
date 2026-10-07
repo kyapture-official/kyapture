@@ -441,3 +441,40 @@ Every claim below is a test in the repo that failed before the fix (or passes as
 | — | Unpublished / expired / deactivated / password-protected galleries on every public route; private paths in the public payload | **Not exploitable** | `GalleryStatesTests` |
 
 New gaps: debt rows 129-132.
+
+---
+
+## 10. Chunk 7-B (downloads, throttles, headers, uploads) results
+
+Every row is a test in the repo that failed before the fix (54 of the first 70 failed: `apps/users/tests/test_security_7b.py`,
+`apps/clients/tests/test_security_7b.py`, `apps/photos/tests/test_security_7b.py`), a real request, or proof that no fix was needed.
+P1 = High, or a breach of "originals stay private"; P2 = Medium; P3 = Low / Info.
+
+| ID | Pri | Finding | Result | Proof |
+|---|---|---|---|---|
+| SEC-01 | P1 | Throttles keyed on a client-sent `X-Forwarded-For` (`NUM_PROXIES` outside `REST_FRAMEWORK`); stored client IP = left-most XFF | **Confirmed** (login, gallery password and PIN all let a 6th/7th try through with a new XFF; stored IP `203.0.113.7`), **fixed**: `REST_FRAMEWORK['NUM_PROXIES']` (0 dev, 1 production), one helper `apps/core/request_ip.client_ip` for every stored/counted IP | `ThrottleIdentityTests` |
+| row 108 | P1 | Throttle counts per process (local-memory cache) | **Confirmed for real**: 2 gunicorn workers, 20 failed logins at a 5/min limit: 9 let through (both PIDs answered). **Fixed**: Redis cache (`CACHE_REDIS_URL`, compose db 2, tests db 3; production refuses to boot without it). Same run after: exactly 5 let through, the second worker refused all 11 of its requests | `SharedThrottleCacheTests` (+ a child process writes, the test process reads) |
+| SEC-04 | P1 | PIN / gallery password: no failure counter | **Confirmed**, **fixed** (`apps/clients/lockout.py`): 5 failures per client per gallery lock that client 15 min (even for the right value); 50 per gallery per hour lock the gate for 1 h and notify the photographer (bell, new kind `security`); a success clears the client count; a new PIN/password resets (keys carry the hash fingerprint). Clear 429 messages, shown as-is by the client UI | `PinLockoutTests`, `PasswordLockoutTests`; `frontend/src/utils/downloadFlow.test.js` |
+| — | P1 | A password set through the gallery PATCH kept every old unlock token working (only `set-password` revoked) | **Confirmed**, **fixed**: `apps/galleries/access.py` applies one rule set to set-password, publish and the PATCH | `UnlockTokenLifecycleTests` |
+| SEC-05 | P1 | Original key derivable from a display URL | **Confirmed by code**, **fixed**: originals and Download Masters get a 128-bit random key part (`apps/photos/models.py`); the stored image extension follows the bytes (a JPEG sent as `.tiff` was stored as `_original.tiff`). Bucket policy / Block Public Access still to verify on staging (15-A) | `PrivateKeyTests` |
+| SEC-06 | P1 | DEBUG `/media/` served every private file | **Confirmed**, **fixed**: `apps/core/media.py` serves public derivative names only; a private file needs the signed, 1-hour URL `SignedFileSystemStorage.url()` hands out (the dev stand-in for S3 presigning) | `DevMediaServingTests` |
+| SEC-07 | P1 | Video stream fell back to the original | **Confirmed** (dev: 302 to the private original path), **fixed**: playback MP4 only, else 409 `video_processing` | `VideoStreamTests` |
+| SEC-09 | P2 | Public derivative URLs outlived a password / unpublish | **Confirmed**, **fixed**: per-gallery `media_token` in every public key; closing the gallery moves every public file to a new random segment (Celery `rotate_public_media`), old objects deleted. Not covered: expiry, browser/CDN caches (row 134) | `PublicUrlRotationTests` |
+| SEC-03 | P2 | Contact allow-list trusted a typed email | **Confirmed** (allowed email alone → token), **fixed**: an allowed address first receives a one-time 6-digit code (10 min, 5 tries, 3 sends); a PIN use is counted once per granted token | `ContactAllowListTests` |
+| SEC-14 | P2 | Unlock tokens in plaintext | **Confirmed**, **fixed**: SHA-256 at rest (migration `clients.0013` hashes existing rows and the favorites keyed by them; browsers keep working); admin never shows it. Query-string transport stays (row 133) | `UnlockTokenLifecycleTests` |
+| SEC-15 | P2 | Admin login unthrottled; hashes in admin forms | **Confirmed**, **fixed**: `apps/core/admin_login.py` (5 failures per address / 10 per account → 429 for 15 min); hash/token fields excluded. MFA: plan only (`secrets.md` §7.2) | `AdminLoginTests` |
+| SEC-13 | P2 | One key, no rotation | **Fixed**: `SECRET_KEY_FALLBACKS` and `JWT_SIGNING_KEY` from env; runbook `secrets.md` §7.1 | `KeyRotationSettingsTests` |
+| SEC-10 | P2 | `.env` in the backend image | **Confirmed** (`/app/.env` and `logs/` in the image), **fixed** with `backend/.dockerignore` (rebuilt image checked) | `docker run ... ls` |
+| SEC-17 | P3 | Refresh in the anon 100/day IP bucket | **Confirmed** (102 refreshes by 3 users on one IP: 429s), **fixed**: `token_refresh` 60/h per verified user id | `TokenRefreshThrottleTests` |
+| SEC-18 | P3 | ffmpeg without timeout | **Confirmed**, **fixed**: every ffmpeg/ffprobe call has a timeout (transcode 600 s + 3 s per video second); photo task 600/660 s Celery limits | `test_every_ffmpeg_call_has_a_timeout` |
+| SEC-19 | P3 | GPS strip fail-open; video location kept | **Confirmed** (XMP and PNG eXIf GPS kept; a strip error uploaded the GPS; video original and playback kept `location`), **fixed**: fail closed (400 `location_strip_failed`), XMP/PNG covered, video original remuxed without location (stream copy) and every derivative made with `-map_metadata -1` | `GpsFailClosedTests`, `VideoLocationTests` |
+| SEC-27 | P3 | Non-READY download; Web Size fell back to the original | **Confirmed** (both 200 with original bytes), **fixed** | `ReadyOnlyDownloadTests` |
+| rows 4/75 | P3 | Body received before refusal | **Partly fixed**: 413 / storage-full 403 from headers alone, body unread; the proxy limit is the real stop (plan in `docs/KYAPTURE_UPLOAD_LIMITS.md`) | `EarlyBodyRefusalTests` |
+| rows 43/44 | P3 | Lapsed plan counted as paid; minutes outside the lock | **Confirmed**, **fixed** | `PlanEdgeTests` |
+| — | — | Register on the anon bucket; no per-account login limit | **Fixed**: `register` 10/h per address, `login_account` 20/h per account | `RegisterAndLoginThrottleTests` |
+| — | — | Errors leak trace/SQL/path; CORS; CSRF; cookie flags; production HTTPS/HSTS/frame settings | **Not exploitable** (generic JSON 500; unknown origin gets no grant; cookie write without CSRF 403; HttpOnly + Lax; production module values read in a subprocess) | `ErrorLeakTests`, `CorsCsrfCookieTests`, `ProductionHeaderSettingsTests` |
+| — | P3 | ZIP file links (bearer URLs in browser/download history) lived 7 days | **Fixed**: 1 hour; the ready page mints a fresh one per click, the emailed job link still lives a week | `FileLinkLifetimeTests` |
+| rows 120/37 | P3 | CSP allowed Google font hosts; stale "no CSP" comment | **Fixed** | `frontend/src/security/nginxCsp.test.js` |
+| row 6 | — | Owner `original_url` | **Not exploitable for clients** (public payload never has it, existing test); the owner's URL is a 1-hour signed URL to a random key | `test_public_gallery_payload_never_exposes_a_raw_original_url` |
+
+New gaps: debt rows 133-140.

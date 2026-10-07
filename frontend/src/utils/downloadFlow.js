@@ -113,6 +113,17 @@ export function isBlockedCode(code) {
  * same whichever endpoint refused; the photographer's contact list is never part
  * of any message.
  */
+/**
+ * Text for a 429 on a download step. A PIN lockout (7-B: too many wrong PINs from
+ * this browser, or for the whole gallery) carries its own message saying how long
+ * to wait or whom to contact; a plain per-minute throttle gets the short text.
+ */
+const LOCKOUT_CODES = new Set(['too_many_attempts', 'gallery_locked', 'too_many_codes'])
+export function tooManyAttemptsMessage(err) {
+  if (LOCKOUT_CODES.has(err?.code) && err?.message) return err.message
+  return 'Too many attempts. Please wait a minute and try again.'
+}
+
 export function blockedMessage(code, studio, fallback = '') {
   const who = studio || 'the photographer'
   switch (code) {

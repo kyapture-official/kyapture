@@ -10,7 +10,7 @@ import DownloadExpired from "../../components/client/DownloadExpired";
 import DownloadShell, { useDownloadGallery } from "../../components/client/DownloadShell";
 import {
   PREPARING_GAVE_UP_MESSAGE, blockedMessage, gateNeeds, initialStep, isBlockedCode, isPreparingError, jobPagePath,
-  withPreparingRetry,
+  tooManyAttemptsMessage, withPreparingRetry,
 } from "../../utils/downloadFlow.js";
 
 /**
@@ -94,7 +94,7 @@ export default function DownloadPage() {
       setPreparing(false);
       if (err?.code === "download_access_expired") sessionExpired();
       else if (isPreparingError(err)) setNotice(PREPARING_GAVE_UP_MESSAGE);
-      else if (err?.status === 429) setNotice("Too many attempts. Please wait a minute and try again.");
+      else if (err?.status === 429) setNotice(tooManyAttemptsMessage(err));
       else if (isBlockedCode(err?.code)) setNotice(blockedMessage(err.code, studio, err.message));
       else setNotice(err?.message || "We couldn't start preparing your photos. Please try again.");
     }

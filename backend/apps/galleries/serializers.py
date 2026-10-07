@@ -13,6 +13,7 @@ from apps.subscriptions.entitlements import ORIGINAL_DOWNLOAD, WATERMARK, requir
 
 from apps.core.utils import generate_unique_slug, sanitize_text
 from apps.photos.models import MediaAsset
+from .access import access_snapshot, after_access_change
 from .models import Gallery
 
 RESERVED_GALLERY_SLUGS = {
@@ -693,6 +694,7 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         are deliberately no-ops, never an implicit cover removal.
         """
         raw_password = validated_data.pop('password', '').strip()
+        before = access_snapshot(instance)
 
         if raw_password:
             instance.password_hash = bcrypt.hashpw(
@@ -709,6 +711,10 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
 
         instance.save()
+        # 7-B: a password set/changed/removed here ends the unlock sessions issued
+        # under the old one (this path used to keep them alive), and closing the
+        # gallery moves its public files to new keys (apps/galleries/access.py).
+        after_access_change(instance, before)
         return instance
 
     def to_representation(self, instance):

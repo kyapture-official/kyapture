@@ -232,12 +232,12 @@ class PreparedGalleryDownloadTestCase(InlineDownloadJobsMixin, APITestCase):
         _ready_image(self.gallery, "first.jpg")
         self.gallery.is_password_protected = True
         self.gallery.save(update_fields=["is_password_protected"])
-        session = ClientSession.objects.create(gallery=self.gallery)
+        session = ClientSession.objects.issue(gallery=self.gallery)
 
         self.assertEqual(request_zip(self.client, self.base, self.guest).status_code, status.HTTP_401_UNAUTHORIZED)
         cache.clear()
         self.assertEqual(
-            request_zip(self.client, self.base, self.guest, unlock_token=session.access_token).status_code,
+            request_zip(self.client, self.base, self.guest, unlock_token=session.raw_token).status_code,
             status.HTTP_200_OK,
         )
 

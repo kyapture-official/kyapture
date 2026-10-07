@@ -19,7 +19,10 @@ from .tasks import process_photo_asset, process_video_asset
 from PIL import Image as PILImage
 from PIL.ImageOps import exif_transpose
 
-from apps.core.utils import get_user_subscription_metrics, get_insertion_order, probe_video_duration, strip_exif_gps
+from apps.core.utils import (
+    LocationStripError, get_user_subscription_metrics, get_insertion_order, probe_video_duration, strip_exif_gps,
+    validate_magic_bytes,
+)
 from apps.subscriptions.entitlements import (
     STORAGE_LIMIT_REACHED, storage_fits, storage_quota_violation, video_quota_violation,
 )
@@ -107,6 +110,66 @@ def _storage_refusal(metrics, refused_files):
     return storage_quota_violation(metrics, len(refused_files), sum(f.size for f in refused_files))
 
 
+# Multipart framing around one file (boundaries, part headers, the set_id field).
+UPLOAD_REQUEST_OVERHEAD_BYTES = 1024 * 1024
+_IMAGE_EXTENSIONS = {'JPEG': '.jpg', 'PNG': '.png'}
+
+
+def _cookie_or_bearer_user(request):
+    """The user a valid access token names, WITHOUT the CSRF check (that reads the body). None otherwise."""
+    from rest_framework_simplejwt.authentication import JWTAuthentication
+
+    auth = JWTAuthentication()
+    raw = request.COOKIES.get('access_token')
+    if not raw:
+        header = auth.get_header(request)
+        raw = auth.get_raw_token(header) if header is not None else None
+    if not raw:
+        return None
+    try:
+        return auth.get_user(auth.get_validated_token(raw))
+    except Exception:
+        return None
+
+
+def early_upload_refusal(request):
+    """
+    (payload, status) for an upload that can be refused from its headers alone,
+    else None. Runs BEFORE authentication: the cookie-auth CSRF check reads the
+    POST body, and DRF parses the whole multipart stream (spooling it to temp
+    files) the moment anything touches request.data. Rows 4 / 31 / 75 (7-B).
+
+      - Content-Length above the largest file any request may carry (the admin's
+        image / video limit, plus multipart framing): 413. The app uploads one
+        file per request, so nothing honest is that big.
+      - A metered account that has no storage left at all: 403 storage_limit_reached,
+        whatever the body holds (its token is checked; the request does nothing,
+        so skipping CSRF here changes no state).
+
+    The bytes a client already sent still reach the proxy; only the proxy's own
+    client_max_body_size stops them earlier (docs/KYAPTURE_UPLOAD_LIMITS.md).
+    """
+    try:
+        length = int(request.META.get('CONTENT_LENGTH') or 0)
+    except ValueError:
+        length = 0
+    limits = get_upload_limits()
+    ceiling = max(limits.max_image_bytes, limits.max_video_bytes) + UPLOAD_REQUEST_OVERHEAD_BYTES
+    if length > ceiling:
+        return {
+            'error': 'This upload is larger than any file you can upload.',
+            'code': 'request_too_large',
+            'max_bytes': ceiling,
+        }, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    user = _cookie_or_bearer_user(request)
+    if user is None or user.is_staff or user.is_superuser:
+        return None
+    metrics = get_user_subscription_metrics(user)
+    if metrics['current_total_storage_bytes'] >= metrics['storage_bytes_limit']:
+        return storage_quota_violation(metrics, 1, length), status.HTTP_403_FORBIDDEN
+    return None
+
+
 class PhotoListUploadView(APIView):
     """
     GET  /api/v1/photos/{gallery_slug}/ - Lists all media assets inside an active gallery.
@@ -124,6 +187,18 @@ class PhotoListUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     permission_classes = [IsAuthenticated]
 
+    def dispatch(self, request, *args, **kwargs):
+        # 7-B: refuse what the headers already condemn before a byte of the body is read.
+        if request.method == 'POST':
+            early = early_upload_refusal(request)
+            if early is not None:
+                self.args, self.kwargs = args, kwargs
+                drf_request = self.initialize_request(request, *args, **kwargs)
+                self.request = drf_request
+                self.headers = self.default_response_headers
+                response = Response(early[0], status=early[1])
+                return self.finalize_response(drf_request, response, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_gallery(self, slug, user):
         """Retrieves an active gallery scoped strictly to the requesting user."""
@@ -243,14 +318,22 @@ class PhotoListUploadView(APIView):
                     # usage read now, so two uploads running at once cannot both claim the
                     # same free space. The check above only spares an ffprobe for a full account.
                     type(photographer).objects.select_for_update().only('pk').get(pk=photographer.pk)
+                    locked_metrics = get_user_subscription_metrics(photographer)
                     image_files, video_files, late_refused = _split_by_storage(
-                        get_user_subscription_metrics(photographer), image_files, video_files)
+                        locked_metrics, image_files, video_files)
                     storage_refused += late_refused
                     if not image_files and not video_files:
                         return Response(
-                            _storage_refusal(get_user_subscription_metrics(photographer), storage_refused),
+                            _storage_refusal(locked_metrics, storage_refused),
                             status=status.HTTP_403_FORBIDDEN,
                         )
+                    # Video minutes too, against usage read under the lock (7-B, row 44):
+                    # two parallel uploads could both pass the check made before probing.
+                    if video_files:
+                        violation = video_quota_violation(
+                            locked_metrics, sum(video_durations[id(f)] for f in video_files))
+                        if violation:
+                            return Response(violation, status=status.HTTP_403_FORBIDDEN)
                 for file_data in image_files:
                     # Validate image size and magic-byte security first
                     serializer = MediaAssetImageUploadSerializer(
@@ -263,7 +346,13 @@ class PhotoListUploadView(APIView):
                     if not title:
                         title = os.path.splitext(file_data.name)[0]
 
+                    display_name = file_data.name
+                    # Fails closed (7-B, row 94): location that cannot be removed refuses the batch.
                     clean_file = strip_exif_gps(file_data)
+                    # The stored extension follows the bytes, never the client's filename
+                    # (a JPEG sent as "x.html" is stored as .jpg; 7-B).
+                    stem = os.path.splitext(os.path.basename(display_name))[0] or 'photo'
+                    clean_file.name = stem + _IMAGE_EXTENSIONS[validate_magic_bytes(clean_file)]
 
                     clean_file.seek(0)
                     with PILImage.open(clean_file) as img:
@@ -276,7 +365,7 @@ class PhotoListUploadView(APIView):
                         gallery=gallery,
                         media_type=MediaAsset.MediaType.IMAGE,
                         original_file=clean_file,
-                        original_name=_safe_text_field(file_data.name, 255),
+                        original_name=_safe_text_field(display_name, 255),
                         file_size=clean_file.size,
                         title=_safe_text_field(title, 200),
                         width=width,                
@@ -329,6 +418,15 @@ class PhotoListUploadView(APIView):
                     "error": "Upload validation failed.",
                     "details": exc.detail,
                     "code": "upload_validation_failed",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except LocationStripError:
+            logger.warning("Upload refused: location data could not be removed (gallery %s).", gallery.slug)
+            return Response(
+                {
+                    "error": "We could not remove the location data from a photo, so it was not uploaded.",
+                    "code": "location_strip_failed",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )

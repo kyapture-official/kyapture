@@ -353,16 +353,20 @@ export const clientsApi = {
    * @param {string} [credentials.token] - gallery unlock token (protected galleries)
    * @param {Object} [options]
    * @param {AbortSignal} [options.signal]
-   * @returns {Promise<{ download_token: string, expires_in: number, email: string, pin_verified: boolean }>}
+   * @param {string} [credentials.emailCode] - the code emailed to a listed contact (second NEXT)
+   * @returns {Promise<{ download_token: string, expires_in: number, email: string, pin_verified: boolean }
+   *   | { code: 'email_verification_required', email: string }>} the second shape when a code was just emailed
    */
   requestDownloadAccess: async (username, slug, credentials = {}, options = {}) => {
     const path = `${buildGalleryPath(username, slug)}download-access/`
-    const { email, pin, token } = credentials || {}
+    const { email, pin, emailCode, token } = credentials || {}
     const { signal } = options || {}
 
     const body = {}
     if (email) body.email = email   // (overrides the remembered one a fresh typing just corrected)
     if (pin) body.pin = pin
+    // 7-B: the one-time code emailed to an address on the gallery's contact list.
+    if (emailCode) body.email_code = emailCode
 
     const config = { signal }
     if (token) config.headers = { Authorization: `Bearer ${token}` }

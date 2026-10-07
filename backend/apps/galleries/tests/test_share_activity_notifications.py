@@ -408,10 +408,10 @@ class FavoriteActivityTests(Base):
         self.gallery.is_password_protected = True
         self.gallery.password_hash = bcrypt.hashpw(b'pw-pw-pw', bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=['is_password_protected', 'password_hash'])
-        session = ClientSession.objects.create(gallery=self.gallery, email='fan@example.com')
+        session = ClientSession.objects.issue(gallery=self.gallery, email='fan@example.com')
         client = self.client_class()
         client.post(f'{self.base}favorites/', {'media_asset_id': str(self.photos[0].id)}, format='json',
-                    HTTP_AUTHORIZATION=f'Bearer {session.access_token}')
+                    HTTP_AUTHORIZATION=f'Bearer {session.raw_token}')
         row = self.as_owner().get(self.activity, {'group': 'client'}).data['results'][0]
         self.assertEqual(row['email'], 'fan@example.com')
 
@@ -419,12 +419,13 @@ class FavoriteActivityTests(Base):
         self.gallery.is_password_protected = True
         self.gallery.password_hash = bcrypt.hashpw(b'pw-pw-pw', bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=['is_password_protected', 'password_hash'])
-        session = ClientSession.objects.create(gallery=self.gallery, email='fan@example.com')
+        session = ClientSession.objects.issue(gallery=self.gallery, email='fan@example.com')
         self.client_class().post(f'{self.base}favorites/', {'media_asset_id': str(self.photos[0].id)}, format='json',
-                                 HTTP_AUTHORIZATION=f'Bearer {session.access_token}')
+                                 HTTP_AUTHORIZATION=f'Bearer {session.raw_token}')
         owner = self.as_owner()
         for params in ({'group': 'client'}, {}, {'list': self.as_owner().get(self.activity, {'group': 'client'}).data['results'][0]['id']}):
             body = str(owner.get(self.activity, params).data)
+            self.assertNotIn(session.raw_token, body)
             self.assertNotIn(session.access_token, body)
             self.assertNotIn('client_key', body)
 

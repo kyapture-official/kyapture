@@ -31,10 +31,11 @@ class ClientSessionAdmin(admin.ModelAdmin):
     # Scale safety: Replaces database-heavy select dropdowns [1.1.2]
     raw_id_fields = ['gallery']
     
-    # Protection Guard: Freezes cryptographic session tokens and audit parameters [1.1.2]
+    # Protection Guard: freezes the audit parameters. The token (its hash since
+    # 7-B) is never shown: a staff account must not hand out gallery keys.
+    exclude = ['access_token']
     readonly_fields = [
-        'id', 
-        'access_token', 
+        'id',
         'ip_address', 
         'created_at', 
         'updated_at'

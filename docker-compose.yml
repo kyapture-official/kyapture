@@ -84,6 +84,10 @@ services:
       DB_PASSWORD: photodelivery
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      # Shared cache for throttles and lockouts (7-B, debt row 108): Redis db 2.
+      # `manage.py test` uses db 3, so a test run never wipes the app's counters.
+      CACHE_REDIS_URL: redis://redis:6379/2
+      CACHE_REDIS_TEST_URL: redis://redis:6379/3
       CELERY_TASK_ALWAYS_EAGER: "false"
       CELERY_TASK_EAGER_PROPAGATES: "false"
       # Where this stack serves the web app. Backend-built links (the "your download is
@@ -132,6 +136,10 @@ services:
       DB_PASSWORD: photodelivery
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      # Shared cache for throttles and lockouts (7-B, debt row 108): Redis db 2.
+      # `manage.py test` uses db 3, so a test run never wipes the app's counters.
+      CACHE_REDIS_URL: redis://redis:6379/2
+      CACHE_REDIS_TEST_URL: redis://redis:6379/3
       CELERY_TASK_ALWAYS_EAGER: "false"
       CELERY_TASK_EAGER_PROPAGATES: "false"
       # Where this stack serves the web app. Backend-built links (the "your download is
@@ -166,6 +174,10 @@ services:
       DB_PASSWORD: photodelivery
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      # Shared cache for throttles and lockouts (7-B, debt row 108): Redis db 2.
+      # `manage.py test` uses db 3, so a test run never wipes the app's counters.
+      CACHE_REDIS_URL: redis://redis:6379/2
+      CACHE_REDIS_TEST_URL: redis://redis:6379/3
       CELERY_TASK_ALWAYS_EAGER: "false"
       CELERY_TASK_EAGER_PROPAGATES: "false"
     depends_on:
@@ -196,6 +208,10 @@ services:
       DB_PASSWORD: photodelivery
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      # Shared cache for throttles and lockouts (7-B, debt row 108): Redis db 2.
+      # `manage.py test` uses db 3, so a test run never wipes the app's counters.
+      CACHE_REDIS_URL: redis://redis:6379/2
+      CACHE_REDIS_TEST_URL: redis://redis:6379/3
       CELERY_TASK_ALWAYS_EAGER: "false"
       CELERY_TASK_EAGER_PROPAGATES: "false"
       # Where this stack serves the web app. Backend-built links (the "your download is

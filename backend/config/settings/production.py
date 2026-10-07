@@ -105,6 +105,19 @@ if _missing_s3_vars:
 
 
 
+# ─── ENFORCE A SHARED CACHE (Fail Loudly) — 7-B, debt row 108 ───────────────
+# Throttles and the PIN/password lockout count in the default cache. Without a
+# shared one each gunicorn worker keeps its own counts, so every limit is
+# silently multiplied by the number of workers. Redis is already required for
+# Celery; point CACHE_REDIS_URL at its own database (e.g. redis://host:6379/2).
+if not os.getenv("CACHE_REDIS_URL"):
+    raise ImproperlyConfigured(
+        "Production requires CACHE_REDIS_URL (a Redis database for the shared "
+        "cache that throttles and lockouts count in). Without it each worker "
+        "process would count on its own and every rate limit would be multiplied."
+    )
+
+
 # ─── ENFORCE REAL TRANSACTIONAL EMAIL DELIVERY (Fail Loudly) — C-10 fix ─────
 # Same failure mode as the S3 guard above, same fix. Without a verified
 # sender identity, PasswordResetRequestView would keep "succeeding" (still
@@ -154,14 +167,16 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "https://app.kyapture.com").rstrip("/")
 # ─── 1. HOST & CORS DOMAIN WHITELISTING ──────────────────────────────────────
 
 # Load allowed hosts from env (e.g. ALLOWED_HOSTS=api.kyapture.com,app.kyapture.com)
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
-if not ALLOWED_HOSTS or ALLOWED_HOSTS == [""]:
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if not ALLOWED_HOSTS:
     # Fallback safe wildcard for tenant subdomains (e.g. .kyapture.com matches all subdomains)
     ALLOWED_HOSTS = [".kyapture.com"]
 
 # Load allowed CORS origins from env
-CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
-if not CORS_ALLOWED_ORIGINS or CORS_ALLOWED_ORIGINS == [""]:
+# Spaces after the commas are tolerated (an unstripped " https://..." silently
+# never matched any Origin).
+CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if not CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS = [
         "https://app.kyapture.com",
         "https://kyapture.com",
@@ -176,8 +191,8 @@ if not CORS_ALLOWED_ORIGINS or CORS_ALLOWED_ORIGINS == [""]:
 # api.kyapture.com) — which is the deployment shape ALLOWED_HOSTS/
 # CORS_ALLOWED_ORIGINS above are already set up for. Reuses the same env var
 # convention as development.py so one .env-style list covers both.
-CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
-if not CSRF_TRUSTED_ORIGINS or CSRF_TRUSTED_ORIGINS == [""]:
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+if not CSRF_TRUSTED_ORIGINS:
     CSRF_TRUSTED_ORIGINS = [
         "https://app.kyapture.com",
         "https://kyapture.com",
@@ -233,13 +248,16 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # browser actually requested rather than gunicorn's internal bind address.
 USE_X_FORWARDED_HOST = True
 
-# Django's own throttle/rate-limiting IP detection walks the X-Forwarded-For
-# chain; NUM_PROXIES tells it how many trusted hops sit in front of the app
-# (nginx = 1) so it reads the correct client IP instead of the proxy's own
-# address (which would make every visitor share one throttle bucket) or a
-# spoofable client-supplied value (if trusted with 0 hops accounted for).
-# Adjust if the real topology adds a CDN/load balancer in front of nginx.
-NUM_PROXIES = int(os.getenv("NUM_PROXIES", "1"))
+# DRF's throttle IP detection walks the X-Forwarded-For chain; NUM_PROXIES
+# tells it how many trusted hops sit in front of the app (nginx = 1) so it
+# reads the address the proxy added instead of the proxy's own address (every
+# visitor in one bucket) or a client-chosen value. DRF reads it ONLY from
+# REST_FRAMEWORK: the top-level NUM_PROXIES that used to be here was ignored,
+# leaving every anonymous throttle keyed on the raw client header (SEC-01,
+# debt row 78). The proxy must append to (or overwrite) X-Forwarded-For;
+# docs/KYAPTURE_UPLOAD_LIMITS.md has the nginx block. Adjust if a CDN/load
+# balancer is added in front of nginx.
+REST_FRAMEWORK = {**REST_FRAMEWORK, "NUM_PROXIES": int(os.getenv("NUM_PROXIES", "1"))}
 
 # HTTP Strict Transport Security (HSTS): Instructs browsers to ONLY communicate via HTTPS
 SECURE_HSTS_SECONDS = 31536000  # 1 Year duration (security standard)

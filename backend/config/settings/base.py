@@ -1,5 +1,6 @@
 #C:\Users\LENOVO\Desktop\kyapture\backend\config\settings\base.py
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -12,6 +13,15 @@ load_dotenv(BASE_DIR / "backend" / ".env")
 
 # SECRET_KEY is loaded from environment variables in production, with a fallback for local safety
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-this-in-production")
+
+# Key rotation (docs/security/secrets.md, "Rotating SECRET_KEY"): the previous
+# key(s), comma-separated. Django still VERIFIES values signed with them
+# (download/job/file links, password-reset links) while signing only with the
+# new SECRET_KEY, so a rotation does not kill every emailed link at once.
+SECRET_KEY_FALLBACKS = [k.strip() for k in os.getenv("SECRET_KEY_FALLBACKS", "").split(",") if k.strip()]
+
+# `manage.py test`: the shared cache uses its own Redis database (see CACHES).
+TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
 
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
@@ -100,6 +110,14 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
+    # How many trusted reverse proxies sit in front of Django. DRF reads this
+    # ONLY from here (a top-level NUM_PROXIES setting is ignored): with None,
+    # every anonymous throttle was keyed on the raw client-sent
+    # X-Forwarded-For, so a new header value per request got a fresh bucket
+    # (SEC-01, debt row 78). 0 = no proxy (dev compose: the browser reaches
+    # :8000 directly) -> REMOTE_ADDR; production.py sets 1 (the proxy that
+    # appends/overwrites X-Forwarded-For) -> the address that proxy added.
+    "NUM_PROXIES": int(os.getenv("NUM_PROXIES", "0")),
     "DEFAULT_THROTTLE_RATES": {
         "anon": "100/day",                  # Standard guest threshold — fine for arbitrary/misc anon endpoints
         "user": "1000/hour",                # Standard authenticated photographer threshold
@@ -127,8 +145,58 @@ REST_FRAMEWORK = {
         "video_preflight": "60/minute",
         # Per-user (authenticated user id, never the IP): POST /api/v1/feedback/.
         "feedback": "5/hour",
+        # 7-B: sign-ups per address (was the shared anon 100/day).
+        "register": "10/hour",
+        # 7-B: login attempts per ACCOUNT (the email), on top of `login` per address,
+        # so a botnet with many addresses still gets only this many tries on one account.
+        "login_account": "20/hour",
+        # 7-B (debt row 92): token refresh per USER (from the refresh token), so
+        # several people behind one NAT never share one anonymous bucket. One
+        # tab refreshes about 4 times an hour (15 min access token).
+        "token_refresh": "60/hour",
     }
 }
+
+# ─── SHARED CACHE (throttles, lockouts, notification de-duplication) ────────
+# DRF throttles and the PIN/password lockout (apps/clients/lockout.py) count in
+# Django's default cache. Without CACHES this was the per-PROCESS local-memory
+# cache, so every gunicorn worker counted separately (debt row 108). Redis is
+# already in the stack (the Celery broker); the cache uses its own database.
+# `manage.py test` uses CACHE_REDIS_TEST_URL (another database) so a test run's
+# cache.clear() never wipes the running app's counters. Without a URL (bare
+# local dev with no Redis) it falls back to local memory; production.py refuses
+# to boot without one.
+CACHE_REDIS_URL = os.getenv("CACHE_REDIS_URL", "")
+if TESTING and os.getenv("CACHE_REDIS_TEST_URL"):
+    CACHE_REDIS_URL = os.getenv("CACHE_REDIS_TEST_URL")
+if CACHE_REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": CACHE_REDIS_URL,
+            "KEY_PREFIX": "kyapture",
+        }
+    }
+else:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+# ─── FAILED-ATTEMPT LOCKOUT: gallery password and download PIN (7-B, row 81) ─
+# Counted per gallery + client address and per gallery, in the shared cache.
+# A client is locked after GATE_CLIENT_MAX_FAILURES wrong values within
+# GATE_CLIENT_WINDOW_SECONDS (a success clears its count); the gallery's gate
+# is locked for everyone after GATE_GALLERY_MAX_FAILURES within
+# GATE_GALLERY_WINDOW_SECONDS, and the photographer gets a bell notification.
+# Changing the PIN / password is the reset (it clears both counts).
+GATE_CLIENT_MAX_FAILURES = int(os.getenv("GATE_CLIENT_MAX_FAILURES", "5"))
+GATE_CLIENT_WINDOW_SECONDS = int(os.getenv("GATE_CLIENT_WINDOW_SECONDS", str(15 * 60)))
+GATE_GALLERY_MAX_FAILURES = int(os.getenv("GATE_GALLERY_MAX_FAILURES", "50"))
+GATE_GALLERY_WINDOW_SECONDS = int(os.getenv("GATE_GALLERY_WINDOW_SECONDS", str(60 * 60)))
+
+# Django admin login (apps/core/admin_login.py): failures per address and per
+# account before the form is locked for the rest of the window.
+ADMIN_LOGIN_MAX_FAILURES_PER_IP = int(os.getenv("ADMIN_LOGIN_MAX_FAILURES_PER_IP", "5"))
+ADMIN_LOGIN_MAX_FAILURES_PER_ACCOUNT = int(os.getenv("ADMIN_LOGIN_MAX_FAILURES_PER_ACCOUNT", "10"))
+ADMIN_LOGIN_WINDOW_SECONDS = int(os.getenv("ADMIN_LOGIN_WINDOW_SECONDS", str(15 * 60)))
 
 # Feedback (apps/users/feedback_api.py). APP_VERSION is stamped on each feedback;
 # a client-sent app_version is kept only when it is in this allowlist, else "unknown".
@@ -145,6 +213,9 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,                 # Revokes old refresh token instantly
     # Explicit Defaults (For developer readability)
     "ALGORITHM": "HS256",
+    # Own key for JWTs (SEC-13, debt row 88), so SECRET_KEY can be rotated
+    # without logging everyone out, and vice versa. Defaults to SECRET_KEY.
+    "SIGNING_KEY": os.getenv("JWT_SIGNING_KEY") or SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
@@ -222,10 +293,12 @@ if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
         },
     }
 else:
-    # 2. No AWS Credentials found: Gracefully fall back to local disk storage
+    # 2. No AWS Credentials found: Gracefully fall back to local disk storage.
+    # The default storage holds private files (payment receipts), so its URLs
+    # are signed and expire like the S3 ones (7-B, debt row 83).
     STORAGES = {
         "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
+            "BACKEND": "apps.core.storage.SignedFileSystemStorage",
         },
         "staticfiles": {
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
@@ -297,9 +370,11 @@ DOWNLOAD_ACCESS_TTL_SECONDS = int(os.getenv("DOWNLOAD_ACCESS_TTL_SECONDS", str(2
 # deletes both. Its file links work, repeatedly, until then.
 DOWNLOAD_JOB_TTL_SECONDS = int(os.getenv("DOWNLOAD_JOB_TTL_SECONDS", str(7 * 24 * 60 * 60)))
 # How long one signed file URL (handed out by the job-status endpoint) works.
-# Defaults to the job's own lifetime; it is bound to ONE job, so it can never
-# outlive or reach beyond the download it was issued for.
-DOWNLOAD_FILE_URL_TTL_SECONDS = int(os.getenv("DOWNLOAD_FILE_URL_TTL_SECONDS", str(7 * 24 * 60 * 60)))
+# It is bound to ONE file of ONE job. 7-B: one hour, not the job's week: the
+# ready page asks the status endpoint for a fresh URL on every click (and the
+# emailed link, which lives as long as the job, opens that page), so a file URL
+# that sits in browser or download-manager history stops working soon after.
+DOWNLOAD_FILE_URL_TTL_SECONDS = int(os.getenv("DOWNLOAD_FILE_URL_TTL_SECONDS", str(60 * 60)))
 # A prepared download is split into several ZIP parts once the photos in one
 # part would pass this many bytes ("...-photo-download-1of3.zip"). A single
 # file bigger than the limit still gets a part of its own.

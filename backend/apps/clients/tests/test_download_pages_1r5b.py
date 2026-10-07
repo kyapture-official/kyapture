@@ -144,7 +144,8 @@ class SevenDayLifetimeTests(JobBase):
     def test_defaults_are_seven_days(self):
         week = 7 * 24 * 3600
         self.assertEqual(settings.DOWNLOAD_JOB_TTL_SECONDS, week)
-        self.assertEqual(settings.DOWNLOAD_FILE_URL_TTL_SECONDS, week)
+        # 7-B: a single file URL lives an hour; the job (and its emailed link) a week.
+        self.assertEqual(settings.DOWNLOAD_FILE_URL_TTL_SECONDS, 3600)
 
     def test_a_ready_job_expires_in_seven_days(self):
         job, _ = self.prepare_job()

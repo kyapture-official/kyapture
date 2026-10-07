@@ -8,9 +8,9 @@ from apps.users.collection_defaults import DESIGN_CHOICES, validate_presentation
 
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset, PhotoSet
-from apps.core.utils import generate_secure_token
 from apps.subscriptions.entitlements import BRANDING, has_feature
 from .models import ClientSession, Favorite, DownloadLog
+from apps.core.request_ip import client_ip
 from .download_access import download_pin_enforced, get_download_policy
 from django.urls import reverse
 
@@ -379,33 +379,20 @@ class GalleryUnlockSerializer(serializers.Serializer):
         gallery = self.context.get('gallery')
         request = self.context.get('request')
         email = validated_data.get('email', '').strip() or None
-        
-        # Extract IP and generate high-entropy token
-        ip_address = self._get_client_ip(request)
-        access_token = generate_secure_token()
 
-        # Database transaction boundary respected
-        return ClientSession.objects.create(
-            gallery=gallery,
+        # The token goes back to the browser once; only its hash is stored (7-B, row 89).
+        return ClientSession.objects.issue(
+            gallery,
             email=email,
-            access_token=access_token,
-            ip_address=ip_address,
+            # The address the throttles see (NUM_PROXIES), never a client-sent header (row 78).
+            ip_address=client_ip(request) if request else None,
             has_download_access=gallery.allow_download
         )
 
-    def _get_client_ip(self, request):
-        """Extracts real client IP addressing, bypassing reverse proxy sandboxes."""
-        if not request:
-            return None
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            return x_forwarded_for.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR')
-
     def to_representation(self, instance):
-        """Returns the secure token payload immediately after successful database save."""
+        """Returns the token issued by create() (it exists nowhere else afterwards)."""
         return {
-            'access_token': instance.access_token,
+            'access_token': instance.raw_token,
             'has_download_access': instance.has_download_access
         }
 

@@ -59,6 +59,53 @@ Also needed for a real 2 GB body (not set anywhere in the repo today, see docs/K
 upload (the Dockerfile uses the 30 s default), and free temp disk for nginx's `client_body_temp_path`, Django's `FILE_UPLOAD_TEMP_DIR`, the stored
 original and the FFmpeg output at once (several times the file's size).
 
+## Early refusal of an oversized body (7-B, debt rows 4, 31, 75)
+
+What the app does (tested in `backend/apps/photos/tests/test_security_7b.py::EarlyBodyRefusalTests`, with a request body that raises
+if it is read): before authentication (the cookie-auth CSRF check reads the POST body, and DRF spools the whole multipart stream to
+temp files the moment `request.data` is touched), `PhotoListUploadView.dispatch` looks only at the headers:
+
+- `Content-Length` above `max(max_image_mb, max_video_mb)` + 1 MB of multipart framing → `413 request_too_large`. The app sends one
+  file per request, so nothing honest is larger.
+- An account (not staff) that has no storage left at all → `403 storage_limit_reached`, whatever the body holds.
+
+What it cannot do: the bytes a client already sent still reach the server. Behind nginx with request buffering on (its default),
+nginx receives the **whole** body before Django sees the headers, so **`client_max_body_size` is the only real early stop**. A video
+whose length the browser cannot read (row 31) still uploads in full before ffprobe can refuse it on minutes; refusing that early needs
+a resumable/chunked upload that probes the first chunk (not built).
+
+### Production proxy and gunicorn values (plan; not testable in this repo)
+
+These go into the staging/production manifests (14-A / 16-A). Defaults: `max_image_mb` 100, `max_video_mb` 2048.
+
+```nginx
+# server block that proxies the API (api.kyapture.com)
+client_max_body_size    2100m;   # >= max_video_mb + 50 MB; raise together with max_video_mb in admin
+client_body_timeout     600s;
+proxy_request_buffering on;      # nginx absorbs slow clients; gunicorn only sees complete bodies
+proxy_read_timeout      900s;    # > the gunicorn timeout below
+proxy_send_timeout      900s;
+
+# The client address DRF throttles and the PIN/password lockout count on
+# (REST_FRAMEWORK NUM_PROXIES = 1 in production.py). Overwrite, never append a
+# client-sent value: with exactly one trusted proxy either works, but overwriting
+# keeps the header to one entry.
+proxy_set_header X-Forwarded-For   $remote_addr;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header Host              $host;
+
+# Unlock / download / file tokens can sit in query strings (<a href>, <video src>):
+# keep them out of the access log.
+log_format kyapture_noargs '$remote_addr - [$time_local] "$request_method $uri" $status $body_bytes_sent $request_time';
+access_log /var/log/nginx/api.access.log kyapture_noargs;
+```
+
+gunicorn (`backend/Dockerfile` CMD today: 3 workers, default `--timeout 30`): with nginx buffering the request, gunicorn reads a
+2 GB body from the local socket in seconds, but the view also runs ffprobe (up to 60 s) and saves the original to storage
+(S3: a multi-GB PUT). Plan: `--timeout 900 --graceful-timeout 60` on the API service (a sync worker blocked longer than that is
+killed and the upload answers 502), and `FILE_UPLOAD_TEMP_DIR` on a volume with room for several of the largest file at once.
+Measuring a real 2 GB upload on staging hardware stays with 15-A (rows 62, 72).
+
 ## Tests
 
 `backend/apps/photos/tests/test_upload_limits.py`: exactly at and one byte/pixel over each limit; a 29952 x 29952 PNG header refused

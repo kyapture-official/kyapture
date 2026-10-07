@@ -74,6 +74,8 @@ ARG BUILD_DB_NAME=build-time-placeholder
 ARG BUILD_DB_USER=build-time-placeholder
 ARG BUILD_DB_PASSWORD=build-time-placeholder
 ARG BUILD_DB_HOST=build-time-placeholder
+# production.py also refuses to boot without a shared cache (7-B, debt row 108).
+ARG BUILD_CACHE_REDIS_URL=redis://build-time-placeholder:6379/2
 
 # Pre-compile and collect static assets during the image build phase.
 # This compiles, compresses, and generates cache-busting hashes for WhiteNoise static serving.
@@ -86,6 +88,7 @@ RUN SECRET_KEY="$BUILD_SECRET_KEY" \
     DB_USER="$BUILD_DB_USER" \
     DB_PASSWORD="$BUILD_DB_PASSWORD" \
     DB_HOST="$BUILD_DB_HOST" \
+    CACHE_REDIS_URL="$BUILD_CACHE_REDIS_URL" \
     python manage.py collectstatic --noinput --settings=config.settings.production
 
 RUN chmod +x docker-entrypoint.py

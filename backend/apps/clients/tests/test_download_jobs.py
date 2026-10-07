@@ -47,7 +47,10 @@ def _asset(gallery, name, photo_set=None, order=0):
     asset.original_file.save(name, ContentFile(b"ORIGINAL:" + name.encode()), save=False)
     asset.save()
     asset.download_file.save(f"{name}.master.jpg", ContentFile(b"MASTER:" + name.encode()), save=False)
-    asset.save(update_fields=["download_file"])
+    # Like every processed READY photo, it has a display tier: Web Size never falls
+    # back to the original any more (7-B, SEC-27).
+    asset.display_file.save(f"{name}.webp", ContentFile(b"DISPLAY:" + name.encode()), save=False)
+    asset.save(update_fields=["download_file", "display_file"])
     return asset
 
 
@@ -138,14 +141,14 @@ class JobCreatedOnlyAfterAuthorizationTests(JobBase):
         self.gallery.is_password_protected = True
         self.gallery.password_hash = bcrypt.hashpw(b"pw", bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=["is_password_protected", "password_hash"])
-        session = ClientSession.objects.create(gallery=self.gallery, email="c@example.com")
+        session = ClientSession.objects.issue(gallery=self.gallery, email="c@example.com")
         grant = self.client.post(
             f"{self.base}download-access/", {"email": "c@example.com", "pin": PIN}, format="json",
-            HTTP_AUTHORIZATION=f"Bearer {session.access_token}")
+            HTTP_AUTHORIZATION=f"Bearer {session.raw_token}")
         token = grant.data["download_token"]
         self.assertEqual(self.prepare(token).status_code, 401)           # token alone is not a session
         self.assert_nothing_queued()
-        self.assertEqual(self.prepare(token, token=session.access_token).status_code, 202)
+        self.assertEqual(self.prepare(token, token=session.raw_token).status_code, 202)
 
     def test_an_authorized_request_creates_exactly_one_job_and_202(self):
         token = self.token()
@@ -335,16 +338,16 @@ class SignedFileUrlTests(JobBase):
         self.gallery.is_password_protected = True
         self.gallery.password_hash = bcrypt.hashpw(b"pw", bcrypt.gensalt()).decode()
         self.gallery.save(update_fields=["is_password_protected", "password_hash"])
-        session = ClientSession.objects.create(gallery=self.gallery, email="client@example.com")
+        session = ClientSession.objects.issue(gallery=self.gallery, email="client@example.com")
         grant = self.client.post(f"{self.base}download-access/", {"email": "client@example.com", "pin": PIN},
-                                 format="json", HTTP_AUTHORIZATION=f"Bearer {session.access_token}")
+                                 format="json", HTTP_AUTHORIZATION=f"Bearer {session.raw_token}")
         token = grant.data["download_token"]
-        job_id = self.prepare(token, token=session.access_token).data["job_id"]
-        listed = self.status_of(job_id, token, token=session.access_token)
+        job_id = self.prepare(token, token=session.raw_token).data["job_id"]
+        listed = self.status_of(job_id, token, token=session.raw_token)
         url = listed.data["files"][0]["url"]
         self.assertEqual(self.client.get(url).status_code, 200)                       # signed link alone
         self.assertEqual(self.client.get(url.split("?")[0]).status_code, 401)         # bare URL: no grant, no session
-        self.assertEqual(self.client.get(f"{url}&token={session.access_token}").status_code, 200)
+        self.assertEqual(self.client.get(f"{url}&token={session.raw_token}").status_code, 200)
 
     def test_expired_job_is_gone(self):
         _, job_id, url = self.ready()
@@ -378,10 +381,17 @@ class ReadyLinkLifetimeTests(JobBase):
         _, job, url = self.ready()
         import time as _time
         now = _time.time()
+        # 7-B: one file URL lives an hour; six days later the job's own link (the
+        # emailed key) still mints a fresh file URL that works.
+        from apps.clients.download_access import issue_job_link_token
+        key = issue_job_link_token(job, self.gallery)
         with mock.patch("django.core.signing.time.time", return_value=now + 6 * 24 * 3600):
-            self.assertEqual(self.client.get(url).status_code, 200)
+            stale = self.client.get(url)
+            self.assertEqual((stale.status_code, stale.data["code"]), (403, "download_link_expired"))
+            fresh = self.client.get(f"{self.base}download-jobs/{job.id}/", {"link_token": key}).data["files"][0]["url"]
+            self.assertEqual(self.client.get(fresh).status_code, 200)
         DownloadJob.objects.filter(pk=job.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
-        self.assertEqual(self.client.get(url).status_code, 410)
+        self.assertEqual(self.client.get(fresh).status_code, 410)
 
     def test_a_token_for_another_job_is_a_404_never_a_download(self):
         token, job, url = self.ready()

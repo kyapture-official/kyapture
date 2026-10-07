@@ -17,11 +17,13 @@ Covers:
   - errors use the existing {'error', 'code'} shape and never leak exceptions
 """
 import io
+import re
 import zipfile
 from unittest import mock
 
 import bcrypt
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import override_settings
@@ -57,6 +59,19 @@ def _asset(gallery, name="photo.jpg", photo_set=None, order=0):
     asset.download_file.save(f"{stored}.master.jpg", ContentFile(b"MASTER:" + name.encode()), save=False)
     asset.save(update_fields=["display_file", "download_file"])
     return asset
+
+
+def complete_email_code(client, url, body, response, **extra):
+    """
+    7-B (row 80): an address on "Restrict Downloads to Specific Contacts" is
+    proven with the one-time code it was emailed. Does what that contact does:
+    reads the code from the (test) mailbox and sends it with the same body.
+    Any other response is passed through unchanged.
+    """
+    if response.status_code != 202 or response.data.get('code') != 'email_verification_required':
+        return response
+    code = re.search(r'\b(\d{6})\b', mail.outbox[-1].body).group(1)
+    return client.post(url, {**body, 'email_code': code}, format='json', **extra)
 
 
 def _zip_entries(response):
@@ -104,7 +119,8 @@ class DownloadFlowBase(InlineDownloadJobsMixin, APITestCase):
         body.setdefault("email", "client@example.com")
         if self.with_pin:
             body.setdefault("pin", PIN)
-        return self.client.post(self.access_url, body, format="json")
+        response = self.client.post(self.access_url, body, format="json")
+        return complete_email_code(self.client, self.access_url, body, response)
 
     def token(self, **body):
         response = self.authorize(**body)
@@ -184,7 +200,7 @@ class GalleryPasswordAndDownloadPinAreSeparateTests(DownloadFlowBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
 
     def test_email_given_at_unlock_is_reused_so_download_does_not_ask_again(self):
-        session = ClientSession.objects.get(access_token=self.unlock_token)
+        session = ClientSession.objects.for_token(self.unlock_token).get()
         session.email = "known@example.com"
         session.save(update_fields=["email"])
         response = self.client.post(
@@ -195,12 +211,12 @@ class GalleryPasswordAndDownloadPinAreSeparateTests(DownloadFlowBase):
 
     def test_download_email_is_saved_on_the_session_when_it_had_none(self):
         self.authorize(token=self.unlock_token, email="new@example.com")
-        session = ClientSession.objects.get(access_token=self.unlock_token)
+        session = ClientSession.objects.for_token(self.unlock_token).get()
         self.assertEqual(session.email, "new@example.com")
         self.assertTrue(session.has_download_access)
 
     def test_existing_session_email_is_never_overwritten(self):
-        session = ClientSession.objects.get(access_token=self.unlock_token)
+        session = ClientSession.objects.for_token(self.unlock_token).get()
         session.email = "first@example.com"
         session.save(update_fields=["email"])
         self.authorize(token=self.unlock_token, email="second@example.com")

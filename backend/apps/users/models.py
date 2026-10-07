@@ -165,6 +165,8 @@ class Notification(BaseModel):
         PROCESSING_DONE = 'processing_done', 'Processing complete'
         PROCESSING_FAILED = 'processing_failed', 'Processing failed'
         FEEDBACK = 'feedback', 'New feedback'     # sent to staff (see apps/users/feedback_api.py)
+        # A gallery's password or download PIN was locked after too many wrong attempts (apps/clients/lockout.py).
+        SECURITY = 'security', 'Security alert'
 
     user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='notifications')
     kind = models.CharField(max_length=20, choices=Kind.choices)

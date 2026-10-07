@@ -16,7 +16,6 @@ skipped silently -- the prepare/status endpoints answer exactly as before, so
 nothing reveals whether an address is valid, deliverable or throttled. A failure
 to send is logged and never touches the job.
 """
-import ipaddress
 import logging
 import re
 from datetime import timedelta
@@ -27,7 +26,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone
-from rest_framework.throttling import BaseThrottle
+from apps.core.request_ip import client_ip
 
 from apps.core.share import build_gallery_share_url
 
@@ -42,10 +41,7 @@ _CONTROL_CHARS = re.compile(r'[\x00-\x1f\x7f]+')
 
 def requester_ip(request):
     """The visitor's IP as DRF's throttles see it (honours NUM_PROXIES), or None when it is not a valid address."""
-    try:
-        return str(ipaddress.ip_address(BaseThrottle().get_ident(request)))
-    except (ValueError, TypeError):
-        return None
+    return client_ip(request)
 
 
 def studio_name(gallery):

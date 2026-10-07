@@ -1,7 +1,7 @@
 // File Location: frontend/src/components/layout/NotificationBell.jsx
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, CheckCheck, CreditCard, Download, Heart, Image as ImageIcon, MessageSquare, Rocket, TriangleAlert } from 'lucide-react'
+import { Bell, CheckCheck, CreditCard, Download, Heart, Image as ImageIcon, MessageSquare, Rocket, ShieldAlert, TriangleAlert } from 'lucide-react'
 import { notificationsApi } from '../../api/notificationsApi'
 import { timeAgo } from '../../utils/formatters'
 
@@ -20,6 +20,7 @@ const KIND_ICON = {
   processing_done: ImageIcon,
   processing_failed: TriangleAlert,
   feedback: MessageSquare,
+  security: ShieldAlert,
 }
 
 /**
@@ -255,7 +256,7 @@ export default function NotificationBell() {
                         }`}
                       >
                         <span className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
-                          item.kind === 'processing_failed' ? 'bg-red-50 text-red-600' : 'bg-cream-100 text-muted'
+                          item.kind === 'processing_failed' || item.kind === 'security' ? 'bg-red-50 text-red-600' : 'bg-cream-100 text-muted'
                         }`}>
                           <Icon className="h-4 w-4" aria-hidden="true" />
                         </span>

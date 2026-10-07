@@ -26,7 +26,7 @@ from rest_framework.test import APIClient
 from apps.clients.download_jobs import send_ready_email
 from apps.clients.models import DownloadJob
 from apps.clients.ready_email import deliver_ready_email
-from apps.clients.tests.test_download_access_flow import PIN, _zip_entries
+from apps.clients.tests.test_download_access_flow import PIN, _zip_entries, complete_email_code
 from apps.clients.tests.test_download_pages_1r5b import JobBase
 from apps.galleries.models import Gallery
 
@@ -47,9 +47,11 @@ class ProtectedGalleryBase(JobBase):
     def make_job(self, email='client@example.com', **body):
         """The honest path: unlock session + PIN/email -> download-access -> prepare."""
         cache.clear()
-        access = self.client.post(
-            f'{self.base}download-access/', {'email': email, 'pin': PIN}, format='json',
-            HTTP_AUTHORIZATION=f'Bearer {self.unlock_token}',
+        auth = {'HTTP_AUTHORIZATION': f'Bearer {self.unlock_token}'}
+        access = complete_email_code(
+            self.client, f'{self.base}download-access/', {'email': email, 'pin': PIN},
+            self.client.post(f'{self.base}download-access/', {'email': email, 'pin': PIN}, format='json', **auth),
+            **auth,
         )
         self.assertEqual(access.status_code, 200, access.data)
         response = self.client.post(

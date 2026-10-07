@@ -50,6 +50,27 @@ import os
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 
+# How long a signed local (dev) URL works: the same hour as the S3 presigned URLs.
+LOCAL_SIGNED_URL_SECONDS = 3600
+LOCAL_SIGNED_URL_SALT = 'kyapture.core.media.local-signed-url'
+
+
+class SignedFileSystemStorage(FileSystemStorage):
+    """
+    Local disk storage whose URLs carry an expiring signature (`?sig=`), the
+    local stand-in for S3 presigned URLs. Used for every PRIVATE file in dev
+    (originals, Download Masters, receipts): the DEBUG media route
+    (apps/core/media.py) refuses a private path without a valid signature, so
+    seeing one public URL no longer opens the whole media directory.
+    """
+
+    def url(self, name):
+        from django.core import signing
+        base = super().url(name)
+        signed = signing.TimestampSigner(salt=LOCAL_SIGNED_URL_SALT).sign(name)
+        return f'{base}?sig={signed[len(name) + 1:]}'
+
+
 _S3_CONFIGURED = bool(
     os.getenv("AWS_ACCESS_KEY_ID")
     and os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -84,8 +105,12 @@ if _S3_CONFIGURED:
         }
 
 else:
-    class PrivateMediaStorage(FileSystemStorage):
-        """Local dev fallback — disk has no ACL/signing concept."""
+    class PrivateMediaStorage(SignedFileSystemStorage):
+        """
+        Local dev fallback. Disk has no ACL, so its URLs are signed and expire
+        like S3's (SignedFileSystemStorage); apps/core/media.py serves a private
+        file only for a valid signature (7-B, SEC-06 / debt row 83).
+        """
         pass
 
     class PublicMediaStorage(FileSystemStorage):

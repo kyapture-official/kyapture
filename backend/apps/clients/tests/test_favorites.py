@@ -14,7 +14,7 @@ from rest_framework.test import APITestCase
 
 from apps.galleries.models import Gallery
 from apps.photos.models import MediaAsset
-from apps.clients.models import ClientSession, Favorite
+from apps.clients.models import ClientSession, Favorite, hash_unlock_token
 
 User = get_user_model()
 
@@ -163,9 +163,9 @@ class ProtectedGalleryFavoritesTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
 
         favorite = Favorite.objects.get(gallery=self.gallery, media_asset=self.asset)
-        self.assertEqual(favorite.client_key, token)
+        self.assertEqual(favorite.client_key, hash_unlock_token(token))      # 7-B: the hash, never the token
         self.assertEqual(favorite.email, "guest@example.com")
-        self.assertEqual(favorite.client_session.access_token, token)
+        self.assertEqual(favorite.client_session.access_token, hash_unlock_token(token))
 
     def test_client_cannot_fabricate_identity_for_protected_gallery(self):
         """
@@ -186,8 +186,9 @@ class ProtectedGalleryFavoritesTestCase(APITestCase):
         self.assertEqual(got.data["favorited_ids"], [])
         self.client.post(self.url, body, format="json", HTTP_AUTHORIZATION=f"Bearer {token}")
         mine = Favorite.objects.get(gallery=self.gallery, client_key="attacker-supplied-id")
-        self.assertEqual(mine.client_session.access_token, token)
-        self.assertEqual(Favorite.objects.get(gallery=self.gallery, client_key=victim).media_asset_id, self.asset.id)
+        self.assertEqual(mine.client_session.access_token, hash_unlock_token(token))
+        self.assertEqual(Favorite.objects.get(gallery=self.gallery, client_key=hash_unlock_token(victim)).media_asset_id,
+                         self.asset.id)
 
 
 class PhotographerFavoriteActivityTestCase(APITestCase):
