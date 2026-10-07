@@ -265,19 +265,41 @@ def pin_limit_reached(gallery):
 
 def record_pin_use(gallery):
     """
-    One successful PIN verification used up — incremented only at the one
-    place a PIN is actually checked against the client-supplied value
-    (PublicDownloadAccessView), never when a previously-issued download
-    token merely carries an earlier verification forward.
+    One successful PIN verification used up — called only at the one place a
+    PIN is actually checked against the client-supplied value
+    (PublicDownloadAccessView), never when a previously-issued download token
+    merely carries an earlier verification forward.
+
+    7F (row F1): the count is changed on the FRESH row under a row lock, never
+    on the copy this request loaded at its start. That makes the limit hold
+    under parallel requests (the check is repeated on the locked row) and
+    keeps an owner save that landed meanwhile (GalleryDetailView.put and
+    GallerySetDownloadPinView lock the same row). Returns None when the use
+    was recorded, 'pin_limit_reached' when the last use went to another
+    request, or 'pin_changed' when the PIN this request proved was changed
+    or cleared meanwhile (its token would not be valid anyway).
     """
-    design_settings = dict(gallery.design_settings or {})
-    privacy = dict(design_settings.get('privacy') or {})
-    count = privacy.get('pin_use_count', 0)
-    count = count if isinstance(count, int) and not isinstance(count, bool) else 0
-    privacy['pin_use_count'] = count + 1
-    design_settings['privacy'] = privacy
+    from django.db import transaction
+    from apps.galleries.models import Gallery
+
+    with transaction.atomic():
+        fresh = Gallery.objects.select_for_update().only(
+            'id', 'design_settings', 'download_pin_hash',
+        ).get(pk=gallery.pk)
+        if (fresh.download_pin_hash or '') != (gallery.download_pin_hash or ''):
+            return 'pin_changed'
+        if pin_limit_reached(fresh):
+            return 'pin_limit_reached'
+        design_settings = dict(fresh.design_settings) if isinstance(fresh.design_settings, dict) else {}
+        privacy = dict(design_settings.get('privacy')) if isinstance(design_settings.get('privacy'), dict) else {}
+        count = privacy.get('pin_use_count', 0)
+        count = count if isinstance(count, int) and not isinstance(count, bool) else 0
+        privacy['pin_use_count'] = count + 1
+        design_settings['privacy'] = privacy
+        fresh.design_settings = design_settings
+        fresh.save(update_fields=['design_settings'])
     gallery.design_settings = design_settings
-    gallery.save(update_fields=['design_settings'])
+    return None
 
 
 MAX_EMAIL_LENGTH = 254

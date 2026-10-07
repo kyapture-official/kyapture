@@ -67,9 +67,26 @@ def normalize_download_settings(value, *, instance=None, user=None):
     apps/clients/download_access.py's resolution_is_allowed() and every
     existing caller already key off it exactly as before — one source of
     truth, no duplicate "is this size on" flag.
+
+    7F (row 152): a key the block leaves out keeps its STORED value (on an
+    update), never the default: high_res.enabled/mode, web.enabled/px,
+    require_email, sets_enabled, limit_total, restrict_contacts,
+    allowed_emails and pin_enabled. Defaults apply only when nothing is
+    stored (a new gallery, or a key an older gallery never had). Off is
+    always an explicit value (false, or null for sets_enabled/limit_total).
+    A kept value is not re-validated: it was validated when it was saved.
     """
     if not isinstance(value, dict):
         raise serializers.ValidationError('downloads must be an object.')
+
+    stored = instance.design_settings.get('downloads') if instance is not None and isinstance(instance.design_settings, dict) else None
+    stored = stored if isinstance(stored, dict) else {}
+    stored_high_res = stored.get('high_res') if isinstance(stored.get('high_res'), dict) else {}
+    stored_web = stored.get('web') if isinstance(stored.get('web'), dict) else {}
+    stored_sizes = stored.get('allowed_sizes') if isinstance(stored.get('allowed_sizes'), list) else None
+
+    def _stored_bool(v, default):
+        return v if isinstance(v, bool) else default
 
     def _bool(d, key, default):
         v = d.get(key, default)
@@ -90,28 +107,37 @@ def normalize_download_settings(value, *, instance=None, user=None):
     elif legacy_sizes is not None:
         high_res_enabled = 'download' in legacy_sizes
     else:
-        high_res_enabled = True
+        high_res_enabled = _stored_bool(
+            stored_high_res.get('enabled'), 'download' in stored_sizes if stored_sizes is not None else True)
 
     if 'enabled' in web_in:
         web_enabled = _bool(web_in, 'enabled', True)
     elif legacy_sizes is not None:
         web_enabled = 'web' in legacy_sizes
     else:
-        web_enabled = True
+        web_enabled = _stored_bool(
+            stored_web.get('enabled'), 'web' in stored_sizes if stored_sizes is not None else True)
 
     if not high_res_enabled and not web_enabled:
         raise serializers.ValidationError({'allowed_sizes': 'Choose at least one download size.'})
 
-    mode = high_res_in.get('mode', '3600')
+    stored_mode = stored_high_res.get('mode') if stored_high_res.get('mode') in HIGH_RES_MODES else '3600'
+    mode = high_res_in.get('mode', stored_mode)
     if mode not in HIGH_RES_MODES:
         raise serializers.ValidationError({'high_res': {'mode': 'mode must be "3600" or "original".'}})
-    if mode == 'original' and high_res_enabled and user is not None:
+    already_on = stored_mode == 'original' and _stored_bool(stored_high_res.get('enabled'), False)
+    if mode == 'original' and high_res_enabled and user is not None and not already_on:
         # Free users may never SAVE 'original' — not even disabled-but-stored,
         # since a lapsed-then-renewed Pro photographer should never find an
         # old Free-era attempt silently reactivated. Reject outright (403).
+        # Keeping an 'original' that is already stored and On is not a new
+        # choice (7F): the download path itself falls back to 3600 once the
+        # plan lapses (apps/clients/download_access.py).
         require_feature(user, ORIGINAL_DOWNLOAD)
 
-    px = web_in.get('px', 2048)
+    stored_px = stored_web.get('px')
+    stored_px = LEGACY_WEB_PX.get(stored_px, stored_px) if isinstance(stored_px, int) and not isinstance(stored_px, bool) else None
+    px = web_in.get('px', stored_px if stored_px in WEB_PX_VALUES else 2048)
     if not isinstance(px, bool) and isinstance(px, int):
         px = LEGACY_WEB_PX.get(px, px)
     if isinstance(px, bool) or px not in WEB_PX_VALUES:
@@ -121,10 +147,14 @@ def normalize_download_settings(value, *, instance=None, user=None):
 
     if 'require_email' in value and not isinstance(value['require_email'], bool):
         raise serializers.ValidationError({'require_email': 'require_email must be true or false.'})
-    require_email = value.get('require_email', True)
+    require_email = value.get('require_email', _stored_bool(stored.get('require_email'), True))
 
-    sets_enabled = value.get('sets_enabled', None)
-    if sets_enabled is not None:
+    if 'sets_enabled' in value:
+        sets_enabled = value['sets_enabled']
+    else:
+        kept = stored.get('sets_enabled')
+        sets_enabled = kept if isinstance(kept, list) and kept and all(isinstance(s, str) for s in kept) else None
+    if sets_enabled is not None and 'sets_enabled' in value:
         if not isinstance(sets_enabled, list) or any(not isinstance(s, str) for s in sets_enabled):
             raise serializers.ValidationError({
                 'sets_enabled': 'sets_enabled must be a list of set ids, or null for all sets.'
@@ -141,15 +171,23 @@ def normalize_download_settings(value, *, instance=None, user=None):
             })
         sets_enabled = sorted(set(sets_enabled))
 
-    limit_total = value.get('limit_total', None)
+    if 'limit_total' in value:
+        limit_total = value['limit_total']
+    else:
+        kept = stored.get('limit_total')
+        limit_total = kept if isinstance(kept, int) and not isinstance(kept, bool) and kept >= 1 else None
     if limit_total is not None:
         if isinstance(limit_total, bool) or not isinstance(limit_total, int) or limit_total < 1:
             raise serializers.ValidationError({
                 'limit_total': 'limit_total must be a positive whole number, or null for no limit.'
             })
 
-    restrict_contacts = _bool(value, 'restrict_contacts', False)
-    allowed_emails_in = value.get('allowed_emails', [])
+    restrict_contacts = _bool(value, 'restrict_contacts', _stored_bool(stored.get('restrict_contacts'), False))
+    if 'allowed_emails' in value:
+        allowed_emails_in = value['allowed_emails']
+    else:
+        kept = stored.get('allowed_emails')
+        allowed_emails_in = kept if isinstance(kept, list) else []
     if not isinstance(allowed_emails_in, list):
         raise serializers.ValidationError({'allowed_emails': 'allowed_emails must be a list of email addresses.'})
     allowed_emails = []
@@ -170,9 +208,7 @@ def normalize_download_settings(value, *, instance=None, user=None):
 
     # Omitted = keep what is stored (a block that never mentions the PIN
     # toggle must not silently flip it); a fresh gallery defaults to On.
-    stored = instance.design_settings.get('downloads') if instance is not None and isinstance(instance.design_settings, dict) else None
-    stored_pin_enabled = stored.get('pin_enabled') if isinstance(stored, dict) else None
-    pin_enabled = _bool(value, 'pin_enabled', stored_pin_enabled if isinstance(stored_pin_enabled, bool) else True)
+    pin_enabled = _bool(value, 'pin_enabled', _stored_bool(stored.get('pin_enabled'), True))
 
     return {
         'allowed_sizes': allowed_sizes,
@@ -197,6 +233,8 @@ def normalize_privacy_settings(value, existing):
     the Privacy tab per the 1R.6 product rule that every gate secret/limit
     lives there, never on the Download tab.
 
+    A block that leaves pin_limit out keeps the stored limit (7F, row 152).
+
     pin_use_count is an internal counter (how many times the CURRENT PIN
     has successfully unlocked a download — apps/clients/views.py
     ::PublicDownloadAccessView) that a photographer request never sets
@@ -206,14 +244,19 @@ def normalize_privacy_settings(value, existing):
     """
     if not isinstance(value, dict):
         raise serializers.ValidationError('privacy must be an object.')
-    pin_limit = value.get('pin_limit', None)
+    # 7F: a block without pin_limit keeps the stored limit; Off is an explicit null.
+    if 'pin_limit' in value:
+        pin_limit = value['pin_limit']
+    else:
+        kept = existing.get('pin_limit') if isinstance(existing, dict) else None
+        pin_limit = kept if isinstance(kept, int) and not isinstance(kept, bool) and kept >= 1 else None
     if pin_limit is not None:
         if isinstance(pin_limit, bool) or not isinstance(pin_limit, int) or pin_limit < 1:
             raise serializers.ValidationError({
                 'pin_limit': 'pin_limit must be a positive whole number, or null for no limit.'
             })
     existing_count = existing.get('pin_use_count', 0) if isinstance(existing, dict) else 0
-    if not isinstance(existing_count, int):
+    if not isinstance(existing_count, int) or isinstance(existing_count, bool):
         existing_count = 0
     return {'pin_limit': pin_limit, 'pin_use_count': existing_count}
 
@@ -511,7 +554,10 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
 
     def validate_design_settings(self, value):
         """
-        Nested merge: a save only changes the keys it names. Presentation keys
+        Nested merge: a save only changes the keys it names, down to the keys
+        inside the downloads, privacy and watermark blocks (7F: an omitted
+        key keeps its stored value; see normalize_download_settings,
+        normalize_privacy_settings and _normalize_blocks). Presentation keys
         (typography, colorPalette, layout, gridStyle, thumbSize, gridSpacing)
         are checked against the fixed vocabulary shared with Collection
         Defaults (null resets one to the app default). Every other stored key
@@ -611,6 +657,10 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
             value.pop('watermark')
             return value
 
+        # 7F: a block that names only some keys keeps the stored value of the
+        # others (type, text, position, opacity, size, margin), not the defaults.
+        if isinstance(incoming, dict) and isinstance(existing_block, dict):
+            incoming = {**existing_block, **incoming}
         config, errors = validate_watermark_config(incoming)
         if errors:
             raise serializers.ValidationError({'watermark': errors})

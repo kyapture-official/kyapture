@@ -1146,8 +1146,18 @@ class PublicDownloadAccessView(APIView):
 
         # "Limit PIN usage" counts granted downloads only: one per token issued,
         # never the extra request of the email-code step.
+        # 7F: recorded on the locked, fresh row; the limit is checked again there.
         if pin_verified:
-            record_pin_use(gallery)
+            refused = record_pin_use(gallery)
+            if refused == 'pin_limit_reached':
+                return error_response(
+                    f'Download limit reached. Contact {_studio_name(gallery)}.', 'pin_limit_reached',
+                    status.HTTP_403_FORBIDDEN,
+                )
+            if refused == 'pin_changed':
+                return error_response(
+                    'Incorrect download PIN.', 'invalid_pin', status.HTTP_401_UNAUTHORIZED,
+                )
 
         # Remember the email on the unlock session (never overwriting one
         # the client already gave) so downloads and favorite activity for

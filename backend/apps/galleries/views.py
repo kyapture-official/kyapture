@@ -246,13 +246,29 @@ class GalleryDetailView(APIView):
         return self.put(request, slug)
 
     def put(self, request, slug):
+        # 7F: the row is locked before it is read, so the merge below works on
+        # the latest stored design_settings and a public write to the same row
+        # (the "Limit PIN Usage" counter, apps/clients/download_access.py
+        # ::record_pin_use) waits instead of being overwritten, or overwriting.
+        with transaction.atomic():
+            locked = Gallery.objects.select_for_update().filter(
+                slug=slug, photographer=request.user, is_active=True,
+            ).values_list('pk', flat=True).first()
+            if locked is None:
+                return Response(
+                    {'error': 'Gallery not found.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            return self._update(request, slug)
+
+    def _update(self, request, slug):
         gallery = self.get_object(slug, request.user)
         if not gallery:
             return Response(
                 {'error': 'Gallery not found.'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         serializer = GalleryUpdateSerializer(
             gallery,
             data=request.data,
@@ -586,40 +602,39 @@ class GallerySetDownloadPinView(APIView):
         )
 
         pin = request.data.get('pin')
-        pin = pin.strip() if pin else ''
-
-        # 1R.6: a new PIN (including clearing the old one) starts its own
-        # "Limit PIN Usage" count — design_settings.privacy.pin_use_count —
-        # rather than inheriting whatever the previous PIN had already used.
-        design_settings = dict(gallery.design_settings or {})
-        privacy = dict(design_settings.get('privacy') or {})
-        privacy['pin_use_count'] = 0
-        design_settings['privacy'] = privacy
-
-        if not pin:
-            gallery.download_pin_hash = None
-            gallery.design_settings = design_settings
-            gallery.save(update_fields=['download_pin_hash', 'design_settings'])
-            return Response({
-                'status': 'success',
-                'has_download_pin': False,
-            }, status=status.HTTP_200_OK)
-
-        if not (pin.isdigit() and 4 <= len(pin) <= 8):
+        if pin is not None and not isinstance(pin, str):
             return Response(
                 {'error': 'PIN must be 4 to 8 digits.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        pin = pin.strip() if pin else ''
 
-        gallery.download_pin_hash = bcrypt.hashpw(
-            pin.encode('utf-8'), bcrypt.gensalt()
-        ).decode('utf-8')
-        gallery.design_settings = design_settings
-        gallery.save(update_fields=['download_pin_hash', 'design_settings'])
+        if pin and not (pin.isdigit() and 4 <= len(pin) <= 8):
+            return Response(
+                {'error': 'PIN must be 4 to 8 digits.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        new_hash = bcrypt.hashpw(pin.encode('utf-8'), bcrypt.gensalt()).decode('utf-8') if pin else None
+
+        # 1R.6: a new PIN (including clearing the old one) starts its own
+        # "Limit PIN Usage" count — design_settings.privacy.pin_use_count —
+        # rather than inheriting whatever the previous PIN had already used.
+        # 7F: written on the locked, fresh row (the hash is computed before
+        # the lock), so a PIN use in flight can neither be lost nor write the
+        # old count back.
+        with transaction.atomic():
+            gallery = Gallery.objects.select_for_update().get(pk=gallery.pk)
+            design_settings = dict(gallery.design_settings) if isinstance(gallery.design_settings, dict) else {}
+            privacy = dict(design_settings.get('privacy')) if isinstance(design_settings.get('privacy'), dict) else {}
+            privacy['pin_use_count'] = 0
+            design_settings['privacy'] = privacy
+            gallery.download_pin_hash = new_hash
+            gallery.design_settings = design_settings
+            gallery.save(update_fields=['download_pin_hash', 'design_settings'])
 
         return Response({
             'status': 'success',
-            'has_download_pin': True,
+            'has_download_pin': bool(new_hash),
         }, status=status.HTTP_200_OK)
 
 
