@@ -9,6 +9,10 @@ files only variable NAMES were listed.
 
 Finding IDs (SEC-xx) refer to [threat-model.md](threat-model.md).
 
+**Current state (7-E, 2026-10-07).** Sections 1, 6, 7 and 8 carry the 7-B / 7-C changes; the history scan (section 5)
+was not repeated. Open items: IAM split and a secret manager (row 88, 13-C), QA values in `docs/qa-1r5e` and the
+`test_s3_connection` URL (row 102, 13-C), MFA for staff (row 90, 13-C).
+
 ---
 
 ## 1. Where secrets are expected
@@ -140,12 +144,12 @@ are already on `origin/feature/landing-page-redesign`: SEC-29). Whether the GitH
 |---|---|---|
 | App loggers | Reviewed every `logger.*` call naming token/password/pin/email: they log ids only (`apps/clients/ready_email.py:115-153`, `apps/users/views.py:493-499`, `apps/clients/download_jobs.py:302-311`) | Good |
 | Dev email | Console backend prints password-reset links to the server terminal (`development.py:47-56`); compose sends them to Mailpit, published on `:8025` (SEC-11) | Dev only; reset links are bearer secrets |
-| Access logs | Query-string tokens (§4) appear in runserver output, gunicorn access logs (if enabled) and the proxy | Weakness (SEC-14) |
+| Access logs | Query-string tokens (§4) appear in the dev runserver output; the image's gunicorn CMD has no access log; the production proxy log format without query strings is in `docs/KYAPTURE_UPLOAD_LIMITS.md` (14-A/16-A) | Accepted in 7-E (row 133) |
 | API errors | `ApiExceptionMiddleware` returns a generic JSON 500 and logs the traceback server-side (`apps/core/middleware.py:41-61`) | Good |
 | DEBUG pages | `DEBUG=True` in dev (`development.py:5`) shows technical pages for non-API paths (e.g. `/admin/`); Django's filter masks setting names containing `SECRET`, `PASS`, `KEY`, `TOKEN`, etc. | Dev only; `CELERY_BROKER_URL` would show a Redis password if one is ever embedded there (name not masked) — needs verification |
 | Entrypoint | Prints `psycopg2.OperationalError` text while waiting for the DB (`docker-entrypoint.py:79-81`) | Info: host/user, not the password |
 | `test_s3_connection` | Prints the probe file's resolved URL (`apps/core/management/commands/test_s3_connection.py:49`), a presigned URL with the access key ID | Info (SEC-26) |
-| Log storage | `backend/logs/django.log` inside the container (`base.py:332-359`), ignored by git (`.gitignore:33, 54-55`) but copied into the image by SEC-10 | Weakness |
+| Log storage | `backend/logs/django.log` inside the container (`base.py:332-359`), ignored by git (`.gitignore:33, 54-55`); kept out of the image by `backend/.dockerignore` since 7-B (SEC-10 fixed) | Good; off-host shipping is row 97 (15-A) |
 
 ---
 

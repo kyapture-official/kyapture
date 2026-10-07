@@ -9,6 +9,11 @@ was not reproduced is marked **Needs verification**, even when the code path is 
 Companion files: [secrets.md](secrets.md), [attack-surface.md](attack-surface.md), [security-checklist.md](security-checklist.md).
 New gaps are tracked as rows 78-102 in `docs/KYAPTURE_PRODUCTION_DEBT.md` (section L).
 
+**Current state (7-E, 2026-10-07, commit after `835133a`).** Sections 2, 4 and 6 describe the code as it is now. Section 7
+keeps each SEC-0 finding as it was found (the "before" picture, with its old line numbers); its outcome is the **Status
+now** column of section 8 and, per finding, [docs/qa-7e/results.md](../qa-7e/results.md) section 4. Sections 9-13 are the
+chunk results. The release summary is [docs/KYAPTURE_SECURITY_REPORT.md](../KYAPTURE_SECURITY_REPORT.md).
+
 Classification used for every finding:
 
 | Label | Meaning |
@@ -55,7 +60,7 @@ The production reverse proxy (TLS, request body limit, X-Forwarded-For handling)
 | A4 | Prepared ZIP downloads | PrivateMediaStorage, `DownloadJob.files[].storage_path` | Whole galleries in one file |
 | A5 | Photographer accounts and sessions | `users.User`, JWT cookies `access_token` / `refresh_token` | Full control of galleries and billing |
 | A6 | Gallery password and download PIN | bcrypt hashes `Gallery.password_hash`, `Gallery.download_pin_hash` (`apps/galleries/models.py:56,66`) | Gate client access |
-| A7 | Client unlock tokens and download tokens | `ClientSession.access_token` (plaintext, `apps/clients/models.py:61`); signed tokens (`apps/clients/download_access.py:348-460`) | Bearer access to protected galleries |
+| A7 | Client unlock tokens and download tokens | `ClientSession.access_token` holds the SHA-256 of the token (7-B, migration `clients.0013`); signed download/job/file tokens (`apps/clients/download_access.py`) | Bearer access to protected galleries |
 | A8 | Client PII: emails, IPs, names, favorites | `ClientSession`, `DownloadLog`, `FavoriteList`, `Favorite` | Personal data of the photographer's clients |
 | A9 | Payment receipts and subscription state | `ManualPayment.payment_proof`, `UserSubscription` | Financial data; plan entitlement |
 | A10 | Secrets | `SECRET_KEY`, DB credentials, AWS keys (S3 + SES) | `SECRET_KEY` signs every JWT and every download token (see [secrets.md](secrets.md)) |
@@ -72,30 +77,30 @@ The production reverse proxy (TLS, request body limit, X-Forwarded-For handling)
 | Celery workers | Trusted code, untrusted input | Decode images, run ffmpeg/ffprobe/cjpegli on uploads |
 | Malicious photographer | Untrusted | Crafted media to attack workers; abuse of storage/email |
 | Infra operator / host | Trusted | Env vars, Docker host, S3 bucket, DB |
-| Third parties | Semi-trusted | AWS S3, AWS SES, Google Fonts, Unsplash (landing images), GitHub (build-time jpegli clone) |
+| Third parties | Semi-trusted | AWS S3, AWS SES, Unsplash (landing images), GitHub (build-time jpegli clone). Google Fonts is no longer used (fonts are self-hosted; hosts removed from the CSP in 7-B, row 120) |
 
 ## 4. Trust boundaries
 
 | TB | Boundary | Controls present |
 |---|---|---|
 | TB1 | Internet → nginx SPA | CSP, X-Frame-Options, nosniff, Referrer-Policy (`frontend/nginx.conf:55-66`) |
-| TB2 | Internet → Django API | Cookie JWT + CSRF, CORS allow-list, DRF throttles, permissions; production HTTPS settings (`production.py:200-252`) |
-| TB3 | Public visitor → protected gallery | bcrypt password → `ClientSession` token; PIN → signed download token |
-| TB4 | Photographer → another photographer's data | Every owner query filters `photographer=request.user` (`apps/galleries/views.py`, `apps/photos/views.py`) |
+| TB2 | Internet → Django API | Cookie JWT (with the `tv` revocation claim, 7-C) + CSRF, CORS allow-list, DRF throttles keyed on `REST_FRAMEWORK['NUM_PROXIES']` and counted in Redis (7-B), permissions; production HTTPS settings (`production.py`) |
+| TB3 | Public visitor → protected gallery | bcrypt password → hashed `ClientSession` token; PIN → signed download token; per-client and per-gallery failure lockout (`apps/clients/lockout.py`); emailed code for listed contacts (7-B) |
+| TB4 | Photographer → another photographer's data | Every owner query filters `photographer=request.user` (`apps/galleries/views.py`, `apps/photos/views.py`; 7-A tests) |
 | TB5 | API → workers | Redis without auth, JSON serializer only (`base.py:236-238`) |
-| TB6 | Uploaded file → decoders (Pillow, ffmpeg, ffprobe, cjpegli) | Magic bytes, size and pixel limits, ffprobe/cjpegli timeouts |
-| TB7 | App → object storage | Private vs public storage classes, signed URLs for private |
-| TB8 | Staff → platform | Django admin, `IsAdminUser` payment endpoints |
-| TB9 | Build → image | `backend/Dockerfile`, `frontend/Dockerfile`, `.dockerignore` (frontend only) |
+| TB6 | Uploaded file → decoders (Pillow, ffmpeg, ffprobe, cjpegli) | Magic bytes, size and pixel limits (413/403 from headers before the body is read), timeouts on every ffmpeg/ffprobe/cjpegli call, photo task Celery limits (7-B) |
+| TB7 | App → object storage | Private vs public storage classes; private keys carry a 128-bit random part; signed 1 h URLs for private files (S3, and `SignedFileSystemStorage` in dev); public keys carry the gallery's rotating `media_token` (7-B) |
+| TB8 | Staff → platform | Django admin with login throttle/lock (`apps/core/admin_login.py`), `IsAdminUser` payment API. No MFA, no network restriction (row 90) |
+| TB9 | Build → image | `backend/Dockerfile`, `frontend/Dockerfile`, `backend/.dockerignore` (7-B) and `frontend/.dockerignore` |
 
 ## 5. Entry points
 
 Full list with methods, auth and throttle per route: [attack-surface.md](attack-surface.md). Summary:
 
-- 18 public routes under `/api/v1/public/` (`apps/clients/urls.py`), all `AllowAny` with `authentication_classes = []`.
-- Auth routes `/api/v1/auth/*` (`apps/users/urls.py`): register, login, refresh, reset, reset-confirm are anonymous.
+- 14 public routes under `/api/v1/public/` (`apps/clients/urls.py`), all `AllowAny` with `authentication_classes = []`.
+- Auth routes `/api/v1/auth/*` (`apps/users/urls.py`): register, login, refresh, reset, reset-check, reset-confirm are anonymous.
 - Owner routes under `/api/v1/galleries/`, `/api/v1/photos/`, `/api/v1/notifications/`, `/api/v1/subscriptions/`.
-- `/admin/` (Django admin), `/health/`, `/api/total-users`, `/media/*` (only when `DEBUG=True`, `config/urls.py:37-38`).
+- `/admin/` (Django admin), `/health/`, `/api/total-users`, `/media/*` (only when `DEBUG=True`; since 7-B public derivative names only, private files need a signed 1-hour URL: `apps/core/media.py`).
 - Multipart uploads: photos/videos (`/api/v1/photos/<slug>/upload/`), avatar/logo (`/api/v1/auth/me/`), receipts (`/api/v1/subscriptions/payments/`).
 - Background: Celery beat schedule (`config/celery.py:35-77`).
 
@@ -110,25 +115,27 @@ These are present and were read in the source. They are listed so the gaps below
 | JWT in HttpOnly cookies, SameSite=Lax, 15 min access / 7 day refresh | `apps/users/views.py:40-71`, `base.py:132-142` |
 | CSRF enforced on unsafe methods when the JWT came from a cookie | `apps/core/authentication.py:38-64` |
 | Refresh rotation mints a new token and blacklists the old one | `apps/users/views.py:206-228` |
-| Logout-all and password change/reset revoke all refresh tokens | `apps/users/views.py:323-340, 555-563`, `apps/users/utils.py:7` |
-| Password validators (length 8, common, numeric, similarity) | `base.py:150-155` |
-| Password reset is anti-enumeration (same 200 either way) | `apps/users/views.py:422-501` |
-| Per-route throttles: login 5/min, unlock/PIN 5/min, reset 5/h, password change 10/h, browse 120/min | `base.py:98-128` (but see SEC-01) |
+| Logout-all, password change/reset and an admin password change revoke every session at once: refresh tokens blacklisted AND access tokens refused via `User.token_version` (`tv` claim, 7-C) | `apps/users/utils.py::revoke_all_sessions`, `apps/core/authentication.py` |
+| One password policy for register/change/reset: validators (length 8, common, numeric, similarity) + not the email + not the current password (7-C) | `apps/users/password_policy.py`, `base.py` |
+| Password reset: same answer and 0 queries for any address (Celery does the lookup); 256-bit single-use link, SHA-256 at rest, 30 min, newest only, in a URL fragment (7-C) | `apps/users/views.py`, `PasswordResetToken` |
+| Per-route throttles, keyed on the real client address (`REST_FRAMEWORK['NUM_PROXIES']`) and shared in Redis (7-B): login 5/min + `login_account` 20/h, unlock/PIN 5/min, register 10/h, reset 10/h per client + 3/h per address, token refresh 60/h per user, browse 120/min | `base.py` `DEFAULT_THROTTLE_RATES`, `CACHES` |
 | Gallery password and PIN stored as bcrypt; PIN-change invalidates download tokens (fingerprint) | `apps/galleries/views.py:518, 591`, `apps/clients/download_access.py:340-372` |
-| Unlock tokens from `secrets.token_hex(32)`; sessions expire (`CLIENT_SESSION_TTL_DAYS`=30) | `apps/clients/models.py:10-15`, `base.py:278` |
+| Wrong gallery password / PIN: 5 per client per gallery lock that client 15 min; 50 per gallery per hour pause the gate 1 h and notify the photographer; listed contacts must enter an emailed one-time code (7-B) | `apps/clients/lockout.py`, `apps/clients/download_access.py` |
+| Django admin login: 5 failures per address / 10 per account → 429 for 15 min; hashes and tokens excluded from admin forms (7-B) | `apps/core/admin_login.py`, `apps/*/admin.py` |
+| Unlock tokens: 256 random bits, stored as SHA-256 (7-B), sessions expire (`CLIENT_SESSION_TTL_DAYS`=30), revoked by any password change on any path | `apps/clients/models.py`, `apps/galleries/access.py` |
 | Download tokens signed (Django `signing`, salted), 2 h TTL; file tokens bound to job/gallery/index | `apps/clients/download_access.py:348-460` |
 | Tenant scoping on every owner and public query (gallery + photographer, asset + gallery, set + gallery) | e.g. `apps/galleries/views.py:203-206`, `apps/clients/views.py:216-228, 769-776` |
 | Raw `resolution=original` refused for clients; Free clients get the 3600 px master | `apps/clients/views.py:117-132, 231-273` |
-| Originals in a private-ACL storage class with 1 h signed URLs (S3) | `apps/core/storage.py:68-74` |
-| Upload checks: magic bytes, admin-set size and pixel limits, Pillow bomb guard, ffprobe timeout 60 s, cjpegli timeout | `apps/core/utils.py:169-270`, `apps/subscriptions/upload_limits.py:45-53` |
+| Originals and Download Masters private, with a 128-bit random key part; 1 h signed URLs (S3 presign; `SignedFileSystemStorage` in dev). Public derivatives move to a new random `media_token` path when a gallery is closed (7-B; re-checked in the 7-E browser run) | `apps/core/storage.py`, `apps/photos/models.py`, `apps/core/media.py` |
+| Upload checks: magic bytes, admin-set size and pixel limits (413 / storage-full 403 from headers before the body is read), Pillow bomb guard, timeouts on every ffprobe/ffmpeg/cjpegli call, photo task Celery limits (7-B) | `apps/core/utils.py`, `apps/photos/views.py`, `apps/subscriptions/upload_limits.py` |
 | Subprocesses use argv lists, never a shell | `apps/core/utils.py:180, 511, 864-895` |
-| GPS stripped from JPEG originals at upload | `apps/core/utils.py:272-330`, `apps/photos/views.py:265` |
+| Location removed at upload and fail closed: JPEG EXIF GPS, XMP GPS, PNG eXIf (400 `location_strip_failed` if it cannot be removed); video location remuxed out, derivatives made with `-map_metadata -1` (7-B). 7-E: 0 of 103 real JPEGs refused | `apps/core/utils.py::strip_exif_gps`, `apps/photos/views.py` |
 | Production refuses to boot without a real SECRET_KEY, DB, S3 and sender | `production.py:23-125` |
 | Production: DEBUG off, HSTS 1 y + preload, Secure cookies, SSL redirect, nosniff, X-Frame DENY | `production.py:8, 203-252` |
 | SPA CSP (`script-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`) and security headers | `frontend/nginx.conf:55-97` |
 | Unhandled API errors return a generic JSON 500 | `apps/core/middleware.py:41-61` |
 | No raw SQL (only `SELECT 1` in the health check); no `dangerouslySetInnerHTML`/`innerHTML` in the SPA | `config/urls.py:15`; grep of `frontend/src` |
-| `.env` files git-ignored; frontend `.dockerignore` keeps `.env*` out of the bundle | `.gitignore:16-21`, `frontend/.dockerignore` |
+| `.env` files git-ignored; `backend/.dockerignore` (7-B) and `frontend/.dockerignore` keep `.env*` out of the images | `.gitignore`, `backend/.dockerignore`, `frontend/.dockerignore` |
 | Ready-email rate limits per email / IP / gallery; download count limits; ZIP size limits | `base.py:298-325`, `apps/clients/download_access.py:232-284` |
 | Public portfolio hides staff accounts, private portfolios and protected galleries | `apps/clients/views.py:2020-2049` |
 
@@ -391,37 +398,39 @@ STRIDE category in brackets. Likelihood: how easy the attack is with the current
 
 ## 8. Risk summary
 
-| ID | Title | Severity | Classification | Debt row |
-|---|---|---|---|---|
-| SEC-01 | XFF-chosen throttle identity | High | Needs verification | 78 |
-| SEC-02 | Favorites by typed email (read/edit/delete) | High | **Confirmed, fixed in 7-A** | 5, 79 |
-| SEC-03 | Contact allow-list trusts typed email | Medium | Needs verification | 80 |
-| SEC-04 | Short PIN/password, no lockout | Medium | Weakness | 81 |
-| SEC-05 | Original key derivable, shared bucket | Medium | Needs verification | 82 |
-| SEC-06 | Dev `/media/` serves private files | Medium | Needs verification | 83 |
-| SEC-07 | Video stream falls back to original | Medium | Needs verification | 84 |
-| SEC-08 | `original_url` in owner API | Low | Weakness | 6 |
-| SEC-09 | Permanent public derivative URLs | Medium | Weakness | 85 |
-| SEC-10 | No backend `.dockerignore` | Medium | Needs verification | 86 |
-| SEC-11 | Dev creds/ports/Redis | Low | Weakness | 87 |
-| SEC-12 | Insecure SECRET_KEY fallback (guarded) | Low | Weakness | — |
-| SEC-13 | One signing key, no rotation | Medium | Missing control | 88 |
-| SEC-14 | Plaintext unlock tokens, tokens in URLs | Low | Weakness | 89 |
-| SEC-15 | Django admin hardening | Medium | Missing control | 90 |
-| SEC-16 | No email verification | Low | Missing control | 91 |
-| SEC-17 | Refresh in anon 100/day bucket | Low | Needs verification | 92 |
-| SEC-18 | ffmpeg without timeout | Low | Weakness | 93 |
-| SEC-19 | Location metadata | Low | Weakness | 94 |
-| SEC-20 | CSP dev origins | Low | Weakness | 95 |
-| SEC-21 | Container/supply chain | Low | Weakness | 96 |
-| SEC-22 | No security logging/alerting | Medium | Missing control | 97 |
-| SEC-23 | PII lifecycle | Low | Missing control | 98 |
-| SEC-25/26 | Secret hygiene (QA values, S3 command) | Info | Weakness | 102 |
-| SEC-27 | Non-READY download fallback | Low | Needs verification | 99 |
-| SEC-28 | Wildcard cookie domain | Low | Needs verification | 100 |
-| SEC-29 | Screenshots pushed | Medium | Needs verification | 101 |
+| ID | Title | Severity | Classification | Debt row | Status now (7-E) |
+|---|---|---|---|---|---|
+| SEC-01 | XFF-chosen throttle identity | High | Needs verification | 78 | FIXED 7-B; proxy overwrite of XFF: 14-A/16-A |
+| SEC-02 | Favorites by typed email (read/edit/delete) | High | **Confirmed, fixed in 7-A** | 5, 79 | FIXED 7-A |
+| SEC-03 | Contact allow-list trusts typed email | Medium | Needs verification | 80 | FIXED 7-B |
+| SEC-04 | Short PIN/password, no lockout | Medium | Weakness | 81 | FIXED 7-B; thresholds/lengths: 13-A (row 135) |
+| SEC-05 | Original key derivable, shared bucket | Medium | Needs verification | 82 | FIXED in code 7-B; bucket policy: 15-A |
+| SEC-06 | Dev `/media/` serves private files | Medium | Needs verification | 83 | FIXED 7-B |
+| SEC-07 | Video stream falls back to original | Medium | Needs verification | 84 | FIXED 7-B |
+| SEC-08 | `original_url` in owner API | Low | Weakness | 6 | FIXED 7-B |
+| SEC-09 | Permanent public derivative URLs | Medium | Weakness | 85 | FIXED 7-B (password, unpublish); expiry 11-D, CDN 15-A (row 134) |
+| SEC-10 | No backend `.dockerignore` | Medium | Needs verification | 86 | FIXED 7-B |
+| SEC-11 | Dev creds/ports/Redis | Low | Weakness | 87 | DEFERRED 13-C |
+| SEC-12 | Insecure SECRET_KEY fallback (guarded) | Low | Weakness | — | ACCEPTED (production refuses to boot with it) |
+| SEC-13 | One signing key, no rotation | Medium | Missing control | 88 | FIXED 7-B; IAM split 13-C |
+| SEC-14 | Plaintext unlock tokens, tokens in URLs | Low | Weakness | 89 | Hashing FIXED 7-B; URL transport ACCEPTED 7-E (row 133) |
+| SEC-15 | Django admin hardening | Medium | Missing control | 90 | Throttle/lock FIXED 7-B; MFA 13-C, network restriction 15-A |
+| SEC-16 | No email verification | Low | Missing control | 91 | DEFERRED RS0-D |
+| SEC-17 | Refresh in anon 100/day bucket | Low | Needs verification | 92 | FIXED 7-B |
+| SEC-18 | ffmpeg without timeout | Low | Weakness | 93 | FIXED 7-B; task time limits 15-B (row 139) |
+| SEC-19 | Location metadata | Low | Weakness | 94 | FIXED 7-B; PNG/other cameras 15-A (row 138) |
+| SEC-20 | CSP dev origins | Low | Weakness | 95 | DEFERRED 15-A |
+| SEC-21 | Container/supply chain | Low | Weakness | 96 | DEFERRED 15-A |
+| SEC-22 | No security logging/alerting | Medium | Missing control | 97 | DEFERRED 15-A |
+| SEC-23 | PII lifecycle | Low | Missing control | 98 | DEFERRED 13-C |
+| SEC-25/26 | Secret hygiene (QA values, S3 command) | Info | Weakness | 102 | DEFERRED 13-C |
+| SEC-27 | Non-READY download fallback | Low | Needs verification | 99 | FIXED 7-B |
+| SEC-28 | Wildcard cookie domain | Low | Needs verification | 100 | DEFERRED 15-A |
+| SEC-29 | Screenshots pushed | Medium | Needs verification | 101 | DEFERRED 13-C |
 
 No finding is labelled **Confirmed vulnerability**: nothing was executed, and no committed production secret was found (see [secrets.md](secrets.md)).
+The Classification column is SEC-0's (before any fix); 7-A and 7-B later confirmed most of them with failing tests. Commits for each
+status: [docs/qa-7e/results.md](../qa-7e/results.md) section 4.
 Existing debt rows that are security-relevant are cross-checked in [security-checklist.md](security-checklist.md) §21.
 
 ---
@@ -567,9 +576,34 @@ they keep working until the account's first revocation.
   flag + its own hashed link (the 7-C token pattern), a signup email + verify page + resend with throttles, a server
   gate on 26 publish code paths and 3 outbound mail modules, an "unverified" UI state, a decision for existing accounts,
   and changes to 29 test files (65 places) that publish with a fresh account. Owner: 7.5-A (account states that decide
-  whether galleries are public, with row 131). A successful reset already proves the address (no flag is set yet).
+  whether galleries are public, with row 131). A successful reset already proves the address (no flag is set yet). *(7-E: the debt file
+  now names RS0-D as the owner of row 91; row 131 stays with 7.5-A.)*
 - **Row 133 (bearer tokens in query strings for `<a href>` downloads and `<video src>`): not changed in 7-C.** It is the
   client gallery's download and video transport, not the account flow this chunk covers; a fix (short-lived per-file
-  grants) changes every gallery download and video play that 7-B/7-D verified in the browser. Moved to 9B-2.
+  grants) changes every gallery download and video play that 7-B/7-D verified in the browser. Moved to 9B-2. *(7-E: the debt file
+  gave it to 7-E, which re-evaluated it and ACCEPTED it; reasons in section 13.)*
 
 New gaps: debt rows 147-151.
+
+---
+
+## 13. Chunk 7-E (security regression) results
+
+No application code changed in 7-E. What was run, and the final status of every SEC finding, checklist item and 7-x debt
+row: [docs/qa-7e/results.md](../qa-7e/results.md). Summary for the release: [docs/KYAPTURE_SECURITY_REPORT.md](../KYAPTURE_SECURITY_REPORT.md).
+
+- Full backend suite on a fresh test database and the frontend tests + build: see results section 1.
+- Browser regression, 42 of 42 checks: login, workspace thumbnails and viewer, real uploads, public gallery images
+  (desktop and 390 px), video playback, favorite, share link, High Resolution, gallery ZIP and its emailed-style job link,
+  close and reopen (old URLs 404, new ones load), gallery password, download PIN, Pro Original (byte-identical),
+  password reset. No empty image box anywhere.
+- Fail-closed location stripping (row 138) against 103 real JPEGs: none refused.
+- **Row 133 (bearer tokens in query strings) re-evaluated and ACCEPTED.** A real fix is short-lived per-file grants minted
+  by a new API, which changes every gallery download and video play: not small. Why the current state is acceptable:
+  the SPA sends `Referrer-Policy: strict-origin-when-cross-origin` and every API response `same-origin`, so no token
+  reaches another site in a Referer; every bearer that grants a FILE is short-lived (ZIP file links and private signed
+  URLs 1 hour, download token 2 hours); the 30-day unlock token is hashed at rest, dies on a password change, and is only
+  in the visitor's own history and download list (that browser already holds it in `sessionStorage`); the production
+  access-log format drops query strings (`docs/KYAPTURE_UPLOAD_LIMITS.md`). Residual risk: a shared computer's history
+  keeps the unlock token up to 30 days; the dev `runserver` log prints full request lines.
+- New gap: debt row 152 (a partial `downloads` PATCH resets the keys it leaves out; owner-only, direct API only).
