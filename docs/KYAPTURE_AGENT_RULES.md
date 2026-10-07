@@ -22,3 +22,5 @@ No "good enough for beta". If you leave any known gap, add a row to docs/KYAPTUR
 
 Before starting any chunk, read docs/KYAPTURE_PRODUCTION_DEBT.md and handle every OPEN row whose owning chunk is your chunk id (fix it, or explain in the report why it is not fixable now). Do not skip these rows.
 Any new column that stores a byte count must be a 64-bit integer (BigIntegerField / PositiveBigIntegerField). When summing it, cast the aggregate to int before serializing.
+Never kill processes by name (no taskkill /IM, pkill, killall). Only stop a process whose PID you started in this session and printed. Never close the owner's browser or other applications.
+Full backend suite: never use --keepdb (a reused test DB loses migration-seeded rows such as the plan rows). Always run it on a fresh test database.
