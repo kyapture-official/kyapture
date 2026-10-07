@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import Spinner from "../ui/Spinner";
+import { MEDIA_GUARD_CLASS, guardMediaEvent } from "../../utils/mediaDeterrence";
 
 const SLIDESHOW_INTERVAL_MS = 4000;
 
@@ -28,6 +29,11 @@ export default function PhotoLightbox({
   // open (the "Slideshow" entry point); the play/pause button works
   // either way once open.
   slideshowMode = false,
+  // 7-D — casual-save deterrence (no right-click menu or drag on the photo or
+  // video; utils/mediaDeterrence.js). ONLY the public client gallery passes it:
+  // the photographer's own dashboard lightbox keeps the normal browser menu.
+  // Deterrence, not protection — it does not stop screenshots or downloads.
+  deterrence = false,
 }) {
   const [imageLoading, setImageLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -233,8 +239,6 @@ export default function PhotoLightbox({
     }
   };
 
-  const handleContextMenu = (e) => e.preventDefault();
-
   if (!activePhoto) return null;
 
   return createPortal(
@@ -398,6 +402,13 @@ export default function PhotoLightbox({
         <div
           className="relative h-full w-full flex items-center justify-center"
           onClick={(e) => e.stopPropagation()}
+          {...(deterrence
+            ? {
+                "data-ky-media-guard": "",
+                onContextMenu: guardMediaEvent,
+                onDragStart: guardMediaEvent,
+              }
+            : {})}
         >
           {hasError ? (
             <div
@@ -436,7 +447,7 @@ export default function PhotoLightbox({
               poster={activePhoto.poster_url || undefined}
               controls
               playsInline
-              onContextMenu={handleContextMenu}
+              controlsList={deterrence ? "nodownload" : undefined}
               onClick={(e) => e.stopPropagation()}
               onLoadedData={() => setImageLoading(false)}
               onError={() => {
@@ -444,7 +455,9 @@ export default function PhotoLightbox({
                 setHasError(true);
               }}
               className={`
+                ${deterrence ? MEDIA_GUARD_CLASS : ""}
                 max-h-full max-w-full select-none transition-all duration-300 ease-out
+                motion-reduce:transition-none motion-reduce:scale-100 motion-reduce:blur-0
                 ${imageLoading ? "opacity-0 scale-95 blur-sm" : "opacity-100 scale-100 blur-0"}
               `}
             />
@@ -467,19 +480,17 @@ export default function PhotoLightbox({
                 "Fullscreen view"
               }
               draggable={false}
-              onContextMenu={handleContextMenu}
               onLoad={() => setImageLoading(false)}
               onError={() => {
                 setImageLoading(false);
                 setHasError(true);
               }}
               className={`
-                max-h-full max-w-full object-contain pointer-events-none select-none transition-all duration-300 ease-out
+                ${deterrence ? `${MEDIA_GUARD_CLASS} pointer-events-none` : ""}
+                max-h-full max-w-full object-contain select-none transition-all duration-300 ease-out
+                motion-reduce:transition-none motion-reduce:scale-100 motion-reduce:blur-0
                 ${imageLoading ? "opacity-0 scale-95 blur-sm" : "opacity-100 scale-100 blur-0"}
               `}
-              style={{
-                WebkitTouchCallout: "none",
-              }}
             />
           )}
         </div>

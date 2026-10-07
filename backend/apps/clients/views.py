@@ -1741,11 +1741,12 @@ class PublicVideoStreamView(APIView):
       - Local disk (dev): streams via Django's FileResponse, which
         handles Range requests automatically.
 
-    NOTE: video content served this way has no extra anti-download
-    protection beyond controlsList="nodownload" on the frontend <video>
-    tag (a UI hint only, trivially bypassed) — unlike images, which get a
-    weak but real "right-click disabled" nudge. There's no strong general
-    fix for this short of DRM, which is out of scope here.
+    NOTE: the playback MP4 is a public derivative. The client gallery's
+    casual-save deterrence (7-D: no right-click menu or drag on the video,
+    controlsList="nodownload" on the <video> tag) is a UI hint only and is
+    trivially bypassed, for video and images alike. There is no general fix
+    for this short of DRM, which is out of scope; never describe it as
+    protection.
     """
     permission_classes = [AllowAny]
     authentication_classes = []

@@ -6,6 +6,7 @@ import { formatDuration } from "../../utils/formatters";
 import { buildGalleryLink } from "../../utils/appUrl";
 import { copyText } from "../../utils/share";
 import { getBlurhashDataUrl } from "../../utils/blurhashDataUrl";
+import { MEDIA_GUARD_CLASS, guardMediaEvent } from "../../utils/mediaDeterrence";
 import { useToast } from "../ui/Toast";
 
 const PLAY_ICON = (
@@ -22,7 +23,9 @@ const PLAY_ICON = (
 
 /**
  * Individual image renderer managing intersection observation,
- * aspect-ratio containment, state-synchronization, and asset-theft protection.
+ * aspect-ratio containment, state-synchronization and casual-save deterrence
+ * (no right-click menu or drag on the media; see utils/mediaDeterrence.js).
+ * Deterrence only: it does not stop screenshots or downloads.
  */
 function LazyPhoto({
   photo,
@@ -95,8 +98,6 @@ function LazyPhoto({
     fixedAspect ||
     (photo.width && photo.height ? `${photo.width} / ${photo.height}` : "3 / 2");
 
-  const handleContextMenu = (e) => e.preventDefault();
-
   const handleShare = async (event) => {
     event.stopPropagation();
     const copied = await copyText(buildGalleryLink(username, slug));
@@ -117,7 +118,8 @@ function LazyPhoto({
     <div
       ref={ref}
       onClick={() => !stillProcessing && onPhotoClick?.(index)}
-      className={`group relative w-full overflow-hidden bg-cream-100 transition-opacity duration-300 select-none ${
+      data-ky-media-guard=""
+      className={`${MEDIA_GUARD_CLASS} group relative w-full overflow-hidden bg-cream-100 transition-opacity duration-300 select-none ${
         fixedAspect ? "" : "mb-3 break-inside-avoid"
       } ${stillProcessing ? "" : "cursor-pointer"}`}
       style={{
@@ -129,7 +131,8 @@ function LazyPhoto({
             backgroundPosition: "center",
           }),
       }}
-      onContextMenu={handleContextMenu}
+      onContextMenu={guardMediaEvent}
+      onDragStart={guardMediaEvent}
     >
       {inView ? (
         <>
@@ -169,16 +172,15 @@ function LazyPhoto({
                 alt={photo.alt || photo.original_name || "Gallery item"}
                 loading="lazy"
                 decoding="async"
+                draggable={false}
                 className={`
+                  ${MEDIA_GUARD_CLASS}
                   w-full h-full object-cover pointer-events-none
                   transition-[opacity,transform] duration-500 ease-out
                   group-hover:scale-[1.03]
+                  motion-reduce:transition-none motion-reduce:group-hover:scale-100
                   ${isLoaded ? "opacity-100" : "opacity-0"}
                 `}
-                style={{
-                  WebkitTouchCallout: "none",
-                  WebkitUserSelect: "none",
-                }}
                 onLoad={() => setLoadedSrc(imgSrc)}
                 onError={() => setErrorSrc(imgSrc)}
               />

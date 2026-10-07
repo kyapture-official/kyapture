@@ -172,7 +172,8 @@ export default function WatermarkSettings({ gallery, setGallery, slug, isMounted
       <div>
         <h2 className="font-serif text-lg text-ink">Watermark</h2>
         <p className="mt-1 text-xs text-muted">
-          Protect the photos clients browse. Your original files and the High Resolution download are
+          Puts your mark on the photos clients browse, which makes casual saving harder. It does not
+          stop screenshots or downloads. Your original files and the High Resolution download are
           never watermarked.
         </p>
       </div>

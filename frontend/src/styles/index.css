@@ -1243,3 +1243,15 @@ input, textarea, select {
 .ky-type:has(.ky-deva) {
   line-height: 1.6;
 }
+
+/* ===== 7-D: client-gallery casual-save deterrence =====
+   Put on the <img>/<video> (and the tile) of the PUBLIC client gallery only
+   (see utils/mediaDeterrence.js). No touch-action / pointer overlay here, so
+   scrolling, pinch and focus rings are untouched. Deterrence, not protection. */
+.ky-media-guard {
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}

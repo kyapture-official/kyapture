@@ -883,6 +883,7 @@ export default function ClientGalleryPage() {
             isFavorited={favoritedIds.has(photos[lightboxIndex]?.id)}
             onToggleFavorite={handleToggleFavorite}
             onDownload={allowDownload ? openPhotoDownload : undefined}
+            deterrence
           />
         )}
 
@@ -901,6 +902,7 @@ export default function ClientGalleryPage() {
             onToggleFavorite={handleToggleFavorite}
             onDownload={allowDownload ? openPhotoDownload : undefined}
             slideshowMode={slideshowAutoplay}
+            deterrence
           />
         )}
 

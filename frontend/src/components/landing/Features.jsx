@@ -135,7 +135,7 @@ export default function Features() {
                         >
                           <Cap className="h-3 w-3 text-slate-400" />
                           <span className="text-[11px] text-slate-500 font-medium">
-                            {j === 0 ? 'Secure' : 'Easy'}
+                            {j === 0 ? 'PIN access' : 'Easy'}
                           </span>
                         </div>
                       ))}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Heart, Pencil, Plus, Trash2, X } from "lucide-react";
 import { clientsApi } from "../../api/clientsApi";
 import ClientDialog from "./ClientDialog";
+import { MEDIA_GUARD_CLASS, guardMediaEvent } from "../../utils/mediaDeterrence";
 
 const fmt = (value) =>
   value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
@@ -224,8 +225,8 @@ export default function FavoritesPanel({
           ) : (
             <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {photos.map((photo) => (
-                <li key={photo.id} className="group relative aspect-square overflow-hidden rounded bg-cream-100">
-                  <img src={photo.thumbnail_url || photo.display_url} alt={photo.original_name || "Favorite photo"} loading="lazy" className="h-full w-full object-cover" />
+                <li key={photo.id} data-ky-media-guard="" onContextMenu={guardMediaEvent} onDragStart={guardMediaEvent} className={`${MEDIA_GUARD_CLASS} group relative aspect-square overflow-hidden rounded bg-cream-100`}>
+                  <img src={photo.thumbnail_url || photo.display_url} alt={photo.original_name || "Favorite photo"} loading="lazy" draggable={false} className={`${MEDIA_GUARD_CLASS} h-full w-full object-cover`} />
                   <button type="button" onClick={() => removePhoto(photo)} disabled={busy} className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white opacity-100 transition hover:bg-black/75 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`Remove ${photo.original_name || "photo"} from this list`}>
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -274,7 +275,7 @@ export default function FavoritesPanel({
                 <li key={list.id} className="flex items-center gap-3 px-3 py-3">
                   <button type="button" onClick={() => { setOpenList(list); setNotice(""); setError(""); }} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label={`Open ${list.name}`}>
                     <span className="h-14 w-14 shrink-0 overflow-hidden rounded bg-cream-100">
-                      {list.thumbnail_url ? <img src={list.thumbnail_url} alt="" className="h-full w-full object-cover" /> : <Heart className="m-auto mt-4 h-5 w-5 text-muted" />}
+                      {list.thumbnail_url ? <img src={list.thumbnail_url} alt="" draggable={false} className={`${MEDIA_GUARD_CLASS} pointer-events-none h-full w-full object-cover`} /> : <Heart className="m-auto mt-4 h-5 w-5 text-muted" />}
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-ink">{list.name}</span>
