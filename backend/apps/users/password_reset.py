@@ -100,7 +100,7 @@ def send_reset_email(email):
 
 
 def send_password_changed_email(user_id, how):
-    """Task body: tells the account owner that the password changed (`how`: 'reset' or 'change')."""
+    """Task body: tells the account owner that the password changed (`how`: 'reset', 'change' or 'admin')."""
     from .models import User
 
     user = User.objects.filter(pk=user_id).first()
@@ -111,6 +111,7 @@ def send_password_changed_email(user_id, how):
         'email': user.email,
         'when': timezone.now().strftime('%d %b %Y, %H:%M UTC'),
         'via_reset': how == 'reset',
+        'by_staff': how == 'admin',
         'forgot_url': f'{settings.FRONTEND_URL}/forgot-password',
     }
     send_mail(

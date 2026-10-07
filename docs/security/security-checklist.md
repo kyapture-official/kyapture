@@ -21,13 +21,14 @@ Status legend:
 | Check | Status | Evidence / finding |
 |---|---|---|
 | Passwords hashed with a slow hasher | ✅ | Django default PBKDF2 (no `PASSWORD_HASHERS` override) |
-| Password policy (length 8, common, numeric, similarity) on register, change, reset | ✅ | `base.py:150-155`; `apps/users/serializers.py:174-186, 241-251`; `apps/users/views.py:547-553` |
+| Password policy (length 8, common, numeric, similarity) on register, change, reset | ✅ | One helper since 7-C: `apps/users/password_policy.py` (validators + not the email + not the current password) |
 | Login throttled | ✅ | `login` 5/min per address (no longer client-chosen, 7-B) + `login_account` 20/h per account; Redis-shared (`apps/users/tests/test_security_7b.py`) |
 | Per-account lockout / backoff after failures | ✅ | `login_account` 20/h per email (7-B) |
 | Generic login error | ✅ | "Invalid email or password." (`apps/users/serializers.py:217`) |
-| Reset is anti-enumeration and rate-limited | ✅ | `apps/users/views.py:422-501`, `password_reset` 5/h |
-| Reset/change revokes other sessions | ✅ | `apps/users/views.py:555-563`; change via serializer `save()` |
-| Email verification at sign-up | ❌ | SEC-16, row 91 |
+| Reset is anti-enumeration and rate-limited | ✅ | 7-C: same status/body for any address, 0 queries in the request (Celery task does the lookup); `password_reset` 10/h per client (429), `password_reset_email` 3/h per address (silent), `password_reset_confirm` 30/h |
+| Reset link: random, hashed, single-use, short, newest only, host from settings | ✅ | 7-C: 256 bits, SHA-256 at rest (`PasswordResetToken`), 30 min (`PASSWORD_RESET_TOKEN_MINUTES`), URL fragment on `FRONTEND_URL`, deleted on use / newer request / revocation (`apps/users/tests/test_password_reset_7c.py`) |
+| Reset/change revokes other sessions | ✅ | 7-C: `revoke_all_sessions` bumps `token_version` (`tv` claim checked on every request and refresh): access AND refresh tokens die at once; also admin password change; owner gets a "password changed" email |
+| Email verification at sign-up | ❌ | SEC-16, row 91: decided in 7-C (verify before publishing or third-party email), to build in 7.5-A |
 | MFA (at least for staff) | ❌ | SEC-15, row 90 |
 | Gallery password hashed (bcrypt, ≤ 72 bytes) | ✅ | `apps/galleries/views.py:459-521`, `apps/clients/serializers.py:349-366` |
 | Gallery password / PIN strength | ⚠️ | ≥ 4 chars; PIN 4-8 digits; failure lockout per client and per gallery since 7-B (`apps/clients/lockout.py`); minimum lengths unchanged (row 135) |
@@ -113,7 +114,7 @@ Status legend:
 | Scoped throttles exist for login, unlock/PIN, reset, change, browse, preflight | ✅ | `base.py:98-128` |
 | Client identity for throttles is trustworthy | ✅ | `REST_FRAMEWORK['NUM_PROXIES']` (7-B); counts shared in Redis (row 108) |
 | Proxy overwrites `X-Forwarded-For` | ❓ | Proxy not in repo (row 73) |
-| Email abuse limits | ✅ | Ready email per email/IP/gallery (`base.py:298-304`); reset 5/h |
+| Email abuse limits | ✅ | Ready email per email/IP/gallery (`base.py:298-304`); reset email 3/h per address + 10/h per client (7-C) |
 | Download/PIN limits per gallery | ✅ | `download_limit_reached`, `pin_limit_reached` (`download_access.py:232-284`) — successes only |
 | Upload body refused before it is received | ⚠️ | 7-B: oversized / storage-full refused from headers before the body is read; the proxy limit is the real stop (plan in `docs/KYAPTURE_UPLOAD_LIMITS.md`); row 31 open |
 | `/health/` and `/admin/` throttled | ⚠️ | Admin login throttled and locks (7-B); `/health/` unthrottled (cheap `SELECT 1`) |
@@ -241,7 +242,7 @@ Status legend:
 | Check | Status | Evidence / finding |
 |---|---|---|
 | API errors are JSON, generic on 500 | ✅ | `apps/core/middleware.py:41-61`; frontend normalises HTML errors (`axiosInstance.js:58-75`) |
-| Reset flow never leaks via exceptions | ✅ | `apps/users/views.py:467-501` |
+| Reset flow never leaks via exceptions | ✅ | 7-C: mail is sent by a Celery task (a failure is retried there, the API answer never changes); no token or password in logs, bodies or the bell (tested) |
 | Error text does not reveal secrets or private paths | ✅ | Reviewed messages in `apps/clients/views.py` |
 | Fail-closed on security helpers | ✅ | `strip_exif_gps` fails closed since 7-B; `_original_within_cap` fails closed |
 

@@ -25,7 +25,8 @@ Finding IDs (SEC-xx) refer to [threat-model.md](threat-model.md).
 | `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME`, `AWS_SES_REGION_NAME`, `AWS_SES_REGION_ENDPOINT` | No | `base.py:190-191`, `production.py:141-144` | Bucket yes |
 | `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | **Can embed a Redis password** | `base.py:232-233` | No guard |
 | `DEFAULT_FROM_EMAIL`, `SERVER_EMAIL` | No | `base.py:395-396` | Sender yes (`production.py:114-125`) |
-| `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT` | No (dev only; no SMTP user/password is read anywhere) | `development.py:56-62` | — |
+| `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`/`EMAIL_USE_SSL` | No | `base.py` (7-C), `development.py` | Production: SES unless `EMAIL_BACKEND` is SMTP; SMTP needs `EMAIL_HOST` and TLS/SSL or boot fails (`production.py`) |
+| `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | **Yes** (SMTP credential) | `base.py` (7-C), env only, never committed | Only read when an SMTP backend is used |
 | `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `SESSION_COOKIE_DOMAIN`, `CSRF_COOKIE_DOMAIN`, `SECURE_SSL_REDIRECT`, `NUM_PROXIES`, `FRONTEND_URL` | No (security-relevant config) | `production.py:157-242` | Defaults exist |
 | TTL / limit knobs (`CLIENT_SESSION_TTL_DAYS`, `DOWNLOAD_*`, `WEB_SIZE_*`, ...) | No | `base.py:258-325` | — |
 
@@ -47,7 +48,7 @@ None is a secret; all are baked into the public bundle. Rule to keep: **never** 
 | JWT access/refresh | HttpOnly cookies; refresh JTIs in `token_blacklist` tables | HS256 signed with `JWT_SIGNING_KEY` (default `SECRET_KEY`, 7-B) |
 | Gallery unlock token | `ClientSession.access_token` holds its **SHA-256** since 7-B (`hash_unlock_token`, migration `clients.0013`) | 256 random bits from `secrets`; returned once by the unlock response (SEC-14) |
 | Download / job-link / file tokens | Not stored; `django.core.signing` | Salted, `SECRET_KEY`-signed, TTL 2 h / job TTL / file TTL (`download_access.py:348-460`) |
-| Password-reset tokens | Not stored | `default_token_generator` (`apps/users/views.py:473`) |
+| Password-reset tokens | **SHA-256** only (`PasswordResetToken.token_hash`, 7-C) | 256 random bits (`secrets.token_urlsafe(32)`); in the email and once in the browser's URL fragment; 30 min; deleted on use, newer request or revocation |
 | S3 presigned URLs | Not stored | 1 h expiry; URL carries the access key ID (by SigV4 design) |
 
 ---

@@ -114,29 +114,36 @@ export const useAuthStore = create(
 
 
       /**
-       * WHAT: Password reset request.
+       * WHAT: Password reset request. Resolves to the server's message, which
+       *       is the same whether or not the address has an account.
        */
       forgotPassword: async (email) => {
-        await authApi.forgotPassword({ email });
+        const data = await authApi.forgotPassword({ email });
+        return data?.message || '';
       },
 
 
       /**
-       * WHAT: Password reset confirmation — exchanges the emailed uidb64/token
-       *       pair plus a new password for an actual password change.
-       *       Deliberately does NOT touch auth cookies/state: the reset link
-       *       is opened logged-out, and on success the page sends the person
-       *       to /login to authenticate normally with the new password,
-       *       matching how ForgotPasswordPage's success state already links
-       *       back to /login rather than assuming a session.
+       * WHAT: Checks an emailed reset token (7-C) without using it up.
        */
-      resetPasswordConfirm: async ({ uidb64, token, newPassword, newPassword2 }) => {
+      checkResetToken: async (token) => {
+        await authApi.checkResetToken({ token });
+      },
+
+
+      /**
+       * WHAT: Password reset confirmation — the emailed token plus a new
+       *       password. On success the server ends every session of the
+       *       account (this browser's cookies included), so local auth state
+       *       is cleared too and the page sends the person to /login.
+       */
+      resetPasswordConfirm: async ({ token, newPassword, newPassword2 }) => {
         await authApi.resetPasswordConfirm({
-          uidb64,
           token,
           new_password: newPassword,
           new_password2: newPassword2,
         });
+        set({ user: null, isAuthenticated: false });
       },
 
 

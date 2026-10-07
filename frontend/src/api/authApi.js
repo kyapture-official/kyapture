@@ -12,7 +12,7 @@ import api from './axiosInstance'
  *   me()             → UserProfile
  *   updateMe()       → UserProfile
  *   changePassword() → { message: string }
- *   forgotPassword() → { detail: string }
+ *   forgotPassword() → { message: string }
  *
  * USER PROFILE INTERFACE (UserProfile):
  *   {
@@ -123,21 +123,34 @@ export const authApi = {
     api.patch('/auth/settings/', payload).then((res) => res.data),
 
   /**
-   * WHAT: Dispatches a password recovery request instructions email.
+   * WHAT: Asks for a "forgot password" email. The answer is the same for every
+   *       well-formed address, registered or not (no account enumeration).
    * URI:  POST /api/v1/auth/password/reset/
    *
    * @param   {{ email: string }} payload
-   * @returns {Promise<{ detail: string }>}
+   * @returns {Promise<{ message: string }>}
    */
   forgotPassword: (payload) =>
     api.post('/auth/password/reset/', payload).then((res) => res.data),
 
   /**
-   * WHAT: Confirms a password reset using the emailed uidb64/token pair and
-   *       sets the new password. Called from the link in the reset email.
+   * WHAT: Checks an emailed reset link before the new-password form is shown.
+   *       Does not use the link up. 400 code `reset_link_invalid` when it is
+   *       unknown, expired, used or replaced by a newer one.
+   * URI:  POST /api/v1/auth/password/reset/check/
+   *
+   * @param   {{ token: string }} payload
+   * @returns {Promise<{ valid: true }>}
+   */
+  checkResetToken: (payload) =>
+    api.post('/auth/password/reset/check/', payload).then((res) => res.data),
+
+  /**
+   * WHAT: Sets the new password with the emailed token (sent in the body only,
+   *       never in a URL). On success every session of the account ends.
    * URI:  POST /api/v1/auth/password/reset/confirm/
    *
-   * @param   {{ uidb64: string, token: string, new_password: string, new_password2: string }} payload
+   * @param   {{ token: string, new_password: string, new_password2: string }} payload
    * @returns {Promise<{ message: string }>}
    */
   resetPasswordConfirm: (payload) =>

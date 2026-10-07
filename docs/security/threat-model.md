@@ -525,3 +525,51 @@ the docs (`frontend/src/security/honestCopy.test.js` scans every shipped source 
 - Not provable here: a real long-press (headless Chrome fires no `contextmenu` for a held touch) and a real phone's browser menu (row 143); a raw rightward swipe in the lightbox triggers Chrome's own history-back gesture in touch emulation (the pre-7-D build does the same, row 144).
 
 New gaps: debt rows 141-145 (and the accepted limit, row 146).
+
+---
+
+## 12. Chunk 7-C (password reset and session revocation) results
+
+Flow: forgot -> emailed one-time link -> new password -> link dead -> every session revoked -> "password changed" email.
+Pre-fix proof: `docs/qa-7c/test_prefix_proof_7c.py` was copied into `apps/users/tests/` of an export of commit `f97d5c5`
+and run there (it uses the removed uid/token API, so it lives outside the suite); all 8 proofs passed, i.e. each
+weakness below existed.
+Post-fix tests: `apps/users/tests/test_password_reset_7c.py` (42 tests). Browser: `docs/qa-7c/qa-script.mjs`.
+
+| ID | Finding (before 7-C) | Result | Proof |
+|---|---|---|---|
+| P1 | After a password **reset**, an access token already issued (cookie and bearer) kept working up to 15 min; only refresh tokens were blacklisted | **Confirmed**, **fixed**: `User.token_version` is in every JWT as `tv`; `CookieJWTAuthentication.get_user` and the refresh view refuse an older number; `revoke_all_sessions` (`apps/users/utils.py`) bumps it. An access token now dies on its very next request (0 s, not 15 min) | `SessionRevocationTests`; live: other device `/me` 401, refresh 401 |
+| P2 | Same after a password **change** and **logout-all** (other devices' access tokens lived on) | **Confirmed**, **fixed** (same mechanism); the device that changed the password gets fresh cookies | `test_a_password_change_kills_other_devices_now_and_keeps_this_one`, `test_logout_all_kills_access_tokens_too`; live: 401 / 200 |
+| P3 | An older reset link kept working after a newer one was requested (Django's stateless token generator) | **Confirmed**, **fixed**: `PasswordResetToken` rows (SHA-256 only); a new request deletes the account's older rows; use, expiry or any revocation deletes them | `test_a_newer_request_kills_the_older_link`; browser D5 |
+| P4 | Link lifetime 3 days (`PASSWORD_RESET_TIMEOUT` default) | **Confirmed**, **fixed**: `PASSWORD_RESET_TOKEN_MINUTES` (env, default 30) | `test_expiry_comes_from_settings_and_is_in_the_email`, `test_an_expired_link_is_refused`; browser D16 |
+| P5 / attack-surface A5 | Confirm answered "user does not exist" for an unknown uid and "expired or invalid" for a bad token | **Confirmed**, **fixed**: no uid any more; one answer `reset_link_invalid` for unknown, expired, used or replaced | `test_wrong_missing_and_oversized_tokens_are_refused` |
+| P6 | No per-address limit: 12 requests from 12 client addresses sent 12 emails to one victim | **Confirmed**, **fixed**: `password_reset_email` 3/hour per typed address, silent (same 200, no email); `password_reset` 10/hour per client (429); `password_reset_confirm` 30/hour per client | `ResetThrottleTests`; live: 4 requests -> 3 emails; browser D17 |
+| P7 | The known-address request did the user lookup, template render and SMTP send inside the request (the unknown one returned at once): a timing oracle | **Confirmed** (send happened inside the request), **fixed**: the request does 0 queries for any address and only queues `send_password_reset_email_task`; the worker looks the account up | `test_the_request_does_no_database_work_for_any_address`; live (dev runserver, 4 each): known median 69 ms, unknown 93 ms, one identical status + body |
+| P8 | Password-reset poisoning through `Host` / `X-Forwarded-Host` | **Not exploitable** (the old code already used `FRONTEND_URL`); kept and tested | `test_a_forged_host_header_does_not_change_the_link` |
+| — | Token in a URL path (`/auth/password/reset/confirm/<uid>/<token>/`): server/proxy logs, Referer, history | **Fixed**: `/reset-password#token=...` (fragment, never sent to a server); the page reads it once, `history.replaceState` removes it, it travels in POST bodies only; page sends `no-referrer`, is `noindex`, loads nothing third-party | browser D6, D11, X1 |
+| — | A password set by staff in Django admin kept every JWT alive | **Confirmed** (failing test first), **fixed**: `KyaptureUserAdmin.user_change_password` revokes and emails | `AdminPasswordChangeTests` |
+| — | No "your password was changed" notice | **Fixed**: email to the account address after a reset, a change and an admin change (Celery, after commit; no password, no token) | `PasswordChangedEmailTests`; live: Mailpit |
+| — | Password policy differed per path (reset/change: validators only) | **Fixed**: one `password_problems` for register/change/reset: validators + not the email + not the current password | `test_the_password_policy_is_the_registration_policy` |
+| — | Accounts with no usable password (future social login) | **Not broken**: reset works; change-password answers 400, not 500 | `NoUsablePasswordTests` |
+| — | Token, link or password in logs, error bodies or the bell | **Not exploitable**: none in any log record of a full flow, in any 400 body or in any Notification; container logs grepped after QA (0 lines) | `test_the_bell_and_logs_never_see_the_token_or_password`, `test_the_check_and_confirm_answers_never_echo_the_token` |
+| — | Django admin session after a reset | **Not exploitable**: Django ends a session whose stored password hash changed | `test_a_reset_ends_django_admin_sessions` |
+
+Mechanism, stated once: **one per-user counter (`token_version`, the `tv` claim) checked on every authenticated request
+and every refresh.** Revocation also blacklists the refresh tokens, deletes pending reset links and clears the
+per-account login and admin-login failure counters. Tokens minted before 7-C have no claim and count as version 0, so
+they keep working until the account's first revocation.
+
+### 12.1 Debt rows owned by 7-C
+
+- **Row 91 (SEC-16, email verification): decided, not built here.** Decision: a new account must verify its email address
+  before it can publish a gallery or cause any email to a third party in its name (ready/download emails, contact codes);
+  sign-in, upload and building galleries stay open, so a typo does not lock anyone out. Not small: it needs a verified
+  flag + its own hashed link (the 7-C token pattern), a signup email + verify page + resend with throttles, a server
+  gate on 26 publish code paths and 3 outbound mail modules, an "unverified" UI state, a decision for existing accounts,
+  and changes to 29 test files (65 places) that publish with a fresh account. Owner: 7.5-A (account states that decide
+  whether galleries are public, with row 131). A successful reset already proves the address (no flag is set yet).
+- **Row 133 (bearer tokens in query strings for `<a href>` downloads and `<video src>`): not changed in 7-C.** It is the
+  client gallery's download and video transport, not the account flow this chunk covers; a fix (short-lived per-file
+  grants) changes every gallery download and video play that 7-B/7-D verified in the browser. Moved to 9B-2.
+
+New gaps: debt rows 147-151.

@@ -961,6 +961,55 @@ input, textarea, select {
   font-size: 13px;
   color: #3d423c;
 }
+/* Forgot / reset password pages (7-C): these classes were used but never styled. */
+.form-error-alert {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: rgba(192, 72, 58, 0.08);
+  border: 1px solid rgba(192, 72, 58, 0.2);
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--red);
+}
+ul.form-error { list-style: none; padding: 0; margin: 5px 0 0; }
+ul.form-error li + li { margin-top: 3px; }
+.auth-card__icon { font-size: 34px; line-height: 1; text-align: center; margin-bottom: 14px; }
+.auth-card__highlight { color: #1a1f1b; font-weight: 600; word-break: break-all; }
+.auth-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 22px;
+  padding: 13px;
+  background: #3a644b;
+  color: #fff;
+  border-radius: 999px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: 0 6px 18px rgba(46, 81, 61, 0.28);
+  transition: background 0.2s ease;
+}
+.auth-link-btn:hover { background: #2e513d; }
+.auth-link-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(249, 246, 240, 0.9), 0 0 0 5px #3a644b; }
+.auth-secondary-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px;
+  background: transparent;
+  color: #2e513d;
+  border: 1.5px solid #d4c4b0;
+  border-radius: 999px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.auth-secondary-btn:hover:not(:disabled) { background: #f3ede3; }
+.auth-secondary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.auth-secondary-btn:focus-visible { outline: 2px solid #3a644b; outline-offset: 2px; }
 .auth-tab:focus-visible,
 .auth-link:focus-visible,
 .auth-check input:focus-visible {

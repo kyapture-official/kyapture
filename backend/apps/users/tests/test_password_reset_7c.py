@@ -528,3 +528,28 @@ class MailSettingsTests(APITestCase):
         with self.assertRaises(AssertionError) as caught:
             settings_in_subprocess('config.settings.production', {**smtp, 'EMAIL_USE_TLS': 'false'}, expr)
         self.assertIn('EMAIL_USE_TLS', str(caught.exception))
+
+
+class AdminPasswordChangeTests(ResetTestBase):
+    """A password a staff member sets in Django admin ends the account's sessions too."""
+
+    def test_a_password_set_in_django_admin_ends_the_sessions(self):
+        staff = User.objects.create_user(username='staff7c', email='staff-7c@example.com', password=OLD_PASSWORD)
+        User.objects.filter(pk=staff.pk).update(is_staff=True, is_superuser=True)
+        device, response = self.login()
+        bearer = response.cookies['access_token'].value
+        admin = APIClient()
+        admin.force_login(User.objects.get(pk=staff.pk))
+        with run_inline(tasks.send_password_changed_email_task), self.captureOnCommitCallbacks(execute=True):
+            page = admin.post(f'/admin/users/user/{self.user.pk}/password/', {
+                'password1': NEW_PASSWORD, 'password2': NEW_PASSWORD, 'usable_password': 'true',
+            })
+        self.assertEqual(page.status_code, 302, getattr(page, 'content', b'')[:500])
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(NEW_PASSWORD))
+        self.assertEqual(device.get(ME_URL).status_code, 401)
+        other = APIClient()
+        other.credentials(HTTP_AUTHORIZATION=f'Bearer {bearer}')
+        self.assertEqual(other.get(ME_URL).status_code, 401)
+        self.assertEqual([m.subject for m in mail.outbox], ['Your Kyapture password was changed'])
+        self.assertIn('by the Kyapture team', mail.outbox[0].body)

@@ -79,10 +79,10 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route
-            path="/auth/password/reset/confirm/:uidb64/:token"
-            element={<ResetPasswordConfirmPage />}
-          />
+          {/* 7-C: the emailed link is /reset-password#token=... (fragment, never sent to a server). */}
+          <Route path="/reset-password" element={<ResetPasswordConfirmPage />} />
+          {/* Links mailed before 7-C no longer work: show the "request a new link" state. */}
+          <Route path="/auth/password/reset/confirm/*" element={<Navigate to="/reset-password" replace />} />
 
           {/* Protected photographer dashboard */}
           <Route path="/dashboard" element={<ProtectedRoute />}>

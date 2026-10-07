@@ -43,8 +43,9 @@ Every gallery lookup requires `is_published=True`, `is_active=True`, not expired
 | A1 | `POST /api/v1/auth/register/` | `apps/users/views.py:78` | AllowAny, no auth classes; defaults (anon 100/day) | No email verification (SEC-16); sets JWT cookies |
 | A2 | `POST /api/v1/auth/login/` | `apps/users/views.py:115` | `login` 5/min | No per-account lockout |
 | A3 | `POST /api/v1/auth/token/refresh/` | `apps/users/views.py:175` | defaults (anon 100/day) | Reads `refresh_token` cookie; SameSite=Lax is the CSRF defence (SEC-17) |
-| A4 | `POST /api/v1/auth/password/reset/` | `apps/users/views.py:422` | `password_reset` 5/h | Anti-enumeration response |
-| A5 | `POST /api/v1/auth/password/reset/confirm/` | `apps/users/views.py:504` | defaults | Distinguishes "no such user" from "bad token" in its error text (low-value enumeration via uid) |
+| A4 | `POST /api/v1/auth/password/reset/` | `apps/users/views.py` (7-C) | `password_reset` 10/h per client; `password_reset_email` 3/h per address (silent) | Same answer and 0 queries for any address; a Celery task looks the account up and mails a `FRONTEND_URL/reset-password#token=` link |
+| A4b | `POST /api/v1/auth/password/reset/check/` | `apps/users/views.py` (7-C) | `password_reset_confirm` 30/h | `token` in the body; 200 or one `reset_link_invalid`; does not use the link up |
+| A5 | `POST /api/v1/auth/password/reset/confirm/` | `apps/users/views.py` (7-C) | `password_reset_confirm` 30/h | `token` + new password in the body; one `reset_link_invalid` answer (the uid oracle is gone); success revokes every session |
 | A6 | `GET /api/v1/subscriptions/plans/` | `apps/subscriptions/views.py:28` | AllowAny; defaults | Public price list |
 | A7 | `GET /api/total-users` | `apps/users/views.py:377` | browse | Count + 5 initials/colours |
 | A8 | `GET /health/` | `config/urls.py:11-19` | plain Django view, **no throttle** | Runs `SELECT 1`; cheap but unthrottled |
