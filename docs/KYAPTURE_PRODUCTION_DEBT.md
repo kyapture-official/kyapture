@@ -222,13 +222,25 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | # | Gap | Raised in | Owner chunk |
 |---|-----|-----------|-------------|
 | 133 | The unlock token (30 days), the download token (2 h) and file tokens still travel in query strings where the browser cannot send a header (`<a href>` downloads, `<video src>`): they land in browser history and the download manager. Hashed at rest and kept out of the app's own logs; the proxy log format without query strings is in docs/KYAPTURE_UPLOAD_LIMITS.md. Needs short-lived per-file URL grants minted by the API | 7-B | 7-C |
-| 134 | Public URLs move on password/unpublish only: a gallery that EXPIRES keeps its public URLs until purge, and copies already in a browser cache or a CDN edge stay up to a year (`immutable`). Needs an expiry sweep that rotates, and a CDN invalidation of the old prefix when a rotation runs | 7-B | 11-D (sweep), 15-A (CDN) |
+| 134 | Public URLs move on password/unpublish only: a gallery that EXPIRES keeps its public URLs until purge, and copies already in a browser cache or a CDN edge stay up to a year (`immutable`). Needs an expiry sweep that rotates, and a CDN invalidation of the old prefix when a rotation runs. 7-D audit: confirmed, a public derivative URL is never short-lived (only private originals, masters and ZIP links are, at one hour) | 7-B | 11-D (sweep), 15-A (CDN) |
 | 135 | The gallery-level lockout (50 wrong PINs or passwords per hour pauses the gate for everyone for 1 h) can be triggered on purpose by anyone with the link; the photographer is told and can reset by changing the secret. PIN stays 4-8 digits and the password 4+ characters | 7-B | 13-A (owner: thresholds and minimum lengths) |
 | 136 | The email-code step sends mail synchronously in the request (`EMAIL_TIMEOUT` 10 s); a slow SES answer delays the form. It also still tells someone who passed the PIN whether an address is on the list (403 vs 202), as before | 7-B | 15-A |
 | 137 | Removing a video's location remuxes the original: video and audio packets are byte-identical, but all container metadata (creation date, camera tags) and data/timed-metadata tracks are dropped when a location is found, and `file_size` changes slightly | 7-B | 13-A (owner decision) |
 | 138 | A JPEG/PNG whose EXIF cannot be parsed is now refused (fail closed) even if it has no GPS; the rate on real camera files is unknown | 7-B | 15-A (run a real photo set) |
 | 139 | `process_video_asset`, the Web Size and ZIP tasks have no Celery `time_limit` (video is bounded by the ffmpeg timeouts, which grow with the video's length) | 7-B | 15-B |
 | 140 | `clients.0013` (hash unlock tokens), `clients.0014`, `galleries.0010` (`media_token`) and `users.0008` were applied to the Docker dev DB only; host dev DB and production are not migrated. `clients.0013` is not reversible (a hash cannot become the token again) | 7-B | 13-C, 15-B |
+
+## S. Raised by 7-D (client-gallery deterrence, docs/security/threat-model.md section 11)
+
+7-D owned no OPEN rows when it started (rows 91 and 133 belong to 7-C).
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 141 | The client gallery's hero cover image (the same watermarked derivative as a tile) has no right-click/drag deterrence: 7-D's scope was the photo and video tiles, lightbox and slideshow. The portfolio page (`ClientHomePage`) photos were not touched either | 7-D | product decision (13-A), then 9A-3 |
+| 142 | A grid tile (the `div` with the click handler) has no `tabindex` or role: a keyboard user can Tab to the heart, download and share buttons of each tile but cannot open the lightbox from the grid (checked in a browser; the toolbar slideshow button opens it at photo 1 only). Not caused by 7-D; the tile controls were also invisible while focused on desktop, fixed in 7-D | 7-D | 9A-3 |
+| 143 | A real long-press on a phone was not exercised: headless Chrome fires no `contextmenu` for a held touch. Proven only: the handler cancels a `contextmenu` on a tile, `-webkit-touch-callout: none` and `user-drag: none` are set, the photo is `pointer-events: none` so the tile is the touch target, and touch scrolling still works from a tile. The iOS Safari and Android Chrome menus need a real device | 7-D | QA-A, 15-A |
+| 144 | In touch emulation a raw rightward swipe in the lightbox is taken by Chrome's history-back gesture and navigates away (the pre-7-D build does the same, proven by building it from `b06280c`). The lightbox stage sets no `touch-action`; `pan-y` would keep vertical scroll and leave horizontal swipes to the app. Not checked on a real phone | 7-D | 9A-3 |
+| 145 | The 7-D browser QA script is in `docs/qa-7d/qa-script.mjs`, but the seeding (real upload through the worker of 8 images with a watermark and one video) was a throwaway script outside the repo. Same pattern as rows 38, 114 and 124 | 7-D | QA-A |
 
 ## Accepted (no fix needed)
 
@@ -239,6 +251,7 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | 66 | A stopped worker is an incident, with alerting handled in 11-D / 15-B | 6-D | Accepted (no fix needed) |
 | 34 | A drop of more than 200 videos is not a realistic use; the server still checks every file | VID-C | Accepted (no fix needed) |
 | 129 | Favorites no longer follow a typed email across devices: a typed email no longer links two devices; linking needs email verification | 7-A | Accepted (no fix needed) |
+| 146 | Deterrence is not protection: a visitor can still take a screenshot, read the network tab, copy a public derivative or playback URL, use the native video controls (playback speed, picture-in-picture, cast) and use any download the photographer allows. The deterrence only removes the right-click menu, drag and long-press callout on the media. No copy may say otherwise (enforced by `frontend/src/security/honestCopy.test.js`) | 7-D | Accepted (inherent; no fix possible short of DRM) |
 - Row 32: The admin form cannot set a plan's `max_collections` to 0; empty = unlimited, and the minimum cap is 1 by design.
 - Old download rows show "-" for set names (no data existed).
 - Video short-preview file does not exist (dead code removed earlier); poster + 1080p MP4 is enough.

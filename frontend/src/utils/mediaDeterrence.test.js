@@ -129,3 +129,8 @@ test('motion is reduced for visitors who ask for it', () => {
   assert.match(read('../components/shared/PublicMasonryGrid.jsx'), /motion-reduce:transition-none/)
   assert.match(read('../components/shared/PhotoLightbox.jsx'), /motion-reduce:transition-none/)
 })
+
+test('tile controls stay visible while a keyboard user is on them (focus ring not hidden)', () => {
+  const grid = read('../components/shared/PublicMasonryGrid.jsx')
+  assert.match(grid, /group-hover:opacity-100 focus-within:opacity-100/)
+})

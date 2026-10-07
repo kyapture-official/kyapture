@@ -478,3 +478,50 @@ P1 = High, or a breach of "originals stay private"; P2 = Medium; P3 = Low / Info
 | row 6 | — | Owner `original_url` | **Not exploitable for clients** (public payload never has it, existing test); the owner's URL is a 1-hour signed URL to a random key | `test_public_gallery_payload_never_exposes_a_raw_original_url` |
 
 New gaps: debt rows 133-140.
+
+---
+
+## 11. Chunk 7-D (client-gallery deterrence) results
+
+**This is deterrence, not protection.** It makes casual saving harder (no right-click "Save image as", no drag to the desktop,
+no long-press callout on the media). It does not stop a screenshot, the browser's network tab, an address copied from the page,
+or the Download button a photographer allows. No screen, copy or download is claimed to be impossible anywhere in the UI or
+the docs (`frontend/src/security/honestCopy.test.js` scans every shipped source file for such claims).
+
+### 11.1 Audit of what 7-B left a visitor able to reach (nothing was changed)
+
+| Question | Answer | Proof |
+|---|---|---|
+| Does any public route return an original, a Download Master or a signed URL? | No. Every URL is a public derivative key (WebP tiers, poster, playback MP4: exactly the names `apps/core/media.py::is_public_path` allows) or a gated app endpoint (`/api/v1/public/...` download and video stream). Routes covered: gallery payload, paginated photos, a favorites list and the lists index | `apps/clients/tests/test_deterrence_7d.py` (9 tests); live: 9 assets gave 25 public-derivative URLs and 10 gated endpoints, 0 private, 0 `sig=` |
+| Is the watermark intact? | Yes. It is baked into the display, medium and thumbnail pixels; the served derivative shows the mark. Each derivative URL carries `?v=<watermark signature>` so a stale unmarked copy cannot come from a cache after a change. Original, Download Master and Web Size are never watermarked (unchanged rule) | live: `?v=f6dab2c02abbb11d` on all three tiers; served display image opened and the mark read; `test_a_derivative_url_carries_the_watermark_version` |
+| Are originals private and URLs short-lived? | Private files only: a signed URL that expires after one hour (S3 presign in production, `SignedFileSystemStorage` in dev); no signature, or a wrong one, is a 404; a ZIP file link lives one hour | live: signed original 200, unsigned 404, wrong signature 404; `PrivateUrlsAreShortLivedTests` |
+| Are the PUBLIC derivative URLs short-lived? | **No, by design.** A derivative URL is stable (one year, immutable) until the gallery is closed (password added or changed, unpublished), when every public file moves to a new random `media_token` segment. A gallery that expires keeps its URLs. Same limit as debt rows 85 and 134; 7-D does not change it | 7-B `PublicUrlRotationTests`; row 134 |
+| Does the video path hand out the private original? | No: the stream view serves the playback MP4 only (409 `video_processing` otherwise) | live: stream 200 `video/mp4`; 7-B `VideoStreamTests` |
+
+### 11.2 What 7-D added (browser side only; no endpoint, model or migration changed)
+
+| Where | What |
+|---|---|
+| `frontend/src/utils/mediaDeterrence.js` | One handler for `contextmenu` and `dragstart`. It cancels the event only inside a region marked `data-ky-media-guard`, and never when the event started on a button, link, input, textarea, select, label, summary, contenteditable or an ARIA button/link/textbox/menuitem/slider |
+| `.ky-media-guard` in `styles/index.css` | `user-drag: none`, `user-select: none`, `-webkit-touch-callout: none`. No `touch-action`, no pointer overlay |
+| Public grid tiles (`PublicMasonryGrid`), favorites photo tiles (`FavoritesPanel`) | marker + handler + `draggable=false`; the photo is `pointer-events: none` (as before), so the tile, not the image, receives the touch |
+| `PhotoLightbox` (lightbox and slideshow) | new prop `deterrence` (default off), passed only by `ClientGalleryPage`; marks the stage, and sets `controlsList="nodownload"` on the video. The photographer's dashboard lightbox no longer blocks the browser menu (it did before: that was the one place the old code was too broad) |
+| Not covered on purpose | the hero cover image, the photographer dashboard and workspace, forms, titles, captions, inputs, links, the download pages (row 141) |
+| Reduced motion | `motion-reduce:transition-none` and no zoom/blur on the grid image and the lightbox image |
+| Keyboard | tile controls (heart, download, share) were invisible while keyboard-focused on desktop (opacity 0 until hover): now `focus-within:opacity-100`, so the focus ring is seen |
+| Honest copy (reworded) | `WatermarkSettings.jsx` ("Protect the photos clients browse" became "...makes casual saving harder. It does not stop screenshots or downloads"), landing `Features.jsx` badge ("Secure" became "PIN access"), `PublicMasonryGrid.jsx` comment ("asset-theft protection"), `apps/clients/views.py` video docstring (it claimed a `nodownload` hint that did not exist) |
+
+### 11.3 Browser QA (Chrome headless, real stack on :3000/:8000, seeded gallery: 8 photos with a text watermark + 1 video)
+
+98 of 98 checks passed (desktop 1366: 47, mobile 390 with touch emulation: 51); script: `docs/qa-7d/qa-script.mjs`.
+
+- Right-click: cancelled on a tile photo, the lightbox photo, the lightbox video and the slideshow photo; NOT cancelled on the heart, download and share buttons, the toolbar buttons, the lightbox close button, the gallery title text, an email input, or a focused button receiving a menu-key `contextmenu`.
+- Drag: `dragstart` on the tile and lightbox photo is cancelled; a real mouse drag from a tile starts no uncancelled drag. Computed style: `user-drag`/`user-select` none, `draggable="false"`, `alt` kept, `touch-action: auto` on tile and image.
+- Text is still selectable (title selected with the selection API; `user-select` auto).
+- Keyboard: Tab reaches the tile controls with a visible focus ring and Enter acts; lightbox ArrowRight/ArrowLeft/Space/Escape, Tab trapped inside; slideshow autoplays and advances (1/9 to 2/9 after 4.6 s).
+- Legit use still works: lightbox video plays (`currentTime` advanced); tile Download and lightbox Download open the download dialog and a real JPEG downloads.
+- Mobile 390: touch scroll starting on the hero and starting ON a photo tile both scroll (+607 px and +463 px); a swipe left in the lightbox changes photo (real touch events, swipe right through the app's own touch handlers); no invisible overlay (the centre point of a tile hits the tile); `prefers-reduced-motion` turns the transitions off.
+- Outside the scope, checked: the photographer's dashboard grid tile and dashboard lightbox photo right-clicks are NOT cancelled (0 guard markers on the page); right-click on text of the download page is NOT cancelled.
+- Not provable here: a real long-press (headless Chrome fires no `contextmenu` for a held touch) and a real phone's browser menu (row 143); a raw rightward swipe in the lightbox triggers Chrome's own history-back gesture in touch emulation (the pre-7-D build does the same, row 144).
+
+New gaps: debt rows 141-145 (and the accepted limit, row 146).
