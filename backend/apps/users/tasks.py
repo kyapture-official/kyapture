@@ -78,3 +78,33 @@ def purge_old_notifications(self):
         raise self.retry(exc=exc)
     logger.info("[purge_old_notifications] Removed %s old notification(s).", deleted)
     return deleted
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_password_reset_email_task(self, email):
+    """
+    7-C: the "forgot password" email. Queued for EVERY well-formed address the
+    reset endpoint accepts (known or not), so the request itself never touches
+    the user table; this task finds out whether the account exists. A retry
+    issues a fresh link (the previous one is dropped). Returns nothing that
+    could end up in a result backend or a log: no token, no link.
+    """
+    from .password_reset import send_reset_email
+
+    try:
+        send_reset_email(email)
+    except Exception as exc:
+        logger.exception("[send_password_reset_email] failed; retrying")
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_password_changed_email_task(self, user_id, how):
+    """7-C: "your password was changed" to the account address, after a reset or a change."""
+    from .password_reset import send_password_changed_email
+
+    try:
+        send_password_changed_email(user_id, how)
+    except Exception as exc:
+        logger.exception("[send_password_changed_email] for user %s failed; retrying", user_id)
+        raise self.retry(exc=exc)

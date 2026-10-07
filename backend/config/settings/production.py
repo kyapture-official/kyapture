@@ -146,7 +146,17 @@ if "django_ses" not in INSTALLED_APPS:
 # AWS_SECRET_ACCESS_KEY already loaded above for S3; django-ses (like
 # django-storages) reads those same Django settings, so there's no second
 # credential pair to manage.
-EMAIL_BACKEND = "django_ses.SESBackend"
+#
+# 7-C: an SMTP provider can be used instead by setting
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend plus EMAIL_HOST,
+# EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD and EMAIL_USE_TLS/SSL (all
+# read from the environment in base.py; never committed).
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django_ses.SESBackend")
+if EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
+    if not os.getenv("EMAIL_HOST"):
+        raise ImproperlyConfigured("EMAIL_BACKEND is SMTP but EMAIL_HOST is not set.")
+    if not (EMAIL_USE_TLS or EMAIL_USE_SSL):
+        raise ImproperlyConfigured("Production SMTP mail needs EMAIL_USE_TLS=true or EMAIL_USE_SSL=true.")
 
 # SES isn't available in every AWS region and has no requirement to share a
 # region with the S3 media bucket. Defaults to the bucket's region if you

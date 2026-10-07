@@ -4,7 +4,8 @@ from .views import (
     RegisterView, LoginView, LogoutView,
     CookieTokenRefreshView,  
     PasswordResetRequestView,
-    PasswordResetConfirmView,  
+    PasswordResetCheckView,
+    PasswordResetConfirmView,
     MeView, ChangePasswordView, LogoutAllView, UserSettingsView,
 )
 
@@ -14,7 +15,8 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='auth-logout'),
     path('token/refresh/', CookieTokenRefreshView.as_view(), name='token-refresh'),
     path('password/reset/', PasswordResetRequestView.as_view(), name='password-reset'),  
-    path('password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),  
+    path('password/reset/check/', PasswordResetCheckView.as_view(), name='password-reset-check'),
+    path('password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('me/', MeView.as_view(), name='auth-me'),
     path('change-password/', ChangePasswordView.as_view(), name='auth-change-pw'),
     path('logout-all/', LogoutAllView.as_view(), name='auth-logout-all'),

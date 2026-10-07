@@ -122,7 +122,13 @@ REST_FRAMEWORK = {
         "anon": "100/day",                  # Standard guest threshold — fine for arbitrary/misc anon endpoints
         "user": "1000/hour",                # Standard authenticated photographer threshold
         "password_unlock": "5/minute",      # Tight brute-force security for private galleries
-        "password_reset": "5/hour",
+        # 7-C: reset requests per client address (429 past it). Reset EMAILS per
+        # typed address are capped separately and silently (the answer never
+        # changes): `password_reset_email`. Link checks and new-password
+        # submissions per address: `password_reset_confirm`.
+        "password_reset": "10/hour",
+        "password_reset_email": "3/hour",
+        "password_reset_confirm": "30/hour",
         "login": "5/minute",                # Tight brute-force security for photographer login
         "password_change": "10/hour",       # Per-user: guards the current-password check against guessing
         # Phase 4 (F-41 fix): ordinary public gallery browsing/streaming/
@@ -480,6 +486,19 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Kyapture <no-reply@kyaptur
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 EMAIL_SUBJECT_PREFIX = "[Kyapture] "
 EMAIL_TIMEOUT = 10  # seconds — a stalled mail provider call should never hang a request/worker
+
+# SMTP settings for any environment that sends through an SMTP server (dev
+# compose: Mailpit). Read from the environment only; nothing secret is ever
+# committed. production.py keeps Amazon SES unless EMAIL_BACKEND says otherwise.
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "1025"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "false").lower() == "true"
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "false").lower() == "true"
+
+# 7-C: how long an emailed "forgot password" link works (apps/users/password_reset.py).
+PASSWORD_RESET_TOKEN_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_MINUTES", "30"))
 
 # Public origin of the deployed React SPA. Views build outgoing email links
 # (password reset, etc.) from this setting instead of hardcoding a hostname,

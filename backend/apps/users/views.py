@@ -3,21 +3,17 @@ import hashlib
 import logging
 
 from django.conf import settings
+from django.db import transaction
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle, UserRateThrottle
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.debug import sensitive_post_parameters
 from django.utils.decorators import method_decorator
-from django.utils.http import urlsafe_base64_decode
-from django.contrib.auth.password_validation import validate_password
+from django.core.validators import validate_email
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
 
 
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -30,7 +26,9 @@ from .serializers import (
     ChangePasswordSerializer,
     UserSettingsSerializer,
 )
-from .utils import blacklist_all_outstanding_tokens_for_user
+from .password_policy import password_problems
+from .tokens import VersionedRefreshToken, token_version_of
+from .utils import revoke_all_sessions
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +92,7 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             user = serializer.save()
-            refresh = RefreshToken.for_user(user)
+            refresh = VersionedRefreshToken.for_user(user)
 
             # Response body contains ONLY profile metadata—no raw token exposure
             response = Response({
@@ -259,17 +257,18 @@ class CookieTokenRefreshView(APIView):
             # AllowAny/unauthenticated by design, since all it has is the
             # refresh cookie), so it's read from the token's own verified
             # payload instead.
-            if jwt_settings.get('ROTATE_REFRESH_TOKENS', False):
-                user_id_claim = jwt_settings.get('USER_ID_CLAIM', 'user_id')
-                user_id = refresh.payload.get(user_id_claim)
-                try:
-                    user = User.objects.get(pk=user_id, is_active=True)
-                except User.DoesNotExist:
-                    return Response(
-                        {'error': 'Invalid or expired session.'}, status=status.HTTP_401_UNAUTHORIZED
-                    )
+            user_id_claim = jwt_settings.get('USER_ID_CLAIM', 'user_id')
+            user_id = refresh.payload.get(user_id_claim)
+            user = User.objects.filter(pk=user_id, is_active=True).first()
+            # 7-C: a refresh token minted before a password reset/change or a
+            # logout-all carries an older `tv` claim: that session is over.
+            if user is None or token_version_of(refresh) != user.token_version:
+                return Response(
+                    {'error': 'Invalid or expired session.'}, status=status.HTTP_401_UNAUTHORIZED
+                )
 
-                new_refresh = RefreshToken.for_user(user)
+            if jwt_settings.get('ROTATE_REFRESH_TOKENS', False):
+                new_refresh = VersionedRefreshToken.for_user(user)
                 new_access_token = str(new_refresh.access_token)
                 new_refresh_token = str(new_refresh)
 
@@ -351,13 +350,11 @@ class ChangePasswordView(APIView):
     """
     PUT /api/v1/auth/change-password/ - Requires authenticated cookie authorization
 
-    On success every outstanding refresh token for the account is revoked (see
-    ChangePasswordSerializer.save), which signs out every OTHER device. The
-    device that just made the change is then given a fresh session so the user
-    isn't bounced to the login screen when their short-lived access token
-    lapses a few minutes later. Access tokens already issued elsewhere stay
-    valid until they expire (ACCESS_TOKEN_LIFETIME, 15 minutes) — a property
-    of stateless JWTs this app deliberately does not change.
+    On success every session of the account ends (ChangePasswordSerializer.save
+    -> revoke_all_sessions): every access and refresh token already issued, on
+    every device, stops working on its next use. The device that made the
+    change is then given a fresh session so it stays signed in, and the owner
+    gets a "your password was changed" email.
     """
     permission_classes = [IsAuthenticated]
     throttle_classes = [PasswordChangeRateThrottle]
@@ -370,7 +367,7 @@ class ChangePasswordView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             response = Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
-            refresh = RefreshToken.for_user(user)
+            refresh = VersionedRefreshToken.for_user(user)
             set_auth_cookies(response, str(refresh.access_token), str(refresh))
             return response
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -379,16 +376,14 @@ class ChangePasswordView(APIView):
 class LogoutAllView(APIView):
     """
     POST /api/v1/auth/logout-all/
-    Signs the account out everywhere: blacklists EVERY outstanding refresh
-    token (this device included) and clears this browser's cookies. Real
-    server-side revocation — refresh tokens stop working immediately; an
-    access token already in flight elsewhere lapses within
-    ACCESS_TOKEN_LIFETIME (15 minutes).
+    Signs the account out everywhere (revoke_all_sessions, apps/users/utils.py):
+    every access and refresh token already issued, this device's included,
+    stops working on its next use, and this browser's cookies are cleared.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        blacklist_all_outstanding_tokens_for_user(request.user)
+        revoke_all_sessions(request.user)
         response = Response({'message': 'Signed out of all sessions.'}, status=status.HTTP_200_OK)
         domain = getattr(settings, 'SESSION_COOKIE_DOMAIN', None)
         response.delete_cookie('access_token', domain=domain)
@@ -461,163 +456,171 @@ class TotalUsersView(APIView):
             "latest_users": latest_users
         }, status=status.HTTP_200_OK)
 
-# ─────────────────────────────────────────────────────────────
-# THROTTLES & PASSWORD RESET VIEWS
-# ─────────────────────────────────────────────────────────────
 
-# 1. Define the throttle class FIRST so Python registers it
+# ─────────────────────────────────────────────────────────────
+# PASSWORD RESET (7-C)
+# ─────────────────────────────────────────────────────────────
+# Forgot -> emailed one-time link (apps/users/password_reset.py) -> new password
+# -> link dead -> every session of the account revoked -> "password changed" email.
+
+RESET_LINK_INVALID = 'This reset link is invalid or has expired. Request a new one.'
+
+
 class PasswordResetRateThrottle(AnonRateThrottle):
-    """
-    Limits anonymous password-reset requests to the 'password_reset' rate
-    configured in REST_FRAMEWORK.DEFAULT_THROTTLE_RATES.
-    """
+    """Reset requests per client address (`password_reset`). Answered with a 429, which says nothing about any account."""
     scope = 'password_reset'
 
 
-# 2. Define the view SECOND after its dependencies are declared
+class PasswordResetEmailThrottle(SimpleRateThrottle):
+    """
+    Reset emails per typed address (`password_reset_email`), counted whether or
+    not an account uses it. NOT a throttle class of the view: past the limit the
+    view still answers the same 200 and simply sends nothing, so nobody can fill
+    an inbox and the answer never changes.
+    """
+    scope = 'password_reset_email'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': hashlib.sha256(view.reset_email.encode('utf-8')).hexdigest(),
+        }
+
+
+class PasswordResetConfirmRateThrottle(AnonRateThrottle):
+    """Link checks and new-password submissions per client address (`password_reset_confirm`)."""
+    scope = 'password_reset_confirm'
+
+
+def _reset_link_invalid():
+    return Response({'error': RESET_LINK_INVALID, 'code': 'reset_link_invalid'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def _posted_str(request, key):
+    value = request.data.get(key) if hasattr(request.data, 'get') else None
+    return value if isinstance(value, str) else ''
+
+
 class PasswordResetRequestView(APIView):
     """
-    POST /api/v1/auth/password/reset/
+    POST /api/v1/auth/password/reset/  {"email": "..."}
 
-    Anti-enumeration contract: this endpoint returns the SAME 200 response,
-    with the SAME generic message, whether or not `email` matches a real
-    account — and it does so unconditionally, regardless of what happens
-    while trying to build/send the actual email. That second half used to
-    be the weak point: template rendering and send_mail() ran inside a
-    try/except that only caught User.DoesNotExist, so a missing template
-    (or any other send-path failure) propagated as an uncaught 500 for
-    real accounts while a non-existent email still quietly returned 200 —
-    an exception-shaped way to find out which emails have accounts. Every
-    failure past "does this user exist" is now caught, logged, and
-    swallowed behind the identical response below.
+    The same 200 and the same body for every well-formed address, known or not,
+    and the same work: the request only counts the address and queues a Celery
+    task (no user lookup here), so its timing does not depend on the account
+    existing either. The task looks the account up and sends the link. A
+    malformed address is a 400 (true for any address of that shape).
     """
     permission_classes = [AllowAny]
     authentication_classes = []
     throttle_classes = [PasswordResetRateThrottle]
 
-    GENERIC_MESSAGE = (
-        'If an active account is registered with that email, a secure '
-        'password reset link has been sent.'
-    )
-
-    def post(self, request):
-        email = request.data.get('email', '').strip().lower()
-        if not email:
-            return Response(
-                {'error': 'A valid email address is required to reset passwords.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        generic_response = Response(
-            {'message': self.GENERIC_MESSAGE}, status=status.HTTP_200_OK
+    def generic_message(self):
+        return (
+            'If an account uses that email, we have sent it a link to reset the password. '
+            f'The link works once and expires in {settings.PASSWORD_RESET_TOKEN_MINUTES} minutes.'
         )
 
+    def post(self, request):
+        from .tasks import send_password_reset_email_task
+
+        email = _posted_str(request, 'email').strip().lower()
         try:
-            user = User.objects.get(email=email, is_active=True)
-        except User.DoesNotExist:
-            # No account for this email — return the exact same response as
-            # the success path below. Nothing here should ever distinguish
-            # "no such account" from "account exists, email dispatch failed".
-            return generic_response
-
-        # From here on, everything is best-effort. A template bug, an SES
-        # outage, or any other failure while composing/sending the email
-        # must never surface as a 500 and must never change the response
-        # shape — that would defeat the whole point of the identical
-        # generic_response above. Log it and move on.
-        try:
-            token = default_token_generator.make_token(user)
-            uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
-
-            reset_url = f"{settings.FRONTEND_URL}/auth/password/reset/confirm/{uidb64}/{token}/"
-
-            email_context = {
-                'display_name': user.display_name or user.username,
-                'reset_url': reset_url,
-            }
-            text_body = render_to_string('users/emails/password_reset_email.txt', email_context)
-            html_body = render_to_string('users/emails/password_reset_email.html', email_context)
-
-            send_mail(
-                subject='Reset your Kyapture password',
-                message=text_body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=html_body,
-                fail_silently=False,
-            )
-            logger.info('Password reset email dispatched for user_id=%s', user.id)
-        except Exception:
-            logger.exception(
-                'Password reset email failed to send for user_id=%s — request '
-                'still reports success to the caller (anti-enumeration contract).',
-                user.id,
+            if len(email) > 254:
+                raise DjangoValidationError('too long')
+            validate_email(email)
+        except DjangoValidationError:
+            return Response(
+                {'error': 'Enter a valid email address.', 'code': 'email_invalid'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return generic_response
+        self.reset_email = email
+        if PasswordResetEmailThrottle().allow_request(request, self):
+            def dispatch():
+                try:
+                    send_password_reset_email_task.delay(email)
+                except Exception:
+                    logger.exception('Could not queue a password reset email')
+
+            transaction.on_commit(dispatch)
+
+        return Response({'message': self.generic_message()}, status=status.HTTP_200_OK)
 
 
-class PasswordResetConfirmView(APIView):
+class PasswordResetCheckView(APIView):
     """
-    POST /api/v1/auth/password/reset/confirm/
+    POST /api/v1/auth/password/reset/check/  {"token": "..."}
+
+    Lets the reset page show "invalid or expired link" before the person types a
+    new password. Does not use the link up. 200 {"valid": true} or 400
+    `reset_link_invalid` (unknown, expired, already used or replaced: one answer).
     """
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [PasswordResetConfirmRateThrottle]
 
     def post(self, request):
-        uidb64 = request.data.get('uidb64', '').strip()
-        token = request.data.get('token', '').strip()
-        new_password = request.data.get('new_password', '')
-        new_password2 = request.data.get('new_password2', '')
+        from .password_reset import live_token_queryset
 
-        if not (uidb64 and token and new_password):
-            return Response(
-                {'error': 'UID, token, and new password parameters are all required.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if not live_token_queryset(_posted_str(request, 'token')).exists():
+            return _reset_link_invalid()
+        return Response({'valid': True}, status=status.HTTP_200_OK)
 
+
+@method_decorator(sensitive_post_parameters('token', 'new_password', 'new_password2'), name='dispatch')
+class PasswordResetConfirmView(APIView):
+    """
+    POST /api/v1/auth/password/reset/confirm/  {"token", "new_password", "new_password2"}
+
+    The new password must pass the one policy (apps/users/password_policy.py:
+    the registration validators, not the email, not the current password). A
+    refused password leaves the link usable so the person can try another one.
+    On success, in one transaction: the password is set, the link and every
+    other pending link of the account are deleted, every session (access and
+    refresh tokens, cookie or bearer) is revoked, and a "password changed"
+    email is queued. This browser's auth cookies are cleared too.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [PasswordResetConfirmRateThrottle]
+
+    def post(self, request):
+        from .password_reset import live_token_queryset, queue_password_changed_email
+
+        token = _posted_str(request, 'token')
+        new_password = _posted_str(request, 'new_password')
+        new_password2 = _posted_str(request, 'new_password2')
+
+        if not token:
+            return _reset_link_invalid()
+        if not new_password:
+            return Response({'new_password': ['Enter a new password.']}, status=status.HTTP_400_BAD_REQUEST)
         if new_password != new_password2:
-            return Response(
-                {'error': 'Passwords do not match.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'new_password2': ['Passwords do not match.']}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            uid = urlsafe_base64_decode(uidb64).decode()
-            user = User.objects.get(pk=uid, is_active=True)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            return Response(
-                {'error': 'Invalid reset link. The user associated with this token does not exist.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        with transaction.atomic():
+            # The row lock makes a link usable exactly once, even for two
+            # simultaneous submissions: the second one finds no row.
+            row = live_token_queryset(token).select_for_update().select_related('user').first()
+            if row is None:
+                return _reset_link_invalid()
+            user = row.user
+            problems = password_problems(new_password, user)
+            if problems:
+                return Response({'new_password': problems}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not default_token_generator.check_token(user, token):
-            return Response(
-                {'error': 'This password reset link has expired or is invalid.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            user.set_password(new_password)
+            user.save(update_fields=['password'])
+            revoke_all_sessions(user)
+            queue_password_changed_email(user, 'reset')
 
-        from django.contrib.auth.password_validation import validate_password
-        from django.core.exceptions import ValidationError as DjangoValidationError
-
-        try:
-            validate_password(new_password, user=user)
-        except DjangoValidationError as e:
-            return Response(
-                {'error': list(e.messages)[0], 'details': list(e.messages)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user.set_password(new_password)
-        user.save()
-
-        # Phase 4 (auth hardening): invalidate every outstanding refresh
-        # token for this user — see blacklist_all_outstanding_tokens_for_user's
-        # own docstring for why this matters specifically for a password
-        # reset (anyone with a still-valid session before the reset must
-        # not keep it afterward).
-        blacklist_all_outstanding_tokens_for_user(user)
-
-        return Response({
-            'message': 'Password changed successfully. Please log in with your new credentials.'
-        }, status=status.HTTP_200_OK)
+        logger.info('Password reset completed for user_id=%s', user.pk)
+        response = Response(
+            {'message': 'Your password has been reset. Sign in with your new password.'},
+            status=status.HTTP_200_OK,
+        )
+        domain = getattr(settings, 'SESSION_COOKIE_DOMAIN', None)
+        response.delete_cookie('access_token', domain=domain)
+        response.delete_cookie('refresh_token', domain=domain)
+        return response

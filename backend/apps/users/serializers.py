@@ -2,14 +2,13 @@
 import logging
 import re
 from django.contrib.auth import authenticate
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.branding import InvalidLogo, sanitize_avatar_upload, sanitize_logo_upload
 from apps.users.collection_defaults import validate_collection_defaults
 from apps.subscriptions.entitlements import BRANDING, require_feature
 from .models import User
+from .password_policy import password_problems
+from .tokens import VersionedRefreshToken
 
 logger = logging.getLogger(__name__)
 
@@ -179,13 +178,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         if data['password'] != data['password2']:
             raise serializers.ValidationError({'password': 'Passwords do not match.'})
             
-        # Cryptographic strength checks using Django's validation engine
-        try:
-            # We must pass the user instance context if we want to check against username/email
-            user_instance = User(username=data.get('username'), email=data.get('email'))
-            validate_password(data['password'], user=user_instance)
-        except DjangoValidationError as e:
-            raise serializers.ValidationError({'password': list(e.messages)})
+        # The one password policy (apps/users/password_policy.py), shared with
+        # password change and reset. The unsaved instance lets the similarity
+        # check see the username and email.
+        user_instance = User(username=data.get('username'), email=data.get('email'))
+        problems = password_problems(data['password'], user_instance)
+        if problems:
+            raise serializers.ValidationError({'password': problems})
             
         return data
 
@@ -222,7 +221,7 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError({'non_field_errors': 'This account has been disabled.'})
 
         # Generate standard JWT session and refresh tokens
-        refresh = RefreshToken.for_user(user)
+        refresh = VersionedRefreshToken.for_user(user)
 
         # Connect and return the user profile directly to optimize David's frontend [1.1.2]
         return {
@@ -244,14 +243,10 @@ class ChangePasswordSerializer(serializers.Serializer):
         if data['new_password'] != data['new_password2']:
             raise serializers.ValidationError({'new_password2': 'New passwords do not match.'})
 
-        if data['new_password'] == data['old_password']:
-            raise serializers.ValidationError({'new_password': 'Choose a password different from your current one.'})
+        problems = password_problems(data['new_password'], self.context['request'].user)
+        if problems:
+            raise serializers.ValidationError({'new_password': problems})
 
-        try:
-            validate_password(data['new_password'], user=self.context['request'].user)
-        except DjangoValidationError as e:
-            raise serializers.ValidationError({'new_password': list(e.messages)})
-            
         return data
 
     def validate_old_password(self, value):
@@ -265,19 +260,13 @@ class ChangePasswordSerializer(serializers.Serializer):
         user.set_password(self.validated_data['new_password'])
         user.save()
 
-        # Phase 4 (auth hardening): invalidate every other outstanding
-        # session on a self-service password change too — see
-        # blacklist_all_outstanding_tokens_for_user's own docstring
-        # (apps/users/utils.py) for the full rationale. Deliberately
-        # blacklists ALL outstanding tokens, including the one behind the
-        # request making this very call — the frontend already holds a
-        # short-lived (15 min) access token and will naturally need to
-        # re-authenticate/refresh soon regardless, and there is no
-        # reliable way from here to distinguish "this device" from "any
-        # other device" among refresh tokens without adding new state
-        # this app doesn't otherwise track.
-        from .utils import blacklist_all_outstanding_tokens_for_user
-        blacklist_all_outstanding_tokens_for_user(user)
+        # 7-C: every session of the account ends here, this device's included
+        # (ChangePasswordView then gives this device a fresh session), and the
+        # owner is told by email. See revoke_all_sessions (apps/users/utils.py).
+        from .password_reset import queue_password_changed_email
+        from .utils import revoke_all_sessions
+        revoke_all_sessions(user)
+        queue_password_changed_email(user, 'change')
 
         return user
 

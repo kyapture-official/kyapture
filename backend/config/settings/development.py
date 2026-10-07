@@ -57,9 +57,8 @@ EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.Em
 
 # docker-compose points the web/worker containers at its dev-only Mailpit
 # catcher (SMTP :1025, inbox UI http://localhost:8025) so emails can be read.
-# Nothing is delivered anywhere; production.py never reads these.
-EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "1025"))
+# Nothing is delivered anywhere. EMAIL_HOST/PORT/HOST_USER/HOST_PASSWORD are
+# read from the environment in base.py.
 
 # Download-ready email abuse limits (apps/clients/ready_email.py): loosened here
 # so repeated local/QA downloads still produce an email. Production keeps the

@@ -135,6 +135,14 @@ class User(AbstractUser):
     # Never read when an existing gallery is edited or displayed.
     collection_defaults = models.JSONField(default=dict, blank=True)
 
+    # ── Session revocation (7-C) ───────────────────────────────────────────
+    # Every JWT (access and refresh) carries this number as its `tv` claim.
+    # CookieJWTAuthentication and the refresh view refuse a token whose claim is
+    # not the current value, so bumping it (apps/users/utils.py
+    # revoke_all_sessions: password reset, password change, logout-all) kills
+    # every token already issued, cookie or bearer, on the very next request.
+    token_version = models.PositiveIntegerField(default=0, editable=False)
+
     class Meta:
         db_table = 'users'
 
@@ -253,3 +261,27 @@ class Feedback(BaseModel):
 
     def __str__(self):
         return f'{self.get_category_display()} from {self.user_id}: {self.subject}'
+
+
+class PasswordResetToken(models.Model):
+    """
+    One emailed "forgot password" link (7-C).
+
+    Only the SHA-256 of the random token is stored; the token itself exists in
+    the email and, once, in the browser. A row is usable while `expires_at` is
+    in the future (settings.PASSWORD_RESET_TOKEN_MINUTES). It is deleted when it
+    is used, when a newer link is requested for the same account, and when any
+    password change revokes the account's sessions, so a link works at most once
+    and only the newest one works.
+    """
+
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='password_reset_tokens')
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        db_table = 'password_reset_tokens'
+
+    def __str__(self):
+        return f'Password reset link for {self.user_id} (expires {self.expires_at:%Y-%m-%d %H:%M})'

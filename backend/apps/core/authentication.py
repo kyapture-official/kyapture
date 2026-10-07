@@ -42,6 +42,19 @@ class CookieJWTAuthentication(JWTAuthentication):
         except InvalidToken:
             return None
 
+    def get_user(self, validated_token):
+        """
+        7-C: a token minted before the account's sessions were revoked (password
+        reset or change, logout-all) carries an older `tv` claim and is refused,
+        so revocation reaches access tokens too, not only refresh tokens.
+        """
+        from apps.users.tokens import token_version_of
+
+        user = super().get_user(validated_token)
+        if token_version_of(validated_token) != user.token_version:
+            raise InvalidToken('Session revoked.')
+        return user
+
     def enforce_csrf(self, request):
         """
         Enforces Django's native, battle-tested CSRF validation.

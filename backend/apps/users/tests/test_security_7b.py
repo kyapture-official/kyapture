@@ -238,7 +238,7 @@ def settings_in_subprocess(module, env, expression):
         'import importlib, json, os, sys; sys.path.insert(0, os.getcwd()); '
         f'm = importlib.import_module({module!r}); print(json.dumps({expression}))'
     )
-    clean = {k: v for k, v in os.environ.items() if not k.startswith(('SECRET_KEY', 'JWT_', 'CACHE_', 'NUM_PROXIES'))}
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(('SECRET_KEY', 'JWT_', 'CACHE_', 'NUM_PROXIES', 'EMAIL_'))}
     result = subprocess.run([sys.executable, '-c', code], cwd=BACKEND_DIR, capture_output=True, text=True,
                             env={**clean, **env}, timeout=60)
     if result.returncode != 0:

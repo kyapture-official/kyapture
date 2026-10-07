@@ -9,13 +9,11 @@ Covers:
     both invalidate every other outstanding refresh token
 """
 from django.core.cache import cache
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
 from rest_framework.test import APITestCase
 from rest_framework import status
 
 from apps.users.models import User
+from apps.users.password_reset import issue_token
 
 LOGIN_URL = '/api/v1/auth/login/'
 REFRESH_URL = '/api/v1/auth/token/refresh/'
@@ -129,11 +127,10 @@ class PasswordResetInvalidatesSessionsTestCase(APITestCase):
     def test_resetting_password_blacklists_outstanding_refresh_token(self):
         refresh_token = self._login()
 
-        uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
-        token = default_token_generator.make_token(self.user)
+        # 7-C: the link carries one random token (apps/users/password_reset.py).
+        token = issue_token(self.user)
 
         response = self.client.post(RESET_CONFIRM_URL, {
-            'uidb64': uidb64,
             'token': token,
             'new_password': 'ResetPassword789!',
             'new_password2': 'ResetPassword789!',
