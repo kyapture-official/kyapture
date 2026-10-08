@@ -1,14 +1,14 @@
 // File Location: frontend/src/api/axiosInstance.js
 
 import axios from 'axios'
-import { withRefreshLock } from './refreshLock.js'
+import { refreshOnce } from './refreshLock.js'
 
 // ── BASE CONFIGURATION & PATH NORMALIZATION ─────────────────────────────────
 // Checks VITE_API_BASE_URL first (correct), falls back to legacy VITE_API_URL
 // for backward compatibility with older .env files.
 const rawBaseURL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
+  import.meta.env?.VITE_API_BASE_URL ||
+  import.meta.env?.VITE_API_URL ||
   '/api/v1'
 // Normalize the base URL by stripping trailing slashes.
 // Relative paths must always start with a leading slash and end with a trailing
@@ -39,6 +39,8 @@ function getCsrfToken() {
 
 api.interceptors.request.use(
   (config) => {
+    // 7G: when this request left, so a 401 can tell whether a refresh finished since.
+    config._sentAt = Date.now()
     const method = (config.method || 'get').toUpperCase()
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       const csrfToken = getCsrfToken()
@@ -140,7 +142,9 @@ api.interceptors.response.use(
         // this call never re-enters these same interceptors.
         // 7F: under a lock shared by every tab, so two tabs never send the same
         // (rotating) refresh cookie at once and sign each other out.
-        await withRefreshLock(() => axios.post(joinPath('/auth/token/refresh/'), {}, {
+        // 7G: a tab that waited reuses the refresh another tab just made.
+        // Tested in axiosInstance.test.js (mocked axios, fake lock).
+        await refreshOnce(originalRequest._sentAt, () => axios.post(joinPath('/auth/token/refresh/'), {}, {
           withCredentials: true,
           timeout: 10000,
         }))

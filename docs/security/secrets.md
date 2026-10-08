@@ -101,7 +101,7 @@ Root text files `.aider.chat.history.md`, `.aider.input.history` (untracked), `u
 | Gallery unlock tokens, download tokens | `sessionStorage` (`frontend/src/store/clientStore.js:22-60`) | Readable by any script on the SPA origin; CSP `script-src 'self'` limits XSS (SEC-14) |
 | Favorites identity (`client_uid`) and remembered visitor email | `localStorage` (`frontend/src/store/visitorStore.js:4-24`) | Low; the email is also the key for SEC-02 |
 | Saved login email ("remember me") | `localStorage` (`frontend/src/pages/auth/LoginPage.jsx:89-93`) | Low (PII on shared machines) |
-| Tokens in URLs | `?token=`, `?download_token=`, `?file_token=`, `?link_token=` (`apps/clients/views.py:431, 1442-1458, 1527, 1818`) | Logged by servers/proxies, kept in history; `Referrer-Policy: strict-origin-when-cross-origin` (`nginx.conf:57`) stops path leakage cross-origin |
+| Tokens in URLs | `?token=`, `?download_token=`, `?file_token=` (`apps/clients/views.py`); the ZIP job key moved to the `X-Download-Link-Key` header in 7G (`?link_token=` is refused) | Logged by servers/proxies, kept in history; `Referrer-Policy: strict-origin-when-cross-origin` (`nginx.conf:57`) stops path leakage cross-origin (debt row 133) |
 | S3 presigned URLs | Owner `original_url` (SEC-08), video redirect (SEC-07) | Expose the access key ID (not the secret) and private key paths |
 | `VITE_*` variables | baked into the bundle | Only URLs today |
 | Committed build output | `frontend/dist-phase2-verify/assets/index-*.js` is tracked | Info: contains whatever `VITE_*` values that build had (URLs only per the scan) |

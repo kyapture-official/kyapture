@@ -39,3 +39,16 @@ class GalleryAdmin(admin.ModelAdmin):
     # are never shown or editable here; the photographer sets them in the app
     # (set-password / set-download-pin), which also ends old sessions.
     exclude = ['password_hash', 'download_pin_hash']
+
+    # 7G (7R-2 R4): design_settings is also written by visitors (the "Limit PIN
+    # Usage" counter) and by the owner's settings screen, each under a row lock.
+    # The admin shows it read-only and writes back only the fields its form
+    # edits, so a save never restores the settings as they were when the form
+    # (or this request) loaded the row.
+    readonly_fields = ['design_settings']
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            return super().save_model(request, obj, form, change)
+        concrete = {field.name for field in obj._meta.concrete_fields}
+        obj.save(update_fields=[name for name in form.cleaned_data if name in concrete])

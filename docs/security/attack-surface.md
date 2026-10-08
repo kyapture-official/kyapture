@@ -36,7 +36,7 @@ Every gallery lookup requires `is_published=True`, `is_active=True`, not expired
 | P4 | `POST {u}/{slug}/unlock/` | `GalleryUnlockView` (582) | password_unlock | body `password`, `email` | bcrypt check, creates a `ClientSession` (token stored hashed); failure lockout per client and per gallery (7-B) |
 | P5 | `POST {u}/{slug}/download-access/` | `PublicDownloadAccessView` (973) | password_unlock | `pin`, `email`, `token` | Issues 2 h `download_token`; a listed contact must first enter an emailed one-time code; PIN failures lock out (7-B) |
 | P6 | `POST {u}/{slug}/download/` | `PublicGalleryDownloadView` (1103) | password_unlock | `download_token`/`pin`, `resolution`, `set_id(s)`, `asset_ids`, `email` | Creates a `DownloadJob`, queues Celery, may send email |
-| P7 | `GET {u}/{slug}/download-jobs/{uuid}/` | `PublicDownloadJobStatusView` (1439) | browse | `link_token` or `download_token` (+ unlock token) | Returns signed file URLs |
+| P7 | `GET {u}/{slug}/download-jobs/{uuid}/` | `PublicDownloadJobStatusView` (1439) | browse | job key in the `X-Download-Link-Key` header (7G; `?link_token=` refused) or `download_token` (+ unlock token) | Returns signed file URLs |
 | P8 | `GET {u}/{slug}/download-jobs/{uuid}/files/{i}/` | `PublicDownloadJobFileView` (1524) | browse | `file_token` | Streams ZIP from private storage; may redirect to `FRONTEND_URL` |
 | P9 | `GET {u}/{slug}/download-all/` | `PublicGalleryDirectDownloadView` (1338) | browse | — | Always 410 |
 | P10 | `GET {u}/{slug}/video/{uuid}/stream/` | `PublicVideoStreamView` (1649) | browse | unlock token in query (row 133, accepted) | Playback MP4 only, else 409 `video_processing` (7-B; SEC-07 fixed) |

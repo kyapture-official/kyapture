@@ -103,3 +103,18 @@ test or a real request), fixed all of them, and found none to be "not a problem"
 | F8 key in a QA capture; token readable | the key was in `docs/qa-1r5c/ready-email.*` | replaced (row 102); token readability: row 153 |
 
 Evidence: docs/qa-7f/results.md.
+
+### 7G: fixes for the second review (7R-2)
+
+7R-2 reviewed 7F read-only and blocked sign-off (three P2, three P3). 7G proved each claim before changing code:
+
+| Finding | Proof before the fix | Fix |
+|---|---|---|
+| R1 gallery lock vs uploads | Publish during a REAL upload: Postgres aborted the upload (`deadlock detected`, 500); with a test lock on the photographer row the publish got 500. The "waits for any upload" half did NOT reproduce: FKs are deferred, so PIN use took 0.17 s and an owner save 0.35 s during an open upload (row 157). bcrypt ran inside the lock | `select_for_update(no_key=True)` on the gallery (3 places) and on the upload's photographer lock; "published" notification on commit; password hashed before the lock. Publish during a real upload: 0.06 s, notification created; two uploads still queue (`test_gallery_lock_7g.py`, 10 tests) |
+| R2 right values locked a venue | One address, production bcrypt cost: 8 parallel right PINs gave 3 x 429; 4 wrong + 4 right gave 429s; email codes the same | tries in flight and real failures counted apart; an over-limit try waits for the ones in flight; only `record_failure` locks: 8 x 200, 4+4 lock nothing, 20 wrong still 5 bcrypt checks then a lock (`test_lockout_shared_ip_7g.py`, row 158) |
+| R3 job key in the query string | 13 `link_token=` lines with full keys in the dev backend log | key in the `X-Download-Link-Key` header (CORS-allowed); `?link_token=` refused (400) unless a transition flag is on; browser: 0 `link_token=` lines, page lists the ZIP (`test_link_key_header_7g.py`, row 133) |
+| R4 admin rolled settings back | admin save after a PIN use: `pin_use_count` 2 back to 1; a posted `design_settings` overwrote it | `design_settings` read-only in the admin, which saves only its form's fields (`test_admin_design_settings_7g.py`; browser 8/8) |
+| R5 interceptor untested | removing the lock from `axiosInstance.js` failed no repo test | `axiosInstance.test.js` drives the real interceptor (mocked axios, fake lock): removing the lock fails 2 tests, the 7F wiring fails 1; a waiting tab now reuses the refresh another tab just made (browser: 6 of 6 rounds, one refresh each, nobody signed out) |
+| R6 email-code gallery pause | — | debt row 159 (13-A) |
+
+Evidence: docs/qa-7g/results.md.
