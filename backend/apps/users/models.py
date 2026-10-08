@@ -184,6 +184,8 @@ class Notification(BaseModel):
         FEEDBACK = 'feedback', 'New feedback'     # sent to staff (see apps/users/feedback_api.py)
         # A gallery's password or download PIN was locked after too many wrong attempts (apps/clients/lockout.py).
         SECURITY = 'security', 'Security alert'
+        # Sent to staff when a user submits a manual payment (apps/subscriptions/payments.py).
+        PAYMENT_REVIEW = 'payment_review', 'Payment to review'
 
     user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='notifications')
     kind = models.CharField(max_length=20, choices=Kind.choices)
@@ -339,13 +341,18 @@ class StaffAuditLog(models.Model):
         SUSPEND = 'account.suspend', 'Suspended an account'
         REACTIVATE = 'account.reactivate', 'Reactivated an account'
         FEEDBACK_STATUS = 'staff.feedback_status', 'Changed a feedback status'
-        PAYMENT_REVIEW = 'staff.payment_review', 'Reviewed a manual payment'
+        PAYMENT_REVIEW = 'staff.payment_review', 'Reviewed a manual payment'   # 7.5-A rows; 7.5-B writes the three below
+        PAYMENT_APPROVE = 'payment.approve', 'Approved a manual payment'
+        PAYMENT_REJECT = 'payment.reject', 'Rejected a manual payment'
+        PAYMENT_PROOF_VIEW = 'payment.proof_view', 'Opened a payment proof'
         INBOX_VIEW = 'staff.inbox_view', 'Viewed a staff queue'
         # Security events
         LOGIN_LOCKOUT = 'security.login_lockout', 'Login locked'
         GALLERY_LOCKOUT = 'security.gallery_lockout', 'Gallery gate locked'
         PASSWORD_RESET = 'security.password_reset', 'Password reset'
         PASSWORD_CHANGE = 'security.password_change', 'Password changed'
+        # A user's own act, recorded for the trail (7.5-B): the actor is the user, not staff.
+        PAYMENT_SUBMIT = 'payment.submit', 'Submitted a manual payment'
 
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

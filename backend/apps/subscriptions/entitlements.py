@@ -106,6 +106,13 @@ def _active_plan(user):
     return sub.plan if sub else None
 
 
+def has_live_paid_plan(user):
+    """True while the user holds a paid plan whose period has not ended (the same rule as every entitlement)."""
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return False
+    return _active_plan(user) is not None
+
+
 def get_feature_entitlements(user):
     """
     {'branding': bool, 'watermark': bool, 'original_download': bool,

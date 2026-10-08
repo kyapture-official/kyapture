@@ -621,15 +621,14 @@ class OtherStaffActionsAreAuditedTests(StaffBase):
         plan = SubscriptionPlan.objects.exclude(key='free').first()
         payment = ManualPayment.objects.create(
             user=self.owner, plan=plan, amount=Decimal('100.00'), payment_proof='payment_proofs/x.png')
-        self.assertEqual(self.client.get('/api/v1/subscriptions/admin/payments/').status_code, 200)
-        self.assertEqual(audit_rows(Action.INBOX_VIEW).get().reason, 'payments')
+        self.assertEqual(self.client.get('/api/v1/staff/payments/').status_code, 200)
+        self.assertEqual(audit_rows(Action.INBOX_VIEW).get().reason, 'payments status=pending')
         response = self.client.post(
-            f'/api/v1/subscriptions/payments/{payment.pk}/review/', {'action': 'reject', 'admin_note': 'blurry'},
-            format='json')
+            f'/api/v1/staff/payments/{payment.pk}/reject/', {'reason': 'blurry'}, format='json')
         self.assertEqual(response.status_code, 200, response.data)
-        row = audit_rows(Action.PAYMENT_REVIEW).get()
-        self.assertEqual((row.actor_id, row.target_id, row.reason), (self.staff.pk, self.owner.pk, 'reject'))
+        row = audit_rows(Action.PAYMENT_REJECT).get()
+        self.assertEqual((row.actor_id, row.target_id), (self.staff.pk, self.owner.pk))
         normal = self.as_user(self.other)
-        self.assertEqual(normal.post(f'/api/v1/subscriptions/payments/{payment.pk}/review/',
-                                     {'action': 'approve'}, format='json').status_code, 403)
-        self.assertEqual(audit_rows(Action.PAYMENT_REVIEW).count(), 1)
+        self.assertEqual(normal.post(f'/api/v1/staff/payments/{payment.pk}/approve/', {}, format='json').status_code, 403)
+        self.assertEqual(audit_rows(Action.PAYMENT_REJECT).count(), 1)
+        self.assertEqual(audit_rows(Action.PAYMENT_APPROVE).count(), 0)

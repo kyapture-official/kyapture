@@ -169,6 +169,8 @@ REST_FRAMEWORK = {
         # the two account actions (suspend / reactivate) have their own buckets.
         "staff_list": "60/minute",
         "staff_action": "30/hour",
+        # 7.5-B: manual payment receipts a user may submit, per user id.
+        "payment_submit": "10/hour",
     }
 }
 
@@ -324,6 +326,20 @@ else:
         },
     }
     
+# ─── MANUAL PAYMENTS (7.5-B) ─────────────────────────────────────────────────
+# The numbers of the bank-transfer / eSewa flow live here, not in code paths.
+# Prices and plan limits are NOT here: they are the SubscriptionPlan rows.
+# Days one approved payment buys. Approving extends from the current end date when
+# the user is already on that plan, otherwise the period starts at approval.
+MANUAL_PAYMENT_PERIOD_DAYS = int(os.getenv("MANUAL_PAYMENT_PERIOD_DAYS", "30"))
+# PENDING payments one user may have waiting for review at the same time.
+MANUAL_PAYMENT_MAX_PENDING = int(os.getenv("MANUAL_PAYMENT_MAX_PENDING", "3"))
+# Proof of payment (image or PDF): size and, for an image, pixels.
+MANUAL_PAYMENT_PROOF_MAX_MB = int(os.getenv("MANUAL_PAYMENT_PROOF_MAX_MB", "5"))
+MANUAL_PAYMENT_PROOF_MAX_PIXELS = int(os.getenv("MANUAL_PAYMENT_PROOF_MAX_PIXELS", "40000000"))
+# How long a staff member's link to one proof stays valid.
+MANUAL_PAYMENT_PROOF_LINK_SECONDS = int(os.getenv("MANUAL_PAYMENT_PROOF_LINK_SECONDS", "300"))
+
 # ─────────────────────────────────────────────────────────────
 # CELERY BACKGROUND WORKER CONFIGURATION
 # ─────────────────────────────────────────────────────────────

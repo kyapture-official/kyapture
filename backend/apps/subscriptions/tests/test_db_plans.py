@@ -16,7 +16,7 @@ from rest_framework.test import APITestCase
 
 from apps.galleries.models import Gallery
 from apps.subscriptions.entitlements import get_feature_entitlements, upgrade_message
-from apps.subscriptions.models import SubscriptionPlan
+from apps.subscriptions.models import ManualPayment, SubscriptionPlan
 from apps.subscriptions.testing import grant_plan
 
 User = get_user_model()
@@ -147,7 +147,8 @@ class FreeUserCannotUseProFeaturesDirectlyTests(APITestCase):
         response = self.client.post(
             '/api/v1/subscriptions/payments/', {'plan': str(free.id), 'amount': '0'}, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('plan', response.data)
+        self.assertIn('plan', response.data['errors'])      # 7.5-B: {error, code, errors: {field: [...]}}
+        self.assertFalse(ManualPayment.objects.exists())
 
     def test_admin_enabling_the_feature_on_free_row_unlocks_it(self):
         SubscriptionPlan.objects.filter(key='free').update(watermark=True)

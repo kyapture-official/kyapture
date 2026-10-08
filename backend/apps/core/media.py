@@ -32,6 +32,7 @@ PUBLIC_PATHS = (
     re.compile(_GALLERY + r'videos/[^/]+_(?:poster\.jpg|playback\.mp4|preview\.webm)'),
     re.compile(r'photographers/[^/]+/profile/avatar_[0-9a-f]+\.[a-z0-9]+'),
     re.compile(r'photographers/[^/]+/branding/logo_[0-9a-f]+\.[a-z0-9]+'),
+    re.compile(r'payment_instructions/qr_[0-9a-f]+\.[a-z0-9]+'),       # 7.5-B: the payment QR (public by design)
 )
 
 

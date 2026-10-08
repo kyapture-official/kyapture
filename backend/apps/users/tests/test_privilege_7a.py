@@ -193,8 +193,11 @@ class StaffBoundaryTests(Base):
         for method, url, body in (
             ('get', '/api/v1/feedback/inbox/', {}),
             ('patch', f'/api/v1/feedback/inbox/{uuid.uuid4()}/', {'status': 'resolved'}),
-            ('get', '/api/v1/subscriptions/admin/payments/', {}),
-            ('post', f'/api/v1/subscriptions/payments/{payment}/review/', {'action': 'approve'}),
+            ('get', '/api/v1/staff/payments/', {}),
+            ('post', f'/api/v1/staff/payments/{payment}/approve/', {}),
+            ('post', f'/api/v1/staff/payments/{payment}/reject/', {'reason': 'x'}),
+            ('post', f'/api/v1/staff/payments/{payment}/proof-link/', {}),
+            ('get', f'/api/v1/staff/payments/{payment}/proof/', {}),
         ):
             self.assertEqual(getattr(self.client, method)(url, body, format='json').status_code, 403, url)
 

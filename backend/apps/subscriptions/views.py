@@ -1,26 +1,22 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/subscriptions/views.py
 import logging
-from datetime import timedelta
-from django.db import transaction
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from apps.users import audit
-from apps.users.notification_service import notify_payment_event
-from apps.users.notifications import notify_payment_reviewed
+from . import payments
 from .entitlements import get_feature_entitlements
-from .models import SubscriptionPlan, UserSubscription, ManualPayment
+from .models import ManualPayment, PaymentInstructions, SubscriptionPlan, UserSubscription
 from .serializers import (
+    ManualPaymentSubmitSerializer,
+    OwnPaymentSerializer,
+    PaymentInstructionsSerializer,
     SubscriptionPlanSerializer,
     UserSubscriptionSerializer,
-    ManualPaymentSubmitSerializer,
-    AdminPaymentListSerializer,   # Integrated Day 3 Serializer
-    AdminPaymentReviewSerializer, # Integrated Day 3 Serializer
 )
 
 logger = logging.getLogger(__name__)
@@ -86,13 +82,26 @@ class MySubscriptionView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     
+class PaymentSubmitThrottle(UserRateThrottle):
+    """Receipts submitted, per user id (settings rate `payment_submit`)."""
+    scope = 'payment_submit'
+
+
+def payment_refusal(error):
+    """The 400 body for a refused submit: one clear message, a stable code, the field when there is one."""
+    body = {'error': error.message, 'code': error.code}
+    if error.field:
+        body['errors'] = {error.field: [error.message]}
+    return Response(body, status=error.http_status)
+
+
 class ManualPaymentView(APIView):
     """
         GET  /api/v1/subscriptions/payments/
-        Lists manual payment history records. Scoped strictly per-user
-        unless the requesting profile is administrative staff.
+        The signed-in user's OWN payments (Billing history), newest first. Staff get the
+        same: the review queue is /api/v1/staff/payments/ (7.5-B).
         POST /api/v1/subscriptions/payments/
-        Submits a fresh manual bank, eSewa, or Khalti receipt screenshot.
+        Submits a manual bank / eSewa payment: plan, amount, transaction ID, proof file.
     """
     permission_classes = [IsAuthenticated]
 
@@ -106,186 +115,55 @@ class ManualPaymentView(APIView):
             return [MultiPartParser(), FormParser()]
         return super().get_parsers() 
 
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.request.method == 'POST':
+            throttles.append(PaymentSubmitThrottle())
+        return throttles
+
     def get(self, request):
-        if request.user.is_staff:
-            # Admins see the complete global pending queue (7.5-A: every such read is audited)
-            audit.record(audit.Action.INBOX_VIEW, actor=request.user, request=request, reason='payments')
-            payments = ManualPayment.objects.select_related('user', 'plan').all()
-        else:
-            # Photographers are strictly isolated to their own history
-            payments = ManualPayment.objects.select_related('plan').filter(user=request.user)
-
-        # Basic inline serialization for quick audit list
-        data = [{
-            'id': pay.id,
-            'email': pay.user.email,
-            'plan_name': pay.plan.name,
-            'amount': str(pay.amount),
-            'status': pay.status,
-            'created_at': pay.created_at,
-            'payment_proof': request.build_absolute_uri(pay.payment_proof.url) if pay.payment_proof else None,
-            'notes': pay.notes
-        } for pay in payments]
-
-        return Response(data, status=status.HTTP_200_OK)
+        rows = ManualPayment.objects.select_related('plan').filter(user=request.user)
+        return Response(OwnPaymentSerializer(rows, many=True).data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        serializer = ManualPaymentSubmitSerializer(
-            data=request.data,
-            context={'request': request}
+        serializer = ManualPaymentSubmitSerializer(data=request.data, context={'request': request})
+        if not serializer.is_valid():
+            return Response(self.first_error(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+        try:
+            payment = serializer.save()
+        except payments.PaymentError as error:
+            return payment_refusal(error)
+        return Response(
+            {
+                "message": "Payment submitted. We will review it shortly.",
+                "payment": OwnPaymentSerializer(payment).data,
+            },
+            status=status.HTTP_201_CREATED,
         )
-        if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {"message": "Payment receipt submitted successfully. Admin review pending."},
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# ─────────────────────────────────────────────────────────────
-# 7. ADMIN PENDING PAYMENTS VIEW (Admin Staff Only)
-# GET /api/v1/subscriptions/admin/payments/
-# ─────────────────────────────────────────────────────────────
-class AdminPendingPaymentsView(APIView):
+    @staticmethod
+    def first_error(errors):
+        """{'error': first message, 'code': its code, 'errors': every field's messages}."""
+        field, details = next(iter(errors.items()))
+        first = details[0] if isinstance(details, (list, tuple)) else details
+        return {
+            'error': str(first),
+            'code': getattr(first, 'code', None) or 'invalid',
+            'errors': {name: [str(item) for item in (value if isinstance(value, (list, tuple)) else [value])]
+                       for name, value in errors.items()},
+        }
+
+
+class PaymentInstructionsView(APIView):
     """
-    GET /api/v1/subscriptions/admin/payments/
-    Lists all pending manual payments waiting for administrative review.
-    IsAdminUser — Restricts access strictly to staff. Non-staff receives 403 [1.1.2].
-    Orders entries chronologically (oldest first) to enable a fair processing queue.
+    GET /api/v1/subscriptions/payment-instructions/
+    Where to send the money (account name, eSewa / bank details, optional QR, a note): the single
+    admin-edited PaymentInstructions row. Signed-in users only; nothing here is in code or the frontend.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        audit.record(audit.Action.INBOX_VIEW, actor=request.user, request=request, reason='payments')
-        # select_related avoids N+1 query loops when resolving related user & plan data
-        payments = (
-            ManualPayment.objects
-            .filter(status=ManualPayment.VerificationStatus.PENDING)
-            .select_related('plan', 'user')
-            .order_by('created_at')
+        return Response(
+            PaymentInstructionsSerializer(PaymentInstructions.load(), context={'request': request}).data,
+            status=status.HTTP_200_OK,
         )
-        serializer = AdminPaymentListSerializer(
-            payments,
-            many=True,
-            context={'request': request}
-        )
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-# ─────────────────────────────────────────────────────────────
-# 8. ADMIN PAYMENT REVIEW VIEW (Admin Staff Only)
-# POST /api/v1/subscriptions/payments/{payment_id}/review/
-# ─────────────────────────────────────────────────────────────
-class AdminPaymentReviewView(APIView):
-    """
-    POST /api/v1/subscriptions/payments/{payment_id}/review/
-    Allows platform administrators to approve or reject manual payment claims.
-    
-    Guarantees strict transaction safety (all or nothing) during multi-table writes:
-    - On Approve:
-        1. ManualPayment status transitions to APPROVED.
-        2. UserSubscription row is fetched or generated, and extended by 30 days.
-        3. User model global flag 'is_active_plan' is set to True.
-    - On Reject:
-        1. ManualPayment status transitions to REJECTED. (User billing status unchanged).
-    """
-    permission_classes = [IsAdminUser]
-
-    def post(self, request, payment_id):
-        payment = get_object_or_404(
-            ManualPayment.objects.select_related('plan', 'user'), 
-            id=payment_id
-        )
-
-        # Utilize serializer validation to assert context-specific checks
-        serializer = AdminPaymentReviewSerializer(
-            data=request.data,
-            context={
-                'request': request,
-                'payment': payment
-            }
-        )
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        action = serializer.validated_data['action']
-        admin_note = serializer.validated_data.get('admin_note', '').strip()
-
-        # Wrap all structural multi-table modifications in a single SQL transaction
-        try:
-            with transaction.atomic():
-                audit.record(audit.Action.PAYMENT_REVIEW, actor=request.user, target=payment.user, request=request,
-                             reason=action)
-                if action == 'approve':
-                    # 1. Update verification state
-                    payment.status = ManualPayment.VerificationStatus.APPROVED
-                    payment.verified_by = request.user
-                    if admin_note:
-                        payment.notes = admin_note
-                    payment.save(update_fields=['status', 'verified_by', 'notes'])
-
-                    # 2. Stateful Create-or-Extend Math for Subscription Expirations
-                    now = timezone.now()
-                    subscription, created = UserSubscription.objects.get_or_create(
-                        user=payment.user,
-                        defaults={
-                            'plan': payment.plan,
-                            'status': UserSubscription.SubscriptionStatus.ACTIVE,
-                            'starts_at': now,
-                            'expires_at': now + timedelta(days=30),
-                            'payment_method': UserSubscription.PaymentMethod.MANUAL
-                        }
-                    )
-
-                    if not created:
-                        # Photographer is renewing. Calculate base date sequentially:
-                        # If active: extend from future expiration. If expired: start from now.
-                        base_date = max(subscription.expires_at, now)
-                        subscription.plan = payment.plan
-                        subscription.status = UserSubscription.SubscriptionStatus.ACTIVE
-                        subscription.payment_method = UserSubscription.PaymentMethod.MANUAL
-                        subscription.expires_at = base_date + timedelta(days=30)
-                        subscription.save(update_fields=['plan', 'status', 'payment_method', 'expires_at'])
-
-                    # 3. Elevate user billing permission
-                    photographer = payment.user
-                    photographer.is_active_plan = True
-                    photographer.save(update_fields=['is_active_plan'])
-
-                    # Email the photographer (if they kept payment alerts on) once
-                    # this transaction actually commits.
-                    notify_payment_reviewed(payment)
-                    notify_payment_event(payment)
-
-                    # Serialize the successful active state to match API specs
-                    return Response({
-                        "message": "Payment approved. Subscription activated.",
-                        "payment": AdminPaymentListSerializer(payment, context={'request': request}).data,
-                        "subscription": UserSubscriptionSerializer(subscription, context={'request': request}).data
-                    }, status=status.HTTP_200_OK)
-
-                elif action == 'reject':
-                    # Rejections only modify the payment status log—no subscription or permission adjustments are made
-                    payment.status = ManualPayment.VerificationStatus.REJECTED
-                    payment.verified_by = request.user
-                    if admin_note:
-                        payment.notes = admin_note
-                    payment.save(update_fields=['status', 'verified_by', 'notes'])
-                    notify_payment_reviewed(payment)
-                    notify_payment_event(payment)
-
-                    return Response({
-                        "message": "Payment rejected.",
-                        "payment": AdminPaymentListSerializer(payment, context={'request': request}).data,
-                        "subscription": None
-                    }, status=status.HTTP_200_OK)
-
-        except Exception:
-            # PostgreSQL rolls back any changes inside the context block on
-            # exception raised. The detail goes to the server log only — it can
-            # carry SQL/driver text that must never reach the client.
-            logger.exception('Payment review failed for payment %s', payment_id)
-            return Response(
-                {"error": "Could not complete the review. No changes were saved.", "code": "review_failed"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )

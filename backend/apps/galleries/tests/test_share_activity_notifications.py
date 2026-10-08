@@ -533,7 +533,8 @@ class NotificationEventTests(Base):
             payment.payment_proof.save('p.png', ContentFile(b'x'), save=False)
             payment.save()
             self.client.force_authenticate(user=staff)
-            response = self.client.post(f'/api/v1/subscriptions/payments/{payment.id}/review/', {'action': action}, format='json')
+            body = {'reason': 'Receipt unreadable'} if action == 'reject' else {}
+            response = self.client.post(f'/api/v1/staff/payments/{payment.id}/{action}/', body, format='json')
             self.assertEqual(response.status_code, 200, response.data)
             self.assertIn(fragment, self.mine(kind='payment').first().message)
         self.assertEqual(self.mine(kind='payment').count(), 2)

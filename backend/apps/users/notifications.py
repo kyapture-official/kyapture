@@ -10,7 +10,7 @@ without one. Paths:
                   (apps/clients/signals.py, on DownloadLog creation)
   - favorites  -> a client favorited a photo (apps/clients/signals.py)
   - payments   -> a manual payment was approved / rejected
-                  (apps/subscriptions/views.py, AdminPaymentReviewView)
+                  (apps/subscriptions/payments.py, approve_payment / reject_payment)
 
 Delivery is a Celery task that re-reads the user, so a preference switched
 off after the event was queued still wins. Activity alerts are COALESCED per
@@ -139,17 +139,21 @@ def notify_favorite(favorite):
 
 
 def notify_payment_reviewed(payment):
-    """Called after an admin approves/rejects a ManualPayment."""
+    """Called after staff approve / reject a ManualPayment (apps/subscriptions/payments.py)."""
     approved = payment.status == 'approved'
     billing = f"{settings.FRONTEND_URL}/dashboard/billing"
     if approved:
+        until = f' It runs until {payment.period_end:%d %b %Y}.' if payment.period_end else ''
         subject = f'Your {payment.plan.name} plan payment was approved'
-        body = f'Your payment for the {payment.plan.name} plan was approved and your plan is now active.\n\nBilling: {billing}'
+        body = (
+            f'Your payment for the {payment.plan.name} plan was approved and your plan is now active.{until}\n\n'
+            f'Billing: {billing}'
+        )
     else:
         subject = f'Your {payment.plan.name} plan payment could not be approved'
-        reason = f'\n\nNote from our team: {payment.notes}' if payment.notes else ''
+        reason = f'\n\nReason: {payment.rejection_reason}' if payment.rejection_reason else ''
         body = (
-            f'We could not approve your payment for the {payment.plan.name} plan.{reason}\n\n'
+            f'We could not approve your payment for the {payment.plan.name} plan. Your plan has not changed.{reason}\n\n'
             f'You can submit a new receipt from Billing: {billing}'
         )
     queue_notification(payment.user, 'payments', subject=subject, body=body)

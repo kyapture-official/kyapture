@@ -3,9 +3,8 @@ from django.urls import path
 from .views import (
     PlanListView, 
     MySubscriptionView,
-    ManualPaymentView,      
-    AdminPendingPaymentsView,  
-    AdminPaymentReviewView,   
+    ManualPaymentView,
+    PaymentInstructionsView,
 )
 
 urlpatterns = [
@@ -22,9 +21,9 @@ urlpatterns = [
     # Unified endpoint: handles both GET listing history and POST receipt uploads
     path('payments/', ManualPaymentView.as_view(), name='payment-list'),
 
-    # ── Admin Pending Review Queue (Admin Staff Only) ─────────────────────────
-    path('admin/payments/', AdminPendingPaymentsView.as_view(), name='admin-pending-payments'),
+    # Where to send the money: the admin-edited PaymentInstructions row
+    path('payment-instructions/', PaymentInstructionsView.as_view(), name='payment-instructions'),
 
-    # ── Admin Decision & Activation Dispatcher (Admin Staff Only) ──────────────
-    path('payments/<uuid:payment_id>/review/', AdminPaymentReviewView.as_view(), name='admin-payment-review'),
+    # The staff review queue, approve / reject and the proof link live under
+    # /api/v1/staff/payments/ (apps/subscriptions/staff_payments.py, 7.5-B).
 ]

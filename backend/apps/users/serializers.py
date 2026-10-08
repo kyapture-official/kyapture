@@ -28,6 +28,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
     Serializes complete User profile data.
     Protects read-only fields from administrative or photographer manipulation.
     """
+    # Computed from the live subscription (active AND unexpired), the single entitlement rule, not read from
+    # the legacy column: a lapsed plan is Free at once and an approved payment is Pro at once (7.5-B).
+    is_active_plan = serializers.SerializerMethodField()
+
+    def get_is_active_plan(self, user):
+        from apps.subscriptions.entitlements import has_live_paid_plan
+        return has_live_paid_plan(user)
+
     class Meta:
         model = User
         fields = [

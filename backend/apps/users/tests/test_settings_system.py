@@ -481,8 +481,7 @@ class PaymentNotificationTests(SettingsBase):
     def review(self, action, **extra):
         self.client.force_authenticate(user=self.staff)
         with self.captureOnCommitCallbacks(execute=True):
-            return self.client.post(f'/api/v1/subscriptions/payments/{self.payment.id}/review/',
-                                    {'action': action, **extra}, format='json')
+            return self.client.post(f'/api/v1/staff/payments/{self.payment.id}/{action}/', extra, format='json')
 
     def test_approval_emails_the_photographer(self):
         response = self.review('approve')
@@ -492,7 +491,7 @@ class PaymentNotificationTests(SettingsBase):
         self.assertIn('approved', mail.outbox[0].subject)
 
     def test_rejection_emails_the_photographer_with_the_note(self):
-        self.review('reject', admin_note='Receipt unreadable')
+        self.review('reject', reason='Receipt unreadable')
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Receipt unreadable', mail.outbox[0].body)
 
@@ -552,8 +551,8 @@ class PlanAndBillingTests(SettingsBase):
             payment = ManualPayment(user=owner, plan=plan, amount=plan.price)
             payment.payment_proof.save('p.png', ContentFile(png().read()), save=False)
             payment.save()
-        emails = [row['email'] for row in self.client.get('/api/v1/subscriptions/payments/').data]
-        self.assertEqual(emails, [self.user.email])
+        rows = self.client.get('/api/v1/subscriptions/payments/').data
+        self.assertEqual([row['id'] for row in rows], [str(ManualPayment.objects.get(user=self.user).id)])
 
     def test_settings_api_cannot_change_plan_or_entitlements(self):
         self.client.patch(SETTINGS, {'plan': 'Studio', 'entitlements': {'branding': True}}, format='json')

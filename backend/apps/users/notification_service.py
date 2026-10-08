@@ -15,6 +15,7 @@ Only events that really exist are wired in:
   published             apps/galleries (publish toggle / gallery update)
   processing done/failed apps/photos/tasks.py (image + video pipelines)
   feedback              apps/users/feedback_api.py (a user submits feedback; staff only)
+  payment_review        apps/subscriptions/payments.py (a user submits a manual payment; staff only)
 
 Burst events coalesce: while a notification of the same kind for the same
 gallery is still UNREAD and recent, the next event bumps its `count` and
@@ -155,6 +156,21 @@ def notify_payment_event(payment):
     )
 
 
+def notify_staff_payment_submitted(payment):
+    """
+    One bell notification per active staff account when a user submits a manual
+    payment. Not coalesced: each payment is its own review. The text names the plan
+    and amount only; the proof and the reference stay behind the staff page.
+    """
+    message = f'New payment to review: {payment.plan.name}, {payment.currency} {payment.amount:,.0f}'
+    created = []
+    for staff in User.objects.filter(is_staff=True, is_active=True):
+        note = record_notification(staff, Kind.PAYMENT_REVIEW, None, message=message)
+        if note:
+            created.append(note)
+    return created
+
+
 def notify_staff_feedback(feedback):
     """
     One bell notification per staff account (Django is_staff) for each new
@@ -204,6 +220,8 @@ def notification_link(notification):
     kind = notification.kind
     if kind == Kind.FEEDBACK:
         return '/dashboard/feedback'
+    if kind == Kind.PAYMENT_REVIEW:
+        return '/dashboard/staff/payments'
     if kind == Kind.PAYMENT or gallery is None:
         return '/dashboard/billing'
     base = f'/dashboard/galleries/{gallery.slug}'
