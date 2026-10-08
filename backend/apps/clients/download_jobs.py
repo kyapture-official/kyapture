@@ -196,6 +196,9 @@ def run_download_job(job_id):
         return job.state
 
     gallery = job.gallery
+    if not gallery.photographer.is_active:      # 7.5-A: the owner was suspended after the visitor asked
+        _fail(job, 'owner_unavailable')
+        return job.state
     assets = list(job_assets(gallery, job.photo_set, job.asset_ids))
     if not assets:
         _fail(job, 'no_media')

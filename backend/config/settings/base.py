@@ -165,6 +165,10 @@ REST_FRAMEWORK = {
         # several people behind one NAT never share one anonymous bucket. One
         # tab refreshes about 4 times an hour (15 min access token).
         "token_refresh": "60/hour",
+        # 7.5-A: the staff area, per staff user id. Reads (users list, audit log) and
+        # the two account actions (suspend / reactivate) have their own buckets.
+        "staff_list": "60/minute",
+        "staff_action": "30/hour",
     }
 }
 

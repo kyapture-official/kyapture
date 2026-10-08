@@ -121,6 +121,9 @@ def deliver_ready_email(job_id):
         if job.state != DownloadJob.State.READY:
             logger.info('Download-ready email for job %s: skipped (job not ready)', job.id)
             return False
+        if not job.gallery.photographer.is_active:
+            logger.info('Download-ready email for job %s: skipped (owner suspended)', job.id)
+            return False
         if job.ready_email_sent_at is not None:
             logger.info('Download-ready email for job %s: skipped (already sent)', job.id)
             return False

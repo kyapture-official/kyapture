@@ -74,4 +74,15 @@ def throttled_admin_login(request, extra_context=None):
         if count >= limit:
             cache.set(f'{key}:lock', time.time() + window, timeout=window)
             cache.delete(key)
+            _audit_lock(request, 'admin_ip' if key.startswith('adminlogin:ip:') else 'admin_account')
     return response
+
+
+def _audit_lock(request, reason):
+    """7.5-A: a lock is a security event. The account is named only when it exists (a typed unknown name is not stored)."""
+    from apps.users import audit
+    from apps.users.models import User
+
+    typed = (request.POST.get('username') or '').strip().lower()
+    target = User.objects.filter(email=typed).only('id', 'email').first() if typed else None
+    audit.record_event(audit.Action.LOGIN_LOCKOUT, target=target, request=request, reason=reason)

@@ -143,6 +143,15 @@ class User(AbstractUser):
     # every token already issued, cookie or bearer, on the very next request.
     token_version = models.PositiveIntegerField(default=0, editable=False)
 
+    # ── Suspension (7.5-A) ─────────────────────────────────────────────────
+    # A suspended account is `is_active=False` (the one switch every login, token
+    # and public gallery lookup already reads); these two only record when and
+    # why staff did it. Plain text, shown to staff escaped. Cleared on reactivation
+    # (the audit log keeps the history). An account deactivated any other way
+    # (Django admin) has is_active=False and no `suspended_at`.
+    suspended_at = models.DateTimeField(null=True, blank=True, editable=False)
+    suspension_reason = models.CharField(max_length=300, blank=True, default='', editable=False)
+
     class Meta:
         db_table = 'users'
 
@@ -285,3 +294,85 @@ class PasswordResetToken(models.Model):
 
     def __str__(self):
         return f'Password reset link for {self.user_id} (expires {self.expires_at:%Y-%m-%d %H:%M})'
+
+
+class AuditLogQuerySet(models.QuerySet):
+    """An audit row can be added, never changed or removed through the ORM."""
+
+    def update(self, **kwargs):
+        raise AuditLogImmutable('Audit log rows cannot be updated.')
+
+    def delete(self):
+        raise AuditLogImmutable('Audit log rows cannot be deleted.')
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise AuditLogImmutable('Audit log rows cannot be updated.')
+
+
+class AuditLogImmutable(Exception):
+    pass
+
+
+class StaffAuditLog(models.Model):
+    """
+    Append-only record of every staff action and every security event (7.5-A).
+
+    One row says: WHO (`actor_*`, empty for the system or an anonymous visitor),
+    DID WHAT (`action`), TO WHOM (`target_*`), WHEN (`created_at`), from WHICH
+    ADDRESS (`ip`, always `apps.core.request_ip.client_ip`, i.e. the trusted-proxy
+    setup of 7-B, never a header the client chose), and `reason`: staff-typed plain
+    text for a suspend/reactivate, otherwise a coarse code ("pin", "reset" ...).
+    It never holds a password, PIN, code, token, key or hash.
+
+    Users are referenced by plain id plus an email snapshot, not by foreign key:
+    deleting an account must neither cascade into nor rewrite its history. The
+    ORM refuses UPDATE and DELETE (here and in the manager), the admin shows the
+    table read-only, and on PostgreSQL a trigger (migration 0010) refuses them
+    in the database itself.
+    """
+
+    class Action(models.TextChoices):
+        # Staff actions
+        USER_LIST = 'staff.user_list', 'Viewed the user list'
+        USER_LOOKUP = 'staff.user_lookup', 'Looked up a user by email'
+        AUDIT_VIEW = 'staff.audit_view', 'Viewed the audit log'
+        SUSPEND = 'account.suspend', 'Suspended an account'
+        REACTIVATE = 'account.reactivate', 'Reactivated an account'
+        FEEDBACK_STATUS = 'staff.feedback_status', 'Changed a feedback status'
+        PAYMENT_REVIEW = 'staff.payment_review', 'Reviewed a manual payment'
+        INBOX_VIEW = 'staff.inbox_view', 'Viewed a staff queue'
+        # Security events
+        LOGIN_LOCKOUT = 'security.login_lockout', 'Login locked'
+        GALLERY_LOCKOUT = 'security.gallery_lockout', 'Gallery gate locked'
+        PASSWORD_RESET = 'security.password_reset', 'Password reset'
+        PASSWORD_CHANGE = 'security.password_change', 'Password changed'
+
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    action = models.CharField(max_length=30, choices=Action.choices, db_index=True)
+    actor_id = models.UUIDField(null=True, blank=True)
+    actor_email = models.EmailField(blank=True, default='')
+    target_id = models.UUIDField(null=True, blank=True, db_index=True)
+    target_email = models.EmailField(blank=True, default='')
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    reason = models.CharField(max_length=300, blank=True, default='')
+
+    objects = AuditLogQuerySet.as_manager()
+
+    class Meta:
+        db_table = 'staff_audit_log'
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['actor_id', '-created_at'], name='idx_audit_actor_created'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise AuditLogImmutable('Audit log rows cannot be changed.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise AuditLogImmutable('Audit log rows cannot be deleted.')
+
+    def __str__(self):
+        return f'{self.created_at:%Y-%m-%d %H:%M} {self.action} actor={self.actor_id} target={self.target_id}'

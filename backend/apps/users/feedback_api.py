@@ -23,13 +23,15 @@ from urllib.parse import urlsplit
 from django.conf import settings
 from django.db import transaction
 from rest_framework import serializers, status
-from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from apps.core.pagination import StandardResultsSetPagination
+from apps.core.permissions import IsStaffUser
 
+from . import audit
 from .models import Feedback
 from .notification_service import notify_staff_feedback
 
@@ -94,15 +96,6 @@ def browser_class(user_agent):
     if 'safari/' in ua:
         return B.SAFARI
     return B.OTHER
-
-
-class IsStaffUser(BasePermission):
-    """Django is_staff on an active account."""
-    message = 'Staff access required.'
-
-    def has_permission(self, request, view):
-        user = request.user
-        return bool(user and user.is_authenticated and user.is_active and user.is_staff)
 
 
 class FeedbackRateThrottle(UserRateThrottle):
@@ -203,6 +196,7 @@ class FeedbackInboxListView(APIView):
                 queryset = queryset.filter(**{param: value})
         paginator = FeedbackPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
+        audit.record(audit.Action.INBOX_VIEW, actor=request.user, request=request, reason='feedback')
         return paginator.get_paginated_response(FeedbackInboxSerializer(page, many=True).data)
 
 
@@ -223,6 +217,9 @@ class FeedbackInboxDetailView(APIView):
             )
         serializer = FeedbackStatusSerializer(data=body)
         serializer.is_valid(raise_exception=True)
-        feedback.status = serializer.validated_data['status']
-        feedback.save(update_fields=['status', 'updated_at'])
+        with transaction.atomic():
+            feedback.status = serializer.validated_data['status']
+            feedback.save(update_fields=['status', 'updated_at'])
+            audit.record(audit.Action.FEEDBACK_STATUS, actor=request.user, target=feedback.user, request=request,
+                         reason=f'status={feedback.status}')
         return Response(FeedbackInboxSerializer(feedback).data)

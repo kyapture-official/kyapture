@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/v1/auth/', include('apps.users.urls')),
     path('api/v1/notifications/', include('apps.users.notification_urls')),
     path('api/v1/feedback/', include('apps.users.feedback_urls')),
+    path('api/v1/staff/', include('apps.users.staff_urls')),
     path('api/v1/galleries/', include('apps.galleries.urls')),
     path('api/v1/photos/', include('apps.photos.urls')),
     path('api/v1/public/', include('apps.clients.urls')),

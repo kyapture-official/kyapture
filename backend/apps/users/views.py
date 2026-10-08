@@ -26,6 +26,7 @@ from .serializers import (
     ChangePasswordSerializer,
     UserSettingsSerializer,
 )
+from . import audit
 from .password_policy import password_problems
 from .tokens import VersionedRefreshToken, token_version_of
 from .utils import revoke_all_sessions
@@ -133,6 +134,27 @@ class LoginAccountRateThrottle(SimpleRateThrottle):
             'scope': self.scope,
             'ident': hashlib.sha256(email.strip().lower().encode('utf-8')).hexdigest(),
         }
+
+    def allow_request(self, request, view):
+        allowed = super().allow_request(request, view)
+        if not allowed:
+            self.audit_lockout(request)
+        return allowed
+
+    def audit_lockout(self, request):
+        """
+        7.5-A: the account is locked out of signing in for the rest of the window. ONE audit
+        row per account and window (not one per refused try). The row names the account only
+        when it exists; a typed address that is no account is never stored.
+        """
+        from django.core.cache import cache
+
+        key = self.get_cache_key(request, None)
+        if not key or not cache.add(f'audit_once:{key}', 1, timeout=self.duration):
+            return
+        email = request.data.get('email').strip().lower()
+        target = User.objects.filter(email=email).only('id', 'email').first()
+        audit.record_event(audit.Action.LOGIN_LOCKOUT, target=target, request=request, reason='account_rate')
 
 
 @method_decorator(ensure_csrf_cookie, name='dispatch')
@@ -614,6 +636,7 @@ class PasswordResetConfirmView(APIView):
             user.save(update_fields=['password'])
             revoke_all_sessions(user)
             queue_password_changed_email(user, 'reset')
+            audit.record_event(audit.Action.PASSWORD_RESET, target=user, request=request, reason='reset')
 
         logger.info('Password reset completed for user_id=%s', user.pk)
         response = Response(

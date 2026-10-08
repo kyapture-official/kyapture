@@ -15,3 +15,12 @@ class IsPhotographer(BasePermission):
             and request.user.is_authenticated 
             and request.user.is_active
         )
+
+
+class IsStaffUser(BasePermission):
+    """Django is_staff on an active account. The only staff notion in the product (no separate role)."""
+    message = 'Staff access required.'
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and user.is_active and user.is_staff)

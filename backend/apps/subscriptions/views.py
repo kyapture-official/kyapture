@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.users import audit
 from apps.users.notification_service import notify_payment_event
 from apps.users.notifications import notify_payment_reviewed
 from .entitlements import get_feature_entitlements
@@ -107,7 +108,8 @@ class ManualPaymentView(APIView):
 
     def get(self, request):
         if request.user.is_staff:
-            # Admins see the complete global pending queue
+            # Admins see the complete global pending queue (7.5-A: every such read is audited)
+            audit.record(audit.Action.INBOX_VIEW, actor=request.user, request=request, reason='payments')
             payments = ManualPayment.objects.select_related('user', 'plan').all()
         else:
             # Photographers are strictly isolated to their own history
@@ -154,6 +156,7 @@ class AdminPendingPaymentsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        audit.record(audit.Action.INBOX_VIEW, actor=request.user, request=request, reason='payments')
         # select_related avoids N+1 query loops when resolving related user & plan data
         payments = (
             ManualPayment.objects
@@ -211,6 +214,8 @@ class AdminPaymentReviewView(APIView):
         # Wrap all structural multi-table modifications in a single SQL transaction
         try:
             with transaction.atomic():
+                audit.record(audit.Action.PAYMENT_REVIEW, actor=request.user, target=payment.user, request=request,
+                             reason=action)
                 if action == 'approve':
                     # 1. Update verification state
                     payment.status = ManualPayment.VerificationStatus.APPROVED

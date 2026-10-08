@@ -1,9 +1,9 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/users/signals.py
 import logging
-from django.db.models.signals import pre_save, post_delete
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from .models import User
+from .models import Notification, User
 
 logger = logging.getLogger(__name__)
 
@@ -71,3 +71,21 @@ def auto_delete_files_on_user_delete(sender, instance, **kwargs):
                 f"Failed to delete '{field_name}' file for deleted User {instance.pk} "
                 f"on S3/Disk: {str(e)}"
             )
+
+
+@receiver(post_save, sender=Notification)
+def audit_gallery_lockout(sender, instance, created, **kwargs):
+    """
+    7.5-A: the gate lockout (apps/clients/lockout.py) tells the photographer with one
+    SECURITY notification the moment a gallery's password / PIN / emailed code is paused for
+    everyone. That is the lockout's own event, so the audit row hangs off it and the lockout
+    code stays exactly as it was. Coarse reason only (which gate), never a value; no request
+    address, because the pause is the sum of many visitors.
+    """
+    if not created or instance.kind != Notification.Kind.SECURITY:
+        return
+    text = instance.message.lower()
+    gate = 'pin' if 'pin' in text else 'password' if 'password' in text else 'email_code'
+    from . import audit
+
+    audit.record_event(audit.Action.GALLERY_LOCKOUT, target=instance.user, reason=gate)

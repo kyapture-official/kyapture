@@ -2,10 +2,12 @@
 import logging
 import re
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import update_last_login
 from rest_framework import serializers
 from apps.core.branding import InvalidLogo, sanitize_avatar_upload, sanitize_logo_upload
 from apps.users.collection_defaults import validate_collection_defaults
 from apps.subscriptions.entitlements import BRANDING, require_feature
+from . import audit
 from .models import User
 from .password_policy import password_problems
 from .tokens import VersionedRefreshToken
@@ -215,10 +217,18 @@ class LoginSerializer(serializers.Serializer):
         )
         
         if not user:
+            # 7.5-A: Django refuses an inactive account the same way as a wrong password.
+            # Only someone who typed the RIGHT password learns that the account is suspended.
+            suspended = User.objects.filter(email=clean_email, is_active=False).first()
+            if suspended is not None and suspended.check_password(password):
+                raise serializers.ValidationError({'non_field_errors': 'This account has been suspended. Contact support.'})
             raise serializers.ValidationError({'non_field_errors': 'Invalid email or password.'})
             
         if not user.is_active:
             raise serializers.ValidationError({'non_field_errors': 'This account has been disabled.'})
+
+        # "Last login" in the staff list: a real value, set on a successful sign-in only.
+        update_last_login(None, user)
 
         # Generate standard JWT session and refresh tokens
         refresh = VersionedRefreshToken.for_user(user)
@@ -267,6 +277,9 @@ class ChangePasswordSerializer(serializers.Serializer):
         from .utils import revoke_all_sessions
         revoke_all_sessions(user)
         queue_password_changed_email(user, 'change')
+        audit.record_event(
+            audit.Action.PASSWORD_CHANGE, actor=user, target=user, request=self.context.get('request'), reason='self',
+        )
 
         return user
 

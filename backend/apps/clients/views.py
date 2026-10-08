@@ -370,7 +370,8 @@ class PublicGalleryView(APIView):
                     slug=slug,
                     photographer__username=username,  # Multi-tenant scoping [1.1.2]
                     is_published=True,                # Block draft galleries
-                    is_active=True                    # Block soft-deleted galleries [1.1.2]
+                    is_active=True,                   # Block soft-deleted galleries [1.1.2]
+                    photographer__is_active=True,     # 7.5-A: a suspended owner's gallery is a 404
                 )
             )
         except Gallery.DoesNotExist:
@@ -526,6 +527,7 @@ class PublicGalleryPhotosView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
+                photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return None
@@ -600,6 +602,7 @@ class GalleryUnlockView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
+                photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return None
@@ -766,6 +769,7 @@ class GalleryFavoritesView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
+                photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return None
@@ -902,7 +906,7 @@ class FavoriteListsAccessMixin:
             gallery = Gallery.objects.get(
                 Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
                 slug=slug.strip().lower(), photographer__username=username.strip().lower(),
-                is_published=True, is_active=True,
+                is_published=True, is_active=True, photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return None, None, None, None, Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1050,6 +1054,7 @@ class PublicDownloadAccessView(APIView):
                 photographer__username=username.strip().lower(),
                 is_published=True,
                 is_active=True,
+                photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1237,7 +1242,8 @@ class PublicGalleryDownloadView(APIView):
                 slug=slug,
                 photographer__username=username,
                 is_published=True,
-                is_active=True
+                is_active=True,
+                photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return None
@@ -1506,6 +1512,7 @@ class DownloadJobGateMixin:
                 photographer__username=username.strip().lower(),
                 is_published=True,
                 is_active=True,
+                photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return None, None, Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1823,6 +1830,7 @@ class PublicVideoStreamView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
+                photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return None
@@ -1925,6 +1933,7 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
+                photographer__is_active=True,
             )
         except Gallery.DoesNotExist:
             return None
