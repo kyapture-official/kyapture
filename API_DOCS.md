@@ -905,65 +905,63 @@ Submit Manual Payment
 
 POST /api/v1/subscriptions/payments/
 
-Submits bank, eSewa, or Khalti transaction screenshot receipts for review.
+Reports a bank or eSewa payment with a transaction ID and a proof file, for staff review (chunk 7.5-B, docs/KYAPTURE_PAYMENTS.md).
 
-Authentication: Required (IsAuthenticated)
+Authentication: Required (IsAuthenticated). Throttle: payment_submit, 10/hour per user.
 
 Important: The registered endpoint is /api/v1/subscriptions/payments/, not /api/v1/subscriptions/pay/.
 
 Request Body — multipart/form-data
 
 plan: "0190106a-ef1a-7b3c-b2f2-10e82f1217e9"
-amount: "19.99"
-payment_proof: [File] (Receipt screenshot up to 5MB)
-notes: "Transacted via eSewa transaction ID 9831..."
+amount: "1499.00"            (must equal the plan's price right now; the price is frozen on the payment row)
+reference: "FT24-ABC/9"      (the transaction ID: 4-64 characters, letters, digits and . _ / - ; unique across all payments, compared trimmed and lower-cased)
+payment_proof: [File]        (PNG, JPEG, WEBP or PDF, judged by its bytes, up to the server's limit; stored privately)
+notes: "Paid by eSewa"       (optional, plain text, 500 characters)
 
 Success Response — 201 Created
 
 {
-  "message": "Payment receipt submitted successfully. Admin review pending."
+  "message": "Payment submitted. We will review it shortly.",
+  "payment": { "id": "...", "plan_name": "Pro", "amount": "1499.00", "currency": "NPR", "reference": "FT24-ABC/9",
+               "status": "pending", "has_proof": true, ... }
 }
+
+Refusals — 400 { "error": "<message>", "code": "<code>", "errors": { "<field>": ["<message>"] } }
+
+reference_required / reference_invalid / reference_taken / reference_already_submitted, amount_mismatch,
+proof_empty / proof_too_large / proof_invalid, too_many_pending, duplicate_pending. 429 past the throttle.
 
 List Payment History
 
 GET /api/v1/subscriptions/payments/
 
-Lists payment history. Photographers see their own history; administrative staff see the entire global review queue.
+The signed-in user's OWN payments, newest first (staff included: the review queue is under /api/v1/staff/payments/).
+Keys: id, plan_name, amount, currency, reference, status, created_at, reviewed_at, rejection_reason, period_end,
+has_proof, notes. No proof file or link is ever returned to the user.
 
 Authentication: Required (IsAuthenticated)
 
-Success Response — 200 OK
+Payment Instructions
 
-Returns an array of submitted payment objects.
+GET /api/v1/subscriptions/payment-instructions/
 
-Review Manual Payment
+Where to send the money: the admin-edited PaymentInstructions row (account_name, esewa_id, bank_name,
+bank_account_number, bank_branch, note, qr_url) plus currency, period_days (days one approved payment buys),
+proof_max_mb and max_pending. Authentication: Required.
 
-POST /api/v1/subscriptions/payments/{payment_id}/review/
+Review Manual Payments (staff only: 401 anonymous, 403 for anyone who is not is_staff)
 
-Admin-only approval or rejection of submitted manual payments.
+GET  /api/v1/staff/payments/?status=pending|approved|rejected|all&page=      the queue (pending oldest first, 25 per page)
+POST /api/v1/staff/payments/{payment_id}/approve/                            approve (idempotent)
+POST /api/v1/staff/payments/{payment_id}/reject/   { "reason": "..." }       reject (reason required, 1-300 characters)
+POST /api/v1/staff/payments/{payment_id}/proof-link/                         { "url", "expires_in", "content_type" }
+GET  /api/v1/staff/payments/{payment_id}/proof/?s=<signed link>              the proof file (staff sign-in AND the link)
 
-Authentication: Required (IsAdminUser)
-
-Request Body — JSON
-
-{
-  "action": "approve",
-  "admin_note": "Verified amount. Transacted via transaction ID 9831."
-}
-
-Success Response — 200 OK
-
-{
-  "message": "Payment approved. Subscription activated.",
-  "payment": {
-    "status": "approved",
-    "notes": "..."
-  },
-  "subscription": {
-    "status": "active",
-    "days_remaining": 29
-  }
-}
+Approve / reject answer 200 { "changed": true|false, "code", "message", "payment": { ... } }. A repeat answers
+"changed": false and changes nothing; an approve after a reject (or a reject after an approve) is 409
+already_rejected / already_approved; staff cannot review their own payment (403 cannot_review_own).
+The two routes this replaces (GET /subscriptions/admin/payments/ and POST /subscriptions/payments/{id}/review/) no longer exist.
 
 Endpoint Quick Reference
 
@@ -1185,9 +1183,25 @@ Submit payment
 
 POST
 
-/api/v1/subscriptions/payments/{payment_id}/review/
+/api/v1/subscriptions/payment-instructions/
 
-Admin
+Required
+
+Payment instructions
+
+GET
+
+/api/v1/staff/payments/
+
+Staff
+
+Payment review queue
+
+POST
+
+/api/v1/staff/payments/{payment_id}/approve/ | reject/ | proof-link/
+
+Staff
 
 Review payment
 

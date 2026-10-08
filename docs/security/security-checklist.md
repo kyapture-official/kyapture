@@ -132,12 +132,12 @@ Status legend:
 | Type by signature, not extension | ✅ | `validate_magic_bytes`, `validate_video_magic_bytes` (`apps/core/utils.py:231-270`) |
 | Size and pixel limits before decoding; editable in admin | ✅ | `apps/photos/views.py:184-188`, `apps/subscriptions/upload_limits.py:40-53` (rows 8, 76 for the owner decisions) |
 | Storage names generated server-side | ✅ | UUID-based paths (`apps/photos/models.py:13-97`); receipts `payment_proofs/{user}/{uuid}{ext}` |
-| Original filename only used after sanitizing | ✅ | `sanitize_download_filename` (`apps/core/utils.py:385`) |
+| Original filename only used after sanitizing | ✅ | `sanitize_download_filename` (`apps/core/utils.py:385`); payment proofs never keep the uploaded name (7.5-B) |
 | Metadata privacy | ✅ | Fail closed; EXIF, XMP and PNG eXIf GPS; video location removed (7-B) |
 | Proxy body limit / timeouts sized for limits | ❓ | Rows 72 (15-A), 73 (14-A/16-A); plan in `docs/KYAPTURE_UPLOAD_LIMITS.md` |
 | Processing timeouts | ✅ | ffprobe, ffmpeg, cjpegli all time-limited; photo task Celery limits (7-B) |
 | Disk-space guard for video processing | ❌ | Row 71 (11-D, 15-A) |
-| Antivirus / content scanning | 💡 | Not present; consider for receipts and any future non-image upload |
+| Antivirus / content scanning | 💡 | Not present; consider for payment proofs (images and PDFs, 7.5-B, row 171) and any future non-image upload |
 
 ## 10. Database security
 
@@ -213,7 +213,7 @@ Status legend:
 | MFA for staff | ❌ | Plan in secrets.md §7.2 (row 90, 13-C) |
 | Admin path/network restricted | ❌ | Default `/admin/` (`config/urls.py`; row 90, 15-A) |
 | Hashes and tokens hidden in admin forms | ✅ | Excluded (7-B) |
-| Payment approval audited | ✅ | `verified_by` stored, and since 7.5-A an append-only `staff_audit_log` row per review and per queue read; no alert/log stream (row 97, 15-A) |
+| Payment approval audited | ✅ | `verified_by` stored, and an append-only `staff_audit_log` row per submit, approve, reject, proof opened and queue read (7.5-A, 7.5-B: `payment.*` actions, ids and money only, never the proof, reference or note); approve / reject lock the payment row and are idempotent; staff cannot review their own payment; the old unlocked review route is gone; no alert/log stream (row 97, 15-A) |
 | Staff actions and security events in an append-only audit log | ✅ | 7.5-A: `StaffAuditLog` (ORM, admin and DB trigger refuse change/delete); suspend, reactivate, list/lookup/audit reads, feedback status, payment review, password change/reset, login lockouts, gallery gate lock. Not covered: row 162 |
 | Suspended account: login, tokens and public galleries stop | ✅ | 7.5-A: `revoke_all_sessions` + `photographer__is_active` on every public lookup; one test per path (row 131) |
 

@@ -73,7 +73,7 @@ Object access is scoped by `photographer=request.user` or `gallery__photographer
 | Notifications | `GET /notifications/`, `GET unread-count/`, `POST read-all/`, `POST {uuid}/read/` | `apps/users/notification_urls.py`, `notification_api.py:49-95` |
 | Galleries | `GET POST /galleries/`, `GET search/?q=`, `GET dashboard/stats/`, `POST {slug}/publish/`, `POST {slug}/set-password/`, `POST {slug}/set-download-pin/`, `GET {slug}/favorites/`, `GET {slug}/download-logs/`, `GET PUT PATCH DELETE {slug}/` | `apps/galleries/urls.py`, `views.py` |
 | Photos | `POST video-preflight/` (60/min), `POST {slug}/upload/` (multipart), `POST {slug}/delete-bulk/`, `PATCH {slug}/reorder/`, `GET {slug}/status/`, `PATCH {slug}/move/`, `PATCH {slug}/sets/reorder/`, `PATCH DELETE {slug}/sets/{uuid}/`, `GET POST {slug}/sets/`, `GET {slug}/`, `PUT photo/{uuid}/favorite/`, `GET favorites/all/`, `GET DELETE photo/{uuid}/` | `apps/photos/urls.py`, `views.py` |
-| Subscriptions | `GET my-subscription/`, `GET me/` (alias), `GET POST payments/` (receipt multipart) | `apps/subscriptions/urls.py`, `views.py:45-145` |
+| Subscriptions | `GET my-subscription/`, `GET me/` (alias), `GET POST payments/` (own history; proof multipart), `GET payment-instructions/` | `apps/subscriptions/urls.py`, `views.py` (7.5-B: `GET payments/` is always the caller's own, a transaction ID is required, a pending cap and the `payment_submit` throttle apply) |
 
 Owner responses include `original_url` for every asset: a 1-hour signed URL to a key with a 128-bit random part (7-B; SEC-08 fixed). Public payloads never carry it.
 
@@ -127,7 +127,8 @@ use Django templates with autoescape (only `download_ready.txt` turns it off, pl
 | Photos (JPEG/PNG) | `POST /photos/{slug}/upload/` field `image` | Admin size limit (`UploadLimits`, default 100 MB) and pixel limit (144 MP) before decode; magic bytes `FF D8` / PNG; Pillow bomb guard follows the limit; location removed, fail closed (7-B; 0 of 103 real JPEGs refused in 7-E); storage + plan checks under a row lock | Original → private; tiers → public |
 | Videos (MP4/MOV) | same, field `video` | Size limit (default 2048 MB); `ftyp` box check (`utils.py:231-250`); ffprobe duration (timeout); plan minutes re-checked under the account lock (7-B); location remuxed out of the original (7-B) | Original → private; poster + 1080p MP4 → public |
 | Avatar, logo | `PUT /auth/me/` | Pillow validation and re-encode (`apps/core/branding.py`); logo needs Branding entitlement before parse (`apps/users/serializers.py:86-111`) | Public storage |
-| Payment receipt | `POST /subscriptions/payments/` | 5 MB, Pillow `verify()`, model `ImageField` extension validator (`apps/subscriptions/serializers.py:143-175`) | Default storage: private + signed in prod (`base.py:198-209`); `payment_proofs/{user}/{uuid}{ext}` |
+| Payment proof | `POST /subscriptions/payments/` | 7.5-B: judged by its bytes (`payments.sniff_proof`): JPEG, PNG or WEBP that Pillow reads within `MANUAL_PAYMENT_PROOF_MAX_PIXELS`, or a PDF (`%PDF-`); at most `MANUAL_PAYMENT_PROOF_MAX_MB` (5); the extension of the stored name comes from the sniffed type; `payment.submit` throttle 10/h | Explicit `PrivateMediaStorage` (signed in prod); `payment_proofs/{user}/{payment}{ext}`; opened only through the staff proof link (`docs/KYAPTURE_PAYMENTS.md` section 5) |
+| Payment QR (admin) | Django admin form of `PaymentInstructions` | decoded and re-encoded by `sanitize_image_upload` (PNG/JPEG/WEBP, no metadata, no SVG) | `PublicMediaStorage`, `payment_instructions/qr_<random>.<ext>` (public by design) |
 | Watermark logo use | derived from the logo | — | — |
 
 Body limits: since 7-B a body above the largest file limit (413) or from an account with no storage left (403) is refused from
@@ -149,9 +150,8 @@ gunicorn still has the default 30 s timeout (row 72). Django's `DATA_UPLOAD_MAX_
 |---|---|---|
 | Django admin `/admin/` (default path) | `is_staff` | Users (`UserAdmin`; a password set here revokes every session, 7-C), galleries and client sessions (password/PIN hashes and tokens excluded since 7-B), media assets, subscription plans, `UploadLimits`, user subscriptions, manual payments (`apps/*/admin.py`) |
 | `/api/v1/staff/users/`, `/staff/users/{id}/suspend|reactivate/`, `/staff/audit/` | `IsStaffUser` (`is_staff`, active) | 7.5-A: user list (allowlisted fields, exact-email search, 25 per page, 60/min), suspend / reactivate (reason, sessions revoked, galleries 404), append-only audit log. Not for staff targets or self. Docs: [KYAPTURE_STAFF.md](../KYAPTURE_STAFF.md) |
-| `GET /api/v1/subscriptions/admin/payments/` | `IsAdminUser` | Pending payment queue |
-| `POST /api/v1/subscriptions/payments/{uuid}/review/` | `IsAdminUser` | Approve/reject → creates/extends subscriptions (`apps/subscriptions/views.py:176-260`) |
-| `GET /api/v1/subscriptions/payments/` as staff | `is_staff` | Every user's payments with receipt URLs (`views.py:108-128`) |
+| `/api/v1/staff/payments/` (list), `.../{id}/approve/`, `.../{id}/reject/`, `.../{id}/proof-link/`, `.../{id}/proof/?s=` | `IsStaffUser` | 7.5-B: the payment queue and review. The old `subscriptions/admin/payments/` and `subscriptions/payments/{id}/review/` routes are removed (they took no lock and let a staff member approve their own payment), and `GET subscriptions/payments/` no longer returns other users' payments to staff. Approve and reject lock the payment row, re-read the status inside the lock, are idempotent, refuse the reviewer's own payment, and write one append-only audit row; the proof is streamed through a 5-minute link bound to the staff member and the payment ([docs/KYAPTURE_PAYMENTS.md](../KYAPTURE_PAYMENTS.md)) |
+| Django admin `ManualPayment` | `is_staff` | Read-only since 7.5-B (no add, change or delete): a status edited there would skip the lock, the plan, the audit row and the user's mail |
 | Staff accounts in the product | `is_staff`/`is_superuser` | Bypass gallery, storage and video limits (`apps/galleries/views.py:106`, `apps/photos/views.py:192, 400`) |
 
 Present since 7-B: login throttle and lock. Missing: MFA, IP restriction (row 90), admin action alerting (row 97).

@@ -36,4 +36,31 @@ export const staffApi = {
     const { data } = await api.get('/staff/audit/', { params, signal })
     return data
   },
+
+  // ── 7.5-B: manual payment review. The server decides everything (staff only, the row lock, the
+  //    plan, the audit row); these calls only present what it returns. docs/KYAPTURE_PAYMENTS.md.
+
+  /** GET /staff/payments/?status=pending|approved|rejected|all&page= -> { count, next, previous, results } */
+  payments: async ({ status = 'pending', page = 1 } = {}, signal = undefined) => {
+    const { data } = await api.get('/staff/payments/', { params: { status, page }, signal })
+    return data
+  },
+
+  /** POST /staff/payments/{id}/approve/ -> { changed, code, message, payment } (a repeat answers changed: false) */
+  approvePayment: async (id) => {
+    const { data } = await api.post(`/staff/payments/${id}/approve/`, {})
+    return data
+  },
+
+  /** POST /staff/payments/{id}/reject/ { reason } -> { changed, code, message, payment } */
+  rejectPayment: async (id, reason) => {
+    const { data } = await api.post(`/staff/payments/${id}/reject/`, { reason })
+    return data
+  },
+
+  /** POST /staff/payments/{id}/proof-link/ -> { url, expires_in, content_type }: a signed link, valid a few minutes. */
+  paymentProofLink: async (id) => {
+    const { data } = await api.post(`/staff/payments/${id}/proof-link/`, {})
+    return data
+  },
 }

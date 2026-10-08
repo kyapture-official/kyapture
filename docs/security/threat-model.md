@@ -628,3 +628,19 @@ Design, endpoints and the audit table: [docs/KYAPTURE_STAFF.md](../KYAPTURE_STAF
 
 New gaps: debt rows 162-168. Row 131 is DONE.
 
+---
+
+## 15. Chunk 7.5-B (manual payment review) results
+
+Design, endpoints and rules: [docs/KYAPTURE_PAYMENTS.md](../KYAPTURE_PAYMENTS.md). Browser QA: [docs/qa-7-5b/results.md](../qa-7-5b/results.md).
+
+| ID | Finding (before 7.5-B) | Result | Proof |
+|---|---|---|---|
+| P1 | Two staff clicking Approve on one payment (or a double click) could both pass the status check: the review read the row without a lock, so the subscription could be extended twice | **Found by reading the code** (the status check ran on a row read before the transaction began; not reproduced on the old code), **fixed**: the PAYMENT row is locked `FOR NO KEY UPDATE`, its status is re-read inside the lock and flipped once; a repeat answers `changed: false` and changes, mails and logs nothing. Two payments of one account are applied one after the other (the user's row is locked next), so no period is lost | `RaceTests` (real threads): without the locks 3 of the 5 fail, with them all pass |
+| P2 | A staff member could approve their own payment | **Fixed**: `403 cannot_review_own` for approve and reject; the page shows "Your own payment" and no buttons | `ApproveTests.test_staff_cannot_approve_or_reject_their_own_payment` |
+| P3 | The review view overwrote the user's own note with the admin's note, set a fixed 30 days in code, and any other path to flip `status` (Django admin) skipped the plan, the audit and the mail | **Fixed**: the reason is its own column, the days are a setting, the old routes are removed and `ManualPayment` is read-only in admin | `StaffOnlyTests.test_the_old_unlocked_review_routes_are_gone`, `test_the_payment_admin_is_read_only...` |
+| P4 | The receipt was an image only, served to the user (and to every staff member) as a 1-hour storage link, and a typed reference did not exist, so one transfer could back several payments | **Fixed**: image or PDF judged by its bytes, kept in private storage and opened only through a 5-minute link bound to the payment and the staff member; the transaction ID is unique across all payments by a database constraint (a rejected one is free again, for its own user only) | `SubmitTests`, `ReferenceTests`, `ProofLinkTests` (incl. the proof, its name and the link never reach a log) |
+| P5 | A submit could pass the pending check twice in parallel; a failed submit left its file in storage | **Fixed**: the pending cap is counted under the user's row lock; the stored file is deleted when the transaction fails | `RaceTests.test_parallel_submits_of_one_user_cannot_pass_the_pending_cap`, `test_a_failed_submit_leaves_no_row_no_file...` |
+| P6 | A lapsed plan must be Free at request time even if the sweep never ran | **Confirmed already true** (debt row 43) and now **proven for this flow**: flags, plan limits, the Original-download gate on a real PATCH, the effective download mode, nothing deleted, over-limit storage reads `over` and refuses uploads; the API's `is_active_plan` is computed from the same rule | `ExpiredPeriodTests` |
+
+New gaps: debt rows 169-177.

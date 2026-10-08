@@ -159,8 +159,8 @@ export default function PlanBillingSection() {
                 {latestPayment.plan_name} plan · {formatCurrency(latestPayment.amount)}
               </p>
               <p className="text-xs text-muted">Submitted {formatDate(latestPayment.created_at)}</p>
-              {latestPayment.status === 'rejected' && latestPayment.notes && (
-                <p className="mt-1 text-xs text-red-700">Note: {latestPayment.notes}</p>
+              {latestPayment.status === 'rejected' && latestPayment.rejection_reason && (
+                <p className="mt-1 text-xs text-red-700">Reason: {latestPayment.rejection_reason}</p>
               )}
             </div>
             <Badge kind={latestPayment.status}>{latestPayment.status}</Badge>

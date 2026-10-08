@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  AUDIT_ACTIONS, canChangeStatus, describeStaffError, looksLikeEmail, planOptions, reasonProblem,
-  REASON_MAX, storageSummary, statusLabel,
+  AUDIT_ACTIONS, canChangeStatus, canReviewPayment, describeStaffError, looksLikeEmail, paymentStatusLabel,
+  planOptions, proofIsImage, reasonProblem, REASON_MAX, storageSummary, statusLabel,
 } from './staffFlow.js'
 
 const httpError = (status, data = {}, headers = {}) => Object.assign(new Error(String(status)), { response: { status, data, headers } })
@@ -60,4 +60,31 @@ test('labels cover the server actions and statuses', () => {
   assert.equal(statusLabel('active'), 'Active')
   assert.ok(AUDIT_ACTIONS.some((a) => a.value === 'account.suspend'))
   assert.equal(new Set(AUDIT_ACTIONS.map((a) => a.value)).size, AUDIT_ACTIONS.length)
+})
+
+test('a payment can be decided only while pending and never by its own payer', () => {
+  assert.equal(canReviewPayment({ status: 'pending', can_review: true }), true)
+  assert.equal(canReviewPayment({ status: 'pending' }), true)
+  assert.equal(canReviewPayment({ status: 'pending', can_review: false }), false)
+  assert.equal(canReviewPayment({ status: 'approved', can_review: true }), false)
+  assert.equal(canReviewPayment({ status: 'rejected', can_review: true }), false)
+  assert.equal(canReviewPayment(null), false)
+})
+
+test('proofs, payment statuses and the new audit actions', () => {
+  assert.equal(proofIsImage('image/png'), true)
+  assert.equal(proofIsImage('application/pdf'), false)
+  assert.equal(proofIsImage(''), false)
+  assert.equal(paymentStatusLabel('pending'), 'Pending')
+  assert.equal(paymentStatusLabel('rejected'), 'Rejected')
+  const actions = AUDIT_ACTIONS.map((a) => a.value)
+  for (const action of ['payment.submit', 'payment.approve', 'payment.reject', 'payment.proof_view']) {
+    assert.ok(actions.includes(action), action)
+  }
+})
+
+test('payment review errors are readable', () => {
+  assert.match(describeStaffError(httpError(403, { error: 'x', code: 'cannot_review_own' })).message, /your own payment/)
+  assert.match(describeStaffError(httpError(409, { error: 'x', code: 'already_approved' })).message, /Nothing was changed/)
+  assert.match(describeStaffError(httpError(403, { error: 'x', code: 'proof_link_invalid' })).message, /expired/)
 })

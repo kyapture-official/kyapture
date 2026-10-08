@@ -39,7 +39,26 @@ export const AUDIT_ACTIONS = [
   { value: 'staff.inbox_view', label: 'Viewed a staff queue' },
   { value: 'staff.feedback_status', label: 'Changed a feedback status' },
   { value: 'staff.payment_review', label: 'Reviewed a manual payment' },
+  { value: 'payment.submit', label: 'Submitted a manual payment' },
+  { value: 'payment.approve', label: 'Approved a manual payment' },
+  { value: 'payment.reject', label: 'Rejected a manual payment' },
+  { value: 'payment.proof_view', label: 'Opened a payment proof' },
 ]
+
+export const PAYMENT_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'all', label: 'All' },
+]
+
+export const paymentStatusLabel = (status) => ({ pending: 'Pending', approved: 'Approved', rejected: 'Rejected' }[status] || 'Unknown')
+
+/** A payment can be decided only while it is pending and it is not the signed-in member's own (the server re-checks both). */
+export const canReviewPayment = (row) => row?.status === 'pending' && row?.can_review !== false
+
+/** The proof is an image the page can draw, or a document (PDF) the member opens from the signed link. */
+export const proofIsImage = (type) => /^image\//.test(String(type || ''))
 
 /** The search box takes one complete address; this only saves a round trip, the server re-checks it. */
 export const looksLikeEmail = (text) => {
@@ -75,6 +94,12 @@ const MESSAGES = {
   already_suspended: 'This account is already suspended. Refresh the list.',
   not_suspended: 'This account is not suspended. Refresh the list.',
   not_found: 'That account no longer exists.',
+  cannot_review_own: 'You cannot review your own payment. Another staff member must.',
+  already_approved: 'This payment was already approved. Nothing was changed.',
+  already_rejected: 'This payment was already rejected. Nothing was changed.',
+  proof_link_invalid: 'This link has expired. Open the proof again.',
+  proof_missing: 'This payment has no proof file.',
+  review_failed: 'Could not complete the review. No changes were saved.',
 }
 
 /** One human message for a failed staff call. Returns { message, status, code }. */

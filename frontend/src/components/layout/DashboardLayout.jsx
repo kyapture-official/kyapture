@@ -135,9 +135,10 @@ const baseNavSections = [
 const staffNavigation = [
   { name: 'Feedback', path: '/dashboard/feedback', icon: Icons.Feedback, label: 'Feedback' },
   { name: 'Users', path: '/dashboard/staff/users', icon: Icons.Users, label: 'Users' },
+  { name: 'Payments', path: '/dashboard/staff/payments', icon: Icons.Billing, label: 'Payments' },
   { name: 'Audit log', path: '/dashboard/staff/audit', icon: Icons.Audit, label: 'Audit log' },
 ]
-const staffNavSections = [{ label: 'Staff', items: ['Feedback', 'Users', 'Audit log'] }]
+const staffNavSections = [{ label: 'Staff', items: ['Feedback', 'Users', 'Payments', 'Audit log'] }]
 
 /**
  * WHAT: Photographer Dashboard Shell Layout

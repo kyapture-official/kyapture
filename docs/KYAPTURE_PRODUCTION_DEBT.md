@@ -292,6 +292,22 @@ Yes, a real paid user can see different labels if the auth-store flag and the li
 | 167 | A suspension changes nothing about billing: a paid plan keeps running and the account's files keep counting as stored. Whether to pause, refund or delete after a period is an owner decision | 7.5-A | 13-A (owner decision) |
 | 168 | 7.5-A browser QA (`docs/qa-7-5a/qa-script.mjs`) ran outside the suite against the Docker stack; accounts were created and deleted by exact email through `manage.py shell`. Same pattern as rows 38, 114, 124, 156, 161 | 7.5-A | QA-A |
 
+## Y. Raised by 7.5-B (manual payment review; docs/KYAPTURE_PAYMENTS.md)
+
+7.5-B owned no OPEN rows when it started.
+
+| # | Gap | Raised in | Owner chunk |
+|---|-----|-----------|-------------|
+| 169 | `subscriptions.0010` (money and review columns, `PaymentInstructions`), `0011` (backfill of old payment rows), `0012` (the unique reference constraint) and `users.0011` (audit actions, a bell kind) were applied to the Docker dev DB only; the host dev DB and production are not migrated. Production: run `0011` in a quiet window after a backup (it updates every `manual_payments` row), and run `0012` only after it | 7.5-B | 13-C, 15-B |
+| 170 | A payment for another plan while a paid plan is still live starts the new plan NOW for a full period and the rest of the old period is dropped (no proration, no credit). Paying early for the SAME plan extends from the current end date, as specified. Whether to prorate or queue the new plan is an owner decision | 7.5-B | 13-A (owner decision) |
+| 171 | A proof is judged by its bytes (type, size, pixels) but is not scanned for malware, and a PDF can carry active content. It is stored privately, streamed only to staff through the signed link with `nosniff` and `default-src 'none'`, and a PDF opens in its own tab (never inside the SPA); no scanner runs on it | 7.5-B | 15-A (with the antivirus line of the security checklist) |
+| 172 | The signed proof link is a query string (`?s=`): it is valid 5 minutes, bound to one payment and one staff member, and useless without the staff sign-in, but the dev `runserver` log and browser history hold the URL. The production proxy must log the path only (the plan in docs/KYAPTURE_UPLOAD_LIMITS.md), as for row 133 | 7.5-B | 14-A/16-A |
+| 173 | A transaction ID may contain only letters, digits and `. _ / -` (4-64 characters, no spaces). Real eSewa and bank references were not checked against that rule; one with a space or `#` is refused with a clear message | 7.5-B | 13-A (owner: check real receipts) |
+| 174 | A user cannot withdraw a pending payment, and staff cannot undo a decision from the page (a reject after an approve is refused, an approve after a reject is refused: the user submits again). A wrong approval is corrected in Django admin by editing the subscription; the payment rows are read-only there and the correction leaves no audit row of its own beyond Django's `LogEntry` | 7.5-B | 13-A (owner decision), 15-A (runbook) |
+| 175 | Staff are told of a new payment only through the bell (no email), so nobody is told while no staff account is signed in; a payment can wait in the queue with no reminder. The queue has no search by transaction ID or email | 7.5-B | 7.5-C (reminder emails), 13-A |
+| 176 | The legacy `User.is_active_plan` column is still written on approve (and cleared by the sweep and the `my-subscription` self-heal). Since 7.5-B the API's `is_active_plan` field is computed from the live plan, but the column itself and `frontend/.../useSubscription.js` (`isSubscribed`) still read it, and the sidebar label says "Pro Plan" for any paid plan (row 36) | 7.5-B | 9A-1 (row 36) |
+| 177 | 7.5-B browser QA (`docs/qa-7-5b/qa-script.mjs`) ran outside the suite against the Docker stack; accounts were created and deleted by exact email through `manage.py shell`. Same pattern as rows 38, 114, 124, 156, 161, 168 | 7.5-B | QA-A |
+
 ## Accepted (no fix needed)
 
 | # | Gap | Raised in | Owner chunk |

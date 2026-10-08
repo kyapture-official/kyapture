@@ -10,7 +10,7 @@ UI: `frontend/src/pages/dashboard/StaffUsersPage.jsx`, `StaffAuditPage.jsx`.
 |---|---|---|
 | Django admin `/admin/` | `is_staff`, login lock since 7-B | no audit of who changed what beyond Django's own `LogEntry` |
 | Feedback inbox `GET/PATCH /feedback/inbox/` | `IsStaffUser` (private class in `feedback_api.py`) | moved to `apps/core/permissions.py`, same behaviour |
-| Manual payments `GET .../admin/payments/`, `POST .../payments/{id}/review/` | DRF `IsAdminUser` (= `is_staff`) | staff list and review were not audited |
+| Manual payments `GET .../admin/payments/`, `POST .../payments/{id}/review/` | DRF `IsAdminUser` (= `is_staff`) | staff list and review were not audited. **Replaced in 7.5-B** by `/staff/payments/...` ([KYAPTURE_PAYMENTS.md](KYAPTURE_PAYMENTS.md)) |
 | `GET .../subscriptions/payments/` as staff | `is_staff` branch of a user endpoint | global queue with receipt URLs, not audited |
 | Deactivating a user | Django admin tick box (`is_active`) | tokens stopped (refresh refused), but the owner's **published galleries stayed public** (debt row 131) |
 | Users list, suspend, audit log | none | built here |
@@ -83,7 +83,10 @@ plus an email snapshot, not foreign keys, so deleting an account neither cascade
 | `staff.audit_view` | audit list | the action filter |
 | `staff.inbox_view` | feedback inbox, payment queues | `feedback` / `payments` |
 | `staff.feedback_status` | feedback PATCH | `status=<new>` |
-| `staff.payment_review` | payment approve / reject | `approve` / `reject` |
+| `staff.payment_review` | (7.5-A rows only; 7.5-B writes the three below) | `approve` / `reject` |
+| `payment.submit` | a user submitting a manual payment | `payment=<id> plan=<key> amount=<n> NPR` |
+| `payment.approve` / `payment.reject` | staff, in the review transaction | the same summary |
+| `payment.proof_view` | staff opening a payment proof (minting its link) | the same summary |
 | `security.password_change` | change-password serializer; Django admin password form | `self` / `admin` |
 | `security.password_reset` | reset-confirm view (completion) | `reset` |
 | `security.login_lockout` | Django-admin login lock (`apps/core/admin_login.py`); account login throttle (`LoginAccountRateThrottle`, once per window) | `admin_ip` / `admin_account` / `account_rate` |

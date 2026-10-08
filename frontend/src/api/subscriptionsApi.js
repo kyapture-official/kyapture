@@ -45,10 +45,10 @@ export const subscriptionsApi = {
    *   causing Django's MultiPartParser to reject the stream with a 415 error.
    *
    * @param {FormData} payload - Form payload containing:
-   *                             plan (id), amount (decimal),
-   *                             payment_proof (File, max 5MB image),
-   *                             notes (string, optional) [weekly tasks.txt]
-   * @returns {Promise<{ message: string }>}
+   *                             plan (id), amount (decimal), reference (the transaction ID),
+   *                             payment_proof (File: image or PDF, within the server's size limit),
+   *                             notes (string, optional)
+   * @returns {Promise<{ message: string, payment: object }>}
    */
   submitManualPayment: async (payload) => {
     const { data } = await api.post('/subscriptions/payments/', payload)
@@ -64,6 +64,16 @@ export const subscriptionsApi = {
    */
   paymentHistory: async (signal = undefined) => {
     const { data } = await api.get('/subscriptions/payments/', { signal })
+    return data
+  },
+
+  /**
+   * WHAT: Where to send the money (account name, eSewa / bank details, optional QR, a note) and the
+   *       figures of the flow (days one payment buys, proof size limit, pending cap).
+   * URI:  GET /api/v1/subscriptions/payment-instructions/  (the admin-edited row; nothing is in code)
+   */
+  getPaymentInstructions: async (signal = undefined) => {
+    const { data } = await api.get('/subscriptions/payment-instructions/', { signal })
     return data
   },
 }
