@@ -7,8 +7,10 @@ to the visitor who asked for it, at most once per job:
 
     From     "{studio name}" <the platform's sending address>   (display name only)
     Reply-To the photographer's email, so "Questions? Reply to this email." works
-    Link     Page 4 of the download flow, /g/{user}/{slug}/download/file/{job}?key=...,
-             an absolute URL on settings.FRONTEND_URL (the public app origin)
+    Link     Page 4 of the download flow, /g/{user}/{slug}/download/file/{job}#key=...,
+             an absolute URL on settings.FRONTEND_URL (the public app origin). 7F: the
+             key is in the URL fragment, which a browser never sends to a server, so
+             it is in no access log and no Referer (it lives as long as the job).
 
 Abuse control: at most DOWNLOAD_READY_EMAIL_LIMIT_PER_* sends per hour for one
 recipient address, one requesting IP and one gallery. Over a limit the email is
@@ -56,7 +58,7 @@ def job_page_url(job):
     parts = urlsplit(base)
     if parts.scheme not in ('http', 'https') or not parts.netloc:
         return ''
-    return f'{base}/download/file/{job.id}?key={issue_job_link_token(job, gallery)}'
+    return f'{base}/download/file/{job.id}#key={issue_job_link_token(job, gallery)}'
 
 
 def build_ready_email(job):

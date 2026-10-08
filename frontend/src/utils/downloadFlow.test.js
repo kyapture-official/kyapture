@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   allSetIds, blockedMessage, defaultSize, formatBytes, gateIntro, gateNeeds, initialStep, isAllSelected, isBlockedCode,
-  jobPagePath, jobViewFor, photoLabel, pollDelay, remainingPreparingMs, scopeModel, selectionRequest, sizeOptions, toggleAll, toggleSet,
+  jobPagePath, jobViewFor, linkKeyFrom, photoLabel, pollDelay, remainingPreparingMs, scopeModel, selectionRequest, sizeOptions, toggleAll, toggleSet,
   PREPARING_MAX_ATTEMPTS, isPreparingError, retryDelayMs, withPreparingRetry, tooManyAttemptsMessage,
 } from './downloadFlow.js'
 
@@ -122,8 +122,18 @@ test('photo counts read naturally', () => {
 })
 
 test('the prepared download lives at its own tokenised page', () => {
-  assert.equal(jobPagePath('kb789', 'hari-and-devi', 'j1', 'k.y'), '/g/kb789/hari-and-devi/download/file/j1?key=k.y')
+  assert.equal(jobPagePath('kb789', 'hari-and-devi', 'j1', 'k.y'), '/g/kb789/hari-and-devi/download/file/j1#key=k.y')
   assert.equal(jobPagePath('u', 's', 'j1'), '/g/u/s/download/file/j1')
+})
+
+test('7F: the job key is read from the fragment, and an old query key is flagged to move', () => {
+  const key = 'eyJqIjoiMSJ9:1u2:abc-_'
+  const path = jobPagePath('u', 's', 'j1', key)
+  assert.ok(!path.includes('?'))
+  assert.deepEqual(linkKeyFrom('', path.slice(path.indexOf('#'))), { key, fromQuery: false })
+  assert.deepEqual(linkKeyFrom(`?key=${encodeURIComponent(key)}`, ''), { key, fromQuery: true })
+  assert.deepEqual(linkKeyFrom('?key=old', '#key=new'), { key: 'new', fromQuery: false })
+  assert.deepEqual(linkKeyFrom('', ''), { key: '', fromQuery: false })
 })
 
 test('status polling backs off 2s, 5s, then every 10s', () => {

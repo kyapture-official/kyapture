@@ -24,3 +24,4 @@ Before starting any chunk, read docs/KYAPTURE_PRODUCTION_DEBT.md and handle ever
 Any new column that stores a byte count must be a 64-bit integer (BigIntegerField / PositiveBigIntegerField). When summing it, cast the aggregate to int before serializing.
 Never kill processes by name (no taskkill /IM, pkill, killall). Only stop a process whose PID you started in this session and printed. Never close the owner's browser or other applications.
 Full backend suite: never use --keepdb (a reused test DB loses migration-seeded rows such as the plan rows). Always run it on a fresh test database.
+TransactionTestCase classes must not use serialized_rollback=True; re-create the rows they need in setUp, so test order cannot change results.

@@ -8,8 +8,10 @@ the fresh row, so that:
   - an owner save landing while a PIN use is in flight is not undone by it;
   - a PIN use landing while an owner save is in flight is not undone by it.
 
-Real threads and real Postgres row locks, so this is a TransactionTestCase
-(serialized_rollback keeps the migration-seeded plan rows for later tests).
+Real threads and real Postgres row locks, so this is a TransactionTestCase.
+No serialized_rollback: a TransactionTestCase flushes every table after each
+test, so setUp re-creates the plan rows it needs (ensure_seed_plans) and the
+result does not depend on which test class ran before it.
 """
 import threading
 from unittest import mock
@@ -21,6 +23,8 @@ from django.db import connection
 from django.test import TransactionTestCase
 from rest_framework.test import APIClient
 
+from apps.subscriptions.testing import ensure_seed_plans
+
 from apps.clients import views as client_views
 from apps.galleries import serializers as gallery_serializers
 from apps.galleries.models import Gallery
@@ -30,10 +34,9 @@ PIN = '4821'
 
 
 class PinCounterLockTests(TransactionTestCase):
-    serialized_rollback = True
-
     def setUp(self):
         cache.clear()
+        self.assertEqual(ensure_seed_plans(), 4)
         self.photographer = User.objects.create_user(
             email='pinlock7f@kyapture.com', password='SecurePassword123!', username='pinlock7f',
         )
@@ -54,8 +57,10 @@ class PinCounterLockTests(TransactionTestCase):
     def stored(self):
         return Gallery.objects.get(pk=self.gallery.pk).design_settings
 
-    def use_pin(self):
-        return APIClient().post(self.access_url, {'email': 'c@example.com', 'pin': PIN}, format='json')
+    def use_pin(self, ip='192.0.2.1'):
+        # One address per visitor: the per-client lockout (5 tries, counted before the
+        # check since 7F F6) is not what these tests are about.
+        return APIClient(REMOTE_ADDR=ip).post(self.access_url, {'email': 'c@example.com', 'pin': PIN}, format='json')
 
     def owner_patch(self, body):
         client = APIClient()
@@ -68,18 +73,20 @@ class PinCounterLockTests(TransactionTestCase):
         codes = []
         lock = threading.Lock()
 
-        def worker():
+        def worker(i):
             try:
                 barrier.wait()
-                response = self.use_pin()
+                response = self.use_pin(ip=f'198.51.100.{i + 1}')
                 with lock:
                     codes.append(response.status_code)
             finally:
                 connection.close()
 
-        threads = [threading.Thread(target=worker) for _ in range(n)]
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
         [t.start() for t in threads]
         [t.join() for t in threads]
+        print(f'\n  7F parallel PIN uses, {len(codes)} threads, 1 use left: {sorted(codes)}')
+        self.assertEqual(len(codes), n)                       # every thread really posted
         self.assertEqual(codes.count(200), 1, codes)
         self.assertEqual(codes.count(403), n - 1, codes)
         self.assertEqual(self.stored()['privacy']['pin_use_count'], 3)

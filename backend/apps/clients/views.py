@@ -622,6 +622,11 @@ class GalleryUnlockView(APIView):
         locked = lockout.check(gallery, lockout.PASSWORD, request)
         if locked is not None:
             return locked
+        # 7F: a typed password is counted before bcrypt runs (a parallel burst gets 5 at most).
+        if as_clean_str(request.data.get('password')):
+            refused = lockout.begin_attempt(gallery, lockout.PASSWORD, request)
+            if refused is not None:
+                return refused
 
         # Pass context into the serializer to support transactional creation [1.1.2]
         serializer = GalleryUnlockSerializer(
@@ -1089,6 +1094,10 @@ class PublicDownloadAccessView(APIView):
                     'A download PIN is required for this gallery.', 'pin_required',
                     status.HTTP_401_UNAUTHORIZED,
                 )
+            # 7F: the try is counted before bcrypt runs, so a parallel burst gets 5 at most.
+            refused = lockout.begin_attempt(gallery, lockout.PIN, request)
+            if refused is not None:
+                return refused
             if not verify_pin(gallery, raw_pin):
                 lockout.record_failure(gallery, lockout.PIN, request)
                 return error_response(
@@ -1139,10 +1148,26 @@ class PublicDownloadAccessView(APIView):
                     'email': email,
                     'message': f'We sent a 6-digit code to {email}. Enter it to continue.',
                 }, status=status.HTTP_202_ACCEPTED)
-            if not check_email_code(gallery, email, code):
+            # 7F: wrong codes count in the per-client lockout too (gate EMAIL_CODE),
+            # each try before the comparison, plus a daily cap per address.
+            locked = lockout.check(gallery, lockout.EMAIL_CODE, request) or lockout.begin_attempt(
+                gallery, lockout.EMAIL_CODE, request)
+            if locked is not None:
+                return locked
+            checked = check_email_code(gallery, email, code)
+            if checked == 'too_many':
+                lockout.record_failure(gallery, lockout.EMAIL_CODE, request)
+                return error_response(
+                    'Too many incorrect codes for this address today. Try again tomorrow, '
+                    f'or contact {_studio_name(gallery)}.',
+                    'too_many_codes', status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            if checked != 'ok':
+                lockout.record_failure(gallery, lockout.EMAIL_CODE, request)
                 return error_response(
                     'That code is not right or has expired.', 'invalid_email_code', status.HTTP_401_UNAUTHORIZED,
                 )
+            lockout.record_success(gallery, lockout.EMAIL_CODE, request)
 
         # "Limit PIN usage" counts granted downloads only: one per token issued,
         # never the extra request of the email-code step.

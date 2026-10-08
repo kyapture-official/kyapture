@@ -477,7 +477,10 @@ class ContactAllowListTests(SecurityBase):
         self.assertEqual((wrong.status_code, wrong.data['code']), (401, 'invalid_email_code'))
         for _ in range(4):
             self.ask('vip@example.com', code='999999' if code != '999999' else '888888')
-        self.assertEqual(self.ask('vip@example.com', code=code).status_code, 401)
+        # 7F: five wrong codes also lock this client (429); from another address the
+        # right code still fails, because the code itself is used up.
+        self.assertEqual(self.ask('vip@example.com', code=code).status_code, 429)
+        self.assertEqual(self.ask('vip@example.com', code=code, client=self.visitor('192.0.2.77')).status_code, 401)
 
     def test_a_code_is_bound_to_its_address(self):
         self.gallery.design_settings['downloads']['allowed_emails'] = ['vip@example.com', 'other@example.com']

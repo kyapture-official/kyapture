@@ -3,7 +3,7 @@
 Task 1R.5-E -- the emailed "ready" link on a password-protected gallery.
 
 The visitor passed the gallery password AND the PIN/email check when the job was
-created, so the signed link (/download/file/{job}?key=...) and the file links
+created, so the signed link (/download/file/{job}#key=...) and the file links
 minted from it must work from the link alone -- in a fresh browser, with no
 unlock session -- while exposing only that job's files. Nothing upstream relaxes:
 creating a job still needs the unlock session plus the PIN/email, and a forged,
@@ -107,7 +107,7 @@ class SignedLinkWorksWithoutUnlockTests(ProtectedGalleryBase):
     def test_the_emailed_link_carries_a_key_that_works(self):
         with override_settings(FRONTEND_URL=APP):
             job, _ = self.make_job(email='mailed@example.com')
-        match = re.search(rf'/download/file/{job.id}\?key=(\S+)', mail.outbox[-1].body)
+        match = re.search(rf'/download/file/{job.id}#key=(\S+)', mail.outbox[-1].body)
         self.assertIsNotNone(match)
         opened = self.fresh().get(self.status_url(job), {'link_token': match.group(1)})
         self.assertEqual(opened.status_code, 200, opened.data)

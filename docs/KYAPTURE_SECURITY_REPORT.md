@@ -25,7 +25,7 @@ Chunk commits: 7-A `8608e04` (tenancy), 7-B `bdca0e9` (downloads, throttles, hea
 | Accounts | Per-account login limit, register limit, token-refresh limit per user; admin login lock; hashes/tokens hidden in admin; `JWT_SIGNING_KEY`, `SECRET_KEY_FALLBACKS` and a rotation runbook | 7-B |
 | Password reset and sessions | Reset/change/logout-all/admin password change revoke access tokens at once (`token_version`), 30-minute single-use newest-only links in a URL fragment, per-address and per-client limits, no timing or uid oracle, "password changed" email, one password policy | 7-C |
 | Uploads and workers | 413 / storage-full 403 from headers before the body is read; timeouts on every ffmpeg/ffprobe/cjpegli call and the photo task; plan edge cases (lapsed plan, video minutes race) | 7-B |
-| Location privacy | Photos fail closed (EXIF GPS, XMP GPS, PNG eXIf); video location remuxed out; derivatives carry no metadata. 7-E: 0 of 103 real JPEGs refused | 7-B, 7-E check |
+| Location privacy | Photos fail closed (EXIF GPS, XMP GPS, PNG eXIf; 7F: every PNG text chunk, see section 5); video location remuxed out; derivatives carry no metadata. 7-E: 0 of 103 real JPEGs refused | 7-B, 7-E check |
 | Build and headers | `backend/.dockerignore` (the old image held `/app/.env`); Google font hosts out of the CSP; stale CSP comment | 7-B |
 | Casual saving | Right-click, drag and long-press callout blocked on client media (deterrence only, never called protection) | 7-D |
 | Errors | Malformed ids and oversized `client_uid` answer 400/ignored instead of 500 | 7-A |
@@ -34,7 +34,7 @@ Chunk commits: 7-A `8608e04` (tenancy), 7-B `bdca0e9` (downloads, throttles, hea
 
 | Gap | Why not now | Owner (debt row) |
 |---|---|---|
-| Bearer tokens in query strings for `<a href>` downloads and `<video src>` | **Accepted in 7-E.** A fix needs short-lived per-file grants from a new API, changing every gallery download and video play. Acceptable because Referrer-Policy keeps tokens on their origin (SPA `strict-origin-when-cross-origin`, API `same-origin`), file-granting links live 1-2 h, the 30-day unlock token is hashed at rest and dies on a password change, and the production log format drops query strings. Residual: a shared computer's history keeps the unlock token up to 30 days | accepted (133) |
+| Bearer tokens in query strings for `<a href>` downloads and `<video src>` | **Accepted in 7-E.** A fix needs short-lived per-file grants from a new API, changing every gallery download and video play. Acceptable because Referrer-Policy keeps tokens on their origin (SPA `strict-origin-when-cross-origin`, API `same-origin`), file-granting links live 1-2 h, the 30-day unlock token is hashed at rest and dies on a password change, and the production log format drops query strings. Residual: a shared computer's history keeps the unlock token up to 30 days. **Corrected in 7F** (reviewer 7R): the ZIP ready-link key lives 7 days and the frontend nginx logged it; it is now in the URL `#fragment` and that log is query-free; the production API log rule is still only a plan (section 5) | accepted (133), corrected 7F |
 | MFA for staff; network restriction on `/admin/` | Needs an MFA package and a deployment decision; the admin login lock is in place | 13-C, 15-A (90) |
 | Email verification at sign-up | Decision made (verify before publishing or emailing third parties); touches 26 publish paths and 29 test files | RS0-D (91) |
 | Proxy: overwrite `X-Forwarded-For`, body limit, TLS, no query strings in logs, timeouts | No production proxy in the repo; the config block is written in `docs/KYAPTURE_UPLOAD_LIMITS.md` | 14-A / 16-A (54, 73), 15-A (72) |
@@ -82,6 +82,24 @@ video, close/reopen, Pro Original byte-identical). No empty image box was found.
 - **MFA**: does not exist (row 90).
 - **Network restrictions on `/admin/`**: none exist; nothing to test (row 90, 15-A).
 - **Dependency CVE audit**: no `pip-audit`, `npm audit` or image scan was run in Task 7 (row 96, 15-A).
-- Also not covered: the production proxy and S3 bucket (not in the repo), PNG and non-JPEG camera files, logout with an
-  expired access cookie in a browser, a concurrent double-submit of one reset link (row 150), and anything on staging
-  or production.
+- Also not covered: the production proxy and S3 bucket (not in the repo), real PNG and non-JPEG camera files (7F tested
+  built GPS PNGs only), and anything on staging or production. (Logout with an expired access cookie and a concurrent
+  double-submit of one reset link were covered in 7F.)
+
+## 5. Reviewer 7R and its fixes (7F)
+
+7R reviewed Task 7 read-only and blocked sign-off with 8 findings. 7F proved each one before changing code (a failing
+test or a real request), fixed all of them, and found none to be "not a problem":
+
+| Finding | Proof before the fix | Fix |
+|---|---|---|
+| F1 PIN usage counter had no lock | 8 of 8 parallel right-PIN requests got a token with 1 use left; an owner save during a PIN use was undone (`pin_limit` 5 back to 3, `limit_total` lost); a new PIN got the old count back | the use is recorded on the locked, fresh row (limit and PIN re-checked there); the gallery PATCH and set-download-pin lock the row before reading (`test_pin_counter_lock_7f.py`, 4 tests) |
+| F2 partial save reset keys | 17 of 19 per-key tests failed | omitted keys keep their stored value (row 152) |
+| F3 ready-link key in logs | the frontend container log showed `?key=` in the request line and the Referer | key in `#fragment`, query-free nginx log (row 133 re-decided) |
+| F4 PNG GPS failed open | 10 of 12 GPS-PNG tests failed (compressed iTXt XMP, Raw-profile EXIF) | every text chunk read; unreadable or over 8 MB inflated: refused (400) |
+| F5 rows 150/152 owned by a read-only chunk | — | moved to 7F and closed; concurrent reset-confirm test |
+| F6 counters not atomic | 20 parallel wrong codes: 20 comparisons (12 when sent through the API); 20 parallel wrong PINs from one client: 15 bcrypt checks; wrong codes never reached the lockout | tries counted before the check (atomic); wrong codes feed the lockout; daily cap per address (rows 154, 155) |
+| F7 two tabs refreshing signed one out | browser, pre-fix build: 1 of 4 rounds lost a tab (refresh 401) | refresh under a Web Lock shared by all tabs: 0 of 8 rounds |
+| F8 key in a QA capture; token readable | the key was in `docs/qa-1r5c/ready-email.*` | replaced (row 102); token readability: row 153 |
+
+Evidence: docs/qa-7f/results.md.

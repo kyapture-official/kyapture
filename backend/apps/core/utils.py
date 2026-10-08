@@ -346,8 +346,105 @@ def _png_chunk(kind, data):
     return len(data).to_bytes(4, 'big') + kind + data + (zlib.crc32(kind + data) & 0xFFFFFFFF).to_bytes(4, 'big')
 
 
-def _strip_png(raw):
+# A PNG text chunk is decompressed at most this far: a real XMP packet or EXIF
+# profile is a few KB, so anything bigger is refused instead of inflated (7F).
+_PNG_TEXT_MAX_BYTES = 8 * 1024 * 1024
+_RAW_PROFILE_PREFIX = b'Raw profile type '
+
+
+def _inflate(data):
     import zlib
+    try:
+        inflater = zlib.decompressobj()
+        text = inflater.decompress(data, _PNG_TEXT_MAX_BYTES)
+    except Exception as exc:
+        raise LocationStripError('unreadable compressed PNG text') from exc
+    if inflater.unconsumed_tail:
+        raise LocationStripError('PNG text too large to check')
+    return text
+
+
+def _png_text(kind, data):
+    """
+    (keyword, text, rebuild) for a tEXt / zTXt / iTXt chunk. `rebuild(new_text)`
+    returns the chunk data with the same keyword, compression and (iTXt)
+    language fields around new text. Raises LocationStripError when it cannot
+    be read: an unreadable text chunk might be hiding a location.
+    """
+    import zlib
+    if b'\x00' not in data:
+        raise LocationStripError('malformed PNG text chunk')
+    keyword, rest = data.split(b'\x00', 1)
+    if kind == b'tEXt':
+        return keyword, rest, lambda new: keyword + b'\x00' + new
+    if kind == b'zTXt':
+        if not rest or rest[0] != 0:
+            raise LocationStripError('unknown PNG text compression')
+        return keyword, _inflate(rest[1:]), lambda new: keyword + b'\x00\x00' + zlib.compress(new)
+    # iTXt: compression flag, method, language tag \0, translated keyword \0, text
+    if len(rest) < 2 or rest[0] not in (0, 1) or rest[1] != 0 or rest[2:].count(b'\x00') < 2:
+        raise LocationStripError('malformed PNG iTXt chunk')
+    flag, head = rest[0], rest[:2]
+    language, rest = rest[2:].split(b'\x00', 1)
+    translated, text = rest.split(b'\x00', 1)
+    fields = head + language + b'\x00' + translated + b'\x00'
+    if flag:
+        return keyword, _inflate(text), lambda new: keyword + b'\x00' + fields + zlib.compress(new)
+    return keyword, text, lambda new: keyword + b'\x00' + fields + new
+
+
+def _raw_profile_bytes(text):
+    """ImageMagick's hex text profile ('\nexif\n   <length>\n<hex lines>') -> (name, bytes)."""
+    try:
+        lines = text.decode('latin-1').strip().split('\n')
+        name, length = lines[0].strip(), int(lines[1].strip())
+        payload = bytes.fromhex(''.join(line.strip() for line in lines[2:]))
+    except Exception as exc:
+        raise LocationStripError('unreadable PNG raw profile') from exc
+    if len(payload) != length:
+        raise LocationStripError('truncated PNG raw profile')
+    return name, payload
+
+
+def _raw_profile_text(name, payload):
+    hexed = payload.hex()
+    lines = '\n'.join(hexed[i:i + 72] for i in range(0, len(hexed), 72))
+    return f'\n{name}\n{len(payload):8d}\n{lines}\n'.encode('latin-1')
+
+
+def _clean_png_text(kind, data):
+    """
+    New chunk data with the location removed, None to drop the chunk, or
+    `data` itself when there is no location in it.
+
+      - "Raw profile type exif" / "APP1" (EXIF as hex text, ImageMagick 6):
+        the GPS IFD is removed and the profile written back in the same form;
+      - "Raw profile type 8bim" holding an EXIF resource (0x0422/0x0423): dropped;
+      - "Raw profile type xmp", "XML:com.adobe.xmp" and any other text whose
+        keyword or text names a GPS field: the chunk is dropped.
+    """
+    keyword, text, rebuild = _png_text(kind, data)
+    if keyword.startswith(_RAW_PROFILE_PREFIX):
+        name, payload = _raw_profile_bytes(text)
+        profile = keyword[len(_RAW_PROFILE_PREFIX):].strip().lower()
+        if profile in (b'exif', b'app1'):
+            if payload.startswith(_XMP_HEADERS):
+                return None if _xmp_has_location(payload) else data
+            clean = _exif_without_gps(payload)
+            if clean is None:
+                return data
+            if not payload.startswith(b'Exif\x00\x00') and clean.startswith(b'Exif\x00\x00'):
+                clean = clean[6:]
+            return rebuild(_raw_profile_text(name, clean))
+        if profile == b'8bim' and (b'8BIM\x04\x22' in payload or b'8BIM\x04\x23' in payload):
+            return None                     # Photoshop resources holding a binary EXIF copy: not parsed, dropped
+        text = payload
+    if b'gps' in keyword.lower() or _xmp_has_location(text):
+        return None
+    return data
+
+
+def _strip_png(raw):
     pos, out, changed = len(_PNG_SIGNATURE), [_PNG_SIGNATURE], False
     while pos + 8 <= len(raw):
         length = int.from_bytes(raw[pos:pos + 4], 'big')
@@ -364,15 +461,14 @@ def _strip_png(raw):
                 out.append(_png_chunk(b'eXIf', clean[6:] if clean.startswith(b'Exif\x00\x00') else clean))
                 changed = True
                 continue
-        elif kind in (b'iTXt', b'tEXt', b'zTXt') and data.startswith(b'XML:com.adobe.xmp\x00'):
-            text = data
-            if kind == b'zTXt':
-                try:
-                    text = zlib.decompress(data.split(b'\x00', 1)[1][1:])
-                except Exception as exc:
-                    raise LocationStripError('unreadable compressed XMP') from exc
-            if _xmp_has_location(text):
+        elif kind in (b'iTXt', b'tEXt', b'zTXt'):
+            # 7F: every text chunk is read, compressed iTXt and ImageMagick's
+            # hex "Raw profile" EXIF included; one that cannot be read is refused.
+            clean = _clean_png_text(kind, data)
+            if clean is not data:
                 changed = True
+                if clean is not None:
+                    out.append(_png_chunk(kind, clean))
                 continue
         out.append(chunk)
         if kind == b'IEND':
@@ -408,7 +504,12 @@ def strip_exif_gps(file_obj):
 
     Covered: the JPEG EXIF GPS IFD (piexif), an XMP packet carrying GPS
     coordinates (JPEG APP1, PNG iTXt/tEXt/zTXt: that packet is dropped), and the
-    PNG eXIf chunk.
+    PNG eXIf chunk. 7F: in a PNG every text chunk is read, compressed iTXt
+    included; EXIF stored as hex text ("Raw profile type exif" / "APP1", as
+    ImageMagick 6 writes it) has its GPS IFD removed and is written back; a
+    text chunk whose keyword or text names a GPS field is dropped; a text chunk
+    that cannot be read (bad compression, bad hex, over 8 MB inflated) refuses
+    the file.
 
     7-B (SEC-19 / debt row 94): fails CLOSED. It used to log a warning and keep
     the original bytes (GPS included) whenever anything went wrong; now it raises

@@ -641,7 +641,7 @@ class ReadyEmailTests(JobBase):
         message = mail.outbox[0]
         self.assertEqual(message.to, ["buyer@example.com"])
         job = DownloadJob.objects.get()
-        self.assertIn(f"/g/{self.owner.username}/{self.gallery.slug}/download/file/{job.id}?key=", message.body)
+        self.assertIn(f"/g/{self.owner.username}/{self.gallery.slug}/download/file/{job.id}#key=", message.body)
         self.assertNotIn("file_token", message.body)                 # the mail carries no credential
 
     def test_no_email_when_none_was_captured(self):

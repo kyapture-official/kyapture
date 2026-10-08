@@ -258,7 +258,7 @@ export const clientsApi = {
    * @param {string} [opts.setId] - limit the ZIP to this photo set
    * @param {string[]} [opts.setIds] - limit the ZIP to these photo sets (two or more)
    * @returns {Promise<{ job_id: string, link_token: string, state: string, status_url: string }>}
-   *   link_token is the key for the job's own page (/download/file/{job_id}?key=...)
+   *   link_token is the key for the job's own page (/download/file/{job_id}#key=...)
    */
   prepareGalleryDownload: async (username, slug, opts = {}) => {
     const path = `${buildGalleryPath(username, slug)}download/`

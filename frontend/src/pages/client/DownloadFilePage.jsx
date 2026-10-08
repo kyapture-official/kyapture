@@ -1,12 +1,12 @@
 // File Location: frontend/src/pages/client/DownloadFilePage.jsx
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { clientsApi } from "../../api/clientsApi";
 import DownloadExpired from "../../components/client/DownloadExpired";
 import DownloadShell, { pageButtonClass, useDownloadGallery } from "../../components/client/DownloadShell";
 import Spinner from "../../components/ui/Spinner";
-import { formatBytes, jobViewFor, pollDelay, remainingPreparingMs } from "../../utils/downloadFlow.js";
+import { formatBytes, jobPagePath, jobViewFor, linkKeyFrom, pollDelay, remainingPreparingMs } from "../../utils/downloadFlow.js";
 
 const heading = "font-serif text-xl font-bold uppercase tracking-[0.16em] text-ink";
 
@@ -22,7 +22,7 @@ function startBrowserDownload(href) {
 }
 
 /**
- * /g/:username/:slug/download/file/:jobId?key=...  — the prepared download's own page.
+ * /g/:username/:slug/download/file/:jobId#key=...  — the prepared download's own page.
  *
  *   Page 3  "We are preparing your photos": spinner; the job is polled
  *           (2s, 5s, then every 10s). Leaving the page never cancels it — the
@@ -39,12 +39,18 @@ function startBrowserDownload(href) {
  */
 export default function DownloadFilePage() {
   const { username, slug, jobId } = useParams();
-  const [searchParams] = useSearchParams();
-  const linkToken = searchParams.get("key") || "";
+  const location = useLocation();
+  const navigate = useNavigate();
+  // 7F: the key lives in the URL fragment (never sent to a server, so in no log);
+  // a link emailed before 7F still has it in the query and is moved at once.
+  const { key: linkToken, fromQuery } = linkKeyFrom(location.search, location.hash);
+  useEffect(() => {
+    if (fromQuery) navigate(jobPagePath(username, slug, jobId, linkToken), { replace: true, state: location.state });
+  }, [fromQuery, navigate, username, slug, jobId, linkToken, location.state]);
   // Set by Page 2 when it hands over a job it just created: only then does the
   // Preparing page owe the visitor a minimum on-screen time (an emailed link
   // opens straight on a finished job and should not pretend to prepare).
-  const justPrepared = Boolean(useLocation().state?.justPrepared);
+  const justPrepared = Boolean(location.state?.justPrepared);
   const gallery = useDownloadGallery(username, slug);
   const { view, galleryToken } = gallery;
 

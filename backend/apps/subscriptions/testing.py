@@ -32,3 +32,16 @@ def grant_plan(user, name='Pro', includes_branding_watermark=True, days=30,
         },
     )
     return plan
+
+
+def ensure_seed_plans():
+    """
+    Re-creates the migration-seeded plan rows that are missing (the seed values
+    from seed.py). A TransactionTestCase flushes every table after each test,
+    which drops these rows; a class that needs them calls this in setUp instead
+    of using serialized_rollback, so the order the suite runs it in cannot
+    change its result (7F).
+    """
+    for key, values in PLAN_SEED.items():
+        SubscriptionPlan.objects.get_or_create(key=key, defaults=values)
+    return SubscriptionPlan.objects.filter(key__in=PLAN_SEED).count()

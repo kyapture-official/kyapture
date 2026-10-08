@@ -428,7 +428,8 @@ def read_download_token(token, gallery):
 
 def issue_job_link_token(job, gallery):
     """
-    The key in the "your photos are ready" link (/download/file/{job}?key=...).
+    The key in the "your photos are ready" link (/download/file/{job}#key=...;
+    in the URL fragment since 7F, so it never reaches a server log).
     Bound to ONE job of ONE gallery and nothing else: it carries no email and
     no PIN, never authorizes another job, and is only ever handed out by the
     authorized prepare POST (or the ready email built from that job). It does
@@ -578,6 +579,13 @@ def authorize_download(gallery, *, pin, download_token, denied_status=status.HTT
 EMAIL_CODE_TTL_SECONDS = 10 * 60
 EMAIL_CODE_MAX_TRIES = 5
 EMAIL_CODE_MAX_SENDS = 3
+# 7F (reviewer F6): per gallery + address per day, on top of the per-10-minute
+# limits above (which alone allowed 5 tries x 3 codes every 10 minutes, about
+# 2,160 guesses a day). Wrong codes are also counted in the per-client lockout
+# (apps/clients/lockout.py, gate EMAIL_CODE).
+EMAIL_CODE_DAY_SECONDS = 24 * 60 * 60
+EMAIL_CODE_DAILY_MAX_FAILURES = 10
+EMAIL_CODE_DAILY_MAX_SENDS = 10
 
 
 def contacts_restricted(gallery):
@@ -593,6 +601,26 @@ def _code_digest(code):
     return hashlib.sha256(code.encode('utf-8')).hexdigest()
 
 
+def _incr(key, timeout):
+    """Atomic +1 on a shared-cache counter that starts at 0 and lives `timeout` seconds."""
+    from django.core.cache import cache
+    cache.add(key, 0, timeout=timeout)
+    try:
+        return cache.incr(key)
+    except ValueError:                      # expired between add and incr
+        cache.add(key, 1, timeout=timeout)
+        return 1
+
+
+def _daily_key(gallery, email, what):
+    return f'{_email_code_key(gallery, email)}:day:{what}'
+
+
+def email_code_day_limit_reached(gallery, email):
+    from django.core.cache import cache
+    return (cache.get(_daily_key(gallery, email, 'fail')) or 0) >= EMAIL_CODE_DAILY_MAX_FAILURES
+
+
 def send_email_code(gallery, email):
     """
     Emails a new one-time code to `email`. Returns 'sent', 'too_many' (send limit
@@ -605,12 +633,15 @@ def send_email_code(gallery, email):
     from django.core.mail import send_mail
 
     key = _email_code_key(gallery, email)
-    sends_key = f'{key}:sends'
-    cache.add(sends_key, 0, timeout=EMAIL_CODE_TTL_SECONDS)
-    if cache.incr(sends_key) > EMAIL_CODE_MAX_SENDS:
+    if email_code_day_limit_reached(gallery, email):
+        return 'too_many'
+    if _incr(f'{key}:sends', EMAIL_CODE_TTL_SECONDS) > EMAIL_CODE_MAX_SENDS:
+        return 'too_many'
+    if _incr(_daily_key(gallery, email, 'sends'), EMAIL_CODE_DAY_SECONDS) > EMAIL_CODE_DAILY_MAX_SENDS:
         return 'too_many'
     code = f'{secrets.randbelow(10 ** 6):06d}'
-    cache.set(key, {'h': _code_digest(code), 'tries': 0}, timeout=EMAIL_CODE_TTL_SECONDS)
+    cache.set(key, {'h': _code_digest(code)}, timeout=EMAIL_CODE_TTL_SECONDS)
+    cache.delete(f'{key}:tries')            # a new code starts its own count of tries
     photographer = gallery.photographer
     studio = re.sub(r'[\x00-\x1f\x7f]+', ' ', photographer.display_name or photographer.username).strip()
     title = re.sub(r'[\x00-\x1f\x7f]+', ' ', gallery.title).strip()
@@ -634,22 +665,38 @@ def send_email_code(gallery, email):
 
 
 def check_email_code(gallery, email, code):
-    """True once for the right, fresh code for this address and gallery (it is then used up)."""
+    """
+    'ok' once for the right, fresh code for this address and gallery (it is
+    then used up), 'wrong' otherwise, or 'too_many' once the address has used
+    its wrong codes for the day.
+
+    7F: each try is counted BEFORE the comparison by an atomic increment, so
+    parallel requests cannot share one try (the count used to be read, changed
+    and written back: 20 parallel wrong codes were 20 real guesses). The 6th
+    try on one code, and every try past the daily cap, is refused without
+    comparing; a right code is used up by whoever deletes it first.
+    """
     from django.core.cache import cache
     from django.utils.crypto import constant_time_compare
 
     code = as_clean_str(code)
     key = _email_code_key(gallery, email)
+    if email_code_day_limit_reached(gallery, email):
+        cache.delete(key)
+        return 'too_many'
     entry = cache.get(key)
     if not code or not isinstance(entry, dict):
-        return False
-    if entry.get('tries', 0) >= EMAIL_CODE_MAX_TRIES:
+        return 'wrong'
+    if _incr(f'{key}:tries', EMAIL_CODE_TTL_SECONDS) > EMAIL_CODE_MAX_TRIES:
         cache.delete(key)
-        return False
-    if constant_time_compare(_code_digest(code), entry.get('h', '')):
+        return 'wrong'
+    day_failures = _incr(_daily_key(gallery, email, 'fail'), EMAIL_CODE_DAY_SECONDS)
+    if day_failures > EMAIL_CODE_DAILY_MAX_FAILURES:
         cache.delete(key)
+        return 'too_many'
+    if constant_time_compare(_code_digest(code), entry.get('h', '')) and cache.delete(key):
+        cache.decr(_daily_key(gallery, email, 'fail'))      # a right code is not a failure
         cache.delete(f'{key}:sends')
-        return True
-    entry['tries'] = entry.get('tries', 0) + 1
-    cache.set(key, entry, timeout=EMAIL_CODE_TTL_SECONDS)
-    return False
+        cache.delete(f'{key}:tries')
+        return 'ok'
+    return 'wrong'

@@ -141,10 +141,25 @@ export function blockedMessage(code, studio, fallback = '') {
 
 // ── Pages 3 and 4: preparing / ready ────────────────────────────────────────
 
-/** The prepared download's own page. The key is bound to that one job (no email / PIN asked again). */
+/**
+ * The prepared download's own page. The key is bound to that one job (no email / PIN asked again).
+ * 7F: it travels in the URL fragment (#key=), which the browser never sends to a server, so it
+ * is in no access log and no Referer.
+ */
 export function jobPagePath(username, slug, jobId, key) {
   const base = `/g/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/download/file/${encodeURIComponent(jobId)}`
-  return key ? `${base}?key=${encodeURIComponent(key)}` : base
+  return key ? `${base}#key=${encodeURIComponent(key)}` : base
+}
+
+/**
+ * The job key from a location: `#key=` (current links), else `?key=` (emails sent before 7F).
+ * `fromQuery` tells the page to move a query key into the fragment right away.
+ */
+export function linkKeyFrom(search, hash) {
+  const fromHash = new URLSearchParams(String(hash || '').replace(/^#/, '')).get('key')
+  if (fromHash) return { key: fromHash, fromQuery: false }
+  const fromSearch = new URLSearchParams(String(search || '')).get('key')
+  return fromSearch ? { key: fromSearch, fromQuery: true } : { key: '', fromQuery: false }
 }
 
 /** Wait before status check number `attempt` (0-based, the first check itself is immediate): 2s, 5s, then every 10s. */

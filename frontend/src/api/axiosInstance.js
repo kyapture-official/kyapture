@@ -1,6 +1,7 @@
 // File Location: frontend/src/api/axiosInstance.js
 
 import axios from 'axios'
+import { withRefreshLock } from './refreshLock.js'
 
 // ── BASE CONFIGURATION & PATH NORMALIZATION ─────────────────────────────────
 // Checks VITE_API_BASE_URL first (correct), falls back to legacy VITE_API_URL
@@ -137,10 +138,12 @@ api.interceptors.response.use(
         // No body needed — the refresh_token cookie rides along automatically
         // because withCredentials is true. Uses bare `axios`, not `api`, so
         // this call never re-enters these same interceptors.
-        await axios.post(joinPath('/auth/token/refresh/'), {}, {
+        // 7F: under a lock shared by every tab, so two tabs never send the same
+        // (rotating) refresh cookie at once and sign each other out.
+        await withRefreshLock(() => axios.post(joinPath('/auth/token/refresh/'), {}, {
           withCredentials: true,
           timeout: 10000,
-        })
+        }))
         isRefreshing = false
         processQueue(null)
         return api(originalRequest)

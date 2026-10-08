@@ -27,7 +27,7 @@ APP = 'https://app.kyapture.test'
 
 
 def page4_url(message):
-    return re.search(r'https?://\S+/download/file/[0-9a-f-]+\?key=[\w:\-.]+', message.body).group(0)
+    return re.search(r'https?://\S+/download/file/[0-9a-f-]+#key=[\w:\-.]+', message.body).group(0)
 
 
 @override_settings(FRONTEND_URL=APP)
@@ -74,7 +74,7 @@ class ReadyEmailContentTests(JobBase):
         ):
             self.assertIn(line, body)
         url = page4_url(message)
-        self.assertTrue(url.startswith(f'{APP}/g/{self.username}/{self.slug}/download/file/{job.id}?key='))
+        self.assertTrue(url.startswith(f'{APP}/g/{self.username}/{self.slug}/download/file/{job.id}#key='))
         self.assertNotIn('localhost', body)
 
     def test_html_alternative_is_dark_mode_safe_and_links_the_same_page(self):
