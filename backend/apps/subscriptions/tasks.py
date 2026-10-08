@@ -28,38 +28,31 @@ def sweep_expired_subscriptions(self):
     status and the user's is_active_plan flag — independent of whether or
     when that user's frontend ever hits /my-subscription/.
 
-    Deliberately mirrors MySubscriptionView.get()'s self-heal logic
-    exactly (same two field writes). That lazy check is left in place
-    on purpose as a fast path for the common case — a user who reloads
-    their dashboard gets flipped instantly rather than waiting for the
-    next sweep interval. Both paths are idempotent no-ops on a
-    subscription the other one already handled, so leaving both active
-    is safe.
+    MySubscriptionView.get() runs the same flip (lifecycle.expire_lapsed) as a fast
+    path for a user who reloads their dashboard. Both are idempotent no-ops on a
+    subscription the other one already handled. Neither is what ENDS access: an
+    ended period is Free at request time (entitlements.py), job or no job. The
+    reminder / downgrade / mail work is the daily run_subscription_lifecycle below.
     """
+    from apps.subscriptions.lifecycle import expire_lapsed
     from apps.subscriptions.models import UserSubscription
 
     now = timezone.now()
 
     try:
-        # select_related('user') avoids an N+1 — we write user.is_active_plan
-        # below for every row in this queryset.
-        expired_qs = (
+        # Each row is flipped by expire_lapsed(), which takes the user and subscription row locks and re-reads
+        # the status inside them (7.5-C): a renewal approved while this loop ran is never written back to
+        # 'expired'. The old version saved without a lock and could do exactly that.
+        expired_ids = list(
             UserSubscription.objects
-            .select_related('user')
             .filter(status=UserSubscription.SubscriptionStatus.ACTIVE, expires_at__lt=now)
+            .values_list('pk', flat=True)
         )
 
         swept_count = 0
-        for subscription in expired_qs:
-            subscription.status = UserSubscription.SubscriptionStatus.EXPIRED
-            subscription.save(update_fields=['status'])
-
-            user = subscription.user
-            if user.is_active_plan:
-                user.is_active_plan = False
-                user.save(update_fields=['is_active_plan'])
-
-            swept_count += 1
+        for subscription_id in expired_ids:
+            if expire_lapsed(subscription_id, now):
+                swept_count += 1
 
         if swept_count:
             logger.info(f"[sweep_expired_subscriptions] Expired {swept_count} subscription(s).")
@@ -71,3 +64,16 @@ def sweep_expired_subscriptions(self):
     except Exception as exc:
         logger.error(f"[sweep_expired_subscriptions] Sweep failed: {str(exc)}")
         raise self.retry(exc=exc)
+
+
+@shared_task(ignore_result=True)
+def run_subscription_lifecycle():
+    """
+    The daily subscription job (7.5-C; beat entry "subscription-lifecycle-daily" in settings.CELERY_BEAT_SCHEDULE).
+    All of the work and its rules are in apps/subscriptions/lifecycle.py; `manage.py run_subscription_lifecycle`
+    runs the same code by hand. Not retried by Celery: a failed mail is released and retried by the next run, and
+    a second run is always safe.
+    """
+    from apps.subscriptions import lifecycle
+    report = lifecycle.run()
+    return {'skipped': report['skipped'], 'reminders': len(report['reminders']), 'downgrades': len(report['downgrades'])}

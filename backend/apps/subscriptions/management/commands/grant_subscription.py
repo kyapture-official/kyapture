@@ -40,6 +40,8 @@ class Command(BaseCommand):
                 "payment_method": UserSubscription.PaymentMethod.MANUAL,
                 "starts_at": now,
                 "expires_at": now + timedelta(days=options["days"]),
+                # a new period: the lifecycle markers of the old one are cleared (7.5-C)
+                **{marker: None for marker in UserSubscription.LIFECYCLE_MARKERS},
             },
         )
 

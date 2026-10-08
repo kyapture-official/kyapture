@@ -1,7 +1,6 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/config/celery.py
 import os
 from celery import Celery
-from celery.schedules import crontab
 
 # Set the default Django settings module for the 'celery' command-line program.
 # Fallback to local development settings for seamless offline execution.
@@ -32,50 +31,9 @@ app.autodiscover_tasks()
 # processes in Celery; nothing in this schedule fires unless that beat
 # process is actually started.
 
-app.conf.beat_schedule = {
-    'sweep-expired-subscriptions': {
-        'task': 'apps.subscriptions.tasks.sweep_expired_subscriptions',
-        'schedule': crontab(minute='*/15'),  # every 15 minutes
-    },
-    # Phase 4 (F-30 storage-leak fix) — hard-deletes galleries past their
-    # trash retention window (see Gallery.trashed_at / GALLERY_TRASH_RETENTION_DAYS).
-    # Daily is plenty: this is a retention-window sweep, not a
-    # time-sensitive gate like the subscription check above.
-    'purge-trashed-galleries': {
-        'task': 'apps.galleries.tasks.purge_trashed_galleries',
-        'schedule': crontab(hour=3, minute=0),  # once daily, off-peak
-    },
-    # Phase 4 (auth hardening) — purges expired ClientSession rows past
-    # CLIENT_SESSION_TTL_DAYS. See apps/clients/tasks.py.
-    'purge-expired-client-sessions': {
-        'task': 'apps.clients.tasks.purge_expired_client_sessions',
-        'schedule': crontab(hour=3, minute=15),  # staggered after the gallery purge above
-    },
-    # Phase 4 (DB cleanup) — trims DownloadLog rows past
-    # DOWNLOAD_LOG_RETENTION_DAYS. Purely operational housekeeping.
-    'purge-old-download-logs': {
-        'task': 'apps.clients.tasks.purge_old_download_logs',
-        'schedule': crontab(hour=3, minute=30, day_of_week='sunday'),  # weekly
-    },
-    # Prepared gallery/set ZIPs: deletes expired jobs (7-day links) and their
-    # stored files. Only download_jobs/ in private storage -- never originals.
-    'purge-expired-download-jobs': {
-        'task': 'apps.clients.tasks.purge_expired_download_jobs',
-        'schedule': crontab(hour=3, minute=45),  # once daily, off-peak
-    },
-    # Dashboard-bell housekeeping: notifications are pointers, not history.
-    'purge-old-notifications': {
-        'task': 'apps.users.tasks.purge_old_notifications',
-        'schedule': crontab(hour=4, minute=30),  # daily, off-peak
-    },
-    # Phase 4 (DB cleanup, "token blacklist growth") — flushes expired
-    # rows from simplejwt's OutstandingToken/BlacklistedToken tables,
-    # which otherwise grow forever. See apps/users/tasks.py.
-    'flush-expired-jwt-tokens': {
-        'task': 'apps.users.tasks.flush_expired_jwt_tokens',
-        'schedule': crontab(hour=4, minute=0, day_of_week='sunday'),  # weekly
-    },
-}
+# The schedule itself lives in settings (CELERY_BEAT_SCHEDULE in config/settings/base.py), one named entry per
+# job. Assigning `app.conf.beat_schedule = {...}` here does NOT work once settings define that key: the settings
+# value silently wins and the assigned entries are lost (7.5-C). Add the next periodic job there.
 
 
 

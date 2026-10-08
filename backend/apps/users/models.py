@@ -186,6 +186,9 @@ class Notification(BaseModel):
         SECURITY = 'security', 'Security alert'
         # Sent to staff when a user submits a manual payment (apps/subscriptions/payments.py).
         PAYMENT_REVIEW = 'payment_review', 'Payment to review'
+        # The owner's paid plan is about to end / has ended (apps/subscriptions/lifecycle.py, 7.5-C).
+        PLAN_EXPIRING = 'plan_expiring', 'Plan expiring'
+        PLAN_EXPIRED = 'plan_expired', 'Plan ended'
 
     user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='notifications')
     kind = models.CharField(max_length=20, choices=Kind.choices)
@@ -353,6 +356,8 @@ class StaffAuditLog(models.Model):
         PASSWORD_CHANGE = 'security.password_change', 'Password changed'
         # A user's own act, recorded for the trail (7.5-B): the actor is the user, not staff.
         PAYMENT_SUBMIT = 'payment.submit', 'Submitted a manual payment'
+        # The daily job moved an account to Free after its paid period (and grace) ended (7.5-C): no actor.
+        SUBSCRIPTION_DOWNGRADE = 'subscription.downgrade', 'Moved to Free after the plan ended'
 
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

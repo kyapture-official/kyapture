@@ -2,7 +2,7 @@
 import os
 import uuid
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
 from django.utils.text import slugify
@@ -152,6 +152,17 @@ class UserSubscription(BaseModel):
     )
     starts_at = models.DateTimeField()
     expires_at = models.DateTimeField()
+
+    # Lifecycle markers (7.5-C, apps/subscriptions/lifecycle.py). Each holds the `expires_at` (the period end)
+    # the step was done FOR, so a marker belongs to ONE period: a renewal moves `expires_at`, and every marker
+    # then reads "not done" by itself (approve_payment also clears them, so the row says so too). The `*_emailed_for`
+    # markers are set BEFORE the mail is sent and cleared again if the send fails (one mail, retried on failure).
+    reminder_notified_for = models.DateTimeField(null=True, blank=True, editable=False)
+    reminder_emailed_for = models.DateTimeField(null=True, blank=True, editable=False)
+    downgraded_for = models.DateTimeField(null=True, blank=True, editable=False)
+    downgrade_emailed_for = models.DateTimeField(null=True, blank=True, editable=False)
+
+    LIFECYCLE_MARKERS = ('reminder_notified_for', 'reminder_emailed_for', 'downgraded_for', 'downgrade_emailed_for')
 
     class Meta:
         db_table = 'user_subscriptions'
@@ -318,6 +329,51 @@ class PaymentInstructions(models.Model):
 
     def __str__(self):
         return 'Payment instructions'
+
+
+class LifecycleSettings(models.Model):
+    """
+    The ONE row that tunes the daily subscription job (chunk 7.5-C), edited in Django admin
+    (Subscriptions -> Subscription lifecycle) and read every time the job runs, so a change
+    applies at the next run with no deploy. Day counts are calendar days in settings.BILLING_TIME_ZONE.
+
+    reminder_days  the reminder goes out once, on the day that is this many days before the period ends
+    grace_days     the account is moved to Free (and told) after this many full days past the period end.
+                   Access does NOT wait for it: an ended period is Free at request time (entitlements.py).
+    """
+    id = models.PositiveSmallIntegerField(primary_key=True, editable=False)  # always 1, set in save()
+    reminder_days = models.PositiveSmallIntegerField(
+        default=3, validators=[MinValueValidator(1), MaxValueValidator(30)],
+        verbose_name='Reminder days before the end',
+        help_text="One reminder (bell and email) goes out this many days before a paid period ends.",
+    )
+    grace_days = models.PositiveSmallIntegerField(
+        default=3, validators=[MaxValueValidator(30)],
+        verbose_name='Grace days after the end',
+        help_text="After this many full days past the end the account is moved to Free and told. "
+                  "Paid features stop at the end of the period regardless; files are never deleted.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'subscription_lifecycle_settings'
+        verbose_name = 'Subscription lifecycle'
+        verbose_name_plural = 'Subscription lifecycle'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        """The single row; created with the defaults if missing."""
+        try:
+            return cls.objects.get(pk=1)
+        except cls.DoesNotExist:
+            return cls.objects.get_or_create(pk=1)[0]
+
+    def __str__(self):
+        return 'Subscription lifecycle'
 
 
 class UploadLimits(models.Model):

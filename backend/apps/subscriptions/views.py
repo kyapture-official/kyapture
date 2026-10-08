@@ -9,6 +9,7 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from . import payments
+from .lifecycle import describe, expire_lapsed
 from .entitlements import get_feature_entitlements
 from .models import ManualPayment, PaymentInstructions, SubscriptionPlan, UserSubscription
 from .serializers import (
@@ -56,17 +57,15 @@ class MySubscriptionView(APIView):
                 .get(user=request.user)
             )
 
-            # Self-Healing Safeguard: Auto-expire active plan if timestamp has passed [1.1.2]
+            # Self-Healing Safeguard: an 'active' row whose period has ended is flipped to 'expired'. Under the
+            # row locks with the status re-read (lifecycle.expire_lapsed, 7.5-C), so a renewal approved a moment
+            # ago is never overwritten by this GET.
             if subscription.status == 'active' and subscription.expires_at < timezone.now():
-                # Enforce transaction-safe status update
-                subscription.status = 'expired'
-                subscription.save(update_fields=['status'])
-                
-                # De-authorize the photographer's billing access flag [1.1.2]
-                user = request.user
-                if user.is_active_plan:
-                    user.is_active_plan = False
-                    user.save(update_fields=['is_active_plan'])
+                if expire_lapsed(subscription.pk):
+                    request.user.is_active_plan = False
+                subscription = (
+                    UserSubscription.objects.select_related('plan', 'user').get(pk=subscription.pk)
+                )
 
         except UserSubscription.DoesNotExist:
             # Return standard non-crashing schema response for clean React parsing [1.1.2]
@@ -75,6 +74,7 @@ class MySubscriptionView(APIView):
                 'message': 'No subscription found. Select a plan to get started.',
                 'plan': None,
                 'expires_at': None,
+                'lifecycle': describe(None),
                 'entitlements': get_feature_entitlements(request.user),
             }, status=status.HTTP_200_OK)
 

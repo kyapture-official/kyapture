@@ -265,7 +265,14 @@ def approve_payment(payment_id, staff, request=None):
             subscription.status = UserSubscription.SubscriptionStatus.ACTIVE
             subscription.payment_method = UserSubscription.PaymentMethod.MANUAL
             subscription.starts_at, subscription.expires_at = start, end
-            subscription.save(update_fields=['plan', 'status', 'payment_method', 'starts_at', 'expires_at', 'updated_at'])
+            # A new period: the reminder / downgrade markers of the old one are cleared (7.5-C; they are also
+            # keyed to the old end date, so they would read "not done" for the new one either way).
+            for marker in UserSubscription.LIFECYCLE_MARKERS:
+                setattr(subscription, marker, None)
+            subscription.save(update_fields=[
+                'plan', 'status', 'payment_method', 'starts_at', 'expires_at', 'updated_at',
+                *UserSubscription.LIFECYCLE_MARKERS,
+            ])
         if not user.is_active_plan:
             user.is_active_plan = True
             user.save(update_fields=['is_active_plan'])

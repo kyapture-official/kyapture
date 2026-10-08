@@ -79,6 +79,7 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
     galleries_used = serializers.SerializerMethodField()
     photos_used = serializers.SerializerMethodField()
     entitlements = serializers.SerializerMethodField()
+    lifecycle = serializers.SerializerMethodField()
 
     class Meta:
         model = UserSubscription
@@ -96,8 +97,15 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
             'galleries_used',
             'photos_used',
             'entitlements',
+            'lifecycle',
         ]
         read_only_fields = fields
+
+    def get_lifecycle(self, obj):
+        # What Billing and the dashboard banner say about the period: 'active', 'expiring' (inside the reminder
+        # window) or 'expired', with calendar days in the billing zone. Computed here, never in the browser.
+        from .lifecycle import describe
+        return describe(obj)
 
     def get_entitlements(self, obj):
         # Computed from the live subscription (active AND unexpired), not from

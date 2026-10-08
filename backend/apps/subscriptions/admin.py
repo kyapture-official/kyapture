@@ -3,7 +3,9 @@ from django import forms
 from django.contrib import admin
 from django.core.files.uploadedfile import UploadedFile
 from apps.core.branding import InvalidLogo, sanitize_image_upload
-from .models import ManualPayment, PaymentInstructions, SubscriptionPlan, UploadLimits, UserSubscription
+from .models import (
+    LifecycleSettings, ManualPayment, PaymentInstructions, SubscriptionPlan, UploadLimits, UserSubscription,
+)
 
 
 @admin.register(SubscriptionPlan)
@@ -49,6 +51,27 @@ class UploadLimitsAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return not UploadLimits.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(LifecycleSettings)
+class LifecycleSettingsAdmin(admin.ModelAdmin):
+    """The one row that tunes the daily subscription job (7.5-C); read at each run, so an edit applies to the next."""
+    list_display = ['__str__', 'reminder_days', 'grace_days', 'updated_at']
+    fields = ['reminder_days', 'grace_days']
+
+    def changelist_view(self, request, extra_context=None):
+        LifecycleSettings.load()  # the row always exists, so there is always something to open
+        return super().changelist_view(request, extra_context)
+
+    def get_object(self, request, object_id, from_field=None):
+        LifecycleSettings.load()
+        return super().get_object(request, object_id, from_field)
+
+    def has_add_permission(self, request):
+        return not LifecycleSettings.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False

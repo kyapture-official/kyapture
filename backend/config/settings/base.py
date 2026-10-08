@@ -340,6 +340,17 @@ MANUAL_PAYMENT_PROOF_MAX_PIXELS = int(os.getenv("MANUAL_PAYMENT_PROOF_MAX_PIXELS
 # How long a staff member's link to one proof stays valid.
 MANUAL_PAYMENT_PROOF_LINK_SECONDS = int(os.getenv("MANUAL_PAYMENT_PROOF_LINK_SECONDS", "300"))
 
+# Subscription lifecycle (7.5-C, apps/subscriptions/lifecycle.py). The tuning (reminder days, grace days) is an
+# admin-edited row, not a setting. The zone decides what a "day" is for the reminder and the downgrade, and what
+# date the owner sees; it is NOT the project TIME_ZONE (UTC), which every existing schedule and date uses.
+BILLING_TIME_ZONE = os.getenv("BILLING_TIME_ZONE", "Asia/Kathmandu")
+# A downgrade / reminder mail that failed is tried again on each daily run for this many days, then dropped. A
+# period that ended longer ago than grace + this is downgraded silently (no mail, no bell): the first run on an
+# old database must not mail everyone who ever lapsed.
+SUBSCRIPTION_EMAIL_RETRY_DAYS = int(os.getenv("SUBSCRIPTION_EMAIL_RETRY_DAYS", "7"))
+# Held (in the shared cache) while the daily job runs, so two beat instances cannot both do the work.
+SUBSCRIPTION_LIFECYCLE_LOCK_SECONDS = int(os.getenv("SUBSCRIPTION_LIFECYCLE_LOCK_SECONDS", "1800"))
+
 # ─────────────────────────────────────────────────────────────
 # CELERY BACKGROUND WORKER CONFIGURATION
 # ─────────────────────────────────────────────────────────────
@@ -362,6 +373,61 @@ CELERY_TASK_ACKS_LATE = True
 
 # Limits active worker prefetching to prevent RAM spikes on large media transcodes
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# The beat schedule: ONE named entry per periodic job, run by the single `celery_beat` service in docker-compose
+# (config/celery.py holds no schedule of its own). Add the next job here under its own name; 11-D reuses this beat.
+# `crontab` runs in CELERY_TIMEZONE (UTC): 18:25 UTC is 00:25 in Asia/Kathmandu (UTC+5:45, no daylight saving), just after midnight,
+# so the day the job counts has just changed. What a "day" means inside the job is BILLING_TIME_ZONE, not this hour.
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    'sweep-expired-subscriptions': {
+        'task': 'apps.subscriptions.tasks.sweep_expired_subscriptions',
+        'schedule': crontab(minute='*/15'),  # every 15 minutes
+    },
+    # Phase 4 (F-30 storage-leak fix) — hard-deletes galleries past their
+    # trash retention window (see Gallery.trashed_at / GALLERY_TRASH_RETENTION_DAYS).
+    # Daily is plenty: this is a retention-window sweep, not a
+    # time-sensitive gate like the subscription check above.
+    'purge-trashed-galleries': {
+        'task': 'apps.galleries.tasks.purge_trashed_galleries',
+        'schedule': crontab(hour=3, minute=0),  # once daily, off-peak
+    },
+    # Phase 4 (auth hardening) — purges expired ClientSession rows past
+    # CLIENT_SESSION_TTL_DAYS. See apps/clients/tasks.py.
+    'purge-expired-client-sessions': {
+        'task': 'apps.clients.tasks.purge_expired_client_sessions',
+        'schedule': crontab(hour=3, minute=15),  # staggered after the gallery purge above
+    },
+    # Phase 4 (DB cleanup) — trims DownloadLog rows past
+    # DOWNLOAD_LOG_RETENTION_DAYS. Purely operational housekeeping.
+    'purge-old-download-logs': {
+        'task': 'apps.clients.tasks.purge_old_download_logs',
+        'schedule': crontab(hour=3, minute=30, day_of_week='sunday'),  # weekly
+    },
+    # Prepared gallery/set ZIPs: deletes expired jobs (7-day links) and their
+    # stored files. Only download_jobs/ in private storage -- never originals.
+    'purge-expired-download-jobs': {
+        'task': 'apps.clients.tasks.purge_expired_download_jobs',
+        'schedule': crontab(hour=3, minute=45),  # once daily, off-peak
+    },
+    # Dashboard-bell housekeeping: notifications are pointers, not history.
+    'purge-old-notifications': {
+        'task': 'apps.users.tasks.purge_old_notifications',
+        'schedule': crontab(hour=4, minute=30),  # daily, off-peak
+    },
+    # Phase 4 (DB cleanup, "token blacklist growth") — flushes expired
+    # rows from simplejwt's OutstandingToken/BlacklistedToken tables,
+    # which otherwise grow forever. See apps/users/tasks.py.
+    'flush-expired-jwt-tokens': {
+        'task': 'apps.users.tasks.flush_expired_jwt_tokens',
+        'schedule': crontab(hour=4, minute=0, day_of_week='sunday'),  # weekly
+    },
+    "subscription-lifecycle-daily": {
+        "task": "apps.subscriptions.tasks.run_subscription_lifecycle",
+        "schedule": crontab(hour=18, minute=25),
+    },
+}
 
 # Web Size derivatives (apps/clients/web_size.py) are encoded by their own
 # queue so the CPU they may use is bounded by that worker's --concurrency
