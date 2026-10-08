@@ -723,6 +723,21 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
                 })
         return data
 
+    @staticmethod
+    def _hash(raw_password):
+        return bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    @classmethod
+    def hash_submitted_password(cls, data):
+        """
+        (plaintext, bcrypt hash) of the password a request body submits, or None.
+        Lets the view run bcrypt before it takes the gallery row lock; update()
+        uses the hash only when the validated password is that same plaintext.
+        """
+        raw = data.get('password') if hasattr(data, 'get') else None
+        raw = raw.strip() if isinstance(raw, str) else ''
+        return (raw, cls._hash(raw)) if raw else None
+
     def update(self, instance, validated_data):
         """
         Updates the gallery instance safely. If a new password is submitted,
@@ -747,9 +762,12 @@ class GalleryUpdateSerializer(serializers.ModelSerializer):
         before = access_snapshot(instance)
 
         if raw_password:
-            instance.password_hash = bcrypt.hashpw(
-                raw_password.encode('utf-8'), bcrypt.gensalt()
-            ).decode('utf-8')
+            # 7G: GalleryDetailView hashes before it locks the row (hash_submitted_password);
+            # hashing here is only for a caller that did not, or a different value.
+            hashed_from, password_hash = self.context.get('password_hash') or ('', None)
+            if not password_hash or hashed_from != raw_password:
+                password_hash = self._hash(raw_password)
+            instance.password_hash = password_hash
         elif not validated_data.get('is_password_protected', instance.is_password_protected):
             instance.password_hash = None
 

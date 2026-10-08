@@ -283,7 +283,7 @@ def record_pin_use(gallery):
     from apps.galleries.models import Gallery
 
     with transaction.atomic():
-        fresh = Gallery.objects.select_for_update().only(
+        fresh = Gallery.objects.select_for_update(no_key=True).only(
             'id', 'design_settings', 'download_pin_hash',
         ).get(pk=gallery.pk)
         if (fresh.download_pin_hash or '') != (gallery.download_pin_hash or ''):
@@ -429,7 +429,9 @@ def read_download_token(token, gallery):
 def issue_job_link_token(job, gallery):
     """
     The key in the "your photos are ready" link (/download/file/{job}#key=...;
-    in the URL fragment since 7F, so it never reaches a server log).
+    in the URL fragment since 7F, so opening the link sends it to no server).
+    The page sends it to the API in the X-Download-Link-Key header (7G), never
+    in a query string, which every access log on the way would record.
     Bound to ONE job of ONE gallery and nothing else: it carries no email and
     no PIN, never authorizes another job, and is only ever handed out by the
     authorized prepare POST (or the ready email built from that job). It does

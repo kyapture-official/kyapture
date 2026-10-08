@@ -294,7 +294,8 @@ export const clientsApi = {
    * instead of keeping an old URL around.
    *
    * Authorized by `linkToken` (the key in the job's page URL, bound to that one
-   * job: no email / PIN asked again).
+   * job: no email / PIN asked again). 7G: sent in the X-Download-Link-Key
+   * header, never in the query string (a query string lands in access logs).
    *
    * @returns {Promise<{ state: 'preparing'|'ready'|'failed', files: Array<{name: string, size_bytes: number, url: string}>, will_email?: boolean, error?: string, code?: string }>}
    */
@@ -303,10 +304,10 @@ export const clientsApi = {
     const path = `${buildGalleryPath(username, slug)}download-jobs/${encodeURIComponent(jobId)}/`
     const { linkToken, token, signal } = opts
 
-    const params = {}
-    if (linkToken) params.link_token = linkToken
-    const config = { signal, params }
-    if (token) config.headers = { Authorization: `Bearer ${token}` }
+    const headers = {}
+    if (linkToken) headers['X-Download-Link-Key'] = linkToken
+    if (token) headers.Authorization = `Bearer ${token}`
+    const config = { signal, headers }
 
     try {
       const res = await api.get(path, config)

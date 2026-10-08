@@ -58,8 +58,8 @@ class PinCounterLockTests(TransactionTestCase):
         return Gallery.objects.get(pk=self.gallery.pk).design_settings
 
     def use_pin(self, ip='192.0.2.1'):
-        # One address per visitor: the per-client lockout (5 tries, counted before the
-        # check since 7F F6) is not what these tests are about.
+        # 7G (7R-2 R2): every visitor shares one address again. 7F gave each thread its
+        # own, because right PINs in flight together used to set the per-client lock.
         return APIClient(REMOTE_ADDR=ip).post(self.access_url, {'email': 'c@example.com', 'pin': PIN}, format='json')
 
     def owner_patch(self, body):
@@ -76,7 +76,7 @@ class PinCounterLockTests(TransactionTestCase):
         def worker(i):
             try:
                 barrier.wait()
-                response = self.use_pin(ip=f'198.51.100.{i + 1}')
+                response = self.use_pin()
                 with lock:
                     codes.append(response.status_code)
             finally:

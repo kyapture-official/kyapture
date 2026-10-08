@@ -92,6 +92,11 @@ CORS_ALLOW_CREDENTIALS = True
 # `Retry-After` on a 503 web_size_preparing, so that header must be exposed.
 CORS_EXPOSE_HEADERS = ["Retry-After"]
 
+# 7G (7R-2 R3): the prepared-download page sends its job key in this request
+# header, never in the query string (a query string lands in access logs).
+from corsheaders.defaults import default_headers as _cors_default_headers  # noqa: E402
+CORS_ALLOW_HEADERS = (*_cors_default_headers, "x-download-link-key")
+
 # REST Framework Configuration (Versioned globally)
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -197,6 +202,10 @@ GATE_CLIENT_MAX_FAILURES = int(os.getenv("GATE_CLIENT_MAX_FAILURES", "5"))
 GATE_CLIENT_WINDOW_SECONDS = int(os.getenv("GATE_CLIENT_WINDOW_SECONDS", str(15 * 60)))
 GATE_GALLERY_MAX_FAILURES = int(os.getenv("GATE_GALLERY_MAX_FAILURES", "50"))
 GATE_GALLERY_WINDOW_SECONDS = int(os.getenv("GATE_GALLERY_WINDOW_SECONDS", str(60 * 60)))
+# 7G: a try that would exceed GATE_CLIENT_MAX_FAILURES counting the tries still in
+# flight from the same address waits up to this long for them (guests behind one NAT
+# typing the right value together), then gets a 429 that sets no lock.
+GATE_INFLIGHT_WAIT_SECONDS = float(os.getenv("GATE_INFLIGHT_WAIT_SECONDS", "5"))
 
 # Django admin login (apps/core/admin_login.py): failures per address and per
 # account before the form is locked for the rest of the window.
@@ -375,6 +384,10 @@ DOWNLOAD_ACCESS_TTL_SECONDS = int(os.getenv("DOWNLOAD_ACCESS_TTL_SECONDS", str(2
 # private storage for it — lives this long (7 days), then the daily purge task
 # deletes both. Its file links work, repeatedly, until then.
 DOWNLOAD_JOB_TTL_SECONDS = int(os.getenv("DOWNLOAD_JOB_TTL_SECONDS", str(7 * 24 * 60 * 60)))
+# 7G (7R-2 R3): the job key is read from the X-Download-Link-Key header only. A
+# `?link_token=` query (pages built before 7G) is refused with 400, unless this
+# transition flag is set while old pages are still open. Off by default.
+DOWNLOAD_LINK_KEY_QUERY_FALLBACK = os.getenv("DOWNLOAD_LINK_KEY_QUERY_FALLBACK", "false").lower() == "true"
 # How long one signed file URL (handed out by the job-status endpoint) works.
 # It is bound to ONE file of ONE job. 7-B: one hour, not the job's week: the
 # ready page asks the status endpoint for a fresh URL on every click (and the

@@ -250,8 +250,13 @@ class GalleryDetailView(APIView):
         # the latest stored design_settings and a public write to the same row
         # (the "Limit PIN Usage" counter, apps/clients/download_access.py
         # ::record_pin_use) waits instead of being overwritten, or overwriting.
+        # 7G (7R-2 R1): FOR NO KEY UPDATE, which writers of this row still queue
+        # behind but child-row inserts (assets, sessions; their FK check takes
+        # FOR KEY SHARE at commit) do not, so a publish no longer deadlocks with
+        # an upload. A new password is hashed (bcrypt) before the lock is taken.
+        password_hash = GalleryUpdateSerializer.hash_submitted_password(request.data)
         with transaction.atomic():
-            locked = Gallery.objects.select_for_update().filter(
+            locked = Gallery.objects.select_for_update(no_key=True).filter(
                 slug=slug, photographer=request.user, is_active=True,
             ).values_list('pk', flat=True).first()
             if locked is None:
@@ -259,9 +264,9 @@ class GalleryDetailView(APIView):
                     {'error': 'Gallery not found.'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            return self._update(request, slug)
+            return self._update(request, slug, password_hash)
 
-    def _update(self, request, slug):
+    def _update(self, request, slug, password_hash=None):
         gallery = self.get_object(slug, request.user)
         if not gallery:
             return Response(
@@ -273,7 +278,7 @@ class GalleryDetailView(APIView):
             gallery,
             data=request.data,
             partial=True,
-            context={'request': request}
+            context={'request': request, 'password_hash': password_hash}
         )
         # Captured before save() mutates the instance, to detect a watermark change.
         watermark_before = _watermark_state(gallery)
@@ -281,7 +286,10 @@ class GalleryDetailView(APIView):
         if serializer.is_valid():
             updated_gallery = serializer.save()
             if updated_gallery.is_published and not was_published:
-                notify_published(updated_gallery)
+                # 7G: after commit, outside the gallery lock (the notification row's
+                # FK check waits for the photographer row an upload may hold), and
+                # never for a save that rolls back.
+                transaction.on_commit(lambda g=updated_gallery: notify_published(g))
             if _watermark_state(updated_gallery) != watermark_before:
                 # Existing READY images keep the derivatives they have until
                 # this background job re-applies the new settings; it never
@@ -623,7 +631,7 @@ class GallerySetDownloadPinView(APIView):
         # the lock), so a PIN use in flight can neither be lost nor write the
         # old count back.
         with transaction.atomic():
-            gallery = Gallery.objects.select_for_update().get(pk=gallery.pk)
+            gallery = Gallery.objects.select_for_update(no_key=True).get(pk=gallery.pk)
             design_settings = dict(gallery.design_settings) if isinstance(gallery.design_settings, dict) else {}
             privacy = dict(design_settings.get('privacy')) if isinstance(design_settings.get('privacy'), dict) else {}
             privacy['pin_use_count'] = 0

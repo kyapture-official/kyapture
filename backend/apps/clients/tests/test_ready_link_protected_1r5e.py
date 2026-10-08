@@ -74,7 +74,7 @@ class SignedLinkWorksWithoutUnlockTests(ProtectedGalleryBase):
     def test_ready_page_and_zip_open_from_the_key_alone(self):
         job, key = self.make_job()
         browser = self.fresh()
-        ready = browser.get(self.status_url(job), {'link_token': key})
+        ready = browser.get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key)
         self.assertEqual(ready.status_code, status.HTTP_200_OK, ready.data)
         self.assertEqual(ready.data['state'], 'ready')
         self.assertEqual(ready.data['files'][0]['name'], 'flow-gallery-photo-download-1of1.zip')
@@ -84,7 +84,7 @@ class SignedLinkWorksWithoutUnlockTests(ProtectedGalleryBase):
 
     def test_the_response_exposes_only_the_jobs_files_and_a_header(self):
         job, key = self.make_job()
-        ready = self.fresh().get(self.status_url(job), {'link_token': key})
+        ready = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key)
         self.assertEqual(
             set(ready.data), {'state', 'files', 'expires_at', 'will_email', 'gallery_title', 'studio'})
         self.assertEqual(ready.data['gallery_title'], 'Flow')
@@ -100,7 +100,7 @@ class SignedLinkWorksWithoutUnlockTests(ProtectedGalleryBase):
         job, key = self.make_job()
         denied = self.fresh().get(self.status_url(job))
         self.assertEqual((denied.status_code, denied.data['code']), (401, 'session_required'))
-        file_url = self.fresh().get(self.status_url(job), {'link_token': key}).data['files'][0]['url']
+        file_url = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key).data['files'][0]['url']
         denied_file = self.fresh().get(file_url.split('?')[0])
         self.assertEqual((denied_file.status_code, denied_file.data['code']), (401, 'session_required'))
 
@@ -109,7 +109,7 @@ class SignedLinkWorksWithoutUnlockTests(ProtectedGalleryBase):
             job, _ = self.make_job(email='mailed@example.com')
         match = re.search(rf'/download/file/{job.id}#key=(\S+)', mail.outbox[-1].body)
         self.assertIsNotNone(match)
-        opened = self.fresh().get(self.status_url(job), {'link_token': match.group(1)})
+        opened = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=match.group(1))
         self.assertEqual(opened.status_code, 200, opened.data)
 
 
@@ -117,15 +117,15 @@ class RefusedKeysTests(ProtectedGalleryBase):
     def test_forged_and_empty_keys_read_as_not_found(self):
         job, key = self.make_job()
         for bad in ('', 'garbage', key[:-3] + 'abc'):
-            denied = self.fresh().get(self.status_url(job), {'link_token': bad})
+            denied = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=bad)
             self.assertEqual((denied.status_code, denied.data['code']), (404, 'download_not_found'), bad)
 
     def test_another_jobs_key_is_refused(self):
         job_a, key_a = self.make_job(resolution='download')
         job_b, key_b = self.make_job(resolution='web', email='other@example.com')
-        denied = self.fresh().get(self.status_url(job_b), {'link_token': key_a})
+        denied = self.fresh().get(self.status_url(job_b), HTTP_X_DOWNLOAD_LINK_KEY=key_a)
         self.assertEqual((denied.status_code, denied.data['code']), (404, 'download_not_found'))
-        self.assertEqual(self.fresh().get(self.status_url(job_b), {'link_token': key_b}).status_code, 200)
+        self.assertEqual(self.fresh().get(self.status_url(job_b), HTTP_X_DOWNLOAD_LINK_KEY=key_b).status_code, 200)
 
     def test_another_galleries_key_is_refused(self):
         job, key = self.make_job()
@@ -139,13 +139,13 @@ class RefusedKeysTests(ProtectedGalleryBase):
             files=job.files, expires_at=job.expires_at,
         )
         denied = self.fresh().get(
-            f'/api/v1/public/{self.username}/other-gallery/download-jobs/{moved.id}/', {'link_token': key})
+            f'/api/v1/public/{self.username}/other-gallery/download-jobs/{moved.id}/', HTTP_X_DOWNLOAD_LINK_KEY=key)
         self.assertEqual((denied.status_code, denied.data['code']), (404, 'download_not_found'))
 
     def test_a_forged_or_other_job_file_link_is_refused(self):
         job, key = self.make_job()
         other_job, _ = self.make_job(resolution='web', email='other@example.com')
-        url = self.fresh().get(self.status_url(job), {'link_token': key}).data['files'][0]['url']
+        url = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key).data['files'][0]['url']
         file_token = url.split('file_token=')[1]
         forged = self.fresh().get(f'{self.base}download-jobs/{job.id}/files/0/', {'file_token': file_token[:-3] + 'abc'})
         self.assertEqual((forged.status_code, forged.data['code']), (404, 'download_not_found'))
@@ -161,19 +161,19 @@ class RefusedKeysTests(ProtectedGalleryBase):
 
     def test_an_expired_file_link_and_an_expired_job(self):
         job, key = self.make_job()
-        url = self.fresh().get(self.status_url(job), {'link_token': key}).data['files'][0]['url']
+        url = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key).data['files'][0]['url']
         with override_settings(DOWNLOAD_FILE_URL_TTL_SECONDS=-1):
             gone = self.fresh().get(url)
         self.assertEqual((gone.status_code, gone.data['code']), (403, 'download_link_expired'))
         DownloadJob.objects.filter(pk=job.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
-        expired = self.fresh().get(self.status_url(job), {'link_token': key})
+        expired = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key)
         self.assertEqual((expired.data['state'], expired.data['code']), ('failed', 'download_expired'))
         self.assertEqual(self.fresh().get(url).status_code, status.HTTP_410_GONE)
 
     def test_downloads_switched_off_still_refuses_the_key(self):
         job, key = self.make_job()
         Gallery.objects.filter(pk=self.gallery.pk).update(allow_download=False)
-        denied = self.fresh().get(self.status_url(job), {'link_token': key})
+        denied = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key)
         self.assertEqual((denied.status_code, denied.data['code']), (403, 'downloads_disabled'))
 
 
@@ -214,7 +214,7 @@ class NothingUpstreamIsRelaxedTests(ProtectedGalleryBase):
         design = {'downloads': {'restrict_contacts': True, 'allowed_emails': ['client@example.com']}}
         Gallery.objects.filter(pk=self.gallery.pk).update(design_settings=design)
         job, key = self.make_job()
-        url = self.fresh().get(self.status_url(job), {'link_token': key}).data['files'][0]['url']
+        url = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key).data['files'][0]['url']
         design['downloads']['allowed_emails'] = ['someone-else@example.com']
         Gallery.objects.filter(pk=self.gallery.pk).update(design_settings=design)
         self.assertGreaterEqual(self.fresh().get(url).status_code, 400)

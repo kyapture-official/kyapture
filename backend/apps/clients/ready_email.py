@@ -10,7 +10,10 @@ to the visitor who asked for it, at most once per job:
     Link     Page 4 of the download flow, /g/{user}/{slug}/download/file/{job}#key=...,
              an absolute URL on settings.FRONTEND_URL (the public app origin). 7F: the
              key is in the URL fragment, which a browser never sends to a server, so
-             it is in no access log and no Referer (it lives as long as the job).
+             opening the link puts it in no access log and no Referer (it lives as
+             long as the job). The page then sends it to the API in the
+             X-Download-Link-Key header (7G; before 7G it went in `?link_token=` and
+             was logged in full).
 
 Abuse control: at most DOWNLOAD_READY_EMAIL_LIMIT_PER_* sends per hour for one
 recipient address, one requesting IP and one gallery. Over a limit the email is

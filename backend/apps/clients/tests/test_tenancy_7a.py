@@ -205,23 +205,23 @@ class ShareLinksNeverBypassGatesTests(ProtectedGalleryBase):
 
     def test_the_ready_link_works_before_any_change(self):
         job, key = self.make_job()
-        self.assertEqual(self.fresh().get(self.status_url(job), {'link_token': key}).status_code, 200)
+        self.assertEqual(self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key).status_code, 200)
 
     def test_the_ready_link_stops_after_a_password_change(self):
         job, key = self.make_job()
         self.change_password()
-        response = self.fresh().get(self.status_url(job), {'link_token': key})
+        response = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND, getattr(response, 'data', None))
 
     def test_the_ready_link_stops_after_a_pin_change(self):
         job, key = self.make_job()
         self.change_pin()
-        response = self.fresh().get(self.status_url(job), {'link_token': key})
+        response = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND, getattr(response, 'data', None))
 
     def test_a_minted_file_link_stops_after_a_password_change(self):
         job, key = self.make_job()
-        file_url = self.fresh().get(self.status_url(job), {'link_token': key}).data['files'][0]['url']
+        file_url = self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key).data['files'][0]['url']
         self.change_password()
         self.assertNotEqual(self.fresh().get(file_url).status_code, status.HTTP_200_OK)
 
@@ -229,7 +229,7 @@ class ShareLinksNeverBypassGatesTests(ProtectedGalleryBase):
         job, key = self.make_job()
         self.gallery.is_password_protected = False
         self.gallery.save(update_fields=['is_password_protected'])
-        self.assertEqual(self.fresh().get(self.status_url(job), {'link_token': key}).status_code, 200)
+        self.assertEqual(self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key).status_code, 200)
 
     def test_an_expired_or_unpublished_gallery_refuses_the_link(self):
         job, key = self.make_job()
@@ -237,7 +237,7 @@ class ShareLinksNeverBypassGatesTests(ProtectedGalleryBase):
             original = getattr(self.gallery, field)
             setattr(self.gallery, field, value)
             self.gallery.save(update_fields=[field])
-            self.assertEqual(self.fresh().get(self.status_url(job), {'link_token': key}).status_code, 404, field)
+            self.assertEqual(self.fresh().get(self.status_url(job), HTTP_X_DOWNLOAD_LINK_KEY=key).status_code, 404, field)
             setattr(self.gallery, field, original)
             self.gallery.save(update_fields=[field])
 

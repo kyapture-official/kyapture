@@ -549,7 +549,9 @@ class NotificationEventTests(Base):
         self.client.post(url, {'is_published': True}, format='json')            # already published -> nothing new
         self.client.post(url, {'is_published': False}, format='json')           # unpublishing -> nothing
         self.assertEqual(self.mine(kind='published').count(), 1)
-        self.client.patch(f'/api/v1/galleries/{self.gallery.slug}/', {'is_published': True}, format='json')
+        # 7G: the PATCH path records it after commit (transaction.on_commit); a TestCase never commits.
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.patch(f'/api/v1/galleries/{self.gallery.slug}/', {'is_published': True}, format='json')
         self.assertEqual(self.mine(kind='published').count(), 2)                # the PATCH path fires too
 
     def test_publish_rejects_non_boolean_values_instead_of_storing_them_as_true(self):

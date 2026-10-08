@@ -67,7 +67,7 @@ class JobBase(DownloadFlowBase):
         return DownloadJob.objects.get(pk=response.data['job_id']), response
 
     def status_by_key(self, job, key, **extra):
-        return self.client.get(f'{self.base}download-jobs/{job.id}/', {'link_token': key, **extra})
+        return self.client.get(f'{self.base}download-jobs/{job.id}/', extra, HTTP_X_DOWNLOAD_LINK_KEY=key)
 
 
 class JobLinkTokenTests(JobBase):
@@ -114,7 +114,7 @@ class JobLinkTokenTests(JobBase):
         )
         denied = self.client.get(
             f'/api/v1/public/{self.username}/other-gallery/download-jobs/{moved.id}/',
-            {'link_token': response.data['link_token']},
+            HTTP_X_DOWNLOAD_LINK_KEY=response.data['link_token'],
         )
         self.assertEqual((denied.status_code, denied.data['code']), (404, 'download_not_found'))
 
@@ -177,7 +177,7 @@ class SevenDayLifetimeTests(JobBase):
         key = response.data['link_token']
         DownloadJob.objects.filter(pk=job.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
         self.assertEqual(purge_expired_jobs(), 1)
-        gone = self.client.get(f'{self.base}download-jobs/{job.id}/', {'link_token': key})
+        gone = self.client.get(f'{self.base}download-jobs/{job.id}/', HTTP_X_DOWNLOAD_LINK_KEY=key)
         self.assertEqual((gone.status_code, gone.data['code']), (404, 'download_not_found'))
 
 

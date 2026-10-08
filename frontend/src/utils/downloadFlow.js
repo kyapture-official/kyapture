@@ -143,8 +143,10 @@ export function blockedMessage(code, studio, fallback = '') {
 
 /**
  * The prepared download's own page. The key is bound to that one job (no email / PIN asked again).
- * 7F: it travels in the URL fragment (#key=), which the browser never sends to a server, so it
- * is in no access log and no Referer.
+ * 7F: it travels in the URL fragment (#key=), which the browser never sends to a server, so the
+ * page URL puts it in no access log and no Referer. 7G: the page's status polls send it in the
+ * X-Download-Link-Key request header (clientsApi.getDownloadJob), never in a query string;
+ * request headers are not in the default access log formats.
  */
 export function jobPagePath(username, slug, jobId, key) {
   const base = `/g/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/download/file/${encodeURIComponent(jobId)}`

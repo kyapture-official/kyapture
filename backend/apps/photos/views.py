@@ -317,7 +317,9 @@ class PhotoListUploadView(APIView):
                     # The decision that counts: under a lock on the account's own row, against
                     # usage read now, so two uploads running at once cannot both claim the
                     # same free space. The check above only spares an ffprobe for a full account.
-                    type(photographer).objects.select_for_update().only('pk').get(pk=photographer.pk)
+                    # 7G: NO KEY UPDATE still queues uploads behind each other, but not the
+                    # photographer's other rows (a notification insert) behind the whole batch.
+                    type(photographer).objects.select_for_update(no_key=True).only('pk').get(pk=photographer.pk)
                     locked_metrics = get_user_subscription_metrics(photographer)
                     image_files, video_files, late_refused = _split_by_storage(
                         locked_metrics, image_files, video_files)

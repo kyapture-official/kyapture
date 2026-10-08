@@ -646,6 +646,8 @@ class GalleryUnlockView(APIView):
 
         if 'password' in serializer.errors and as_clean_str(request.data.get('password')):
             lockout.record_failure(gallery, lockout.PASSWORD, request)
+        elif as_clean_str(request.data.get('password')):
+            lockout.cancel_attempt(gallery, lockout.PASSWORD, request)      # 7G: no verdict, not in flight
         return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
 
 
@@ -1537,17 +1539,37 @@ class DownloadJobGateMixin:
         return gallery, job, None
 
 
+LINK_KEY_HEADER = 'HTTP_X_DOWNLOAD_LINK_KEY'
+
+
+def _job_link_key(request):
+    """
+    7G (7R-2 R3): the job key from the X-Download-Link-Key header, or None. A key
+    in the query string (`?link_token=`, pages built before 7G) is read only while
+    settings.DOWNLOAD_LINK_KEY_QUERY_FALLBACK is on: a query string is written to
+    every access log on the way (proxy, runserver, gunicorn).
+    """
+    header = request.META.get(LINK_KEY_HEADER)
+    if header is not None:
+        return header
+    if settings.DOWNLOAD_LINK_KEY_QUERY_FALLBACK:
+        return request.query_params.get('link_token')
+    return None
+
+
 class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
     """
     GET /api/v1/public/{username}/{slug}/download-jobs/{job_id}/
-        ?link_token=<the job's own key>   |   ?download_token=<from POST .../download-access/>
-        [&token=<gallery unlock token>]
+        header X-Download-Link-Key: <the job's own key>   |   ?download_token=<from POST .../download-access/>
+        [Authorization: Bearer <gallery unlock token>]
 
     -> { state: preparing | ready | failed, files: [{name, size_bytes, url}], will_email }
 
-    Two ways in. `link_token` is the key in the ready page's URL / the ready
-    email: it is bound to THIS job only, so opening the link needs no email or
-    PIN again; any other job's key, or a forged one, reads as "not found".
+    Two ways in. The link key is the key in the ready page's URL fragment / the
+    ready email: it is bound to THIS job only, so opening the link needs no email
+    or PIN again; any other job's key, or a forged one, reads as "not found". 7G:
+    it travels in a request header, never in the query string (`?link_token=` is
+    refused with 400 unless DOWNLOAD_LINK_KEY_QUERY_FALLBACK is on).
     Otherwise the caller must hold the download access token that created the
     job (same email); another visitor's token reads as "not found". When ready,
     each file's `url` is a freshly signed link - poll again for a new one
@@ -1555,21 +1577,26 @@ class PublicDownloadJobStatusView(DownloadJobGateMixin, APIView):
     """
 
     def holds_job_grant(self, request, job, gallery):
-        link_token = request.query_params.get('link_token')
+        link_token = _job_link_key(request)
         return link_token is not None and job_link_token_is_valid(link_token, job, gallery)
 
     def grant_failure(self, request, job, gallery):
         # A key was presented but is forged / for another job or gallery: the friendly "expired" page.
-        if request.query_params.get('link_token') is None:
+        if _job_link_key(request) is None:
             return None
         return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)
 
     def get(self, request, username, slug, job_id):
+        if 'link_token' in request.query_params and not settings.DOWNLOAD_LINK_KEY_QUERY_FALLBACK:
+            return error_response(
+                'This page is out of date. Reload it to see your download.', 'link_key_in_query',
+                status.HTTP_400_BAD_REQUEST,
+            )
         gallery, job, error = self.resolve_job(request, username, slug, job_id)
         if error:
             return error
 
-        link_token = request.query_params.get('link_token')
+        link_token = _job_link_key(request)
         if link_token is not None:
             if not job_link_token_is_valid(link_token, job, gallery):
                 return error_response('Download not found.', 'download_not_found', status.HTTP_404_NOT_FOUND)

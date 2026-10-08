@@ -388,7 +388,7 @@ class ReadyLinkLifetimeTests(JobBase):
         with mock.patch("django.core.signing.time.time", return_value=now + 6 * 24 * 3600):
             stale = self.client.get(url)
             self.assertEqual((stale.status_code, stale.data["code"]), (403, "download_link_expired"))
-            fresh = self.client.get(f"{self.base}download-jobs/{job.id}/", {"link_token": key}).data["files"][0]["url"]
+            fresh = self.client.get(f"{self.base}download-jobs/{job.id}/", HTTP_X_DOWNLOAD_LINK_KEY=key).data["files"][0]["url"]
             self.assertEqual(self.client.get(fresh).status_code, 200)
         DownloadJob.objects.filter(pk=job.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
         self.assertEqual(self.client.get(fresh).status_code, 410)
