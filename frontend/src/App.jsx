@@ -18,6 +18,8 @@ const FavoritesPage = lazy(() => import("./pages/dashboard/FavoritesPage"));
 const SettingsPage = lazy(() => import("./pages/dashboard/SettingsPage"));
 const BillingPage = lazy(() => import("./pages/subscription/BillingPage"));
 const FeedbackInboxPage = lazy(() => import("./pages/dashboard/FeedbackInboxPage"));
+const StaffUsersPage = lazy(() => import("./pages/dashboard/StaffUsersPage"));
+const StaffAuditPage = lazy(() => import("./pages/dashboard/StaffAuditPage"));
 // Gallery workspace (own shell — no DashboardLayout)
 const GalleryWorkspaceLayout = lazy(() => import("./pages/dashboard/GalleryWorkspaceLayout"));
 const GalleryPhotosPage = lazy(() => import("./pages/dashboard/GalleryPhotosPage"));
@@ -95,6 +97,9 @@ export default function App() {
               <Route path="billing" element={<BillingPage />} />
               {/* Staff inbox: the link is shown to staff only, the API enforces it (403) */}
               <Route path="feedback" element={<FeedbackInboxPage />} />
+              {/* 7.5-A staff area: same rule, the API answers 403 to anyone who is not staff */}
+              <Route path="staff/users" element={<StaffUsersPage />} />
+              <Route path="staff/audit" element={<StaffAuditPage />} />
             </Route>
 
             {/* Gallery workspace — full takeover, its own sidebar/chrome.

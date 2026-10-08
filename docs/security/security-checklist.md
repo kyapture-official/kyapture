@@ -198,7 +198,7 @@ Status legend:
 | Check | Status | Evidence / finding |
 |---|---|---|
 | No secrets/tokens in app logs | ✅ | Reviewed logger calls ([secrets.md](secrets.md) §6) |
-| Security events logged (failed login/unlock/PIN, 429s, admin actions) | ❌ | SEC-22, row 97 (15-A). Only the gallery lockout raises a bell notification to the photographer (7-B) |
+| Security events logged (failed login/unlock/PIN, 429s, admin actions) | ⚠️ | SEC-22, row 97 (15-A). Since 7.5-A the audit log records lockouts, password changes/resets and staff actions (row 162 lists what is not covered); there is still no log shipping or alerting |
 | Central log shipping, retention, alerting | ❌ | Local file + console only (`base.py` `LOGGING`; row 97, 15-A) |
 | Error tracking | ❌ | None in requirements (row 97, 15-A) |
 | Worker/queue health alerting | ❌ | Accepted row 66 points to 11-D / 15-B |
@@ -213,7 +213,9 @@ Status legend:
 | MFA for staff | ❌ | Plan in secrets.md §7.2 (row 90, 13-C) |
 | Admin path/network restricted | ❌ | Default `/admin/` (`config/urls.py`; row 90, 15-A) |
 | Hashes and tokens hidden in admin forms | ✅ | Excluded (7-B) |
-| Payment approval audited | ⚠️ | `verified_by` stored (`apps/subscriptions/views.py`); no alert/log stream (row 97, 15-A) |
+| Payment approval audited | ✅ | `verified_by` stored, and since 7.5-A an append-only `staff_audit_log` row per review and per queue read; no alert/log stream (row 97, 15-A) |
+| Staff actions and security events in an append-only audit log | ✅ | 7.5-A: `StaffAuditLog` (ORM, admin and DB trigger refuse change/delete); suspend, reactivate, list/lookup/audit reads, feedback status, payment review, password change/reset, login lockouts, gallery gate lock. Not covered: row 162 |
+| Suspended account: login, tokens and public galleries stop | ✅ | 7.5-A: `revoke_all_sessions` + `photographer__is_active` on every public lookup; one test per path (row 131) |
 
 ## 17. Deployment / infrastructure
 

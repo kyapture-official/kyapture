@@ -100,7 +100,7 @@ Owner responses include `original_url` for every asset: a 1-hour signed URL to a
 | Job link / file tokens | Django `signing`, bound to job + gallery (+ index) | `download_access.py:389-487` | Bearer links in URLs and email by design |
 | Favorites identity | client key (`client_uid`, else the unlock token's hash); an email is only a label (7-A) | `apps/clients/views.py:649-699`, `favorite_lists.py:87-128` | A typed email no longer links two devices (row 129, accepted) |
 | Plan entitlement | server-side `require_feature`, metrics, limits under row lock | `apps/users/serializers.py:86-111`, `apps/photos/views.py:186-255` | Fixed in 7-B (rows 43, 44) |
-| Staff | `is_staff` → Django admin, `IsAdminUser` payment API, unlimited plan | `apps/subscriptions/views.py:109, 154, 189`, `apps/galleries/views.py:106`, `apps/photos/views.py:192` | No MFA (row 90); admin login lock since 7-B |
+| Staff | `is_staff` → Django admin, `IsAdminUser` payment API, the staff area `/api/v1/staff/` (7.5-A: users list, suspend / reactivate, audit log; `IsStaffUser`, throttled, audited), unlimited plan | `apps/subscriptions/views.py:109, 154, 189`, `apps/galleries/views.py:106`, `apps/photos/views.py:192` | No MFA (row 90); admin login lock since 7-B |
 
 ## 5. User inputs
 
@@ -148,6 +148,7 @@ gunicorn still has the default 30 s timeout (row 72). Django's `DATA_UPLOAD_MAX_
 | Surface | Access | What it controls |
 |---|---|---|
 | Django admin `/admin/` (default path) | `is_staff` | Users (`UserAdmin`; a password set here revokes every session, 7-C), galleries and client sessions (password/PIN hashes and tokens excluded since 7-B), media assets, subscription plans, `UploadLimits`, user subscriptions, manual payments (`apps/*/admin.py`) |
+| `/api/v1/staff/users/`, `/staff/users/{id}/suspend|reactivate/`, `/staff/audit/` | `IsStaffUser` (`is_staff`, active) | 7.5-A: user list (allowlisted fields, exact-email search, 25 per page, 60/min), suspend / reactivate (reason, sessions revoked, galleries 404), append-only audit log. Not for staff targets or self. Docs: [KYAPTURE_STAFF.md](../KYAPTURE_STAFF.md) |
 | `GET /api/v1/subscriptions/admin/payments/` | `IsAdminUser` | Pending payment queue |
 | `POST /api/v1/subscriptions/payments/{uuid}/review/` | `IsAdminUser` | Approve/reject → creates/extends subscriptions (`apps/subscriptions/views.py:176-260`) |
 | `GET /api/v1/subscriptions/payments/` as staff | `is_staff` | Every user's payments with receipt URLs (`views.py:108-128`) |

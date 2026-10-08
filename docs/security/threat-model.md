@@ -607,3 +607,24 @@ row: [docs/qa-7e/results.md](../qa-7e/results.md). Summary for the release: [doc
   access-log format drops query strings (`docs/KYAPTURE_UPLOAD_LIMITS.md`). Residual risk: a shared computer's history
   keeps the unlock token up to 30 days; the dev `runserver` log prints full request lines.
 - New gap: debt row 152 (a partial `downloads` PATCH resets the keys it leaves out; owner-only, direct API only).
+
+---
+
+## 14. Chunk 7.5-A (staff area, suspension, audit log) results
+
+Design, endpoints and the audit table: [docs/KYAPTURE_STAFF.md](../KYAPTURE_STAFF.md). Browser QA: [docs/qa-7-5a/results.md](../qa-7-5a/results.md).
+
+| ID | Finding (before 7.5-A) | Result | Proof |
+|---|---|---|---|
+| S1 | A deactivated or suspended owner's published galleries stayed public: every public lookup checked the gallery, none checked the owner (debt row 131) | **Confirmed**, **fixed**: all 10 public lookups require `photographer__is_active=True`; a PREPARING ZIP ends `owner_unavailable`; the ready email is skipped; public derivative keys are rotated on suspend | `test_suspended_owner_7_5a.py`: one test per path, 200 -> 404 -> 200 through the real staff endpoints; 15 of 19 failed on the pre-change code |
+| S2 | No staff tool to suspend an account with a reason and a trace; the only switch was Django admin's `is_active` box (API tokens already stopped at once, 7-A), with no reason, no audit and no `token_version` bump | **Fixed**: `POST /staff/users/{id}/suspend/` revokes every session at once (`token_version`), needs a reason, cannot target self or staff/superuser; the admin box now revokes and audits too | `SuspendTests`, `test_switching_an_account_off_in_django_admin_is_a_suspension` |
+| S3 | A staff endpoint could leak what staff do not need (hashes, tokens, PINs, storage keys) | **Not exploitable**: the list selects an explicit column set (`.only`), the serializer is an allowlist; the SQL never contains the password column; nothing secret is reachable from any staff route | `UserListTests.test_no_secret_is_returned_anywhere`, `test_the_password_column_is_never_selected`, `test_a_row_carries_exactly_the_allowlisted_keys...` |
+| S4 | A search box can become a data dump | **Fixed by design**: one complete email, exact case-insensitive match, `%`/`_` literal, 25 per page (max 100), 60 reads per minute per staff user, no export | `test_search_is_one_exact_email_and_nothing_else`, `test_pagination_caps_the_page`, `test_the_list_is_throttled_per_staff_user`, `test_there_is_no_export_route` |
+| S5 | Staff-only routes must refuse everyone else, including a superuser who is not staff and a deactivated staff account | **Proven**: 401 anonymous, 403 normal user and non-staff superuser, 401 for a deactivated staff account's token; a refused call changes and logs nothing; every view declares `IsStaffUser` | `StaffOnlyEverywhereTests` |
+| S6 | Security events and staff actions left no durable trace (SEC-22, row 97) | **Partly fixed**: append-only `staff_audit_log` for suspend/reactivate, list/lookup/audit/queue reads, feedback status, payment review, password change and reset, admin-login and account-login lockouts, gallery gate lock. No secret in any row (tests grep the whole table); the address is the 7-B trusted-proxy value, never a header | `SecurityEventTests`, `SuspendTests.test_the_audit_ip_comes_from_the_trusted_proxy_setup_not_a_client_header`. What is NOT covered: debt row 162 |
+| S7 | An audit log that staff can edit proves nothing | **Fixed in three layers**: the ORM refuses update/delete, the admin is read-only with no actions, a PostgreSQL trigger refuses `UPDATE`/`DELETE`; rows outlive the deletion of the accounts they name | `AuditLogTests` (incl. raw SQL refused by the database) |
+| S8 | A failing audit write could break a sign-in or leave a staff action unrecorded | **Both ways closed**: security events use a savepoint and swallow the failure (the sign-in / reset still succeeds); staff actions write inside the action's transaction (no row, no change) | `test_a_failing_audit_write_never_breaks...`, `test_the_change_and_its_audit_row_commit_together` |
+| S9 | A suspended person should not learn more than a stranger | **Kept**: a wrong password still answers "Invalid email or password"; only the right password is told "suspended" | `test_a_suspended_user_cannot_sign_in` |
+
+New gaps: debt rows 162-168. Row 131 is DONE.
+
