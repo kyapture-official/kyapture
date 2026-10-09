@@ -596,6 +596,13 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "false").lower() == "true"
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "false").lower() == "true"
 
+# 7.5-D (apps/core/emailing.py): the address printed in every email footer, the Reply-To of every email that has no
+# better one (the "photos are ready" email replies to the photographer), and the ONE address that is told a payment
+# waits for review (empty = no staff email, the bell still works). Env only; nothing here is user input.
+SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@kyapture.com").strip()
+EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", "").strip()   # empty = reply to SUPPORT_EMAIL
+STAFF_ALERT_EMAIL = os.getenv("STAFF_ALERT_EMAIL", "").strip()
+
 # 7-C: how long an emailed "forgot password" link works (apps/users/password_reset.py).
 PASSWORD_RESET_TOKEN_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_MINUTES", "30"))
 

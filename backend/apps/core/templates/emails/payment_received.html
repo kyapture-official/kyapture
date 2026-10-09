@@ -1,0 +1,8 @@
+{% extends "emails/base.html" %}
+{% block preheader %}We received your payment and will review it soon.{% endblock %}
+{% block heading %}We received your payment{% endblock %}
+{% block content %}
+            <p style="margin:0 0 16px 0;">We received your payment of {{ amount }} for the {{ plan_name }} plan. It is waiting for review.</p>
+            <p style="margin:0;">Your plan has not changed yet. We will email you when the payment has been reviewed.</p>
+{% endblock %}
+{% block action %}{% include "emails/_button.html" with url=billing_url label="Open Billing" %}{% endblock %}

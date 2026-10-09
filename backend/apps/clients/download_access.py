@@ -628,11 +628,11 @@ def send_email_code(gallery, email):
     Emails a new one-time code to `email`. Returns 'sent', 'too_many' (send limit
     for this address and gallery reached) or 'failed' (mail could not be sent).
     """
-    import re
     import secrets
 
     from django.core.cache import cache
-    from django.core.mail import send_mail
+
+    from apps.core.emailing import safe_send_email
 
     key = _email_code_key(gallery, email)
     if email_code_day_limit_reached(gallery, email):
@@ -645,22 +645,17 @@ def send_email_code(gallery, email):
     cache.set(key, {'h': _code_digest(code)}, timeout=EMAIL_CODE_TTL_SECONDS)
     cache.delete(f'{key}:tries')            # a new code starts its own count of tries
     photographer = gallery.photographer
-    studio = re.sub(r'[\x00-\x1f\x7f]+', ' ', photographer.display_name or photographer.username).strip()
-    title = re.sub(r'[\x00-\x1f\x7f]+', ' ', gallery.title).strip()
-    minutes = EMAIL_CODE_TTL_SECONDS // 60
-    try:
-        send_mail(
-            f'Your download code: {code}',
-            (
-                f'Your code to download photos from "{title}" by {studio} is:\n\n    {code}\n\n'
-                f'It works for {minutes} minutes. If you did not ask to download these photos, '
-                'you can ignore this email.\n'
-            ),
-            settings.DEFAULT_FROM_EMAIL,
-            [email],
-        )
-    except Exception:
-        logger.exception('Download code email could not be sent for gallery %s', gallery.pk)
+    # 7.5-D: sent on the shared email base with a FIXED subject (the code is in the body only). It stays in the
+    # request on purpose: the answer to the visitor depends on the send result (503 when it fails), and the code
+    # is a secret that should not travel through the Celery broker as a task argument.
+    sent = safe_send_email('download_code', email, {
+        'code': code,
+        'gallery_title': gallery.title,
+        'studio': photographer.display_name or photographer.username,
+        'minutes': EMAIL_CODE_TTL_SECONDS // 60,
+    })
+    if not sent:
+        logger.error('Download code email could not be sent for gallery %s', gallery.pk)
         cache.delete(key)
         return 'failed'
     return 'sent'

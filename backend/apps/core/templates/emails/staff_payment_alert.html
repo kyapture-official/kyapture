@@ -1,0 +1,8 @@
+{% extends "emails/base.html" %}
+{% block preheader %}A payment is waiting for review.{% endblock %}
+{% block heading %}New payment to review{% endblock %}
+{% block content %}
+            <p style="margin:0 0 16px 0;">A payment is waiting for review.</p>
+            <p style="margin:0;">Payment ID: {{ payment_id }}<br>Plan: {{ plan_name }}<br>Amount: {{ amount }}</p>
+{% endblock %}
+{% block action %}{% include "emails/_button.html" with url=staff_url label="Review Payments" %}{% endblock %}

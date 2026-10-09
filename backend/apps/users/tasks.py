@@ -39,17 +39,30 @@ def flush_expired_jwt_tokens(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=120)
-def send_notification_email(self, user_id, kind, subject, body):
+def send_notification_email(self, user_id, kind, template, context):
     """
-    Delivers one photographer notification email (see apps/users/notifications.py).
-    Re-checks the user preference at send time; retries transient mail failures.
+    Delivers one photographer notification email (see apps/users/notifications.py): a shared template key
+    and a flat context, never a subject or a body. Re-checks the user preference at send time; retries
+    transient mail failures. The log line names the kind and the exception type only.
     """
     from .notifications import deliver_notification
 
     try:
-        return deliver_notification(user_id, kind, subject, body)
+        return deliver_notification(user_id, kind, template, context)
     except Exception as exc:
-        logger.exception("[send_notification_email] %s email for user %s failed", kind, user_id)
+        logger.error("[send_notification_email] %s email for user %s failed (%s)", kind, user_id, type(exc).__name__)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=120)
+def send_staff_alert_email(self, template, context):
+    """7.5-D: the "new payment to review" email to the one STAFF_ALERT_EMAIL address."""
+    from .notifications import deliver_staff_alert
+
+    try:
+        return deliver_staff_alert(template, context)
+    except Exception as exc:
+        logger.error("[send_staff_alert_email] %s failed (%s)", template, type(exc).__name__)
         raise self.retry(exc=exc)
 
 

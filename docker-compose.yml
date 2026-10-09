@@ -101,6 +101,9 @@ services:
       EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
       EMAIL_HOST: mailpit
       EMAIL_PORT: "1025"
+      # 7.5-D: footer / Reply-To address of every email, and the one address told "new payment to review".
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@kyapture.com}
+      STAFF_ALERT_EMAIL: ${STAFF_ALERT_EMAIL:-staff-alerts@kyapture.test}
     ports:
       - "8000:8000"
     depends_on:
@@ -150,6 +153,9 @@ services:
       EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
       EMAIL_HOST: mailpit
       EMAIL_PORT: "1025"
+      # 7.5-D: footer / Reply-To address of every email, and the one address told "new payment to review".
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@kyapture.com}
+      STAFF_ALERT_EMAIL: ${STAFF_ALERT_EMAIL:-staff-alerts@kyapture.test}
     depends_on:
       db:
         condition: service_healthy

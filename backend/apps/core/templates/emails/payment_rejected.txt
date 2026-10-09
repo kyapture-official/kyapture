@@ -1,0 +1,10 @@
+{% extends "emails/base.txt" %}
+{% block heading %}Your payment could not be approved{% endblock %}
+{% block content %}We could not approve your payment for the {{ plan_name }} plan. Your plan has not changed.
+{% if reason %}
+Reason: {{ reason }}
+{% endif %}
+You can submit a new receipt from Billing.{% endblock %}
+{% block action %}
+Billing: {{ billing_url }}
+{% endblock %}

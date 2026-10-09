@@ -72,8 +72,10 @@ Django admin -> Subscriptions -> **Subscription lifecycle** (one row, like Uploa
 
 An account with `is_active = False` (suspended or deactivated) gets no reminder, no bell and no mail; its downgrade still applies. A
 deleted account has no subscription row (cascade). The mails also follow the owner's existing **Payments** email preference
-(Settings -> Notifications): with it off they get the bell only. The wording is a **plain-text placeholder**: 7.5-D owns the real
-"plan expiring" template (none exists yet; debt row 179).
+(Settings -> Notifications): with it off they get the bell only. Since 7.5-D the mails are the shared templates `plan_expiring`
+("Your plan ends on <date>", sent `reminder_days` before the end) and `plan_ended` (the plan HAS ended, the account is on Free,
+files and settings kept, renewing restores the paid features), with fixed subjects, HTML and text, and dates in the billing zone
+(docs/KYAPTURE_EMAIL.md). Neither says anything about a grace period: access ended at the end date.
 
 ## 3. Running it by hand
 

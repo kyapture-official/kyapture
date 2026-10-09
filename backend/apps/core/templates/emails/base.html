@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{ subject }}</title>
+<style>
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
+  a { color: inherit; }
+  .em-text, .em-muted, .em-title { overflow-wrap: anywhere; word-break: break-word; }
+  @media (prefers-color-scheme: dark) {
+    .em-bg { background-color: #0f0f10 !important; }
+    .em-card { background-color: #1a1a1c !important; border-color: #2c2c2f !important; }
+    .em-title, .em-mark { color: #f3f3f3 !important; }
+    .em-text { color: #d2d2d5 !important; }
+    .em-muted, .em-muted a { color: #9a9a9e !important; }
+    .em-rule { border-top-color: #2c2c2f !important; }
+    .em-box { background-color: #232326 !important; color: #f3f3f3 !important; }
+    .em-btn { background-color: #f3f3f3 !important; }
+    .em-btn a { color: #1f1f23 !important; }
+  }
+  [data-ogsc] .em-title, [data-ogsc] .em-mark { color: #f3f3f3 !important; }
+  [data-ogsc] .em-text { color: #d2d2d5 !important; }
+  [data-ogsc] .em-muted { color: #9a9a9e !important; }
+  [data-ogsb] .em-bg { background-color: #0f0f10 !important; }
+  [data-ogsb] .em-card { background-color: #1a1a1c !important; }
+  [data-ogsb] .em-btn { background-color: #f3f3f3 !important; }
+  @media only screen and (max-width: 620px) {
+    .em-pad { padding-left: 22px !important; padding-right: 22px !important; }
+    .em-h1 { font-size: 22px !important; }
+    .em-outer { padding: 12px 8px !important; }
+  }
+</style>
+</head>
+<body class="em-bg" style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{% block preheader %}{{ subject }}{% endblock %}</div>
+<table role="presentation" class="em-bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f4f5;">
+  <tr>
+    <td class="em-outer" align="center" style="padding:24px 12px;">
+      <table role="presentation" class="em-card" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #e4e4e7;">
+        <tr>
+          <td class="em-pad" style="padding:28px 40px 0 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <div class="em-mark" style="font-size:15px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#1f1f23;">{{ site_name }}</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="em-pad" style="padding:28px 40px 0 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <h1 class="em-title em-h1" style="margin:0;font-size:26px;font-weight:600;line-height:1.25;color:#1f1f23;">{% block heading %}{{ subject }}{% endblock %}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td class="em-pad em-text" style="padding:16px 40px 0 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.65;color:#4a4a50;word-break:break-word;overflow-wrap:anywhere;">
+{% block content %}{% endblock %}
+          </td>
+        </tr>
+{% block action %}{% endblock %}
+        <tr>
+          <td class="em-pad em-text" style="padding:8px 40px 0 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#4a4a50;word-break:break-word;overflow-wrap:anywhere;">
+{% block after %}{% endblock %}
+          </td>
+        </tr>
+        <tr>
+          <td class="em-pad" style="padding:24px 40px 32px 40px;">
+            <div class="em-rule" style="border-top:1px solid #e4e4e7;font-size:0;line-height:0;">&nbsp;</div>
+            <p class="em-muted" style="margin:16px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.7;color:#6b6b70;">
+              {{ site_name }} &middot; Need help? <a href="mailto:{{ support_email }}" style="color:#6b6b70;">{{ support_email }}</a>
+            </p>
+{% if preferences_url %}
+            <p class="em-muted" style="margin:6px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.7;color:#6b6b70;">
+              You&rsquo;re receiving this because of your {{ site_name }} notification settings.
+              <a href="{{ preferences_url }}" style="color:#6b6b70;">Change them any time</a>.
+            </p>
+{% endif %}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

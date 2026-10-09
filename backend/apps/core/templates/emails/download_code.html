@@ -1,0 +1,8 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Your one-time code to download photos.{% endblock %}
+{% block heading %}Your download code{% endblock %}
+{% block content %}
+            <p style="margin:0 0 16px 0;">Your code to download photos from &ldquo;{{ gallery_title }}&rdquo; by {{ studio }} is:</p>
+            <p class="em-box" style="margin:0 0 16px 0;padding:14px 20px;background-color:#f4f4f5;color:#1f1f23;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:28px;font-weight:600;letter-spacing:8px;text-align:center;">{{ code }}</p>
+            <p style="margin:0;">It works for {{ minutes }} minutes. If you did not ask to download these photos, you can ignore this email.</p>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% extends "emails/base.txt" %}
+{% block heading %}Your payment was approved{% endblock %}
+{% block content %}Your payment for the {{ plan_name }} plan was approved and your plan is now active.{% if until %} It runs until {{ until }}.{% endif %}{% endblock %}
+{% block action %}
+Billing: {{ billing_url }}
+{% endblock %}

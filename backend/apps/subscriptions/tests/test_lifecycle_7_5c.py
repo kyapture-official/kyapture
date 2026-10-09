@@ -204,9 +204,9 @@ class OnceTests(LifecycleBase):
         self.assertEqual(bells(self.owner, 'plan_expiring'), 1)
         self.assertEqual(len(mails_to(self.owner)), 1)
         text = mails_to(self.owner)[0]
-        self.assertIn('Pro', text.subject)
+        self.assertEqual(text.subject, 'Your Kyapture plan is ending soon')       # 7.5-D: fixed subject
+        self.assertIn('Your Pro plan ends on', text.body)
         self.assertIn('/dashboard/billing', text.body)
-        self.assertNotIn('<', text.subject)
         self.assertEqual(self.sub().reminder_notified_for, END)
         self.assertEqual(self.sub().reminder_emailed_for, END)
         # and not again the next day, nor on the last day
@@ -226,7 +226,7 @@ class OnceTests(LifecycleBase):
         self.assertEqual(downgrade_rows(self.owner).count(), 1)
         self.assertEqual(bells(self.owner, 'plan_expired'), 1)
         self.assertEqual(len(mails_to(self.owner)), 1)
-        self.assertIn('ended', mails_to(self.owner)[0].subject)
+        self.assertEqual(mails_to(self.owner)[0].subject, 'Your Kyapture plan has ended')
 
     def test_the_audit_row_has_no_actor_names_the_account_and_holds_no_secret(self):
         self.run_job(npt(10, 15, 9))
@@ -429,7 +429,7 @@ class MailTests(LifecycleBase):
         give_period(self.owner, END)
 
     def test_a_failed_downgrade_email_does_not_block_the_downgrade_and_is_retried(self):
-        with mock.patch('apps.subscriptions.lifecycle.send_mail', side_effect=SMTPException('down')):
+        with mock.patch('apps.subscriptions.lifecycle.send_email', side_effect=SMTPException('down')):
             report = self.run_job(npt(10, 15, 9))
         self.assertTrue(report['downgrades'][0]['downgraded'])
         self.assertTrue(report['downgrades'][0]['email_failed'])
@@ -447,7 +447,7 @@ class MailTests(LifecycleBase):
                          (1, 1, 1))
 
     def test_a_failed_reminder_email_is_retried_while_the_period_is_still_running(self):
-        with mock.patch('apps.subscriptions.lifecycle.send_mail', side_effect=SMTPException('down')):
+        with mock.patch('apps.subscriptions.lifecycle.send_email', side_effect=SMTPException('down')):
             self.run_job(npt(10, 8, 9))
         self.assertEqual((bells(self.owner, 'plan_expiring'), len(mails_to(self.owner))), (1, 0))
         self.assertIsNone(self.sub().reminder_emailed_for)
@@ -455,7 +455,7 @@ class MailTests(LifecycleBase):
         self.assertEqual((bells(self.owner, 'plan_expiring'), len(mails_to(self.owner))), (1, 1))
 
     def test_a_mail_that_keeps_failing_is_dropped_after_the_retry_window(self):
-        with mock.patch('apps.subscriptions.lifecycle.send_mail', side_effect=SMTPException('down')):
+        with mock.patch('apps.subscriptions.lifecycle.send_email', side_effect=SMTPException('down')):
             self.run_job(npt(10, 15, 9))
             late = self.run_job(npt(10, 14) + timedelta(days=3 + settings.SUBSCRIPTION_EMAIL_RETRY_DAYS + 1))
         self.assertEqual(late['downgrades'], [])

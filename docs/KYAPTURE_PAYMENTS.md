@@ -110,6 +110,9 @@ the row is empty.
 Never the proof, its name, the reference or the user's note. A new payment makes one bell notification
 (`payment_review`, link `/dashboard/staff/payments`) for each active staff account; a decision makes one for the user and one
 email (through `notifications.notify_payment_reviewed`, which still honours the user's "payments" email preference).
+Since 7.5-D every one of these mails is a shared template with a fixed subject (docs/KYAPTURE_EMAIL.md): a submit also sends
+"We received your payment" to the payer (same preference) and one "New payment to review" email to `STAFF_ALERT_EMAIL` (payment id,
+plan, amount and the staff page link only; no proof link, reference, notes or user).
 
 ## 9. Operations
 

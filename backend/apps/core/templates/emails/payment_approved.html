@@ -1,0 +1,7 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Your {{ plan_name }} plan is now active.{% endblock %}
+{% block heading %}Your payment was approved{% endblock %}
+{% block content %}
+            <p style="margin:0;">Your payment for the {{ plan_name }} plan was approved and your plan is now active.{% if until %} It runs until {{ until }}.{% endif %}</p>
+{% endblock %}
+{% block action %}{% include "emails/_button.html" with url=billing_url label="Open Billing" %}{% endblock %}

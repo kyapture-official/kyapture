@@ -7,6 +7,9 @@ to the visitor who asked for it, at most once per job:
 
     From     "{studio name}" <the platform's sending address>   (display name only)
     Reply-To the photographer's email, so "Questions? Reply to this email." works
+    Subject  fixed ("Your photos are ready for download", 7.5-D): the gallery title is in the
+             body only, never in a header
+    Layout   the shared email base (apps/core/emailing.py, templates/emails/)
     Link     Page 4 of the download flow, /g/{user}/{slug}/download/file/{job}#key=...,
              an absolute URL on settings.FRONTEND_URL (the public app origin). 7F: the
              key is in the URL fragment, which a browser never sends to a server, so
@@ -24,13 +27,11 @@ to send is logged and never touches the job.
 import logging
 import re
 from datetime import timedelta
-from email.utils import formataddr, parseaddr
 from urllib.parse import urlsplit
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
 from django.utils import timezone
+from apps.core.emailing import display_from, send_email
 from apps.core.request_ip import client_ip
 
 from apps.core.share import build_gallery_share_url
@@ -65,7 +66,7 @@ def job_page_url(job):
 
 
 def build_ready_email(job):
-    """The (subject, text body, html body, from header, reply-to) of the email for `job`."""
+    """What the email for `job` is made of: its context, the studio From header, the photographer Reply-To."""
     gallery = job.gallery
     studio = studio_name(gallery)
     context = {
@@ -75,14 +76,11 @@ def build_ready_email(job):
         'gallery_url': build_gallery_share_url(gallery),
         'days': LINK_DAYS,
     }
-    from_address = parseaddr(settings.DEFAULT_FROM_EMAIL)[1]
     return {
-        'subject': _CONTROL_CHARS.sub(' ', f'Your Photos for {gallery.title} are ready for download').strip(),
-        'text': render_to_string('clients/emails/download_ready.txt', context),
-        'html': render_to_string('clients/emails/download_ready.html', context),
-        'from_email': formataddr((studio, from_address)),
+        'from_email': display_from(studio),
         'reply_to': [gallery.photographer.email],
         'download_url': context['download_url'],
+        'context': context,
     }
 
 
@@ -142,12 +140,8 @@ def deliver_ready_email(job_id):
             mail = build_ready_email(job)
             if not mail['download_url']:
                 raise ValueError('FRONTEND_URL is not an absolute http(s) URL')
-            message = EmailMultiAlternatives(
-                subject=mail['subject'], body=mail['text'], from_email=mail['from_email'],
-                to=[job.email], reply_to=mail['reply_to'],
-            )
-            message.attach_alternative(mail['html'], 'text/html')
-            message.send(fail_silently=False)
+            send_email('download_ready', job.email, mail['context'],
+                       from_email=mail['from_email'], reply_to=mail['reply_to'])
         except Exception:
             DownloadJob.objects.filter(pk=job.pk).update(ready_email_sent_at=None)
             raise

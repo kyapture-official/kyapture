@@ -1,0 +1,8 @@
+{% extends "emails/base.txt" %}
+{% block heading %}We received your payment{% endblock %}
+{% block content %}We received your payment of {{ amount }} for the {{ plan_name }} plan. It is waiting for review.
+
+Your plan has not changed yet. We will email you when the payment has been reviewed.{% endblock %}
+{% block action %}
+Billing: {{ billing_url }}
+{% endblock %}

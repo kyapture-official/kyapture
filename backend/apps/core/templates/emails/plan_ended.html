@@ -1,0 +1,9 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Your account is now on the Free plan. Your files are kept.{% endblock %}
+{% block heading %}Your plan has ended{% endblock %}
+{% block content %}
+            <p style="margin:0 0 16px 0;">Your {{ plan_name }} plan ended on {{ end_date }}. Your account is now on the Free plan.</p>
+            <p style="margin:0 0 16px 0;">Nothing was deleted: your files, galleries and settings are kept. Paid features are locked and the Free limits apply until you renew.</p>
+            <p style="margin:0;">Renewing restores the paid features.</p>
+{% endblock %}
+{% block action %}{% include "emails/_button.html" with url=billing_url label="Renew Plan" %}{% endblock %}

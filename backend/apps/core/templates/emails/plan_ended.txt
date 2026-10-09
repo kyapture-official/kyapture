@@ -1,0 +1,10 @@
+{% extends "emails/base.txt" %}
+{% block heading %}Your plan has ended{% endblock %}
+{% block content %}Your {{ plan_name }} plan ended on {{ end_date }}. Your account is now on the Free plan.
+
+Nothing was deleted: your files, galleries and settings are kept. Paid features are locked and the Free limits apply until you renew.
+
+Renewing restores the paid features.{% endblock %}
+{% block action %}
+Renew from Billing: {{ billing_url }}
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "emails/base.txt" %}
+{% block heading %}New download{% endblock %}
+{% block content %}{{ who }} downloaded {{ what }} from "{{ gallery_title }}".{% endblock %}
+{% block action %}
+See the full download activity: {{ activity_url }}
+{% endblock %}
+{% block after %}
+(You get at most one of these emails per collection every {{ window_minutes }} minutes.){% endblock %}

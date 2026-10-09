@@ -1,0 +1,8 @@
+{% extends "emails/base.txt" %}
+{% block heading %}New favorite{% endblock %}
+{% block content %}{{ who }} marked a photo as a favorite in "{{ gallery_title }}".{% endblock %}
+{% block action %}
+See favorite activity: {{ activity_url }}
+{% endblock %}
+{% block after %}
+(You get at most one of these emails per collection every {{ window_minutes }} minutes.){% endblock %}

@@ -1,0 +1,1662 @@
+[
+  {
+    "subject": "Your Kyapture download code",
+    "to": "qa75d1791542446-codeguest@example.test",
+    "id": "3y9dqD9f4jIk6BPiah1Ad2",
+    "slug": "your-kyapture-download-code-odeguest",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your download code",
+        "firstLines": [
+          "KYAPTURE",
+          "Your download code",
+          "Your code to download photos from “<i>QA</i> Wedding & Co” by <b>Ann</b> Owner is:"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your download code",
+        "firstLines": [
+          "KYAPTURE",
+          "Your download code",
+          "Your code to download photos from “<i>QA</i> Wedding & Co” by <b>Ann</b> Owner is:"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your download code",
+        "firstLines": [
+          "KYAPTURE",
+          "Your download code",
+          "Your code to download photos from “<i>QA</i> Wedding & Co” by <b>Ann</b> Owner is:"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your download code",
+        "firstLines": [
+          "KYAPTURE",
+          "Your download code",
+          "Your code to download photos from “<i>QA</i> Wedding & Co” by <b>Ann</b> Owner is:"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 270
+    }
+  },
+  {
+    "subject": "Your photos are ready for download",
+    "to": "qa75d1791542446-guest@example.test",
+    "id": "4fXkSl05nL1YXkaNaBuCSK",
+    "slug": "your-photos-are-ready-for-download-446guest",
+    "replyTo": "qa75d1791542446-owner@example.test",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Download Ready",
+        "firstLines": [
+          "KYAPTURE",
+          "Download Ready",
+          "Download Ready Notification"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/g/qa75d1791542446owner/qa75d1791542446-g/download/file/01a12040-5aae-767c-b20a-95418ee51fd3#key=.eJxNyjEOgDAIAMC_MEsCbRHqb2oLJn7Awfh36-Z0y91wwgbEjRMVQmnNUVftuCdqWKWwuQvHyLDA8a8lglCZFatJRhbvRiMsVZv1mnUSH88L3TEX4Q:1xF81y:kdInRheJZq8ZFbw0A0WEUWmABl8T8-MJSwcoMr_blUw",
+          "http://localhost:3000/g/qa75d1791542446owner/qa75d1791542446-g",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Download Ready",
+        "firstLines": [
+          "KYAPTURE",
+          "Download Ready",
+          "Download Ready Notification"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/g/qa75d1791542446owner/qa75d1791542446-g/download/file/01a12040-5aae-767c-b20a-95418ee51fd3#key=.eJxNyjEOgDAIAMC_MEsCbRHqb2oLJn7Awfh36-Z0y91wwgbEjRMVQmnNUVftuCdqWKWwuQvHyLDA8a8lglCZFatJRhbvRiMsVZv1mnUSH88L3TEX4Q:1xF81y:kdInRheJZq8ZFbw0A0WEUWmABl8T8-MJSwcoMr_blUw",
+          "http://localhost:3000/g/qa75d1791542446owner/qa75d1791542446-g",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Download Ready",
+        "firstLines": [
+          "KYAPTURE",
+          "Download Ready",
+          "Download Ready Notification"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/g/qa75d1791542446owner/qa75d1791542446-g/download/file/01a12040-5aae-767c-b20a-95418ee51fd3#key=.eJxNyjEOgDAIAMC_MEsCbRHqb2oLJn7Awfh36-Z0y91wwgbEjRMVQmnNUVftuCdqWKWwuQvHyLDA8a8lglCZFatJRhbvRiMsVZv1mnUSH88L3TEX4Q:1xF81y:kdInRheJZq8ZFbw0A0WEUWmABl8T8-MJSwcoMr_blUw",
+          "http://localhost:3000/g/qa75d1791542446owner/qa75d1791542446-g",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Download Ready",
+        "firstLines": [
+          "KYAPTURE",
+          "Download Ready",
+          "Download Ready Notification"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/g/qa75d1791542446owner/qa75d1791542446-g/download/file/01a12040-5aae-767c-b20a-95418ee51fd3#key=.eJxNyjEOgDAIAMC_MEsCbRHqb2oLJn7Awfh36-Z0y91wwgbEjRMVQmnNUVftuCdqWKWwuQvHyLDA8a8lglCZFatJRhbvRiMsVZv1mnUSH88L3TEX4Q:1xF81y:kdInRheJZq8ZFbw0A0WEUWmABl8T8-MJSwcoMr_blUw",
+          "http://localhost:3000/g/qa75d1791542446owner/qa75d1791542446-g",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 781
+    }
+  },
+  {
+    "subject": "New favorite in one of your collections",
+    "to": "qa75d1791542446-owner@example.test",
+    "id": "78dDt241u6xuhDiHsTbQAe",
+    "slug": "new-favorite-in-one-of-your-collections-446owner",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "New favorite",
+        "firstLines": [
+          "KYAPTURE",
+          "New favorite",
+          "<u>fan</u>@example.test marked a photo as a favorite in “<i>QA</i> Wedding & Co”."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/galleries/qa75d1791542446-g/activities?tab=favorites",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "New favorite",
+        "firstLines": [
+          "KYAPTURE",
+          "New favorite",
+          "<u>fan</u>@example.test marked a photo as a favorite in “<i>QA</i> Wedding & Co”."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/galleries/qa75d1791542446-g/activities?tab=favorites",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "New favorite",
+        "firstLines": [
+          "KYAPTURE",
+          "New favorite",
+          "<u>fan</u>@example.test marked a photo as a favorite in “<i>QA</i> Wedding & Co”."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/galleries/qa75d1791542446-g/activities?tab=favorites",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "New favorite",
+        "firstLines": [
+          "KYAPTURE",
+          "New favorite",
+          "<u>fan</u>@example.test marked a photo as a favorite in “<i>QA</i> Wedding & Co”."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/galleries/qa75d1791542446-g/activities?tab=favorites",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 481
+    }
+  },
+  {
+    "subject": "New download from one of your collections",
+    "to": "qa75d1791542446-owner@example.test",
+    "id": "1st5jIZU6MiKWanmZdnbgR",
+    "slug": "new-download-from-one-of-your-collections-446owner",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "New download",
+        "firstLines": [
+          "KYAPTURE",
+          "New download",
+          "<u>guest</u>@example.test downloaded a photo from “<i>QA</i> Wedding & Co”."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/galleries/qa75d1791542446-g/activities?tab=downloads",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "New download",
+        "firstLines": [
+          "KYAPTURE",
+          "New download",
+          "<u>guest</u>@example.test downloaded a photo from “<i>QA</i> Wedding & Co”."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/galleries/qa75d1791542446-g/activities?tab=downloads",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "New download",
+        "firstLines": [
+          "KYAPTURE",
+          "New download",
+          "<u>guest</u>@example.test downloaded a photo from “<i>QA</i> Wedding & Co”."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/galleries/qa75d1791542446-g/activities?tab=downloads",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "New download",
+        "firstLines": [
+          "KYAPTURE",
+          "New download",
+          "<u>guest</u>@example.test downloaded a photo from “<i>QA</i> Wedding & Co”."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/galleries/qa75d1791542446-g/activities?tab=downloads",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 484
+    }
+  },
+  {
+    "subject": "Your Kyapture plan has ended",
+    "to": "qa75d1791542446-ended@example.test",
+    "id": "74RDV2SqWCThtAJr82LjJh",
+    "slug": "your-kyapture-plan-has-ended-446ended",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your plan has ended",
+        "firstLines": [
+          "KYAPTURE",
+          "Your plan has ended",
+          "Your Pro plan ended on 05 Oct 2026. Your account is now on the Free plan."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your plan has ended",
+        "firstLines": [
+          "KYAPTURE",
+          "Your plan has ended",
+          "Your Pro plan ended on 05 Oct 2026. Your account is now on the Free plan."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your plan has ended",
+        "firstLines": [
+          "KYAPTURE",
+          "Your plan has ended",
+          "Your Pro plan ended on 05 Oct 2026. Your account is now on the Free plan."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your plan has ended",
+        "firstLines": [
+          "KYAPTURE",
+          "Your plan has ended",
+          "Your Pro plan ended on 05 Oct 2026. Your account is now on the Free plan."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 533
+    }
+  },
+  {
+    "subject": "Your Kyapture plan is ending soon",
+    "to": "qa75d1791542446-expiring@example.test",
+    "id": "0jhwFmiOHQsEDh6VFasZc5",
+    "slug": "your-kyapture-plan-is-ending-soon-expiring",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your plan ends on 11 Oct 2026",
+        "firstLines": [
+          "KYAPTURE",
+          "Your plan ends on 11 Oct 2026",
+          "Your Pro plan ends on 11 Oct 2026 (in 2 days). After that your account moves to the Free plan: your files, galleries and settings are kept, and the Free limits and features apply."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your plan ends on 11 Oct 2026",
+        "firstLines": [
+          "KYAPTURE",
+          "Your plan ends on 11 Oct 2026",
+          "Your Pro plan ends on 11 Oct 2026 (in 2 days). After that your account moves to the Free plan: your files, galleries and settings are kept, and the Free limits and features apply."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your plan ends on 11 Oct 2026",
+        "firstLines": [
+          "KYAPTURE",
+          "Your plan ends on 11 Oct 2026",
+          "Your Pro plan ends on 11 Oct 2026 (in 2 days). After that your account moves to the Free plan: your files, galleries and settings are kept, and the Free limits and features apply."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your plan ends on 11 Oct 2026",
+        "firstLines": [
+          "KYAPTURE",
+          "Your plan ends on 11 Oct 2026",
+          "Your Pro plan ends on 11 Oct 2026 (in 2 days). After that your account moves to the Free plan: your files, galleries and settings are kept, and the Free limits and features apply."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 510
+    }
+  },
+  {
+    "subject": "Your payment could not be approved",
+    "to": "qa75d1791542446-payerb@example.test",
+    "id": "3RMHyz5nYY8l1mlEbGIvSu",
+    "slug": "your-payment-could-not-be-approved-46payerb",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your payment could not be approved",
+        "firstLines": [
+          "KYAPTURE",
+          "Your payment could not be approved",
+          "We could not approve your payment for the Pro plan. Your plan has not changed."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your payment could not be approved",
+        "firstLines": [
+          "KYAPTURE",
+          "Your payment could not be approved",
+          "We could not approve your payment for the Pro plan. Your plan has not changed."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your payment could not be approved",
+        "firstLines": [
+          "KYAPTURE",
+          "Your payment could not be approved",
+          "We could not approve your payment for the Pro plan. Your plan has not changed."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your payment could not be approved",
+        "firstLines": [
+          "KYAPTURE",
+          "Your payment could not be approved",
+          "We could not approve your payment for the Pro plan. Your plan has not changed."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 474
+    }
+  },
+  {
+    "subject": "We received your payment",
+    "to": "qa75d1791542446-payerb@example.test",
+    "id": "1iCB3cbALj5fINuBne2sGv",
+    "slug": "we-received-your-payment-46payerb",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "We received your payment",
+        "firstLines": [
+          "KYAPTURE",
+          "We received your payment",
+          "We received your payment of NPR 1,499 for the Pro plan. It is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "We received your payment",
+        "firstLines": [
+          "KYAPTURE",
+          "We received your payment",
+          "We received your payment of NPR 1,499 for the Pro plan. It is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "We received your payment",
+        "firstLines": [
+          "KYAPTURE",
+          "We received your payment",
+          "We received your payment of NPR 1,499 for the Pro plan. It is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "We received your payment",
+        "firstLines": [
+          "KYAPTURE",
+          "We received your payment",
+          "We received your payment of NPR 1,499 for the Pro plan. It is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 448
+    }
+  },
+  {
+    "subject": "Your payment was approved",
+    "to": "qa75d1791542446-payer@example.test",
+    "id": "23k8BEitlEwC5jcst8G9eB",
+    "slug": "your-payment-was-approved-446payer",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your payment was approved",
+        "firstLines": [
+          "KYAPTURE",
+          "Your payment was approved",
+          "Your payment for the Pro plan was approved and your plan is now active. It runs until 08 Nov 2026."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your payment was approved",
+        "firstLines": [
+          "KYAPTURE",
+          "Your payment was approved",
+          "Your payment for the Pro plan was approved and your plan is now active. It runs until 08 Nov 2026."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your payment was approved",
+        "firstLines": [
+          "KYAPTURE",
+          "Your payment was approved",
+          "Your payment for the Pro plan was approved and your plan is now active. It runs until 08 Nov 2026."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your payment was approved",
+        "firstLines": [
+          "KYAPTURE",
+          "Your payment was approved",
+          "Your payment for the Pro plan was approved and your plan is now active. It runs until 08 Nov 2026."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 380
+    }
+  },
+  {
+    "subject": "We received your payment",
+    "to": "qa75d1791542446-payer@example.test",
+    "id": "4hCzELtdkcQ7W5dSyk1HXF",
+    "slug": "we-received-your-payment-446payer",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "We received your payment",
+        "firstLines": [
+          "KYAPTURE",
+          "We received your payment",
+          "We received your payment of NPR 1,499 for the Pro plan. It is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "We received your payment",
+        "firstLines": [
+          "KYAPTURE",
+          "We received your payment",
+          "We received your payment of NPR 1,499 for the Pro plan. It is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "We received your payment",
+        "firstLines": [
+          "KYAPTURE",
+          "We received your payment",
+          "We received your payment of NPR 1,499 for the Pro plan. It is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "We received your payment",
+        "firstLines": [
+          "KYAPTURE",
+          "We received your payment",
+          "We received your payment of NPR 1,499 for the Pro plan. It is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/billing",
+          "mailto:support@kyapture.com",
+          "http://localhost:3000/dashboard/settings/notifications"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 448
+    }
+  },
+  {
+    "subject": "Your Kyapture password was changed",
+    "to": "qa75d1791542446-payerb@example.test",
+    "id": "0i2wmU2flOivLcZxOZwbUM",
+    "slug": "your-kyapture-password-was-changed-46payerb",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your password was changed",
+        "firstLines": [
+          "KYAPTURE",
+          "Your password was changed",
+          "Hi Pia Payer,"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/forgot-password",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Your password was changed",
+        "firstLines": [
+          "KYAPTURE",
+          "Your password was changed",
+          "Hi Pia Payer,"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/forgot-password",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your password was changed",
+        "firstLines": [
+          "KYAPTURE",
+          "Your password was changed",
+          "Hi Pia Payer,"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/forgot-password",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Your password was changed",
+        "firstLines": [
+          "KYAPTURE",
+          "Your password was changed",
+          "Hi Pia Payer,"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/forgot-password",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 407
+    }
+  },
+  {
+    "subject": "Reset your Kyapture password",
+    "to": "qa75d1791542446-payer@example.test",
+    "id": "1GpKJjLWxFzk4YuTVzD8RL",
+    "slug": "reset-your-kyapture-password-446payer",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Reset your password",
+        "firstLines": [
+          "KYAPTURE",
+          "Reset your password",
+          "Hi Pat Payer,"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/reset-password#token=fcr65KnD500iMJL5PabNGTT40DvSol7htJ4t23WY-VE",
+          "http://localhost:3000/reset-password#token=fcr65KnD500iMJL5PabNGTT40DvSol7htJ4t23WY-VE",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "Reset your password",
+        "firstLines": [
+          "KYAPTURE",
+          "Reset your password",
+          "Hi Pat Payer,"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/reset-password#token=fcr65KnD500iMJL5PabNGTT40DvSol7htJ4t23WY-VE",
+          "http://localhost:3000/reset-password#token=fcr65KnD500iMJL5PabNGTT40DvSol7htJ4t23WY-VE",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Reset your password",
+        "firstLines": [
+          "KYAPTURE",
+          "Reset your password",
+          "Hi Pat Payer,"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/reset-password#token=fcr65KnD500iMJL5PabNGTT40DvSol7htJ4t23WY-VE",
+          "http://localhost:3000/reset-password#token=fcr65KnD500iMJL5PabNGTT40DvSol7htJ4t23WY-VE",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "Reset your password",
+        "firstLines": [
+          "KYAPTURE",
+          "Reset your password",
+          "Hi Pat Payer,"
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/reset-password#token=fcr65KnD500iMJL5PabNGTT40DvSol7htJ4t23WY-VE",
+          "http://localhost:3000/reset-password#token=fcr65KnD500iMJL5PabNGTT40DvSol7htJ4t23WY-VE",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 483
+    }
+  },
+  {
+    "subject": "New payment to review",
+    "to": "staff-alerts@kyapture.test",
+    "id": "4QnbntUD39sbJdwaOrcZi3",
+    "slug": "new-payment-to-review-ffalerts",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "New payment to review",
+        "firstLines": [
+          "KYAPTURE",
+          "New payment to review",
+          "A payment is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/staff/payments",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "New payment to review",
+        "firstLines": [
+          "KYAPTURE",
+          "New payment to review",
+          "A payment is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/staff/payments",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "New payment to review",
+        "firstLines": [
+          "KYAPTURE",
+          "New payment to review",
+          "A payment is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/staff/payments",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "New payment to review",
+        "firstLines": [
+          "KYAPTURE",
+          "New payment to review",
+          "A payment is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/staff/payments",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 255
+    }
+  },
+  {
+    "subject": "New payment to review",
+    "to": "staff-alerts@kyapture.test",
+    "id": "0dwChjE4kpAfmYI0D7VJVf",
+    "slug": "new-payment-to-review-ffalerts",
+    "replyTo": "support@kyapture.com",
+    "from": "no-reply@kyapture.com",
+    "hasHtml": true,
+    "hasText": true,
+    "checks": {
+      "textNoMarkup": true,
+      "textHasSupport": true,
+      "subjectHasNoDigits6": true,
+      "desktop": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "New payment to review",
+        "firstLines": [
+          "KYAPTURE",
+          "New payment to review",
+          "A payment is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/staff/payments",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "h1": "New payment to review",
+        "firstLines": [
+          "KYAPTURE",
+          "New payment to review",
+          "A payment is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/staff/payments",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "m390-dark": {
+        "cardWidth": 374,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "overflowX": false,
+        "widest": 390,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "New payment to review",
+        "firstLines": [
+          "KYAPTURE",
+          "New payment to review",
+          "A payment is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/staff/payments",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "desktop-dark": {
+        "cardWidth": 600,
+        "scrollWidth": 1000,
+        "clientWidth": 1000,
+        "overflowX": false,
+        "widest": 1000,
+        "images": 0,
+        "scripts": 0,
+        "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helve",
+        "bg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(26, 26, 28)",
+        "h1": "New payment to review",
+        "firstLines": [
+          "KYAPTURE",
+          "New payment to review",
+          "A payment is waiting for review."
+        ],
+        "wordmark": "Kyapture",
+        "support": true,
+        "links": [
+          "http://localhost:3000/dashboard/staff/payments",
+          "mailto:support@kyapture.com"
+        ],
+        "remoteRequests": []
+      },
+      "txtPageChars": 255
+    }
+  }
+]

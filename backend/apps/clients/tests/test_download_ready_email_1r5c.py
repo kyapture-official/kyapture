@@ -47,7 +47,7 @@ class ReadyEmailContentTests(JobBase):
     def test_headers(self):
         job, message = self.sent()
         self.assertEqual(message.to, ['buyer@example.com'])
-        self.assertEqual(message.subject, 'Your Photos for sari and ravi are ready for download')
+        self.assertEqual(message.subject, 'Your photos are ready for download')     # 7.5-D: fixed, no gallery title
         self.assertEqual(message.reply_to, [self.photographer.email])
         name, address = parseaddr(message.from_email)
         self.assertEqual(name, 'Herry Shop')                         # From name = studio name

@@ -1,0 +1,12 @@
+{{ site_name|upper }}
+
+{% block heading %}{{ subject }}{% endblock %}
+
+{% block content %}{% endblock %}
+{% block action %}{% endblock %}
+{% block after %}{% endblock %}
+
+--
+{{ site_name }} - Need help? {{ support_email }}{% if preferences_url %}
+You're receiving this because of your {{ site_name }} notification settings.
+Change them any time: {{ preferences_url }}{% endif %}

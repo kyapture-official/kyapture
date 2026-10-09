@@ -1,0 +1,8 @@
+{% extends "emails/base.txt" %}
+{% block heading %}Your plan ends on {{ end_date }}{% endblock %}
+{% block content %}Your {{ plan_name }} plan ends on {{ end_date }} ({{ when }}). After that your account moves to the Free plan: your files, galleries and settings are kept, and the Free limits and features apply.
+
+To keep {{ plan_name }}, renew from Billing.{% endblock %}
+{% block action %}
+Renew from Billing: {{ billing_url }}
+{% endblock %}

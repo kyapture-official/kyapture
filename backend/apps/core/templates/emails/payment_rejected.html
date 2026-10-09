@@ -1,0 +1,9 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Your plan has not changed.{% endblock %}
+{% block heading %}Your payment could not be approved{% endblock %}
+{% block content %}
+            <p style="margin:0 0 16px 0;">We could not approve your payment for the {{ plan_name }} plan. Your plan has not changed.</p>
+{% if reason %}            <p style="margin:0 0 16px 0;"><strong>Reason:</strong> {{ reason }}</p>
+{% endif %}            <p style="margin:0;">You can submit a new receipt from Billing.</p>
+{% endblock %}
+{% block action %}{% include "emails/_button.html" with url=billing_url label="Open Billing" %}{% endblock %}

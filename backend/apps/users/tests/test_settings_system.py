@@ -407,7 +407,8 @@ class NotificationDeliveryTests(SettingsBase):
         self.assertEqual(len(mail.outbox), 1)
         message = mail.outbox[0]
         self.assertEqual(message.to, [self.user.email])
-        self.assertIn('Wedding', message.subject)
+        self.assertNotIn('Wedding', message.subject)                            # 7.5-D: the subject is fixed
+        self.assertIn('Wedding', message.body)
         self.assertIn('client@example.com', message.body)
         self.assertIn('/dashboard/settings/notifications', message.body)       # how to change it
 

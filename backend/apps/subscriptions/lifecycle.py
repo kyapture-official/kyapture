@@ -6,9 +6,11 @@ the account to Free after it (and its grace) has ended. It reuses what 7.5-B bui
   access        entitlements.py alone decides who may use a paid feature, and it already treats an ended period
                 as Free AT REQUEST TIME. So access never waits for this job, and a dead beat process cannot
                 extend a plan. This module only does the paperwork around the end of a period.
-  reminder      once per period, `reminder_days` calendar days before the end: a bell notification and an email.
+  reminder      once per period, `reminder_days` calendar days before the end: a bell notification and an email
+                ("Your plan ends on <date>", template plan_expiring).
   downgrade     once per period, after `grace_days` full days past the end: status -> expired, the legacy
-                `is_active_plan` flag off, one audit row (no actor), a bell notification and an email.
+                `is_active_plan` flag off, one audit row (no actor), a bell notification and an email
+                (template plan_ended: the plan HAS ended, the account is on Free).
                 NOTHING is deleted: files, galleries, settings, watermark and branding values all stay, so an
                 upgrade restores them.
   tuning        the two day counts are the LifecycleSettings row (admin), never code.
@@ -36,11 +38,11 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
+from apps.core.emailing import billing_url, format_date, send_email
 from apps.users import audit
 from apps.users.models import Notification, User
 from apps.users.notification_service import record_notification
@@ -113,40 +115,27 @@ def describe(subscription, now=None, cfg=None):
     return base
 
 
-# ─── the text (7.5-D owns the real email template; these are plain-text placeholders) ───
+# ─── the text ────────────────────────────────────────────────────────────────
+# The bell text lives here; the email wording lives in the shared templates (apps/core/templates/emails/
+# plan_expiring.* and plan_ended.*, 7.5-D). Dates are always the billing-zone date (format_date).
 
-def _billing_url():
-    return f'{settings.FRONTEND_URL}/dashboard/billing'
-
-
-def _date_text(moment):
-    return f'{moment.astimezone(billing_tz()):%d %b %Y}'
+def _when(days):
+    return 'today' if days <= 0 else 'tomorrow' if days == 1 else f'in {days} days'
 
 
-def reminder_text(plan_name, end, now):
-    days = days_until(end, now)
-    when = 'today' if days <= 0 else 'tomorrow' if days == 1 else f'in {days} days'
-    bell = f'Your {plan_name} plan expires {when} ({_date_text(end)}). Renew to keep it.'
-    subject = f'Your {plan_name} plan expires {when}'
-    body = (
-        f'Your {plan_name} plan ends on {_date_text(end)}. After that your account moves to the Free plan: '
-        'your files, galleries and settings are kept, and the Free limits and features apply.\n\n'
-        f'To keep {plan_name}, renew from Billing: {_billing_url()}'
-    )
-    return bell, subject, body
+def reminder_bell(plan_name, end, now):
+    return f'Your {plan_name} plan expires {_when(days_until(end, now))} ({format_date(end)}). Renew to keep it.'
 
 
-def downgrade_text(plan_name, end):
-    bell = f'Your {plan_name} plan ended on {_date_text(end)}. You are on the Free plan now. Your files are kept.'
-    subject = f'Your {plan_name} plan has ended'
-    body = (
-        f'Your {plan_name} plan ended on {_date_text(end)} and your account is now on the Free plan. '
-        'Nothing was deleted: your galleries, photos and settings are all still there, and clients can still '
-        'view and download from your published galleries at the Free level. Paid features are locked and '
-        'uploads are limited to the Free plan until you renew; your saved settings come back when you do.\n\n'
-        f'Renew from Billing: {_billing_url()}'
-    )
-    return bell, subject, body
+def downgrade_bell(plan_name, end):
+    return f'Your {plan_name} plan ended on {format_date(end)}. You are on the Free plan now. Your files are kept.'
+
+
+def _email_context(template, plan_name, end, now):
+    context = {'plan_name': plan_name, 'end_date': format_date(end), 'billing_url': billing_url()}
+    if template == 'plan_expiring':
+        context['when'] = _when(days_until(end, now))
+    return context
 
 
 # ─── locks ───────────────────────────────────────────────────────────────────
@@ -190,26 +179,21 @@ def _wants_email(user):
     return bool(user.is_active and user.notify_payments)
 
 
-def _send(user_email, subject, body):
-    from apps.users.notifications import preferences_url
-    footer = (
-        "\n\n—\nYou're receiving this because of your Kyapture notification settings.\n"
-        f'Change them any time: {preferences_url()}\n'
-    )
-    send_mail(subject=subject, message=body + footer, from_email=settings.DEFAULT_FROM_EMAIL,
-              recipient_list=[user_email], fail_silently=False)
+def _send(to, template, plan_name, end, now):
+    send_email(template, to, _email_context(template, plan_name, end, now))
 
 
-def _deliver(subscription_id, user_id, marker, end, to, subject, body):
+def _deliver(subscription_id, user_id, marker, end, to, template, plan_name, now):
     """
     Sends one claimed mail; on failure releases the claim (under the lock, only if it is still this period's)
     so the next run tries again. Returns True when it was sent.
     """
     try:
-        _send(to, subject, body)
+        _send(to, template, plan_name, end, now)
         return True
     except Exception:
-        logger.exception('Lifecycle mail (%s) failed for subscription %s; it will be retried', marker, subscription_id)
+        logger.error('Lifecycle mail (%s) failed for subscription %s; it will be retried', marker, subscription_id,
+                     exc_info=True)
     try:
         with transaction.atomic():
             _user, sub = _lock_rows(subscription_id, user_id)
@@ -274,7 +258,7 @@ def process_reminder(subscription_id, user_id, now, cfg, tz):
         if sub is None or not user.is_active or not _reminder_due(sub, now, cfg, tz):
             return None
         end = sub.expires_at
-        bell, subject, body = reminder_text(sub.plan.name, end, now)
+        bell = reminder_bell(sub.plan.name, end, now)
         fields = []
         if sub.reminder_notified_for != end:
             if record_notification(user, Kind.PLAN_EXPIRING, None, message=bell) is not None:
@@ -285,7 +269,7 @@ def process_reminder(subscription_id, user_id, now, cfg, tz):
             sub.reminder_emailed_for = end          # the claim: set now, released if the send fails
             fields.append('reminder_emailed_for')
             if _wants_email(user):
-                mail_job = (user.email, subject, body)
+                mail_job = (user.email, 'plan_expiring', sub.plan.name, now)
                 done['email_claimed'] = True
         if not fields:
             return None
@@ -310,7 +294,7 @@ def process_downgrade(subscription_id, user_id, now, cfg, tz):
             return None
         end = sub.expires_at
         recent = end >= email_window_start(now, cfg.grace_days)
-        bell, subject, body = downgrade_text(sub.plan.name, end)
+        bell = downgrade_bell(sub.plan.name, end)
         fields = []
         if sub.downgraded_for != end:
             sub.status = Status.EXPIRED
@@ -332,7 +316,7 @@ def process_downgrade(subscription_id, user_id, now, cfg, tz):
             sub.downgrade_emailed_for = end         # the claim (also "handled" for a suspended or very old account)
             fields.append('downgrade_emailed_for')
             if user.is_active and recent and _wants_email(user):
-                mail_job = (user.email, subject, body)
+                mail_job = (user.email, 'plan_ended', sub.plan.name, now)
                 done['email_claimed'] = True
         if not fields:
             return None

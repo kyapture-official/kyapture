@@ -1,0 +1,17 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Your photos for {{ gallery_title }} are ready for download.{% endblock %}
+{% block heading %}Download Ready{% endblock %}
+{% block content %}
+            <p class="em-muted" style="margin:0 0 4px 0;font-size:12px;letter-spacing:.3px;color:#6b6b70;">Download Ready Notification</p>
+            <p style="margin:0 0 16px 0;font-size:13px;letter-spacing:2px;text-transform:uppercase;">{{ studio }}</p>
+            <p style="margin:0;">Your photos for {{ gallery_title }} are ready for download. Click the button below to download:</p>
+{% endblock %}
+{% block action %}{% include "emails/_button.html" with url=download_url label="Download Photos" %}{% endblock %}
+{% block after %}
+            <p style="margin:0 0 16px 0;">You can use this link to download them again at anytime during the next {{ days }} days. After {{ days }} days, you can visit the gallery to request a new download.</p>
+            <p class="em-muted" style="margin:0;font-size:13px;line-height:1.8;color:#6b6b70;">
+              {{ studio }}<br>
+              <a href="{{ gallery_url }}" target="_blank" style="color:#6b6b70;text-decoration:none;">{{ gallery_url }}</a><br>
+              Questions? Reply to this email.
+            </p>
+{% endblock %}

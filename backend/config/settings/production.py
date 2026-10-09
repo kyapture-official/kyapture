@@ -124,7 +124,7 @@ if not os.getenv("CACHE_REDIS_URL"):
 # return its generic 200) while every reset link silently went nowhere —
 # every user who forgets their password would be permanently locked out
 # with no error surfacing anywhere. Refuse to boot instead of shipping that.
-_required_email_vars = ("DEFAULT_FROM_EMAIL",)
+_required_email_vars = ("DEFAULT_FROM_EMAIL", "SUPPORT_EMAIL")   # 7.5-D: every email footer prints SUPPORT_EMAIL
 _missing_email_vars = [name for name in _required_email_vars if not os.getenv(name)]
 
 if _missing_email_vars:

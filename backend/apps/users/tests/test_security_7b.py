@@ -249,7 +249,7 @@ def settings_in_subprocess(module, env, expression):
 PROD_ENV = {
     'SECRET_KEY': 'k' * 60, 'DB_NAME': 'x', 'DB_USER': 'x', 'DB_PASSWORD': 'x', 'DB_HOST': 'x',
     'AWS_ACCESS_KEY_ID': 'x', 'AWS_SECRET_ACCESS_KEY': 'x', 'AWS_STORAGE_BUCKET_NAME': 'x',
-    'DEFAULT_FROM_EMAIL': 'Kyapture <no-reply@kyapture.com>', 'CACHE_REDIS_URL': 'redis://cache:6379/2',
+    'DEFAULT_FROM_EMAIL': 'Kyapture <no-reply@kyapture.com>', 'SUPPORT_EMAIL': 'support@kyapture.com', 'CACHE_REDIS_URL': 'redis://cache:6379/2',
 }
 
 

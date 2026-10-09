@@ -1,0 +1,16 @@
+{% extends "emails/base.txt" %}
+{% block heading %}DOWNLOAD READY NOTIFICATION
+
+{{ studio|upper }}
+
+Download Ready{% endblock %}
+{% block content %}Your photos for {{ gallery_title }} are ready for download. Click the link below to download:{% endblock %}
+{% block action %}
+DOWNLOAD PHOTOS: {{ download_url }}
+{% endblock %}
+{% block after %}
+You can use this link to download them again at anytime during the next {{ days }} days. After {{ days }} days, you can visit the gallery to request a new download.
+
+{{ studio }}
+{{ gallery_url }}
+Questions? Reply to this email.{% endblock %}

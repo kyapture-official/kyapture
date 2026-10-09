@@ -19,10 +19,10 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.db import transaction
-from django.template.loader import render_to_string
 from django.utils import timezone
+
+from apps.core.emailing import app_url, format_datetime, send_email
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def hash_token(raw):
 
 
 def reset_link(raw):
-    return f'{settings.FRONTEND_URL}/reset-password#token={raw}'
+    return app_url(f'/reset-password#token={raw}')
 
 
 def issue_token(user):
@@ -87,14 +87,7 @@ def send_reset_email(email):
         'reset_url': reset_link(raw),
         'minutes': settings.PASSWORD_RESET_TOKEN_MINUTES,
     }
-    send_mail(
-        subject='Reset your Kyapture password',
-        message=render_to_string('users/emails/password_reset_email.txt', context),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        html_message=render_to_string('users/emails/password_reset_email.html', context),
-        fail_silently=False,
-    )
+    send_email('password_reset', user.email, context)
     logger.info('Password reset email sent for user_id=%s', user.pk)
     return True
 
@@ -109,19 +102,12 @@ def send_password_changed_email(user_id, how):
     context = {
         'display_name': user.display_name or user.username,
         'email': user.email,
-        'when': timezone.now().strftime('%d %b %Y, %H:%M UTC'),
+        'when': format_datetime(timezone.now()),
         'via_reset': how == 'reset',
         'by_staff': how == 'admin',
-        'forgot_url': f'{settings.FRONTEND_URL}/forgot-password',
+        'forgot_url': app_url('/forgot-password'),
     }
-    send_mail(
-        subject='Your Kyapture password was changed',
-        message=render_to_string('users/emails/password_changed_email.txt', context),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        html_message=render_to_string('users/emails/password_changed_email.html', context),
-        fail_silently=False,
-    )
+    send_email('password_changed', user.email, context)
     logger.info('Password changed email sent for user_id=%s', user.pk)
     return True
 

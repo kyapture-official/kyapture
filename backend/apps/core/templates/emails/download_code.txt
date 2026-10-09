@@ -1,0 +1,7 @@
+{% extends "emails/base.txt" %}
+{% block heading %}Your download code{% endblock %}
+{% block content %}Your code to download photos from "{{ gallery_title }}" by {{ studio }} is:
+
+    {{ code }}
+
+It works for {{ minutes }} minutes. If you did not ask to download these photos, you can ignore this email.{% endblock %}

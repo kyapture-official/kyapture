@@ -1,0 +1,10 @@
+{% extends "emails/base.html" %}
+{% block preheader %}A client favorited a photo in &ldquo;{{ gallery_title }}&rdquo;.{% endblock %}
+{% block heading %}New favorite{% endblock %}
+{% block content %}
+            <p style="margin:0;">{{ who }} marked a photo as a favorite in &ldquo;{{ gallery_title }}&rdquo;.</p>
+{% endblock %}
+{% block action %}{% include "emails/_button.html" with url=activity_url label="See favorite activity" %}{% endblock %}
+{% block after %}
+            <p class="em-muted" style="margin:0;font-size:13px;line-height:1.7;color:#6b6b70;">(You get at most one of these emails per collection every {{ window_minutes }} minutes.)</p>
+{% endblock %}

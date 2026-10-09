@@ -1,0 +1,10 @@
+{% extends "emails/base.txt" %}
+{% block heading %}New payment to review{% endblock %}
+{% block content %}A payment is waiting for review.
+
+Payment ID: {{ payment_id }}
+Plan: {{ plan_name }}
+Amount: {{ amount }}{% endblock %}
+{% block action %}
+Review it here: {{ staff_url }}
+{% endblock %}

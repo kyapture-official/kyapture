@@ -30,7 +30,7 @@ from PIL import Image as PILImage
 from apps.users import audit
 from apps.users.models import User
 from apps.users.notification_service import notify_payment_event, notify_staff_payment_submitted
-from apps.users.notifications import notify_payment_reviewed
+from apps.users.notifications import notify_payment_reviewed, notify_payment_submitted, queue_staff_payment_alert
 
 from .models import ManualPayment, UserSubscription, normalize_reference
 
@@ -194,6 +194,8 @@ def create_payment(*, user, plan, amount, reference, proof, proof_type, notes=''
             audit.record(audit.Action.PAYMENT_SUBMIT, actor=user, target=user, request=request,
                          reason=audit_summary(payment))
             notify_staff_payment_submitted(payment)
+            notify_payment_submitted(payment)           # 7.5-D: "we received your payment" (follows the Payments preference)
+            queue_staff_payment_alert(payment)          # 7.5-D: one email to STAFF_ALERT_EMAIL, after commit
     except Exception as exc:
         # The database rolled back; the private file must not outlive the row it belonged to.
         if stored_name:
