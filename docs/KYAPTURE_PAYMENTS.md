@@ -136,6 +136,10 @@ plan, amount and the staff page link only; no proof link, reference, notes or us
   real reject.
 * Debt: new rows 169-177.
 
+## 10b. When the account is deleted (7.5-E)
+
+`ManualPayment.user` is nullable (`SET_NULL`). An APPROVED payment is kept as an anonymised financial record: no user link, `payer_hash` (HMAC of the email), amount, currency, plan, reference, dates and period kept, note and proof file deleted. Rejected (and any pending) payments are deleted with their proof. A PENDING payment blocks the deletion request, and a closing account cannot submit a payment (`account_closing`). The staff queue shows an anonymised row as "Deleted account". See [KYAPTURE_ACCOUNT_DELETION.md](KYAPTURE_ACCOUNT_DELETION.md) section 6.
+
 ## 11. Paying for a DIFFERENT plan during an active period (current behaviour, no proration)
 
 What `approve_payment` does today, unchanged by 7.5-C and pinned by `test_another_plan_or_a_lapsed_one_starts_now_instead` (7.5-B) and

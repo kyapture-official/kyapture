@@ -1,6 +1,6 @@
 # C:/Users/LENOVO/Desktop/kyapture/backend/apps/users/signals.py
 import logging
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
 from .models import Notification, User
@@ -71,6 +71,18 @@ def auto_delete_files_on_user_delete(sender, instance, **kwargs):
                 f"Failed to delete '{field_name}' file for deleted User {instance.pk} "
                 f"on S3/Disk: {str(e)}"
             )
+
+
+@receiver(pre_delete, sender=User)
+def anonymise_payments_on_user_delete(sender, instance, **kwargs):
+    """
+    7.5-E: however a User row is deleted (the account-deletion purge, Django admin, a shell), the approved
+    manual payments stay as anonymised financial records and every other payment goes with its proof file.
+    The purge has already done this by the time it deletes the row, so here it finds nothing (idempotent).
+    """
+    from .account_deletion import anonymise_payments
+
+    anonymise_payments(instance, schedule_file_purge=True)
 
 
 @receiver(post_save, sender=Notification)

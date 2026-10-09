@@ -39,15 +39,15 @@ class StaffPaymentSerializer(serializers.Serializer):
 
     def to_representation(self, payment):
         staff = self.context['staff']
-        user = payment.user
-        subscription = getattr(user, 'subscription', None)
+        user = payment.user                      # None for an approved payment of a deleted account (7.5-E)
+        subscription = getattr(user, 'subscription', None) if user is not None else None
         live = bool(subscription and subscription.status == UserSubscription.SubscriptionStatus.ACTIVE
                     and subscription.expires_at > self.context['now'])
         return {
             'id': str(payment.pk),
-            'user_id': str(user.pk),
-            'email': user.email,
-            'name': user.display_name or user.username,
+            'user_id': str(user.pk) if user is not None else None,
+            'email': user.email if user is not None else None,
+            'name': (user.display_name or user.username) if user is not None else 'Deleted account',
             'plan': payment.plan.key,
             'plan_name': payment.plan.name,
             'plan_price': str(payment.plan_price),

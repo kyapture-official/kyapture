@@ -313,13 +313,21 @@ class PhotoListUploadView(APIView):
         # Atomic transaction: If database saving fails, the batch rolls back safely
         try:
             with transaction.atomic():
+                # 7.5-E: under the account's own row lock, the same one the account-deletion request and the
+                # purge take, so an upload that started before the request cannot add data to a closing account.
+                # 7G: NO KEY UPDATE still queues uploads behind each other, but not the photographer's other
+                # rows (a notification insert) behind the whole batch.
+                owner = type(photographer).objects.select_for_update(no_key=True).only(
+                    'pk', 'deletion_requested_at').get(pk=photographer.pk)
+                if owner.deletion_requested_at is not None:
+                    return Response({
+                        'error': 'This account is scheduled for deletion, so nothing can be uploaded.',
+                        'code': 'account_pending_deletion',
+                    }, status=status.HTTP_403_FORBIDDEN)
                 if metered:
-                    # The decision that counts: under a lock on the account's own row, against
-                    # usage read now, so two uploads running at once cannot both claim the
-                    # same free space. The check above only spares an ffprobe for a full account.
-                    # 7G: NO KEY UPDATE still queues uploads behind each other, but not the
-                    # photographer's other rows (a notification insert) behind the whole batch.
-                    type(photographer).objects.select_for_update(no_key=True).only('pk').get(pk=photographer.pk)
+                    # The decision that counts: against usage read now (under the lock above), so two uploads
+                    # running at once cannot both claim the same free space. The check above only spares an
+                    # ffprobe for a full account.
                     locked_metrics = get_user_subscription_metrics(photographer)
                     image_files, video_files, late_refused = _split_by_storage(
                         locked_metrics, image_files, video_files)

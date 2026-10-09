@@ -33,6 +33,7 @@ class CookieJWTAuthentication(JWTAuthentication):
             # 3. Validate the token and return the associated user model
             validated_token = self.get_validated_token(raw_token)
             user = self.get_user(validated_token)
+            self.refuse_closing_account(request, user)
 
             # 4. Critical Security Guard: Enforce CSRF checks if the token came from a cookie
             if from_cookie:
@@ -41,6 +42,25 @@ class CookieJWTAuthentication(JWTAuthentication):
             return user, validated_token
         except InvalidToken:
             return None
+
+    # 7.5-E: while an account deletion is waiting, the signed-in owner can see who they are, read the deletion
+    # status, cancel it and sign out. Every other authenticated route is refused with a clear code, so nothing is
+    # created, changed or paid for on an account that is closing. `auth-me` is read-only.
+    CLOSING_ACCOUNT_ROUTES = frozenset({
+        'auth-me', 'auth-logout', 'auth-logout-all', 'account-deletion-status', 'account-deletion-cancel',
+    })
+
+    def refuse_closing_account(self, request, user):
+        if user.deletion_requested_at is None:
+            return
+        match = getattr(request, 'resolver_match', None) or getattr(getattr(request, '_request', None), 'resolver_match', None)
+        name = getattr(match, 'url_name', None)
+        if name in self.CLOSING_ACCOUNT_ROUTES and (name != 'auth-me' or request.method in ('GET', 'HEAD', 'OPTIONS')):
+            return
+        raise PermissionDenied(detail={
+            'error': 'This account is scheduled for deletion. Cancel the deletion to use it again.',
+            'code': 'account_pending_deletion',
+        })
 
     def get_user(self, validated_token):
         """

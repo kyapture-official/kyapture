@@ -121,3 +121,60 @@ def send_password_changed_email_task(self, user_id, how):
     except Exception as exc:
         logger.exception("[send_password_changed_email] for user %s failed; retrying", user_id)
         raise self.retry(exc=exc)
+
+
+# ─── account deletion (7.5-E, apps/users/account_deletion.py) ────────────────
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_deletion_requested_email(self, user_id):
+    """The "your account is scheduled for deletion" email with a fresh cancel link (the token is made in the task)."""
+    from .account_deletion import send_requested_email
+
+    try:
+        send_requested_email(user_id)
+    except Exception as exc:
+        logger.error("[send_deletion_requested_email] for user %s failed (%s); retrying", user_id, type(exc).__name__)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_account_deleted_email(self, email):
+    """The one "your account was deleted" notice, to the address the account had. Queued once, by the final purge step."""
+    from .account_deletion import send_deleted_email
+
+    try:
+        send_deleted_email(email)
+    except Exception as exc:
+        logger.error("[send_account_deleted_email] failed (%s); retrying", type(exc).__name__)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=8, acks_late=True)
+def purge_account(self, user_id):
+    """
+    Owner-less purge of one closing account (no request, no user in the session). Idempotent and resumable:
+    it re-checks the status under the row lock, does bounded steps, re-queues itself while there is more to do
+    and retries (with backoff) when a file could not be deleted, leaving the rows in place until it can.
+    """
+    from .account_deletion import run_purge_steps
+
+    outcome = run_purge_steps(user_id)
+    if outcome == 'more':
+        purge_account.apply_async(args=[user_id], countdown=1)
+    elif outcome == 'retry':
+        if self.request.retries >= self.max_retries:
+            logger.error("[purge_account] giving up for now on user %s: files still cannot be deleted; the sweep resumes it", user_id)
+            return outcome
+        raise self.retry(countdown=min(30 * 2 ** self.request.retries, 1800))
+    return outcome
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def sweep_account_deletions(self):
+    """Beat: starts every purge that is due and resumes the ones that stalled (a killed worker, a long storage outage)."""
+    from .account_deletion import sweep_due
+
+    queued = sweep_due()
+    if queued:
+        logger.info("[sweep_account_deletions] queued %s purge(s).", queued)
+    return queued

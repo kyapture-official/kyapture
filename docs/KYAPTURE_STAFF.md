@@ -74,7 +74,7 @@ normally after reactivation. Tests: `apps/clients/tests/test_suspended_owner_7_5
 ## 5. The audit log
 
 `staff_audit_log`: `id, created_at, action, actor_id, actor_email, target_id, target_email, ip, reason`. Users are plain ids
-plus an email snapshot, not foreign keys, so deleting an account neither cascades into nor rewrites its history.
+plus an email snapshot, not foreign keys, so deleting an account neither cascades into nor rewrites its history (proved in 7.5-E: a user with audit rows is deleted and the rows stay identical). What the rows keep after an account is deleted, and for how long, is in [KYAPTURE_ACCOUNT_DELETION.md](KYAPTURE_ACCOUNT_DELETION.md) section 7 (full address and IP of rows written before 7.5-E, kept with no retention period: debt row 193).
 
 | Action | Written by | Reason |
 |---|---|---|
@@ -92,6 +92,7 @@ plus an email snapshot, not foreign keys, so deleting an account neither cascade
 | `security.password_reset` | reset-confirm view (completion) | `reset` |
 | `security.login_lockout` | Django-admin login lock (`apps/core/admin_login.py`); account login throttle (`LoginAccountRateThrottle`, once per window) | `admin_ip` / `admin_account` / `account_rate` |
 | `security.gallery_lockout` | `post_save` signal on the lockout's own SECURITY notification (`apps/clients/lockout.py` is unchanged) | `pin` / `password` / `email_code` |
+| `account.deletion_requested` / `account.deletion_cancelled` / `account.deletion_completed` | the owner's own deletion request, its cancel, and the purge job (7.5-E, [KYAPTURE_ACCOUNT_DELETION.md](KYAPTURE_ACCOUNT_DELETION.md)) | `requested` / `requested_now`, `cancelled` / `cancelled_by_link`, `completed`. The row holds the account id (as actor and target) and a MASKED address (`k***@gmail.com`); no IP, no full address |
 
 Security events use `record_event` (a failed write is logged and swallowed, so the audit can never break a sign-in or a
 reset). Staff actions use `record` inside the action's transaction (fail closed: no row, no change, no data).

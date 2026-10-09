@@ -788,7 +788,8 @@ class BeatScheduleTests(APITestCase):
                      'purge-old-download-logs', 'purge-expired-download-jobs', 'purge-old-notifications',
                      'flush-expired-jwt-tokens'):
             self.assertIn(name, schedule)
-        self.assertEqual(len(schedule), 8)
+        self.assertIn('account-deletion-sweep', schedule)        # 7.5-E added its own named entry
+        self.assertEqual(len(schedule), 9)
         self.assertEqual(settings.CELERY_BEAT_SCHEDULE.keys(), schedule.keys())
 
     def test_it_runs_just_after_midnight_in_kathmandu(self):

@@ -100,6 +100,7 @@ from .download_jobs import (
 from .ready_email import requester_ip
 from . import lockout
 from apps.core.request_ip import client_ip
+from apps.users.ownership import PUBLIC_OWNER, PUBLIC_USER
 from .tasks import prepare_download_job
 from .web_size import WebSizeNotReady, open_cached, request_cached
 from apps.core.watermark import build_watermark_spec
@@ -371,7 +372,7 @@ class PublicGalleryView(APIView):
                     photographer__username=username,  # Multi-tenant scoping [1.1.2]
                     is_published=True,                # Block draft galleries
                     is_active=True,                   # Block soft-deleted galleries [1.1.2]
-                    photographer__is_active=True,     # 7.5-A: a suspended owner's gallery is a 404
+                    **PUBLIC_OWNER,     # 7.5-A: a suspended owner's gallery is a 404
                 )
             )
         except Gallery.DoesNotExist:
@@ -527,7 +528,7 @@ class PublicGalleryPhotosView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
-                photographer__is_active=True,
+                **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return None
@@ -602,7 +603,7 @@ class GalleryUnlockView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
-                photographer__is_active=True,
+                **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return None
@@ -769,7 +770,7 @@ class GalleryFavoritesView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
-                photographer__is_active=True,
+                **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return None
@@ -906,7 +907,7 @@ class FavoriteListsAccessMixin:
             gallery = Gallery.objects.get(
                 Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
                 slug=slug.strip().lower(), photographer__username=username.strip().lower(),
-                is_published=True, is_active=True, photographer__is_active=True,
+                is_published=True, is_active=True, **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return None, None, None, None, Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1054,7 +1055,7 @@ class PublicDownloadAccessView(APIView):
                 photographer__username=username.strip().lower(),
                 is_published=True,
                 is_active=True,
-                photographer__is_active=True,
+                **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1243,7 +1244,7 @@ class PublicGalleryDownloadView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
-                photographer__is_active=True,
+                **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return None
@@ -1512,7 +1513,7 @@ class DownloadJobGateMixin:
                 photographer__username=username.strip().lower(),
                 is_published=True,
                 is_active=True,
-                photographer__is_active=True,
+                **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return None, None, Response({'error': 'Gallery not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1830,7 +1831,7 @@ class PublicVideoStreamView(APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
-                photographer__is_active=True,
+                **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return None
@@ -1933,7 +1934,7 @@ class PublicPhotoDownloadView(PinGuessThrottledMixin, APIView):
                 photographer__username=username,
                 is_published=True,
                 is_active=True,
-                photographer__is_active=True,
+                **PUBLIC_OWNER,
             )
         except Gallery.DoesNotExist:
             return None
@@ -2152,7 +2153,7 @@ class PublicPhotographerPortfolioView(APIView):
         # separate routes and keep following each gallery's own settings.
         photographer = get_object_or_404(
             User.objects.filter(
-                is_active=True, is_staff=False, is_superuser=False, portfolio_public=True
+                is_staff=False, is_superuser=False, portfolio_public=True, **PUBLIC_USER
             ),
             username=username.strip().lower()
         )

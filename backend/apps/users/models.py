@@ -7,7 +7,7 @@ from django.db import models
 from apps.core.models import BaseModel
 from apps.core.storage import PublicMediaStorage
 from .managers import CustomUserManager
-from django.core.validators import RegexValidator
+from django.core.validators import MaxValueValidator, RegexValidator
 
 # Mirrors apps/galleries/models.py's hex_color_validator. Duplicated rather than
 # imported to avoid a cross-app import at model-load time (galleries only
@@ -151,6 +151,17 @@ class User(AbstractUser):
     # (Django admin) has is_active=False and no `suspended_at`.
     suspended_at = models.DateTimeField(null=True, blank=True, editable=False)
     suspension_reason = models.CharField(max_length=300, blank=True, default='', editable=False)
+
+    # ── Account deletion (7.5-E, apps/users/account_deletion.py) ───────────
+    # None of these is a credential. `deletion_requested_at` set = the account is closing:
+    # public galleries answer 404, every API route except the cancel page refuses, billing
+    # jobs skip it. `deletion_started_at` set = the purge job has begun (no way back).
+    # `deletion_cancel_hash` is the SHA-256 of the emailed cancel link's token (the token
+    # itself exists only in the email), unique so the link finds its account.
+    deletion_requested_at = models.DateTimeField(null=True, blank=True, editable=False)
+    deletion_scheduled_for = models.DateTimeField(null=True, blank=True, editable=False)
+    deletion_started_at = models.DateTimeField(null=True, blank=True, editable=False)
+    deletion_cancel_hash = models.CharField(max_length=64, null=True, blank=True, unique=True, editable=False)
 
     class Meta:
         db_table = 'users'
@@ -358,6 +369,10 @@ class StaffAuditLog(models.Model):
         PAYMENT_SUBMIT = 'payment.submit', 'Submitted a manual payment'
         # The daily job moved an account to Free after its paid period (and grace) ended (7.5-C): no actor.
         SUBSCRIPTION_DOWNGRADE = 'subscription.downgrade', 'Moved to Free after the plan ended'
+        # Account deletion (7.5-E): the account's own act, then the purge job's. Id and a coarse reason only.
+        ACCOUNT_DELETION_REQUESTED = 'account.deletion_requested', 'Requested account deletion'
+        ACCOUNT_DELETION_CANCELLED = 'account.deletion_cancelled', 'Cancelled account deletion'
+        ACCOUNT_DELETION_COMPLETED = 'account.deletion_completed', 'Account deleted'
 
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -388,3 +403,43 @@ class StaffAuditLog(models.Model):
 
     def __str__(self):
         return f'{self.created_at:%Y-%m-%d %H:%M} {self.action} actor={self.actor_id} target={self.target_id}'
+
+
+class AccountSettings(models.Model):
+    """
+    The ONE row that tunes account deletion (7.5-E), edited in Django admin (Users -> Account
+    settings) and read each time a deletion is requested, so a change applies to the next request
+    with no deploy. Same single-row pattern as Upload limits and Subscription lifecycle.
+
+    deletion_cooling_off_days  how long a requested deletion waits before the purge starts. During the
+                               wait the owner can cancel and everything is restored. 0 = the purge
+                               starts at once and nothing can be cancelled.
+    """
+    id = models.PositiveSmallIntegerField(primary_key=True, editable=False)  # always 1, set in save()
+    deletion_cooling_off_days = models.PositiveSmallIntegerField(
+        default=7, validators=[MaxValueValidator(90)],
+        verbose_name='Deletion cooling-off days (DELETION_COOLING_OFF_DAYS)',
+        help_text="Days between a deletion request and the purge. The account can cancel in this time. "
+                  "0 starts the purge immediately (no way back). Maximum 90.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'account_settings'
+        verbose_name = 'Account settings'
+        verbose_name_plural = 'Account settings'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        """The single row; created with the defaults if missing."""
+        try:
+            return cls.objects.get(pk=1)
+        except cls.DoesNotExist:
+            return cls.objects.get_or_create(pk=1)[0]
+
+    def __str__(self):
+        return 'Account settings'

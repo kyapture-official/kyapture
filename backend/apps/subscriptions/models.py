@@ -204,11 +204,17 @@ class ManualPayment(BaseModel):
 
     CURRENCY = 'NPR'
 
+    # SET_NULL, not CASCADE (7.5-E): an APPROVED payment is a financial record that outlives the account.
+    # Deleting an account removes this link and stores `payer_hash` instead (apps/users/account_deletion.py).
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name='manual_payments'
     )
+    # HMAC of the payer's email, written when the account is deleted; '' while the account exists.
+    payer_hash = models.CharField(max_length=64, blank=True, default='', editable=False)
     plan = models.ForeignKey(
         SubscriptionPlan,
         on_delete=models.PROTECT,
@@ -274,7 +280,8 @@ class ManualPayment(BaseModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Payment #{str(self.id)[:8]} — {self.user.email} ({self.get_status_display()})"
+        payer = self.user.email if self.user_id else 'deleted account'
+        return f"Payment #{str(self.id)[:8]} — {payer} ({self.get_status_display()})"
 
 
 class PaymentInstructions(models.Model):

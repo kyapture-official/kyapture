@@ -247,6 +247,9 @@ class StaffUserStateView(APIView):
             if target.is_staff or target.is_superuser:
                 return error('Staff accounts are managed in the admin, not here.', 'cannot_change_staff',
                              status.HTTP_403_FORBIDDEN)
+            if target.deletion_requested_at is not None:
+                return error('The owner asked to delete this account, so its state cannot be changed here.',
+                             'deletion_pending', status.HTTP_409_CONFLICT)
             if self.suspend and not target.is_active:
                 return error('This account is already suspended.', 'already_suspended', status.HTTP_409_CONFLICT)
             if not self.suspend and target.is_active:

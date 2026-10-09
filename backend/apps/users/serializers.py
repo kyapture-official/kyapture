@@ -36,16 +36,25 @@ class UserProfileSerializer(serializers.ModelSerializer):
         from apps.subscriptions.entitlements import has_live_paid_plan
         return has_live_paid_plan(user)
 
+    # 7.5-E: null, or {requested_at, scheduled_for} while an account deletion is waiting (the app then shows
+    # the "Cancel deletion" page instead of the dashboard). Read only.
+    deletion = serializers.SerializerMethodField()
+
+    def get_deletion(self, user):
+        if user.deletion_requested_at is None:
+            return None
+        return {'requested_at': user.deletion_requested_at, 'scheduled_for': user.deletion_scheduled_for}
+
     class Meta:
         model = User
         fields = [
             'id', 'email', 'username', 'display_name',
             'bio', 'avatar', 'logo', 'branding_color',
-            'phone', 'website', 'is_active_plan', 'is_staff', 'created_at'
+            'phone', 'website', 'is_active_plan', 'is_staff', 'created_at', 'deletion'
         ]
         # is_staff is shown only so the UI can offer the staff feedback inbox; it can
         # never be written here, and the inbox endpoints enforce it server-side.
-        read_only_fields = ['id', 'email', 'is_active_plan', 'is_staff', 'created_at']
+        read_only_fields = ['id', 'email', 'is_active_plan', 'is_staff', 'created_at', 'deletion']
         # Uniqueness is enforced by validate_username below (case-normalized,
         # excluding the user's own row, with the app's own wording); the model's
         # generic UniqueValidator would answer first with "user with this
@@ -229,6 +238,8 @@ class LoginSerializer(serializers.Serializer):
             # Only someone who typed the RIGHT password learns that the account is suspended.
             suspended = User.objects.filter(email=clean_email, is_active=False).first()
             if suspended is not None and suspended.check_password(password):
+                if suspended.deletion_started_at is not None:        # 7.5-E: the purge has begun
+                    raise serializers.ValidationError({'non_field_errors': 'This account is being deleted and can no longer be used.'})
                 raise serializers.ValidationError({'non_field_errors': 'This account has been suspended. Contact support.'})
             raise serializers.ValidationError({'non_field_errors': 'Invalid email or password.'})
             

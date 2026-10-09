@@ -57,6 +57,10 @@ EMAILS = {
     # account security (always sent: no preference applies)
     'password_reset': EmailSpec('Reset your Kyapture password'),
     'password_changed': EmailSpec('Your Kyapture password was changed'),
+    # account deletion (7.5-E): always sent, no preference applies
+    'deletion_code': EmailSpec('Confirm deleting your Kyapture account'),
+    'deletion_requested': EmailSpec('Your Kyapture account is scheduled for deletion'),
+    'account_deleted': EmailSpec('Your Kyapture account was deleted'),
     # photographer notification preferences (Settings > Notifications)
     'notify_download': EmailSpec('New download from one of your collections', preferences_link=True),
     'notify_favorite': EmailSpec('New favorite in one of your collections', preferences_link=True),

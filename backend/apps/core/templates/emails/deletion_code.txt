@@ -1,0 +1,7 @@
+{% extends "emails/base.txt" %}
+{% block heading %}Confirm account deletion{% endblock %}
+{% block content %}Use this code to confirm that you want to delete your Kyapture account:
+
+    {{ code }}
+
+It works for {{ minutes }} minutes. If you did not ask to delete your account, ignore this email and change your password: nothing happens without this code.{% endblock %}

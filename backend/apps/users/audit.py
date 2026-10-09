@@ -54,6 +54,31 @@ def record(action, *, actor=None, target=None, request=None, reason=''):
     )
 
 
+def masked_email(email):
+    """`k***@gmail.com`: a non-secret snapshot that tells staff which kind of address it was, not whose."""
+    local, _, domain = (email or '').strip().partition('@')
+    if not local or not domain:
+        return ''
+    return f'{local[0]}***@{domain}'
+
+
+def record_account_event(action, user_id, email, *, reason):
+    """
+    Account-deletion trail (7.5-E): the account's own id and a MASKED address, a coarse reason code, nothing
+    else (no IP, no full address, no name). The id is a plain value, not a foreign key, so the row outlives the
+    account without any cascade. Strict like record(): call it inside the transaction of the change.
+    """
+    return StaffAuditLog.objects.create(
+        action=action,
+        actor_id=user_id,
+        actor_email='',
+        target_id=user_id,
+        target_email=masked_email(email),
+        ip=None,
+        reason=clean_reason(reason),
+    )
+
+
 def record_event(action, *, actor=None, target=None, request=None, reason=''):
     """Like record(), but never raises: returns the row, or None when it could not be written."""
     try:

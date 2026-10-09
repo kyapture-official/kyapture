@@ -27,6 +27,7 @@ from apps.core.storage import PrivateMediaStorage
 from apps.core.utils import sanitize_download_filename
 from apps.core.watermark import build_watermark_spec
 from apps.photos.models import MediaAsset
+from apps.users.ownership import owner_is_public
 
 from .download_access import effective_high_res_mode, web_px_for_gallery
 from .models import DownloadJob
@@ -196,7 +197,7 @@ def run_download_job(job_id):
         return job.state
 
     gallery = job.gallery
-    if not gallery.photographer.is_active:      # 7.5-A: the owner was suspended after the visitor asked
+    if not owner_is_public(gallery.photographer):      # 7.5-A/7.5-E: the owner was suspended, or asked to be deleted, after the visitor asked
         _fail(job, 'owner_unavailable')
         return job.state
     assets = list(job_assets(gallery, job.photo_set, job.asset_ids))

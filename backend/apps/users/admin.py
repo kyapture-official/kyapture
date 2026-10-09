@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
 from . import audit
-from .models import StaffAuditLog, User
+from .models import AccountSettings, StaffAuditLog, User
 
 
 class KyaptureUserAdmin(UserAdmin):
@@ -39,6 +39,27 @@ class KyaptureUserAdmin(UserAdmin):
             else:       # a reason / date left by an earlier suspension in the staff area no longer applies
                 User.objects.filter(pk=obj.pk).update(suspended_at=None, suspension_reason='')
             audit.record_event(action, actor=request.user, target=obj, request=request, reason='django admin')
+
+
+@admin.register(AccountSettings)
+class AccountSettingsAdmin(admin.ModelAdmin):
+    """The one row that tunes account deletion (7.5-E); read at each deletion request, so an edit applies to the next."""
+    list_display = ['__str__', 'deletion_cooling_off_days', 'updated_at']
+    fields = ['deletion_cooling_off_days']
+
+    def changelist_view(self, request, extra_context=None):
+        AccountSettings.load()  # the row always exists, so there is always something to open
+        return super().changelist_view(request, extra_context)
+
+    def get_object(self, request, object_id, from_field=None):
+        AccountSettings.load()
+        return super().get_object(request, object_id, from_field)
+
+    def has_add_permission(self, request):
+        return not AccountSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(StaffAuditLog)

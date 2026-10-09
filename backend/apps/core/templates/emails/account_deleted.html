@@ -1,0 +1,8 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Your Kyapture account was deleted.{% endblock %}
+{% block heading %}Your account was deleted{% endblock %}
+{% block content %}
+            <p style="margin:0 0 16px 0;">Your Kyapture account ({{ email }}) has been deleted. Your collections, photos, videos, settings and files are gone and cannot be restored.</p>
+            <p style="margin:0 0 16px 0;">Records of payments you made are kept without your name or email, as the law and our accounts require.</p>
+            <p style="margin:0;">This is the last email we will send to this address about the account. You are welcome to start a new account at any time.</p>
+{% endblock %}

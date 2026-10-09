@@ -70,6 +70,11 @@ def realistic_contexts():
         'plan_ended': dict(plan_name='Pro', end_date='14 Oct 2026', billing_url=link('/dashboard/billing')),
         'staff_payment_alert': dict(payment_id='0190aa', plan_name='Pro', amount='NPR 1,500',
                                     staff_url=link('/dashboard/staff/payments')),
+        # 7.5-E account deletion
+        'deletion_code': dict(code='482913', minutes=10),
+        'deletion_requested': dict(display_name='Ann', email='ann@example.test', scheduled_date='21 Oct 2026', days=7,
+                                   cancel_url=link('/cancel-deletion#token=tok-en_123')),
+        'account_deleted': dict(email='ann@example.test'),
     }
 
 
@@ -80,11 +85,12 @@ USER_TEXT_KEYS = ('display_name', 'studio', 'gallery_title', 'who', 'what', 'pla
 @override_settings(FRONTEND_URL=APP)
 class RenderTests(SimpleTestCase):
     def test_the_audit_is_complete_and_every_email_has_a_context(self):
-        # the 10 emails found by the 7.5-D audit + payment received + the staff alert
+        # the 10 emails found by the 7.5-D audit + payment received + the staff alert + the 3 account-deletion emails (7.5-E)
         self.assertEqual(set(EMAILS), {
             'download_ready', 'download_code', 'password_reset', 'password_changed', 'notify_download',
             'notify_favorite', 'payment_received', 'payment_approved', 'payment_rejected', 'plan_expiring',
             'plan_ended', 'staff_payment_alert',
+            'deletion_code', 'deletion_requested', 'account_deleted',      # 7.5-E
         })
         self.assertEqual(set(realistic_contexts()), set(EMAILS))
 

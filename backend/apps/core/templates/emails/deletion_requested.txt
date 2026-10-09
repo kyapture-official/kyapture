@@ -1,0 +1,12 @@
+{% extends "emails/base.txt" %}
+{% block heading %}Your account is scheduled for deletion{% endblock %}
+{% block content %}Hi {{ display_name }},
+
+We received a request to delete your Kyapture account ({{ email }}). You were signed out on every device, and your collections are no longer visible to your clients.
+
+The deletion starts on {{ scheduled_date }} ({{ days }} days after the request). Then your collections, photos, videos, settings and files are permanently deleted and cannot be restored.
+
+If you changed your mind, cancel the deletion before then and everything comes back exactly as it was. If you did not ask for this, cancel it and change your password.{% endblock %}
+{% block action %}
+Cancel the deletion: {{ cancel_url }}
+{% endblock %}

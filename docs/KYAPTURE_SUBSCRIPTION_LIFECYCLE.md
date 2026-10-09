@@ -68,6 +68,10 @@ Django admin -> Subscriptions -> **Subscription lifecycle** (one row, like Uploa
   (audit row, `silent=old`) without a bell or a mail, so the first run on a database full of old expired rows does not mail everyone who
   ever lapsed. Run `--dry-run` first on a real database.
 
+### Accounts that asked to be deleted (7.5-E)
+
+Billing stops for an account whose deletion is waiting: the reminder and downgrade candidate queries exclude it and each step re-checks inside the lock, so it gets no reminder, no bell, no mail and no `subscription.downgrade` audit row, and its subscription is not changed. If the owner cancels the deletion the next run treats it like any other account. When the purge runs the subscription is set to `cancelled` and deleted with the account ([KYAPTURE_ACCOUNT_DELETION.md](KYAPTURE_ACCOUNT_DELETION.md)).
+
 ### Who is not mailed
 
 An account with `is_active = False` (suspended or deactivated) gets no reminder, no bell and no mail; its downgrade still applies. A

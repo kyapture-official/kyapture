@@ -171,6 +171,11 @@ REST_FRAMEWORK = {
         "staff_action": "30/hour",
         # 7.5-B: manual payment receipts a user may submit, per user id.
         "payment_submit": "10/hour",
+        # 7.5-E account deletion: per signed-in user, except the emailed cancel link (per client address).
+        "account_deletion": "5/hour",
+        "account_deletion_code": "3/hour",
+        "account_deletion_cancel": "10/hour",
+        "account_deletion_cancel_link": "10/hour",
     }
 }
 
@@ -423,6 +428,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.users.tasks.flush_expired_jwt_tokens',
         'schedule': crontab(hour=4, minute=0, day_of_week='sunday'),  # weekly
     },
+    # 7.5-E: starts the purge of every account whose cooling-off ended, and resumes a purge that stopped
+    # half way (a failed file delete, a killed worker). Cheap when there is nothing to do.
+    "account-deletion-sweep": {
+        "task": "apps.users.tasks.sweep_account_deletions",
+        "schedule": crontab(minute="*/15"),
+    },
     "subscription-lifecycle-daily": {
         "task": "apps.subscriptions.tasks.run_subscription_lifecycle",
         "schedule": crontab(hour=18, minute=25),
@@ -610,3 +621,13 @@ PASSWORD_RESET_TOKEN_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_MINUTES", "30
 # (password reset, etc.) from this setting instead of hardcoding a hostname,
 # so the exact same view code produces a working link in every environment.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+
+# ─────────────────────────────────────────────────────────────
+# ACCOUNT DELETION (7.5-E, apps/users/account_deletion.py)
+# ─────────────────────────────────────────────────────────────
+# The cooling-off length is an admin-editable row (Users -> Account settings), not a setting.
+# Photos/videos removed (files first, then rows) per purge step; the job re-queues itself until done.
+ACCOUNT_PURGE_BATCH_ASSETS = int(os.getenv("ACCOUNT_PURGE_BATCH_ASSETS", "200"))
+# An account with no password confirms a deletion with an emailed one-time code.
+ACCOUNT_DELETION_CODE_MINUTES = int(os.getenv("ACCOUNT_DELETION_CODE_MINUTES", "10"))
+ACCOUNT_DELETION_CODE_MAX_TRIES = int(os.getenv("ACCOUNT_DELETION_CODE_MAX_TRIES", "5"))

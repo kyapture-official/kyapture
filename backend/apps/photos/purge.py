@@ -128,6 +128,20 @@ def collecting_purges():
     schedule_purge(batch.refs, batch.prefixes)
 
 
+@contextmanager
+def discarding_purges():
+    """
+    While active, MediaAsset deletions add their storage objects to a batch that is THROWN AWAY. For a
+    caller that has already deleted those files itself and then removes the rows (account deletion,
+    apps/users/account_deletion.py: files first, rows after), so no second, redundant purge is queued.
+    """
+    _collector.stack.append(PurgeBatch())
+    try:
+        yield
+    finally:
+        _collector.stack.pop()
+
+
 def schedule_purge(refs, prefixes=()):
     """Queue the idempotent purge after the surrounding transaction commits."""
     refs = list({(r['s'], r['n']): r for r in refs}.values())      # de-duplicate

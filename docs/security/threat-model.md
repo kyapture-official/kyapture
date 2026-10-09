@@ -666,3 +666,26 @@ Design and rules: [docs/KYAPTURE_SUBSCRIPTION_LIFECYCLE.md](../KYAPTURE_SUBSCRIP
 Not fixed (debt rows 178-185): migrations on the dev DB only, placeholder mail text, a mail lost if the process dies between claim and send
 and no alert when the beat is down, project time zone still UTC, grace does not extend access, branding colour not plan-gated, notice only on
 Billing and the dashboard home, QA scripts outside the suite.
+
+## 17. Chunk 7.5-E (account deletion) results
+
+Design and rules: [docs/KYAPTURE_ACCOUNT_DELETION.md](../KYAPTURE_ACCOUNT_DELETION.md). Browser QA: [docs/qa-7-5e/results.md](../qa-7-5e/results.md).
+
+| ID | Threat | Result | Proof |
+|---|---|---|---|
+| D1 | Someone with a stolen session (or an unattended browser) deletes the whole account | **Mitigated in layers**: the password is re-entered (an account with no password types an emailed 6-digit code, hashed in the cache, 10 minutes, 5 tries) AND the account email is typed; 5 requests per hour per user; a cooling-off of `deletion_cooling_off_days` (default 7) in which the owner is emailed a cancel link and can cancel; every session ends at once | `RequestTests` (wrong / missing password, wrong email), `CodeTests`, `ThrottleTests.test_the_request_is_limited_per_user`, `PendingTests` |
+| D2 | The deletion endpoint is used to guess the password or the code | 5 requests per hour per user (`account_deletion`), code tries capped (`ACCOUNT_DELETION_CODE_MAX_TRIES`), code emails 3 per hour | `ThrottleTests`, `CodeTests.test_too_many_wrong_codes_burn_the_code` |
+| D3 | One account deletes or cancels another | **No route takes an id**; every call acts on `request.user`; a body naming another id is ignored | `RequestTests.test_another_users_account_cannot_be_deleted_and_no_route_takes_an_id` |
+| D4 | The cancel link is guessed, replayed or leaked | 256-bit token in the URL fragment (no server, log or Referer sees it), only its SHA-256 stored, made inside the email task (never through the broker), replaced by a resend, one use, dead once the purge starts; per-address throttle 10/hour that ignores a forged `X-Forwarded-For` | `CancelTests`, `ThrottleTests.test_the_cancel_link_is_limited_per_client_address_and_ignores_a_forged_forwarded_header` |
+| D5 | A cancel and the purge start race, or two purge runners run | The request, cancel, purge start and final step lock the user row (`FOR NO KEY UPDATE`) and re-read the status inside it; a per-account cache lock turns a second runner away | `RaceTests` (real threads, TransactionTestCase), `PurgeTests.test_a_second_runner_is_turned_away...` |
+| D6 | Data survives the deletion (orphan files, visitor data) | Files are deleted first through the 5.1-D purge path, rows only when the files are gone; the account's key prefixes are removed in both storages; visitor data goes with the galleries | `PurgeTests.test_the_whole_account_is_gone_every_file_and_every_row`, `..._purge_orphans_in_dry_run...`, `..._visitor_data...` |
+| D7 | A failed or killed purge leaves a half-deleted account | Resumable: rows stay until their files are gone, the task retries, the beat sweep resumes a stalled purge | `PurgeTests.test_a_failing_file_delete_keeps_the_rows...`, `..._failing_account_file...`, `..._beat_sweep...` |
+| D8 | New data is created during the purge (an upload, a login, a payment) | The API refuses a closing account (`403 account_pending_deletion`); uploads and payments also refuse under the row lock; sign-in is refused once the purge started | `PendingTests`, `test_deleting_owner_7_5e.py` |
+| D9 | The public keeps seeing a closing owner's galleries | The ten public lookups, the portfolio, the ZIP job and the ready email share ONE rule (`ownership.PUBLIC_OWNER`) with the 7.5-A suspension; 17 of the 19 per-path tests failed before the shared filter was applied | `apps/clients/tests/test_deleting_owner_7_5e.py` (19) |
+| D10 | Staff delete a staff account (or a user, from the wrong place) | Staff are refused (403) and nothing is stamped; staff cannot suspend or reactivate a closing account | `RequestTests.test_staff_cannot_delete...`, `PendingTests.test_staff_cannot_suspend...` |
+| D11 | The audit log blocks the deletion, or is rewritten by it | The table has no foreign key to the user; a user with audit rows is deleted and the rows are identical afterwards; append-only layers untouched | `AuditTests` |
+| D12 | The financial record identifies the person | An approved payment keeps amount, plan, dates and reference but loses the user link, the note and the proof; the address becomes an HMAC (a pseudonym, not anonymity: debt row 195) | `PaymentRecordTests` |
+| D13 | A secret ends up in a log | No log line holds the password, the code, the token or the address | `AuditTests.test_no_log_line_holds...` |
+
+Not fixed (debt rows 192-200): migrations on the dev DB only; the audit log keeps full emails and IPs of older rows with no retention period; `purge_orphans` does not know the Web Size cache; purge residuals (an in-flight upload's file, the farewell address in the broker, an unverified address, the hash is a pseudonym); backups and logs are outside the purge; no data export; no staff view of waiting deletions; no download during the cooling-off; QA scripts outside the suite.
+

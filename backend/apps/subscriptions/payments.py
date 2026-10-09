@@ -168,7 +168,10 @@ def create_payment(*, user, plan, amount, reference, proof, proof_type, notes=''
     stored_name = None
     try:
         with transaction.atomic():
-            User.objects.select_for_update(no_key=True).get(pk=user.pk)
+            owner = User.objects.select_for_update(no_key=True).get(pk=user.pk)
+            if owner.deletion_requested_at is not None:       # 7.5-E: billing stops for an account that is closing
+                raise PaymentError(
+                    'account_closing', 'This account is scheduled for deletion, so no payment can be sent.')
             pending = ManualPayment.objects.filter(user=user, status=Status.PENDING)
             if pending.count() >= settings.MANUAL_PAYMENT_MAX_PENDING:
                 raise PaymentError(

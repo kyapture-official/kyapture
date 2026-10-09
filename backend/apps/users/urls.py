@@ -9,6 +9,10 @@ from .views import (
     MeView, ChangePasswordView, LogoutAllView, UserSettingsView,
 )
 
+from .account_api import (
+    DeletionStatusView, DeletionCodeView, DeletionRequestView, DeletionCancelView, DeletionCancelLinkView,
+)
+
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='auth-register'),
     path('login/', LoginView.as_view(), name='auth-login'),
@@ -21,4 +25,10 @@ urlpatterns = [
     path('change-password/', ChangePasswordView.as_view(), name='auth-change-pw'),
     path('logout-all/', LogoutAllView.as_view(), name='auth-logout-all'),
     path('settings/', UserSettingsView.as_view(), name='auth-settings'),
+    # 7.5-E account deletion (apps/users/account_api.py)
+    path('account/deletion/', DeletionStatusView.as_view(), name='account-deletion-status'),
+    path('account/deletion/code/', DeletionCodeView.as_view(), name='account-deletion-code'),
+    path('account/deletion/request/', DeletionRequestView.as_view(), name='account-deletion-request'),
+    path('account/deletion/cancel/', DeletionCancelView.as_view(), name='account-deletion-cancel'),
+    path('account/deletion/cancel-link/', DeletionCancelLinkView.as_view(), name='account-deletion-cancel-link'),
 ]

@@ -38,6 +38,9 @@ Share-by-email (debt row 9) is a frontend `mailto:` link: the server sends nothi
 | `plan_expiring` (was a placeholder) | Your Kyapture plan is ending soon | yes | the daily job (claim, send after commit, release on failure) | "Payments" preference |
 | `plan_ended` (was a placeholder) | Your Kyapture plan has ended | yes | same | "Payments" preference |
 | `staff_payment_alert` (new) | New payment to review | no | Celery `send_staff_alert_email` | `STAFF_ALERT_EMAIL` set |
+| `deletion_code` (7.5-E) | Confirm deleting your Kyapture account | no | in the request (`safe_send_email`), like the download code | accounts with no password only; 3 per hour per user |
+| `deletion_requested` (7.5-E) | Your Kyapture account is scheduled for deletion | no | Celery `send_deletion_requested_email` (the cancel token is made in the task) | once per request, when the cooling-off is above 0 days |
+| `account_deleted` (7.5-E) | Your Kyapture account was deleted | no | Celery `send_account_deleted_email`, queued by the transaction that deletes the user | once, to the old address; no preference applies |
 
 There is no notification-preference system or unsubscribe list in this chunk; the existing three preferences (Settings >
 Notifications) keep deciding what they decided. Welcome and alert emails are not built (skipped by the task).

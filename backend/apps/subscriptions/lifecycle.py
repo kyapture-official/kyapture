@@ -225,7 +225,7 @@ def reminder_candidates(now, cfg, tz):
     """(subscription id, user id, email, plan name, period end) rows that still owe a reminder bell or mail."""
     rows = (
         UserSubscription.objects
-        .filter(status=Status.ACTIVE, expires_at__gt=now, user__is_active=True,
+        .filter(status=Status.ACTIVE, expires_at__gt=now, user__is_active=True, user__deletion_requested_at__isnull=True,
                 expires_at__lt=reminder_boundary(now, cfg.reminder_days, tz))
         .filter(_unmarked('reminder_notified_for') | _unmarked('reminder_emailed_for'))
         .select_related('user', 'plan').order_by('expires_at')
@@ -238,7 +238,8 @@ def downgrade_candidates(now, cfg, tz):
     recent = Q(expires_at__gte=email_window_start(now, cfg.grace_days))
     rows = (
         UserSubscription.objects
-        .filter(status__in=(Status.ACTIVE, Status.EXPIRED), expires_at__lt=downgrade_cutoff(now, cfg.grace_days, tz))
+        .filter(status__in=(Status.ACTIVE, Status.EXPIRED), expires_at__lt=downgrade_cutoff(now, cfg.grace_days, tz),
+                user__deletion_requested_at__isnull=True)      # 7.5-E: billing stops for an account that is closing
         .filter(_unmarked('downgraded_for') | (_unmarked('downgrade_emailed_for') & recent))
         .select_related('user', 'plan').order_by('expires_at')
     )
@@ -255,7 +256,7 @@ def process_reminder(subscription_id, user_id, now, cfg, tz):
     done = {'bell': False, 'email_claimed': False}
     with transaction.atomic():
         user, sub = _lock_rows(subscription_id, user_id)
-        if sub is None or not user.is_active or not _reminder_due(sub, now, cfg, tz):
+        if sub is None or not user.is_active or user.deletion_requested_at is not None or not _reminder_due(sub, now, cfg, tz):
             return None
         end = sub.expires_at
         bell = reminder_bell(sub.plan.name, end, now)
@@ -290,7 +291,7 @@ def process_downgrade(subscription_id, user_id, now, cfg, tz):
     done = {'downgraded': False, 'bell': False, 'email_claimed': False}
     with transaction.atomic():
         user, sub = _lock_rows(subscription_id, user_id)
-        if sub is None or not _downgrade_due(sub, now, cfg, tz):
+        if sub is None or user.deletion_requested_at is not None or not _downgrade_due(sub, now, cfg, tz):
             return None
         end = sub.expires_at
         recent = end >= email_window_start(now, cfg.grace_days)

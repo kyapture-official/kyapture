@@ -35,6 +35,7 @@ from apps.core.emailing import display_from, send_email
 from apps.core.request_ip import client_ip
 
 from apps.core.share import build_gallery_share_url
+from apps.users.ownership import owner_is_public
 
 from .download_access import issue_job_link_token
 from .models import DownloadJob
@@ -119,8 +120,8 @@ def deliver_ready_email(job_id):
         if job.state != DownloadJob.State.READY:
             logger.info('Download-ready email for job %s: skipped (job not ready)', job.id)
             return False
-        if not job.gallery.photographer.is_active:
-            logger.info('Download-ready email for job %s: skipped (owner suspended)', job.id)
+        if not owner_is_public(job.gallery.photographer):
+            logger.info('Download-ready email for job %s: skipped (owner suspended or closing)', job.id)
             return False
         if job.ready_email_sent_at is not None:
             logger.info('Download-ready email for job %s: skipped (already sent)', job.id)
