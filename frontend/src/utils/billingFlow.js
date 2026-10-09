@@ -65,6 +65,25 @@ export function billingState({ subscription, payments }) {
   }
 }
 
+/**
+ * What the owner is told about the paid period, from the server's `lifecycle` block (my-subscription; the server
+ * computes the state and the calendar days in the billing time zone, the browser only words them):
+ *   null                        no paid period to talk about (never subscribed, cancelled, still loading)
+ *   { state: 'active', label }  live, far from the end: "Expires in 20 days"
+ *   { state: 'expiring', ... }  live and inside the reminder window: "Expires in 2 days" / "Expires today"
+ *   { state: 'expired', ... }   the period ended: "Expired" (the account is on the Free plan)
+ * `banner` is true for the two states that earn a notice on the dashboard.
+ */
+export function expiryNotice(lifecycle) {
+  const state = lifecycle?.state
+  if (state === 'expired') return { state, label: 'Expired', banner: true }
+  if (state !== 'active' && state !== 'expiring') return null
+  const days = lifecycle.days_left == null ? NaN : Number(lifecycle.days_left)
+  if (!Number.isFinite(days) || days < 0) return null
+  const label = days === 0 ? 'Expires today' : days === 1 ? 'Expires in 1 day' : `Expires in ${days} days`
+  return { state, label, banner: state === 'expiring' }
+}
+
 /** One short line for a history row: why it was rejected, or how long the approved plan runs. */
 export function paymentDetail(payment, formatDate) {
   if (payment.status === 'rejected') return payment.rejection_reason || 'Not approved.'

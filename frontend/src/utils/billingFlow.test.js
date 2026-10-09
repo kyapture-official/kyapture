@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  billingState, describeSubmitError, livePlanOf, paymentDetail, proofProblem, referenceProblem,
+  billingState, describeSubmitError, expiryNotice, livePlanOf, paymentDetail, proofProblem, referenceProblem,
 } from './billingFlow.js'
 
 const httpError = (status, data = {}) => Object.assign(new Error(String(status)), { response: { status, data, headers: {} } })
@@ -72,4 +72,15 @@ test('a refused submit shows the server sentence and its field messages', () => 
   assert.equal(described.code, 'reference_taken')
   assert.match(describeSubmitError(httpError(429)).message, /Too many/)
   assert.match(describeSubmitError({}).message, /Network error/)
+})
+
+test('the expiry notice words the server lifecycle block: days, today, expired, nothing', () => {
+  assert.deepEqual(expiryNotice({ state: 'active', days_left: 20 }), { state: 'active', label: 'Expires in 20 days', banner: false })
+  assert.deepEqual(expiryNotice({ state: 'expiring', days_left: 3 }), { state: 'expiring', label: 'Expires in 3 days', banner: true })
+  assert.equal(expiryNotice({ state: 'expiring', days_left: 1 }).label, 'Expires in 1 day')
+  assert.equal(expiryNotice({ state: 'expiring', days_left: 0 }).label, 'Expires today')
+  assert.deepEqual(expiryNotice({ state: 'expired', days_left: -2 }), { state: 'expired', label: 'Expired', banner: true })
+  for (const none of [null, undefined, {}, { state: 'none' }, { state: 'active', days_left: null }, { state: 'active', days_left: -1 }]) {
+    assert.equal(expiryNotice(none), null, JSON.stringify(none))
+  }
 })

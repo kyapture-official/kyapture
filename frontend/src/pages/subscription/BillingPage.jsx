@@ -13,6 +13,7 @@ import {
   billingState,
   DEFAULT_PROOF_MAX_MB,
   describeSubmitError,
+  expiryNotice,
   livePlanOf,
   paymentDetail,
   PROOF_ACCEPT,
@@ -86,6 +87,31 @@ function PaymentStatusBadge({ status }) {
     }`}>
       {status}
     </span>
+  )
+}
+
+/**
+ * How long the paid period has left (or that it ended), worded from the server's lifecycle block, with the link to
+ * the plans below. Shown on Billing for every live paid plan and for a plan that ended.
+ */
+function ExpiryNotice({ notice }) {
+  const expired = notice.state === 'expired'
+  const goToPlans = () => document.getElementById('choose-tier')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="billing-expiry" data-state={notice.state}>
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
+        expired ? STATUS_BADGE_STYLES.expired
+          : notice.state === 'expiring' ? 'bg-amber-50 text-amber-800 border-amber-200' : STATUS_BADGE_STYLES.active
+      }`}>
+        {notice.label}
+      </span>
+      {notice.state !== 'active' && (
+        <button type="button" onClick={goToPlans} data-testid="billing-expiry-link"
+          className="text-xs font-semibold text-brand-green-700 underline underline-offset-2 hover:text-brand-green-800 cursor-pointer">
+          {expired ? 'Upgrade' : 'Renew'}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -289,6 +315,7 @@ export default function BillingPage() {
     instructions && (instructions.account_name || instructions.esewa_id || instructions.bank_name
       || instructions.bank_account_number || instructions.qr_url),
   )
+  const notice = expiryNotice(subscription?.lifecycle)
   const periodDays = instructions?.period_days
   const renewing = Boolean(selectedPlan && activePlan && selectedPlan.id === activePlan.id)
 
@@ -335,13 +362,15 @@ export default function BillingPage() {
         ) : lapsedPlan ? (
           <p className="text-xs text-muted font-light leading-relaxed" data-testid="billing-lapsed">
             Your {lapsedPlan.name} plan ended on {formatDate(subscription.expires_at)}. You are on the Free plan now: your files
-            are kept, and the Free limits apply. Choose a tier below to renew.
+            are kept, and the Free limits apply. Choose a tier below to renew; your saved settings come back when you do.
           </p>
         ) : (
           <p className="text-xs text-muted font-light leading-relaxed">
             You are currently running on the Free tier plan. Select a tier below to request an upgrade.
           </p>
         )}
+
+        {notice && <ExpiryNotice notice={notice} />}
 
         {state.pending.length > 0 && (
           <div role="status" data-testid="billing-pending" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
@@ -378,7 +407,7 @@ export default function BillingPage() {
 
       {/* Pricing Selector */}
       <section className="space-y-6">
-        <h2 className="font-serif text-2xl text-ink">1. Choose Upgrade Tier</h2>
+        <h2 id="choose-tier" className="font-serif text-2xl text-ink scroll-mt-24">1. Choose Upgrade Tier</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {paidPlans.map((p) => {
             const isSelected = selectedPlan?.id === p.id

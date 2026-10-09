@@ -87,7 +87,8 @@ Images are drawn inside the staff page; a PDF is opened from the same signed lin
 sweep (`sweep_expired_subscriptions`, every 15 minutes) has run. Tests set `expires_at` to the past with the status still `active`
 and check: the feature flags, the Free plan limits, the Original-download gate on a real gallery PATCH, the effective download
 mode, that nothing is deleted, and that storage above the Free limit reads `over` and refuses new uploads (the BILL-C rules).
-**Not built here (chunk 7.5-C): the scheduled job, reminder emails, a grace period and auto-downgrade.**
+The reminder, grace, the audit row and the mails around the end of a period are the daily job of chunk 7.5-C
+([KYAPTURE_SUBSCRIPTION_LIFECYCLE.md](KYAPTURE_SUBSCRIPTION_LIFECYCLE.md)); access never waits for it.
 
 ## 7. The payment instructions row
 
@@ -131,3 +132,18 @@ email (through `notifications.notify_payment_reviewed`, which still honours the 
 * Browser: [qa-7-5b/results.md](qa-7-5b/results.md), 61 / 61 checks at desktop and 390 px, with a real submit, a real approve and a
   real reject.
 * Debt: new rows 169-177.
+
+## 11. Paying for a DIFFERENT plan during an active period (current behaviour, no proration)
+
+What `approve_payment` does today, unchanged by 7.5-C and pinned by `test_another_plan_or_a_lapsed_one_starts_now_instead` (7.5-B) and
+`test_paying_for_a_different_plan_during_an_active_period_starts_it_now_for_a_full_period` (7.5-C):
+
+| The user pays for | Their current subscription | Result |
+|---|---|---|
+| the **same** plan they are on | live (not ended) | the period is added to the current end date: `expires_at = old end + MANUAL_PAYMENT_PERIOD_DAYS`; `starts_at` is kept |
+| a **different** plan (upgrade or downgrade) | live | the new plan starts **now** for a full `MANUAL_PAYMENT_PERIOD_DAYS` (30): `starts_at = now`, `expires_at = now + 30 days`. **The unused rest of the old period is dropped: no proration, no credit, no queued change** |
+| any plan | ended, `expired`, or none | the paid plan starts now for a full period |
+
+So a Basic user with 10 days left who pays for Studio has Studio for 30 days from approval, and the 10 Basic days are gone. The payment row
+records the period it granted (`period_start`, `period_end`). Proration or queuing the new plan is an owner decision (debt row 170, 13-A);
+this chunk adds none. In every case the lifecycle markers are cleared, so the new period gets its own reminder and downgrade.

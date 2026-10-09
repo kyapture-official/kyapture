@@ -12,6 +12,7 @@ import { galleriesApi } from "../../api/galleriesApi";
 import { subscriptionsApi } from "../../api/subscriptionsApi";
 import Badge from "../../components/ui/Badge";
 import { formatDate } from "../../utils/formatters";
+import { expiryNotice } from "../../utils/billingFlow";
 
 const STATUS_BADGE_VARIANT = {
   active: "success",
@@ -108,7 +109,11 @@ export default function HomePage() {
     };
   }, [loadDashboard]);
 
-  const planName = sub?.plan?.name ?? "Free";
+  // The server says whether the paid period is live, close to its end, or over (an ended period is the Free plan).
+  const notice = expiryNotice(sub?.lifecycle);
+  const expired = notice?.state === "expired";
+  const paidPlanName = sub?.plan?.name ?? null;
+  const planName = expired ? "Free" : (paidPlanName ?? "Free");
   const studioUrl = user?.username ? `${user.username}.kyapture.com` : '';
 
   // Time-based greeting
@@ -163,6 +168,31 @@ export default function HomePage() {
           </p>
         </div>
       </div>
+
+      {/* ── PLAN EXPIRY NOTICE: only inside the reminder window, or once the period has ended ── */}
+      {!loading && !subError && notice?.banner && (
+        <div
+          role="status"
+          data-testid="plan-expiry-banner"
+          data-state={notice.state}
+          className={`rounded-2xl border px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm ${
+            expired ? "border-red-200 bg-red-50 text-red-900" : "border-amber-200 bg-amber-50 text-amber-900"
+          }`}
+        >
+          <p className="leading-relaxed">
+            {expired
+              ? `Your ${paidPlanName} plan has ended. You are on the Free plan: your files are kept and the Free limits apply.`
+              : `Your ${paidPlanName} plan ${notice.label.charAt(0).toLowerCase()}${notice.label.slice(1)}. Renew to keep it.`}
+          </p>
+          <Link
+            to="/dashboard/billing"
+            data-testid="plan-expiry-link"
+            className="shrink-0 text-xs font-semibold uppercase tracking-wider underline underline-offset-2 hover:opacity-80"
+          >
+            {expired ? "Upgrade" : "Renew"}
+          </Link>
+        </div>
+      )}
 
       {/* ── STAT CARDS ── */}
       {!loading && (
@@ -233,15 +263,17 @@ export default function HomePage() {
             <div>
               <p className="text-sm font-medium text-ink">{planName} Plan</p>
               <p className="text-xs text-muted">
-                {sub.expires_at
-                  ? `Expires ${formatDate(sub.expires_at)}`
-                  : "No expiration"}{" "}
+                {expired
+                  ? `Your ${paidPlanName} plan ended ${formatDate(sub.expires_at)}`
+                  : sub.expires_at
+                    ? `Expires ${formatDate(sub.expires_at)}`
+                    : "No expiration"}{" "}
                 &middot; via {sub.payment_method}
               </p>
             </div>
           </div>
-          <Badge variant={STATUS_BADGE_VARIANT[sub.status] || "default"}>
-            {sub.status}
+          <Badge variant={STATUS_BADGE_VARIANT[expired ? "expired" : sub.status] || "default"}>
+            {expired ? "expired" : sub.status}
           </Badge>
         </div>
       )}

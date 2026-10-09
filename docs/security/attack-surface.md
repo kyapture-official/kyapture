@@ -83,7 +83,7 @@ Owner responses include `original_url` for every asset: a 1-hour signed URL to a
 |---|---|---|
 | Redis broker/results (`base.py:232-233`) | Dev: published `6379` on all interfaces, **no password** (`docker-compose.yml:58-61`) | Anyone who reaches it can enqueue registered tasks with chosen arguments (JSON only, `base.py:236-238`) |
 | PostgreSQL | Dev: published `5432`, hardcoded password (SEC-11). Prod: env vars, **no `sslmode`** in `DATABASES` (`production.py:64-79`) | TLS to the DB depends on the host default (needs verification) |
-| Celery beat tasks (`config/celery.py:35-77`) | Internal | Subscription sweep (15 min), gallery purge, session/log/job/notification purge, JWT blacklist flush |
+| Celery beat tasks (`CELERY_BEAT_SCHEDULE` in `config/settings/base.py`; one `celery_beat` service) | Internal | Subscription sweep (15 min), gallery purge, session/log/job/notification purge, JWT blacklist flush, and (7.5-C) the daily subscription lifecycle job (`apps/subscriptions/lifecycle.py`: reminder, downgrade after the grace, audit row, bell and mail; cache lock + row locks). No HTTP route runs it; support uses `manage.py run_subscription_lifecycle [--dry-run]` inside the container |
 | Celery work on uploads | Internal, untrusted input | Pillow decode, ffprobe, ffmpeg and cjpegli all with timeouts; photo task Celery limits 600/660 s (7-B). Video/Web Size/ZIP tasks have no Celery time limit (row 139) |
 | Mailpit (dev) | `8025` web inbox + `1025` SMTP on all interfaces (`docker-compose.yml:227-231`) | Holds reset links and download links |
 | Management commands | Shell access only | `backfill_*`, `purge_orphans`, `test_s3_connection` (prints a presigned URL, SEC-26) |

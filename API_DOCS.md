@@ -899,7 +899,20 @@ Authentication: Required (IsAuthenticated)
 
 Success Response — 200 OK
 
-Identical structure to the /stats/ mapping.
+Identical structure to the /stats/ mapping, plus (7.5-C) a `lifecycle` block that says where the paid period stands. It is computed
+on the server in the billing time zone (Asia/Kathmandu), the same way every entitlement is: an ended period reads `expired` whether
+or not the daily job has run.
+
+  "lifecycle": {
+    "state": "active" | "expiring" | "expired" | "none",   (expiring = live and inside the reminder window)
+    "days_left": 20,                                       (calendar days; 0 = ends today; negative once ended; null for none)
+    "period_end": "2026-10-28T18:01:45Z",
+    "reminder_days": 3,                                    (admin-edited: Subscriptions > Subscription lifecycle)
+    "grace_days": 3
+  }
+
+A user with no subscription gets `"status": "no_subscription"` and `"lifecycle": {"state": "none", ...}`. The daily job itself has no
+HTTP endpoint (`manage.py run_subscription_lifecycle [--dry-run]`, docs/KYAPTURE_SUBSCRIPTION_LIFECYCLE.md).
 
 Submit Manual Payment
 

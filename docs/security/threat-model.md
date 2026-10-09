@@ -644,3 +644,25 @@ Design, endpoints and rules: [docs/KYAPTURE_PAYMENTS.md](../KYAPTURE_PAYMENTS.md
 | P6 | A lapsed plan must be Free at request time even if the sweep never ran | **Confirmed already true** (debt row 43) and now **proven for this flow**: flags, plan limits, the Original-download gate on a real PATCH, the effective download mode, nothing deleted, over-limit storage reads `over` and refuses uploads; the API's `is_active_plan` is computed from the same rule | `ExpiredPeriodTests` |
 
 New gaps: debt rows 169-177.
+
+---
+
+## 16. Chunk 7.5-C (subscription lifecycle) results
+
+Design and rules: [docs/KYAPTURE_SUBSCRIPTION_LIFECYCLE.md](../KYAPTURE_SUBSCRIPTION_LIFECYCLE.md). Browser QA: [docs/qa-7-5c/results.md](../qa-7-5c/results.md).
+
+| ID | Finding | Result | Proof |
+|---|---|---|---|
+| L1 | A dead beat or worker must not keep a paid plan alive | **Already true and now proven with no job**: every entitlement needs `status='active' AND expires_at > now`; the job only does paperwork (audit row, bell, mail) | `RequestTimeExpiryTests` (flags, Free limits, the real Original-download PATCH answering 403, nothing written by anyone) |
+| L2 | The sweep and `GET my-subscription` wrote `status='expired'` with no lock and no re-check, so a renewal approved between their read and write could be overwritten and a freshly paid user would read as Free | **Found by reading the code** (not reproduced on the old code), **fixed**: `lifecycle.expire_lapsed` takes the user row, then the subscription row (`FOR NO KEY UPDATE`, the same order as `approve_payment`, so no deadlock) and re-reads the status inside | `SweepLockTests`; `TwoRunnersAtOnceTests.test_a_renewal_holding_the_locks_is_not_overwritten_by_the_sweep` (real threads) |
+| L3 | Two beat instances (or a manual run beside the beat) must not send two mails or write two audit rows | **Fixed**: a cache lock, and under it the user + subscription row locks with every marker re-read; a mail is claimed before it is sent | `TwoRunnersAtOnceTests`: with the cache lock defeated, 3 accounts still get exactly one downgrade, one audit row, one bell, one mail each; with the row locks removed 2 of those 3 tests fail |
+| L4 | A first run on a database full of old expired rows would mail everyone who ever lapsed | **Fixed**: a period that ended more than grace + `SUBSCRIPTION_EMAIL_RETRY_DAYS` days ago is downgraded silently (audit `silent=old`) | `MailTests.test_a_period_that_ended_long_ago_is_downgraded_silently` |
+| L5 | A suspended or deactivated account must not be mailed or notified, but its downgrade must apply | **Done**: no reminder, no bell, no mail; the downgrade, marker and audit row are still written | `MailTests.test_a_suspended_account_is_downgraded_but_never_mailed_or_notified`, `..._is_skipped_inside_the_lock` |
+| L6 | The job could be triggered by a stranger over HTTP | **No endpoint exists**; the job is the beat entry and a management command | `CommandTests.test_there_is_no_http_route_for_the_job` |
+| L7 | A mail or bell could leak a secret or a storage path | **Checked**: plan name, dates and the Billing link only | `MailTests.test_the_mail_and_the_bell_never_carry_a_secret_or_a_storage_path`; the QA mail check |
+| L8 | A failed mail could block or undo the downgrade, or be lost | **Fixed**: the downgrade commits first; the mail claim is released on failure and retried by the next run (7 days) | `MailTests` (downgrade and reminder retry, retry window) |
+| L9 | The existing beat entries could be lost when the new one was added (`app.conf.beat_schedule = {...}` in `celery.py` silently loses to a settings value) | **Found while building, fixed**: every entry moved into `CELERY_BEAT_SCHEDULE`; 7 old + 1 new asserted | `BeatScheduleTests` |
+
+Not fixed (debt rows 178-185): migrations on the dev DB only, placeholder mail text, a mail lost if the process dies between claim and send
+and no alert when the beat is down, project time zone still UTC, grace does not extend access, branding colour not plan-gated, notice only on
+Billing and the dashboard home, QA scripts outside the suite.

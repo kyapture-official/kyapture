@@ -50,6 +50,7 @@ Status legend:
 | Contact allow-list for downloads | ✅ | One-time emailed code before a token (7-B, row 80) |
 | Plan entitlements enforced server-side | ✅ | `require_feature` (`apps/users/serializers.py:86-111`), upload metrics and row lock (`apps/photos/views.py:186-252`), `effective_high_res_mode` |
 | Entitlement edge cases | ✅ | Fixed in 7-B: metrics need `expires_at` in the future (row 43); minutes re-checked under the row lock (row 44) |
+| An ended plan loses paid features with no job running; the daily job and the sweep never overwrite a renewal | ✅ | 7.5-C: request-time rule proven with the job never run (`RequestTimeExpiryTests`); the sweep and `my-subscription` flip `expired` only under the user + subscription row locks with the status re-read (`lifecycle.expire_lapsed`); the job is lock-protected and idempotent; no HTTP endpoint runs it. Branding colour is not plan-gated (row 183) |
 | Staff-only endpoints use `IsAdminUser` | ✅ | `apps/subscriptions/views.py:154, 189` |
 | Staff bypass of plan limits is intended | 💡 | `apps/galleries/views.py`, `apps/photos/views.py`: document it |
 

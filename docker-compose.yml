@@ -186,11 +186,14 @@ services:
       redis:
         condition: service_healthy
 
-      # 4b. PERIODIC TASK SCHEDULER (Celery Beat)
-      # Ticks the schedule defined in config/celery.py's beat_schedule and
-      # hands due tasks off to celery_worker above. This is a SEPARATE process
-      # from the worker — Celery never runs beat inside a worker process, so
-      # skipping this service means beat_schedule silently never fires.
+      # 4b. PERIODIC TASK SCHEDULER (Celery Beat) — run EXACTLY ONE of these.
+      # Ticks CELERY_BEAT_SCHEDULE (config/settings/base.py: one named entry per
+      # periodic job, including the daily subscription lifecycle job of 7.5-C;
+      # 11-D adds its jobs there too) and hands due tasks off to celery_worker
+      # above. This is a SEPARATE process from the worker — Celery never runs
+      # beat inside a worker process, so skipping this service means the
+      # schedule silently never fires. After changing the schedule or a task:
+      # docker compose restart celery_worker celery_beat.
   celery_beat:
     build: ./backend
     command: celery -A config beat -l info

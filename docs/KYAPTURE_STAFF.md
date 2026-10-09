@@ -87,6 +87,7 @@ plus an email snapshot, not foreign keys, so deleting an account neither cascade
 | `payment.submit` | a user submitting a manual payment | `payment=<id> plan=<key> amount=<n> NPR` |
 | `payment.approve` / `payment.reject` | staff, in the review transaction | the same summary |
 | `payment.proof_view` | staff opening a payment proof (minting its link) | the same summary |
+| `subscription.downgrade` | the daily lifecycle job (7.5-C): no actor, the account is the target | `plan=<key> period_end=<date> grace_days=<n>` (+ ` silent=old` for a very old lapse) |
 | `security.password_change` | change-password serializer; Django admin password form | `self` / `admin` |
 | `security.password_reset` | reset-confirm view (completion) | `reset` |
 | `security.login_lockout` | Django-admin login lock (`apps/core/admin_login.py`); account login throttle (`LoginAccountRateThrottle`, once per window) | `admin_ip` / `admin_account` / `account_rate` |

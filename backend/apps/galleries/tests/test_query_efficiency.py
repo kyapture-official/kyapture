@@ -305,4 +305,4 @@ class RewrittenQueriesKeepTheirAnswersTests(QueryBase):
 
     def test_my_subscription_query_count_is_bounded(self):
         count, _ = self.queries('/api/v1/subscriptions/my-subscription/')
-        self.assertLessEqual(count, 4)
+        self.assertLessEqual(count, 5)                              # 4 + the lifecycle-settings row (7.5-C), read per request
